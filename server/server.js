@@ -21,6 +21,16 @@ const openai = process.env.OPENAI_API_KEY
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Serve vCard with explicit MIME type for better mobile compatibility
+app.get('/business-card/contact.vcf', (req, res, next) => {
+    const filePath = path.join(__dirname, '..', 'business-card', 'contact.vcf');
+    if (!fs.existsSync(filePath)) return next();
+
+    res.setHeader('Content-Type', 'text/vcard; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="contact.vcf"');
+    return res.sendFile(filePath);
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '..')));
 
