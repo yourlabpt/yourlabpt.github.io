@@ -68,28 +68,21 @@ const translations = {
         chatHeading: "Let's Talk About Your Idea",
         chatDescription: 'Have a business idea? Our AI agent is here to listen and help you shape your vision. Just describe your idea and leave your contact information.',
         chatGreeting: "Hey — I'm Alex, from YourLab. I talk to a lot of people with ideas, and the interesting part is always in the details nobody says upfront. What's on your mind?",
-        chatThinking: 'I am analyzing your context...',
+        chatThinking: 'Alex is thinking...',
         inputPlaceholder: 'Type your message here...',
         sendBtn: 'Send',
         // Footer
         footerText: '\u00A9 2025 YourLab. All rights reserved.',
         footerContactShortcut: 'Contacts card',
-        // Chat bot responses
+        // Chat bot responses (used as frontend fallback)
         bot: {
-            r0: 'Great! Tell me more about your business idea. What problem are you solving?',
-            r1: 'That sounds interesting. How do you plan to differentiate from competitors?',
-            r2: 'Excellent vision! Now, could you please share your name so we can contact you?',
-            askEmail: "Thanks! What's your email address? We'll use this to reach out to you.",
-            askPhone: "Perfect! And what's the best phone number to reach you at?",
-            saved: (name) => `Excellent, ${name}. We've received your business idea and saved your contact information. Our team will review your idea and get back to you shortly. Thanks for choosing YourLab.`,
-            askMissing: (email, phone) => "I want to make sure we can reach you. Could you provide:\n" + (email ? "" : "- Your email\n") + (phone ? "" : "- Your phone number\n") + "?",
-            moreInfo: "Thanks for sharing! Is there anything else you'd like to tell us about your business idea?",
+            saved: (name) => `The YourLab team has everything they need, ${name}. Expect a real conversation soon \u2014 not a template email, an actual reply.`,
             generic: [
-                "That's an interesting point! Tell me more.",
-                "I see \u2014 how will you approach this?",
-                "Fascinating! What's your target market?",
-                "Great idea! What's the timeline for launch?",
-                "I like your thinking! How can we help you with this?"
+                "What's the unfair advantage you have here that nobody else in this space has?",
+                "If you couldn't use code or an app to solve this \u2014 how would you do it manually?",
+                "Who's the first person you'd show this to, and what would their reaction probably be?",
+                "If this totally fails in 6 months \u2014 what would be the real reason?",
+                "What's the dumbest simple version of this idea that might actually work?"
             ]
         }
     },
@@ -158,28 +151,21 @@ const translations = {
         chatHeading: 'Vamos Falar Sobre a Tua Ideia',
         chatDescription: 'Tens uma ideia de neg\u00F3cio? O nosso agente de IA est\u00E1 aqui para ouvir e ajudar-te a moldar a tua vis\u00E3o. Basta descrever a tua ideia e deixar as tuas informa\u00E7\u00F5es de contacto.',
         chatGreeting: 'Olá — sou o Alex, da YourLab. Falo com muita gente que tem ideias, e o que é sempre mais interessante é o que não está nos primeiros dois parágrafos. O que tens na cabeça?',
-        chatThinking: 'Estou a analisar o teu contexto...',
+        chatThinking: 'Alex est\u00e1 a pensar...',
         inputPlaceholder: 'Escreve a tua mensagem aqui...',
         sendBtn: 'Enviar',
         // Footer
         footerText: '\u00A9 2025 YourLab. Todos os direitos reservados.',
         footerContactShortcut: 'Cart\u00E3o de contacto',
-        // Chat bot responses
+        // Chat bot responses (used as frontend fallback)
         bot: {
-            r0: '\u00D3timo! Conta-me mais sobre a tua ideia de neg\u00F3cio. Que problema est\u00E1s a resolver?',
-            r1: 'Parece interessante. Como pensas diferenciar-te da concorr\u00EAncia?',
-            r2: 'Excelente vis\u00E3o! Podes partilhar o teu nome para podermos contactar-te?',
-            askEmail: 'Obrigado! Qual \u00E9 o teu email? Vamos us\u00E1-lo para entrar em contacto contigo.',
-            askPhone: 'Perfeito! E qual \u00E9 o melhor n\u00FAmero de telefone para te contactar?',
-            saved: (name) => `Excelente, ${name}. Recebemos a tua ideia de neg\u00F3cio e guard\u00E1mos as tuas informa\u00E7\u00F5es de contacto. A nossa equipa vai analisar a tua ideia e entrar\u00E1 em contacto em breve. Obrigado por escolheres a YourLab.`,
-            askMissing: (email, phone) => "Quero ter a certeza de que te conseguimos contactar. Podes fornecer:\n" + (email ? "" : "- O teu email\n") + (phone ? "" : "- O teu n\u00FAmero de telefone\n") + "?",
-            moreInfo: 'Obrigado por partilhares! H\u00E1 mais alguma coisa que gostarias de nos contar sobre a tua ideia de neg\u00F3cio?',
+            saved: (name) => `A equipa da YourLab j\u00e1 tem o que precisa, ${name}. Espera uma resposta real em breve \u2014 n\u00e3o um email gen\u00e9rico, uma conversa a s\u00e9rio.`,
             generic: [
-                '\u00C9 um ponto interessante! Conta-me mais.',
-                'Compreendo \u2014 como pensas abordar isto?',
-                'Fascinante! Qual \u00E9 o teu mercado-alvo?',
-                '\u00D3tima ideia! Qual \u00E9 o timing para o lan\u00E7amento?',
-                'Gosto da tua vis\u00E3o! Como podemos ajudar-te com isto?'
+                'O que te fez escolher este problema espec\u00edfico e n\u00e3o outro mais f\u00e1cil?',
+                'Se n\u00e3o pudesses usar c\u00f3digo ou uma app \u2014 como resolverias isto manualmente?',
+                'Quem seria a primeira pessoa a quem mostrarias isto, e qual seria provavelmente a rea\u00e7\u00e3o?',
+                'Se isto falhasse completamente em 6 meses \u2014 qual seria o verdadeiro motivo?',
+                'Qual \u00e9 a vers\u00e3o mais simples e crua desta ideia que poderia realmente funcionar?'
             ]
         }
     }
@@ -328,49 +314,108 @@ async function sendMessageToAi(userText) {
 }
 
 function parseFallbackInput(text) {
-    const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
-    const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}/g;
-    const nameRegex = /(?:name is|i'm|i am|call me|chamo-me|meu nome \u00e9|sou o|sou a)\s+([a-zA-Z\u00c0-\u00ff\s]+)(?:[,.]|$)/i;
+    const emailMatch = text.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+    const phoneMatch = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/);
+    const nameMatch = text.match(/(?:name is|i'?m|i am|call me|chamo-me|meu nome [e\u00e9]|sou o|sou a)\s+([A-Za-z\u00c0-\u00ff' -]{2,40})(?:[,.]|$)/i);
 
-    const emails = text.match(emailRegex);
-    const phones = text.match(phoneRegex);
-    const nameMatch = text.match(nameRegex);
-
-    if (emails) chatState.fallbackConversation.contact.email = emails[0];
-    if (phones) chatState.fallbackConversation.contact.phone = phones[0];
+    if (emailMatch) chatState.fallbackConversation.contact.email = emailMatch[0];
+    if (phoneMatch && phoneMatch[0].replace(/\D/g, '').length >= 8) {
+        chatState.fallbackConversation.contact.phone = phoneMatch[0];
+    }
     if (nameMatch) chatState.fallbackConversation.contact.name = nameMatch[1].trim();
 
-    chatState.fallbackConversation.businessIdea += ` ${text}`;
+    // Infer name if user typed it as a standalone short reply
+    if (!chatState.fallbackConversation.contact.name && !emailMatch && !phoneMatch) {
+        const singleName = text.trim().match(/^([A-Za-z\u00c0-\u00ff]{2,20}(?:\s[A-Za-z\u00c0-\u00ff]{2,20})?)\s*\.?$/);
+        if (singleName) chatState.fallbackConversation.contact.name = singleName[1];
+    }
+
+    chatState.fallbackConversation.businessIdea += ' ' + text;
 }
 
 function processFallbackUserMessage(userText) {
     parseFallbackInput(userText);
 
+    const contact = chatState.fallbackConversation.contact;
+    const hasName    = Boolean(contact.name);
+    const hasEmail   = Boolean(contact.email);
+    const hasPhone   = Boolean(contact.phone);
+    const hasContact = hasEmail || hasPhone;
+    const idea       = chatState.fallbackConversation.businessIdea.trim();
+    const hasProblem = idea.length > 35;
+    const msgCount   = chatState.fallbackConversation.messages.length;
+    const isPt       = currentLang === 'pt';
+
+    const trimmed  = userText.trim();
+    const snippet  = trimmed.length > 65 ? trimmed.slice(0, 62) + '\u2026' : trimmed;
+    const isSmallTalk = trimmed.length < 50 &&
+        /^(hi|hey|hello|oi|ol[a\u00e1]|bom dia|boa tarde|boa noite|tudo bem|tudo certo|how are you|como est[\u00e1a]s?|sup|yo|haha|lol|ok|okay|sure|yes|no|sim|n[\u00e3a]o|claro|maybe|talvez|boa|fixe|e a[\u00ed]|tudo|great|and you|e tu)\b/i.test(trimmed);
+
+    const alexQEn = [
+        "What made you choose this specific problem and not something easier?",
+        "If you couldn\u2019t use code or an app to solve this \u2014 how would you do it manually?",
+        "Who\u2019s the first person you\u2019d show this to, and what would their reaction probably be?",
+        "Is this a problem you have personally, or one you observed in someone else?",
+        "What would have to be true for this to become something really big?",
+        "What\u2019s the dumbest simple version of this idea that might actually work?",
+        "If you had to bet your own money on it \u2014 what number makes you nervous but you\u2019d still do it?",
+        "What\u2019s the unfair advantage you have here that nobody else in this space has?",
+        "If this totally fails in 6 months \u2014 what would be the real reason?",
+        "What version of this ships in 6 weeks vs. the version that takes 2 years?"
+    ];
+    const alexQPt = [
+        "O que te fez escolher este problema espec\u00edfico e n\u00e3o outro mais f\u00e1cil?",
+        "Se n\u00e3o pudesses usar c\u00f3digo ou uma app para resolver isto \u2014 como o farias manualmente?",
+        "Quem seria a primeira pessoa a quem mostrarias isto, e qual seria provavelmente a rea\u00e7\u00e3o?",
+        "Este \u00e9 um problema que tens pessoalmente, ou algo que observaste noutras pessoas?",
+        "O que teria de ser verdade para isto se tornar algo realmente grande?",
+        "Qual \u00e9 a vers\u00e3o mais simples e crua desta ideia que poderia realmente funcionar?",
+        "Se tivesses de apostar o teu pr\u00f3prio dinheiro \u2014 que valor te deixaria nervoso mas ainda assim avan\u00e7avas?",
+        "Qual \u00e9 a vantagem injusta que tens aqui e que mais ningu\u00e9m neste espa\u00e7o tem?",
+        "Se isto falhasse completamente em 6 meses \u2014 qual seria o verdadeiro motivo?",
+        "Que vers\u00e3o disto lan\u00e7as em 6 semanas vs. a vers\u00e3o que demora 2 anos?"
+    ];
+    const alexQ = isPt ? alexQPt : alexQEn;
+    const pickQ = (offset) => alexQ[(msgCount + (offset || 0)) % alexQ.length];
+
     let botResponse = '';
-    const messageCount = chatState.fallbackConversation.messages.length;
-    const bot = getBotText();
 
-    const hasName = chatState.fallbackConversation.contact.name;
-    const hasEmail = chatState.fallbackConversation.contact.email;
-    const hasPhone = chatState.fallbackConversation.contact.phone;
-    const hasIdea = chatState.fallbackConversation.businessIdea.trim().length > 20;
-
-    if (messageCount === 0) {
-        botResponse = bot.r0;
-    } else if (messageCount === 1) {
-        botResponse = bot.r1;
-    } else if (messageCount === 2) {
-        botResponse = bot.r2;
-    } else if (!hasEmail) {
-        botResponse = bot.askEmail;
-    } else if (!hasPhone) {
-        botResponse = bot.askPhone;
-    } else if (hasName && hasEmail && hasPhone && hasIdea) {
-        botResponse = bot.saved(chatState.fallbackConversation.contact.name);
-    } else if (messageCount > 5) {
-        botResponse = (!hasEmail || !hasPhone) ? bot.askMissing(hasEmail, hasPhone) : bot.moreInfo;
+    if (isSmallTalk && msgCount === 0) {
+        botResponse = isPt
+            ? 'Ol\u00e1! Boa altura para uma conversa. Diz-me \u2014 tens alguma coisa a mexer-te na cabe\u00e7a ultimamente? Um projeto, uma frustra\u00e7\u00e3o, uma ideia que n\u00e3o te larga?'
+            : 'Hey! Good timing. Tell me \u2014 is there something on your mind lately? A project, a frustration, an idea that keeps coming back?';
+    } else if (isSmallTalk && msgCount <= 2) {
+        botResponse = isPt
+            ? `Haha, percebo. Mas j\u00e1 que estamos aqui \u2014 ${pickQ(1)}`
+            : `Ha, fair. But since we\u2019re here \u2014 ${pickQ(1)}`;
+    } else if (!hasProblem) {
+        botResponse = isPt
+            ? `\u201c${snippet}\u201d \u2014 percebido. Sem press\u00e3o, mas tenho curiosidade: ${pickQ()} N\u00e3o precisa de estar polido.`
+            : `\u201c${snippet}\u201d \u2014 noted. No pressure, but I\u2019m curious: ${pickQ()} Doesn\u2019t need to be polished.`;
+    } else if (!hasName && msgCount <= 4) {
+        botResponse = isPt
+            ? `\u201c${snippet}\u201d \u2014 honestamente, \u00e9 mais dif\u00edcil de resolver do que parece \u00e0 primeira vista. ${pickQ()} E como te chamas?`
+            : `\u201c${snippet}\u201d \u2014 that\u2019s actually harder to crack than it looks, honestly. ${pickQ()} And what\u2019s your name?`;
+    } else if (!hasName) {
+        botResponse = isPt
+            ? 'Ainda n\u00e3o me disseste o teu nome \u2014 como te chamas?'
+            : 'I still don\u2019t know your name \u2014 what should I call you?';
+    } else if (!hasContact) {
+        botResponse = isPt
+            ? `Faz sentido, ${contact.name}. A equipa da YourLab vai querer continuar esta conversa \u2014 qual \u00e9 o teu email ou n\u00famero para entrarem em contacto?`
+            : `This makes sense, ${contact.name}. The YourLab team will want to follow up \u2014 what\u2019s the best email or phone to reach you?`;
     } else {
-        botResponse = bot.generic[messageCount % bot.generic.length];
+        botResponse = isPt
+            ? `Perfeito, ${contact.name}. A equipa da YourLab tem contexto suficiente para uma an\u00e1lise a s\u00e9rio. V\u00e3o entrar em contacto em breve. \u00daltima coisa, s\u00f3 por curiosidade \u2014 ${pickQ(2)}`
+            : `Perfect, ${contact.name}. The YourLab team has enough to do a real review and will reach out soon. One last thing, out of pure curiosity \u2014 ${pickQ(2)}`;
+
+        saveConversationLocally({
+            timestamp: new Date().toISOString(),
+            contact: { ...contact },
+            businessIdea: idea,
+            messages: [...chatState.fallbackConversation.messages],
+            source: 'frontend-fallback-flow'
+        });
     }
 
     chatState.fallbackConversation.messages.push({
@@ -378,26 +423,6 @@ function processFallbackUserMessage(userText) {
         bot: botResponse,
         timestamp: new Date().toISOString()
     });
-
-    if (hasName && hasEmail && hasPhone && hasIdea) {
-        saveConversationLocally({
-            timestamp: new Date().toISOString(),
-            contact: { ...chatState.fallbackConversation.contact },
-            businessIdea: chatState.fallbackConversation.businessIdea.trim(),
-            messages: [...chatState.fallbackConversation.messages],
-            source: 'frontend-fallback-flow'
-        });
-
-        chatState.fallbackConversation = {
-            messages: [],
-            contact: {
-                name: '',
-                email: '',
-                phone: ''
-            },
-            businessIdea: ''
-        };
-    }
 
     return botResponse;
 }
