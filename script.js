@@ -67,7 +67,7 @@ const translations = {
         // Chat
         chatHeading: "Let's Talk About Your Idea",
         chatDescription: 'Have a business idea? Our AI agent is here to listen and help you shape your vision. Just describe your idea and leave your contact information.',
-        chatGreeting: "Hi there! I'm the YourLab Agent. Tell me about your business idea and share your contact info so we can reach out to discuss it further.",
+        chatGreeting: "Hey — I'm Alex, from YourLab. I talk to a lot of people with ideas, and the interesting part is always in the details nobody says upfront. What's on your mind?",
         chatThinking: 'I am analyzing your context...',
         inputPlaceholder: 'Type your message here...',
         sendBtn: 'Send',
@@ -157,7 +157,7 @@ const translations = {
         // Chat
         chatHeading: 'Vamos Falar Sobre a Tua Ideia',
         chatDescription: 'Tens uma ideia de neg\u00F3cio? O nosso agente de IA est\u00E1 aqui para ouvir e ajudar-te a moldar a tua vis\u00E3o. Basta descrever a tua ideia e deixar as tuas informa\u00E7\u00F5es de contacto.',
-        chatGreeting: 'Ol\u00E1! Sou o Agente da YourLab. Fala-me da tua ideia de neg\u00F3cio e partilha as tuas informa\u00E7\u00F5es de contacto para podermos entrar em contacto contigo.',
+        chatGreeting: 'Olá — sou o Alex, da YourLab. Falo com muita gente que tem ideias, e o que é sempre mais interessante é o que não está nos primeiros dois parágrafos. O que tens na cabeça?',
         chatThinking: 'Estou a analisar o teu contexto...',
         inputPlaceholder: 'Escreve a tua mensagem aqui...',
         sendBtn: 'Enviar',
