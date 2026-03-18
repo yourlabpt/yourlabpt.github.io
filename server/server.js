@@ -206,36 +206,87 @@ function getOrCreateSession(sessionId, language) {
     return session;
 }
 
-function buildSystemPrompt(language) {
+function buildSystemPrompt(session) {
+    const language = session.lead.language;
     const isPt = language === 'pt';
-    const languageInstruction = isPt ? 'Portuguese from Portugal' : 'English';
-    return `
-You are the "YourLab Growth Advisor", a commercial specialist and market strategy expert for YourLab.
-YourLab differentiators:
-- "Fail small, learn fast, launch smart" with MVP-first strategy.
-- Disciplined requirements engineering with measurable validation metrics.
-- One specialist focused per project and close collaboration with founders.
-- Human expertise combined with AI support.
+    const languageInstruction = isPt ? 'European Portuguese (from Portugal)' : 'English';
+    const lead = session.lead;
+    const stage = session.stage;
 
-Goal:
-- Keep the conversation engaging and human.
-- Understand the founder's business history and idea.
-- Qualify lead quality for follow-up.
-- Gather contact data naturally (name + email or phone).
-- Ask only one key question at a time.
+    // Build explicit context of what is already known vs what is still missing
+    const known = [];
+    const missing = [];
 
-Conversation rules:
-- Write only in ${languageInstruction}.
-- 40 to 110 words.
-- Warm, direct, practical tone.
-- Never sound robotic, never pressure aggressively.
-- Always show listening by briefly reflecting what they said.
-- Request consent for contact before final handoff.
-- If contact is missing, ask for it after delivering value.
-- If enough info is collected, propose a concrete next step and timeline.
+    if (lead.name) known.push(`Name: "${lead.name}"`);
+    else missing.push(isPt ? 'nome' : 'name');
 
-Output JSON only.
-`.trim();
+    if (lead.email) known.push(`Email: "${lead.email}"`);
+    else missing.push(isPt ? 'email' : 'email');
+
+    if (lead.phone) known.push(`Phone: "${lead.phone}"`);
+    else if (!lead.email) missing.push(isPt ? 'telefone (ou email)' : 'phone (or email)');
+
+    if (lead.company) known.push(`Company: "${lead.company}"`);
+    if (lead.industry) known.push(`Industry: "${lead.industry}"`);
+
+    if (lead.problem) known.push(`Business problem: "${lead.problem.slice(0, 180)}${lead.problem.length > 180 ? '…' : ''}"`)
+    else missing.push(isPt ? 'problema de negócio / ideia' : 'business problem / idea');
+
+    if (lead.targetCustomer) known.push(`Target customer: "${lead.targetCustomer.slice(0, 120)}${lead.targetCustomer.length > 120 ? '…' : ''}"`);
+    else if (lead.problem) missing.push(isPt ? 'cliente-alvo' : 'target customer');
+
+    if (lead.currentSolution) known.push(`Current solution: "${lead.currentSolution.slice(0, 100)}${lead.currentSolution.length > 100 ? '…' : ''}"`);
+
+    if (lead.goal) known.push(`Desired outcome / goal: "${lead.goal.slice(0, 140)}${lead.goal.length > 140 ? '…' : ''}"`);
+    else if (lead.problem) missing.push(isPt ? 'objetivo / resultado desejado' : 'desired goal / outcome');
+
+    if (lead.timeline) known.push(`Timeline: "${lead.timeline}"`);
+    else if (lead.goal) missing.push(isPt ? 'prazo / urgência' : 'timeline / urgency');
+
+    if (lead.budgetRange) known.push(`Budget: "${lead.budgetRange}"`);
+    if (lead.urgencyLevel) known.push(`Urgency: "${lead.urgencyLevel}"`);
+    if (lead.consentToContact) known.push(isPt ? 'Consentimento de contacto: sim' : 'Contact consent: yes');
+
+    const knownSection = known.length > 0 ? known.join('\n') : (isPt ? '(nada capturado ainda)' : '(nothing captured yet)');
+    const missingSection = missing.length > 0 ? missing.join(', ') : (isPt ? '(nada crítico em falta)' : '(nothing critical missing)');
+
+    const stageGuide = isPt
+        ? `- discover → entender o problema/ideia\n- qualify → aprofundar: cliente-alvo, solução atual, objetivo, urgência\n- capture → obter nome + email ou telefone\n- commit → resumir e confirmar próximos passos\n- completed → concluído`
+        : `- discover → understand the problem/idea\n- qualify → dig deeper: target customer, current solution, goal, urgency\n- capture → get name + email or phone\n- commit → wrap up and confirm next steps\n- completed → done`;
+
+    return `You are the YourLab Growth Advisor — a warm, sharp startup strategist helping founders turn ideas into validated MVPs.
+
+ABOUT YOURLAB:
+- Philosophy: "Fail small, learn fast, launch smart" — MVP-first with disciplined requirements engineering.
+- Model: one specialist per project, working closely side-by-side with the founder.
+- Differentiator: ideas become structured requirements with measurable validation metrics.
+- Scope: custom software, IoT systems, integrations, digital products.
+
+YOUR MISSION:
+Conduct a warm discovery conversation. Understand the founder's problem, qualify the idea, and capture their contact so the YourLab team can follow up with a real proposal. You are NOT a generic assistant — you are a focused advisor having a 1:1 with a founder.
+
+CURRENT CONVERSATION STAGE: ${stage}
+${stageGuide}
+
+ALREADY CAPTURED ABOUT THIS LEAD:
+${knownSection}
+
+STILL MISSING:
+${missingSection}
+
+STRICT RULES (all must be followed without exception):
+1. Write ONLY in ${languageInstruction}. Never mix languages.
+2. Reply in 40–120 words. Never exceed 120 words.
+3. Your FIRST sentence MUST specifically echo or paraphrase what the user just said. Never open with a generic phrase.
+4. Ask exactly ONE question. Never ask two questions in the same message.
+5. NEVER ask for anything already listed under "ALREADY CAPTURED". Check before you ask.
+6. NEVER give generic or scripted answers. Everything you say must be specific to this conversation.
+7. When name + (email or phone) + problem + goal are all captured: deliver a concrete next-step proposal (e.g. a short discovery call or written MVP brief) and invite them to confirm.
+8. If the user goes off-topic: acknowledge briefly, then steer back with a focused question.
+
+TONE: Sharp, human, entrepreneurial. Think of a trusted startup advisor in a real 1:1 — curious, direct, genuinely interested.
+
+Output ONLY valid JSON matching the schema provided.`.trim();
 }
 
 const TURN_OUTPUT_SCHEMA = {
@@ -312,25 +363,14 @@ async function runLeadConversationTurn(session, userMessage) {
         throw new Error('OPENAI_API_KEY is missing.');
     }
 
-    const history = session.turns.slice(-8).flatMap((turn) => ([
+    const history = session.turns.slice(-10).flatMap((turn) => ([
         { role: 'user', content: turn.user },
         { role: 'assistant', content: turn.assistant }
     ]));
 
-    const contextState = {
-        stage: session.stage,
-        leadScore: session.leadScore,
-        lead: session.lead,
-        topicBullets: session.topicBullets
-    };
-
     const input = [
-        { role: 'system', content: buildSystemPrompt(session.lead.language) },
+        { role: 'system', content: buildSystemPrompt(session) },
         ...history,
-        {
-            role: 'system',
-            content: `Current lead state JSON: ${JSON.stringify(contextState)}`
-        },
         { role: 'user', content: userMessage }
     ];
 
@@ -364,50 +404,70 @@ async function runLeadConversationTurn(session, userMessage) {
 function fallbackTurn(session, userMessage) {
     const isPt = session.lead.language === 'pt';
     const lead = session.lead;
-    const cleanedUserMessage = cleanText(userMessage, 700);
-    const hasStory = Boolean(lead.problem || lead.goal || cleanedUserMessage.length > 35);
-    const missingContact = !(lead.email || lead.phone);
-    const missingName = !lead.name;
+    const msg = cleanText(userMessage, 700);
     const inferredLeadUpdate = {};
 
-    if (cleanedUserMessage.length > 35 && !lead.problem) {
-        inferredLeadUpdate.problem = cleanedUserMessage;
+    // Extract what we can from the raw message
+    const extracted = extractLeadSignalsFromText(msg);
+    if (extracted.name) inferredLeadUpdate.name = extracted.name;
+    if (extracted.email) inferredLeadUpdate.email = extracted.email;
+    if (extracted.phone) inferredLeadUpdate.phone = extracted.phone;
+    if (extracted.company) inferredLeadUpdate.company = extracted.company;
+    if (msg.length > 40 && !lead.problem) inferredLeadUpdate.problem = msg;
+    if (!lead.goal && /\b(goal|want|need|achieve|solve|objetivo|pretendo|quero|resolver|alcan)\b/i.test(msg)) {
+        inferredLeadUpdate.goal = msg;
     }
-    if (!lead.goal && /\b(goal|want|need|objetivo|pretendo|quero)\b/i.test(cleanedUserMessage)) {
-        inferredLeadUpdate.goal = cleanedUserMessage;
-    }
-    if (/\b(consent|agree|authorized|autorizo|aceito|sim|yes)\b/i.test(cleanedUserMessage)) {
+    if (/\b(consent|agree|autori[zs]|aceito|sim\b|yes\b|claro|sure|ok\b)\b/i.test(msg)) {
         inferredLeadUpdate.consentToContact = true;
     }
 
+    // Merge now so reply can reference latest state
+    const updatedLead = mergeLead(lead, inferredLeadUpdate);
+
+    const hasProblem = Boolean(updatedLead.problem || msg.length > 40);
+    const hasGoal = Boolean(updatedLead.goal);
+    const hasName = Boolean(updatedLead.name);
+    const hasContact = Boolean(updatedLead.email || updatedLead.phone);
+    const hasStory = hasProblem && hasGoal;
+
+    // Build a short echo of what the user said to make reply feel coherent
+    const snippet = msg.length > 60 ? msg.slice(0, 57) + '…' : msg;
+    const echoEn = `Got it — "${snippet}".`;
+    const echoPt = `Percebido — "${snippet}".`;
+    const echo = isPt ? echoPt : echoEn;
+
     let reply = '';
-    if (!hasStory) {
+    if (!hasProblem) {
         reply = isPt
-            ? 'Obrigado por estares aqui. Para te ajudarmos com uma proposta de MVP, qual e o principal problema de negocio que queres resolver e para quem?'
-            : 'Thanks for sharing. To shape a strong MVP proposal, what is the main business problem you want to solve, and for whom?';
-    } else if (missingName) {
+            ? `${echo} Para conseguirmos ajudar-te com uma proposta de MVP, qual é o principal problema de negócio que queres resolver, e para quem?`
+            : `${echo} To help you shape a solid MVP, what is the main business problem you want to solve, and who is it for?`;
+    } else if (!hasGoal) {
         reply = isPt
-            ? 'A tua ideia faz sentido e tem potencial. Para preparar os proximos passos contigo, podes partilhar o teu nome?'
-            : 'Your idea makes sense and has potential. To prepare the next steps with you, could you share your name?';
-    } else if (missingContact) {
+            ? `${echo} Faz sentido. Qual é o resultado que esperas alcançar, ou seja, como é que o sucesso se parece para ti neste projeto?`
+            : `${echo} That makes sense. What outcome are you hoping to achieve — what does success look like for you on this project?`;
+    } else if (!hasName) {
         reply = isPt
-            ? 'Excelente contexto. Para te enviarmos um resumo com os proximos passos, deixa o teu melhor email ou telefone.'
-            : 'Great context. To send you a short action summary and next steps, share your best email or phone number.';
+            ? `${echo} A tua ideia tem potencial claro. Podes dizer-me o teu nome para personalizarmos os próximos passos?`
+            : `${echo} Your idea has clear potential. What's your name so we can personalise the next steps?`;
+    } else if (!hasContact) {
+        reply = isPt
+            ? `Obrigado, ${updatedLead.name}. Para te enviarmos um resumo das prioridades do MVP e agendarmos uma conversa rápida, qual é o teu melhor email ou telefone?`
+            : `Thanks, ${updatedLead.name}. To send you a concise MVP priorities brief and arrange a quick call, what's the best email or phone to reach you?`;
     } else {
         reply = isPt
-            ? 'Perfeito, obrigado. Ja temos contexto suficiente para avancar: podemos enviar um resumo com prioridades do MVP e marcar uma chamada curta para alinhar escopo.'
-            : 'Perfect, thank you. We now have enough context to move forward: we can send a concise MVP priority summary and schedule a short alignment call.';
+            ? `Perfeito, ${updatedLead.name}. Já temos contexto suficiente. A equipa da YourLab vai rever a tua ideia e entrar em contacto brevemente com um resumo e proposta de próximos passos.`
+            : `Perfect, ${updatedLead.name}. We have everything we need. The YourLab team will review your idea and reach out shortly with a summary and proposed next steps.`;
     }
 
-    const score = computeLeadScore(lead);
+    const score = computeLeadScore(updatedLead);
     return {
         assistant_reply: reply,
-        request_contact_now: missingContact,
-        lead_stage: resolveLeadStage(lead, score),
+        request_contact_now: !hasContact,
+        lead_stage: resolveLeadStage(updatedLead, score),
         lead_score: score,
         updated_lead: inferredLeadUpdate,
         topic_bullets: session.topicBullets,
-        next_best_action: isPt ? 'Enviar resumo e agendar chamada.' : 'Send summary and schedule intro call.'
+        next_best_action: isPt ? 'Enviar resumo MVP e agendar chamada de alinhamento.' : 'Send MVP brief and schedule an alignment call.'
     };
 }
 
