@@ -23,7 +23,7 @@ echo    Version: %NODE_VERSION%
 echo.
 
 REM Navigate to server directory
-cd /d "%~dp0server"
+cd /d "%~dp0"
 
 REM Check if node_modules exists
 if not exist "node_modules" (

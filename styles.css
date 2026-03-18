@@ -1033,6 +1033,42 @@ body {
     font-size: 0.85rem;
 }
 
+.footer-contact-shortcut {
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+}
+
+.footer-contact-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(232, 213, 183, 0.22);
+    color: #c7c3b9;
+    text-decoration: none;
+    font-size: 0.74rem;
+    letter-spacing: 0.01em;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.footer-contact-link svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.footer-contact-link:hover {
+    color: var(--accent-color);
+    border-color: rgba(232, 213, 183, 0.45);
+    background: rgba(232, 213, 183, 0.06);
+}
+
 /* Animations */
 @keyframes fadeInDown {
     from {
@@ -1119,4 +1155,5 @@ body {
     .slideshow-section {
         height: auto;
     }
+
 }

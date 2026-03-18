@@ -21,7 +21,7 @@ echo "   Version: $(node --version)"
 echo ""
 
 # Navigate to server directory
-cd "$(dirname "$0")/server" || exit
+cd "$(dirname "$0")" || exit
 
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then

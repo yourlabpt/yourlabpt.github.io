@@ -1,0 +1,13 @@
+BEGIN:VCARD
+VERSION:3.0
+N:Soares;Tulio;;;
+FN:Tulio Soares
+ORG:Your Lab
+TITLE:Founder | Software & Embedded Engineer
+TEL;TYPE=CELL,VOICE:+351927319412
+EMAIL;TYPE=WORK,INTERNET:yourlabpt@gmail.com
+URL:https://www.yourlabpt.com
+URL;TYPE=LinkedIn:https://www.linkedin.com/in/your-lab-technologies-2537523a7/
+ADR;TYPE=WORK:;;;;Porto;;Portugal
+NOTE:Custom software, embedded systems, and requirements engineering.
+END:VCARD

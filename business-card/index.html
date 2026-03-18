@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tulio Soares | Your Lab</title>
+  <meta name="description" content="Custom software and engineering-driven digital solutions for businesses.">
+  <meta name="theme-color" content="#161616">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #131313;
+      --bg-2: #1d1d1d;
+      --panel: rgba(22, 22, 22, 0.94);
+      --text: #f2f1ec;
+      --muted: #bbb9b2;
+      --line: rgba(232, 213, 183, 0.2);
+      --accent: #e8d5b7;
+      --accent-hover: #d8c39f;
+      --chip: rgba(232, 213, 183, 0.11);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(232, 213, 183, 0.08), transparent 42%),
+        radial-gradient(circle at 80% 10%, rgba(232, 213, 183, 0.05), transparent 35%),
+        linear-gradient(165deg, var(--bg-1), var(--bg-2));
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 460px;
+    }
+
+    .card {
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 24px 22px;
+      box-shadow: 0 24px 42px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(6px);
+      animation: rise 0.5s ease both;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 14px rgba(232, 213, 183, 0.65);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-family: 'Sora', 'Manrope', sans-serif;
+      font-size: clamp(26px, 6.4vw, 34px);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .role {
+      font-size: 15px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .company {
+      font-size: 17px;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .desc {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .chips span {
+      font-size: 12px;
+      color: #d8d6cf;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      border-radius: 999px;
+      padding: 6px 10px;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      text-decoration: none;
+      text-align: center;
+      padding: 12px 14px;
+      font-weight: 700;
+      font-size: 14px;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      color: #1f1f1f;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 10px 20px rgba(232, 213, 183, 0.24);
+    }
+
+    .btn-secondary {
+      color: var(--text);
+      background: rgba(34, 34, 34, 0.75);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(40, 40, 40, 0.78);
+      border-color: rgba(232, 213, 183, 0.4);
+    }
+
+    .section {
+      margin-top: 20px;
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+    }
+
+    .section h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-family: 'Sora', 'Manrope', sans-serif;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .section p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      color: #9f9d96;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .footer strong {
+      color: #c8c5bc;
+      font-weight: 600;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrapper">
+    <article class="card">
+      <div class="badge">
+        <span class="dot"></span>
+        NFC Business Card
+      </div>
+
+      <h1>Tulio Soares</h1>
+      <div class="role">Founder | Software &amp; Embedded Engineer</div>
+      <div class="company">Your Lab</div>
+
+      <p class="desc">
+        Custom software and engineering-driven digital solutions for businesses.
+      </p>
+
+      <div class="chips">
+        <span>MVP Delivery</span>
+        <span>Embedded Systems</span>
+        <span>Requirements Engineering</span>
+      </div>
+
+      <div class="actions">
+        <a class="btn btn-primary" href="./contact.vcf" download>Save Contact</a>
+        <a class="btn btn-secondary" href="https://yourlab.pt" target="_blank" rel="noopener noreferrer">Visit Website</a>
+        <a class="btn btn-secondary" href="https://www.linkedin.com/in/tuliosoares" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        <a class="btn btn-secondary" href="mailto:hello@yourlab.pt">Email</a>
+        <a class="btn btn-secondary" href="https://wa.me/351912345678" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+      </div>
+
+      <section class="section">
+        <h2>What we do</h2>
+        <p>
+          We build custom software, clarify requirements, and transform business ideas into practical digital systems.
+        </p>
+      </section>
+
+      <div class="footer">
+        <strong>Your Lab</strong> — Porto, Portugal<br>
+        Tap card. Open page. Save contact.
+      </div>
+    </article>
+  </main>
+</body>
+</html>

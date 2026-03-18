@@ -53,6 +53,16 @@ const translations = {
         slide5Heading: 'Are you ready to turn ideas into reality?',
         slide5Lead: 'We are here for you. YourLab Technologies.',
         slide5Cta: 'Start the conversation',
+        // NFC Business Card
+        nfcKicker: 'NFC BUSINESS CARD',
+        nfcHeading: 'Tap, Open, Save Contact',
+        nfcDescription: 'Use an NFC card, NFC sticker, or iPhone shortcut to instantly share your website contact profile.',
+        nfcStep1: '1. Tap card',
+        nfcStep2: '2. Open page',
+        nfcStep3: '3. Save contact',
+        nfcOpenPage: 'Open digital card',
+        nfcDownload: 'Download contact (.vcf)',
+        nfcNote: 'NFC tip: write only the page URL as an NDEF URI record.',
 
         // Chat
         chatHeading: "Let's Talk About Your Idea",
@@ -63,6 +73,7 @@ const translations = {
         sendBtn: 'Send',
         // Footer
         footerText: '\u00A9 2025 YourLab. All rights reserved.',
+        footerContactShortcut: 'Contacts card',
         // Chat bot responses
         bot: {
             r0: 'Great! Tell me more about your business idea. What problem are you solving?',
@@ -132,6 +143,16 @@ const translations = {
         slide5Heading: 'Est\u00E1s pronto para transformar ideias em realidade?',
         slide5Lead: 'Estamos aqui para ti. YourLab Technologies.',
         slide5Cta: 'Come\u00E7a a conversa',
+        // NFC Business Card
+        nfcKicker: 'CART\u00C3O NFC',
+        nfcHeading: 'Toca, abre, guarda o contacto',
+        nfcDescription: 'Usa um cart\u00E3o NFC, autocolante NFC ou atalho no iPhone para partilhar instantaneamente o teu perfil de contacto do website.',
+        nfcStep1: '1. Tocar no cart\u00E3o',
+        nfcStep2: '2. Abrir p\u00E1gina',
+        nfcStep3: '3. Guardar contacto',
+        nfcOpenPage: 'Abrir cart\u00E3o digital',
+        nfcDownload: 'Descarregar contacto (.vcf)',
+        nfcNote: 'Dica NFC: grava apenas o URL da p\u00E1gina como registo NDEF URI.',
 
         // Chat
         chatHeading: 'Vamos Falar Sobre a Tua Ideia',
@@ -142,6 +163,7 @@ const translations = {
         sendBtn: 'Enviar',
         // Footer
         footerText: '\u00A9 2025 YourLab. Todos os direitos reservados.',
+        footerContactShortcut: 'Cart\u00E3o de contacto',
         // Chat bot responses
         bot: {
             r0: '\u00D3timo! Conta-me mais sobre a tua ideia de neg\u00F3cio. Que problema est\u00E1s a resolver?',

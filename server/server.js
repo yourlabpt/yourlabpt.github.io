@@ -774,6 +774,15 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Explicit business-card routes (safety for environments that do not auto-serve folder index)
+app.get('/business-card', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'business-card', 'index.html'));
+});
+
+app.get('/business-card/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'business-card', 'index.html'));
+});
+
 // Serve index.html for any unmatched routes
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'index.html'));
