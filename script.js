@@ -128,7 +128,6 @@ const translations = {
         projectShowcaseKicker: 'PROVEN PROJECT STORIES',
         projectShowcaseHeading: 'What we build, how we build it, and the outcomes clients get',
         projectShowcaseDescription: 'Every case shows the full path: business request, initial pain, our execution strategy, and a flexible solution ready for daily operations.',
-        projectShowcaseAddHint: 'Add or update projects in `projectShowcaseData` in `script.js`. For agent automation, use `docs/PROJECT_SHOWCASE_AGENT_PROMPT.md`.',
         projectCaseLabel: 'Case',
         projectBuiltForLabel: 'Built for',
         projectSectorLabel: 'Sector',
@@ -303,7 +302,6 @@ const translations = {
         projectShowcaseKicker: 'CASOS COM RESULTADO REAL',
         projectShowcaseHeading: 'O que construimos, como executamos e quais resultados entregamos',
         projectShowcaseDescription: 'Cada caso mostra a jornada completa: pedido de negocio, dor inicial, estrategia de execucao e solucao flexivel pronta para operacao diaria.',
-        projectShowcaseAddHint: 'Adicione ou atualize projetos em `projectShowcaseData` no `script.js`. Para automacao com agentes, use `docs/PROJECT_SHOWCASE_AGENT_PROMPT.md`.',
         projectCaseLabel: 'Caso',
         projectBuiltForLabel: 'Construido para',
         projectSectorLabel: 'Setor',
@@ -398,106 +396,110 @@ document.getElementById('langToggle').addEventListener('click', () => {
 // Apply saved language on load
 setLanguage(currentLang);
 
-// ===== Projects Showcase (Bilingual + Easy to Extend) =====
-// Add new projects by appending a new object to this array.
-// Expected fields:
-// id, title{en,pt}, clientProfile{en,pt}, sector{en,pt}, timeline{en,pt},
-// strategicRequest{en,pt}, painSnapshot{en,pt}, businessImpact{en,pt},
-// approach{en[],pt[]}, solutionDelivered{en[],pt[]}, results{en[],pt[]},
-// dailyUse{en[],pt[]}, optional ctaText{en,pt}
-const projectShowcaseData = [
-    {
-        "operation": "update",
-        "target_id": "001",
-        "project": {
-            "id": "gestao-flexivel-gorjetas-restaurantes",
-            "title": {
-            "pt": "Centralizacao de Gorjetas e Fechamento Financeiro para Restaurantes",
-            "en": "Centralized Tip and Financial Closing Management for Restaurants"
-            },
-            "clientProfile": {
-            "pt": "Rede de restaurantes com donos, gerentes e supervisores que precisam controlar faturamento diario e distribuicao de gorjetas por funcionario.",
-            "en": "Restaurant group with owners, managers, and supervisors who need control over daily revenue and employee-level tip distribution."
-            },
-            "sector": {
-            "pt": "Restauracao",
-            "en": "Restaurant Operations"
-            },
-            "timeline": {
-            "pt": "Projeto evolutivo em fases, do lancamento diario a configuracoes avancadas de acerto.",
-            "en": "Phased project evolution, from daily entries to advanced settlement configuration."
-            },
-            "strategicRequest": {
-            "pt": "Criar um sistema unico para registrar gorjetas e faturamento diario, calcular corretamente por funcao e garantir pagamentos consistentes em cada restaurante.",
-            "en": "Build a single system to record tips and daily revenue, calculate correctly by role, and ensure consistent payouts in each restaurant."
-            },
-            "painSnapshot": {
-            "pt": "O pedido comecou como um controle simples de gorjetas, mas havia divergencia entre a base usada para calcular algumas funcoes e a fonte real de pagamento.",
-            "en": "The request started as simple tip tracking, but there was a mismatch between the base used to calculate some roles and the real payment source."
-            },
-            "businessImpact": {
-            "pt": "Essa divergencia gerava ajustes manuais, risco de inconsistencias entre unidades e consumo de tempo da lideranca para validar valores.",
-            "en": "This mismatch caused manual adjustments, risk of inconsistencies across units, and leadership time spent validating numbers."
-            },
-            "approach": {
-            "pt": [
-                "Mapeamos regras reais por funcao e por restaurante para identificar onde calculo e pagamento divergiam.",
-                "Estruturamos um motor de regras flexivel separando fonte de calculo e fonte de pagamento por perfil.",
-                "Conectamos cadastro, presenca, lancamento diario e acerto por periodo em um fluxo unico de operacao."
-            ],
-            "en": [
-                "We mapped real rules by role and restaurant to identify where calculation and payment diverged.",
-                "We structured a flexible rules engine separating calculation source and payment source by profile.",
-                "We connected staff records, attendance, daily entries, and period settlement into one operating flow."
-            ]
-            },
-            "solutionDelivered": {
-            "pt": [
-                "Modulo de lancamento diario com faturamento global, gorjetas e valores por funcionario.",
-                "Sistema flexivel de criacao e ajuste de regras por tipo de funcionario e tipo de restaurante.",
-                "Capacidades operacionais para ficha de funcionarios, marcacao de presenca e acerto diario ou por periodo."
-            ],
-            "en": [
-                "Daily entry module with total revenue, tips, and per-employee values.",
-                "Flexible system to create and adjust rules by employee type and restaurant type.",
-                "Operational capabilities for staff records, attendance tracking, and daily or period settlement."
-            ]
-            },
-            "results": {
-            "pt": [
-                "Calculos e pagamentos ficaram alinhados com a regra real de cada funcao.",
-                "Reducao de retrabalho manual e maior confianca no fechamento financeiro.",
-                "Gestao centralizada para donos com execucao distribuida entre gerentes e supervisores."
-            ],
-            "en": [
-                "Calculations and payouts became aligned with each role's real rule.",
-                "Lower manual rework and higher confidence in financial closing.",
-                "Centralized oversight for owners with distributed execution across managers and supervisors."
-            ]
-            },
-            "dailyUse": {
-            "pt": [
-                "Regras podem ser atualizadas no dia a dia sem interromper a operacao.",
-                "Modelo pode ser replicado para novos restaurantes mantendo padrao de controle.",
-                "Fluxo atende diferentes perfis de uso com responsabilidades claras por nivel de gestao."
-            ],
-            "en": [
-                "Rules can be updated day to day without interrupting operations.",
-                "The model can be replicated to new restaurants while keeping control standards.",
-                "The workflow supports different user profiles with clear responsibilities by management level."
-            ]
-            },
-            "ctaText": {
-            "pt": "Se voce quer padronizar gorjetas e fechamento financeiro em varias unidades, fale com a YourLab.",
-            "en": "If you want to standardize tip management and financial closing across multiple locations, talk to YourLab."
-            }
-        },
-        "changeSummary": {
-            "pt": "Case 001 atualizado com foco na correcao da divergencia entre calculo e pagamento e na evolucao para regras flexiveis por funcao e restaurante.",
-            "en": "Case 001 updated with focus on fixing the calculation-versus-payment mismatch and evolving to flexible rules by role and restaurant."
+// ===== Projects Showcase =====
+// Source of truth is the Admin Dashboard + backend API.
+// This local array is only a fallback used if the API is unavailable.
+const projectShowcaseData = [];
+
+function normalizeProjectShowcaseCollection(input) {
+    const asArray = Array.isArray(input) ? input : [input];
+
+    function pickLangValue(value, fallback = '') {
+        if (typeof value === 'string') {
+            return { pt: value, en: value };
         }
-    },
-];
+        if (!value || typeof value !== 'object') {
+            return { pt: fallback, en: fallback };
+        }
+
+        const pt = typeof value.pt === 'string'
+            ? value.pt
+            : typeof value.en === 'string'
+                ? value.en
+                : fallback;
+        const en = typeof value.en === 'string'
+            ? value.en
+            : typeof value.pt === 'string'
+                ? value.pt
+                : fallback;
+
+        return { pt, en };
+    }
+
+    function pickLangList(value, fallback = []) {
+        if (Array.isArray(value)) {
+            return { pt: [...value], en: [...value] };
+        }
+        if (!value || typeof value !== 'object') {
+            return { pt: [...fallback], en: [...fallback] };
+        }
+
+        const pt = Array.isArray(value.pt)
+            ? value.pt
+            : Array.isArray(value.en)
+                ? value.en
+                : fallback;
+        const en = Array.isArray(value.en)
+            ? value.en
+            : Array.isArray(value.pt)
+                ? value.pt
+                : fallback;
+
+        return { pt: [...pt], en: [...en] };
+    }
+
+    return asArray
+        .map((entry, index) => {
+            if (!entry || typeof entry !== 'object') return null;
+
+            // Supports both:
+            // 1) direct project object
+            // 2) wrapped agent output { operation, target_id, project: { ... } }
+            const source = (entry.project && typeof entry.project === 'object')
+                ? entry.project
+                : entry;
+
+            const title = pickLangValue(source.title);
+            const hasRenderableTitle = Boolean((title.pt || '').trim() || (title.en || '').trim());
+            if (!hasRenderableTitle) return null;
+
+            const solutionDeliveredRaw = source.solutionDelivered || source.finalResult;
+            const solutionDelivered = Array.isArray(solutionDeliveredRaw) || (
+                solutionDeliveredRaw && typeof solutionDeliveredRaw === 'object' && (
+                    Array.isArray(solutionDeliveredRaw.pt) || Array.isArray(solutionDeliveredRaw.en)
+                )
+            )
+                ? pickLangList(solutionDeliveredRaw)
+                : pickLangList([]);
+
+            const finalResultAsText = pickLangValue(source.finalResult || '');
+            if (!solutionDelivered.pt.length && (finalResultAsText.pt || '').trim()) {
+                solutionDelivered.pt = [finalResultAsText.pt];
+            }
+            if (!solutionDelivered.en.length && (finalResultAsText.en || '').trim()) {
+                solutionDelivered.en = [finalResultAsText.en];
+            }
+
+            return {
+                id: typeof source.id === 'string' && source.id.trim()
+                    ? source.id.trim()
+                    : `project-${index + 1}`,
+                title,
+                clientProfile: pickLangValue(source.clientProfile || source.client || source.audience || ''),
+                sector: pickLangValue(source.sector || source.industry || ''),
+                timeline: pickLangValue(source.timeline || ''),
+                strategicRequest: pickLangValue(source.strategicRequest || source.request || ''),
+                painSnapshot: pickLangValue(source.painSnapshot || source.requestPain || ''),
+                businessImpact: pickLangValue(source.businessImpact || ''),
+                approach: pickLangList(source.approach || source.processProposal || []),
+                solutionDelivered,
+                results: pickLangList(source.results || []),
+                dailyUse: pickLangList(source.dailyUse || []),
+                ctaText: pickLangValue(source.ctaText || '')
+            };
+        })
+        .filter(Boolean);
+}
 
 (function initProjectShowcase() {
     const wrapper = document.querySelector('[data-project-showcase]');
@@ -509,8 +511,8 @@ const projectShowcaseData = [
     const nextBtn = wrapper.querySelector('[data-project-next]');
     if (!slidesEl || !dotsEl) return;
 
-    const total = projectShowcaseData.length;
-    if (!total) return;
+    let normalizedProjects = normalizeProjectShowcaseCollection(projectShowcaseData);
+    const apiBase = (window.YOURLAB_API_URL || '').replace(/\/$/, '');
 
     let current = 0;
     let touchStartX = 0;
@@ -546,8 +548,31 @@ const projectShowcaseData = [
         return String(value).padStart(2, '0');
     }
 
+    function totalProjects() {
+        return normalizedProjects.length;
+    }
+
+    function setEmptyState() {
+        slidesEl.innerHTML = '';
+        dotsEl.innerHTML = '';
+        if (prevBtn) {
+            prevBtn.disabled = true;
+            prevBtn.classList.add('is-disabled');
+        }
+        if (nextBtn) {
+            nextBtn.disabled = true;
+            nextBtn.classList.add('is-disabled');
+        }
+    }
+
     function render() {
-        slidesEl.innerHTML = projectShowcaseData.map((project, index) => {
+        const total = totalProjects();
+        if (!total) {
+            setEmptyState();
+            return;
+        }
+
+        slidesEl.innerHTML = normalizedProjects.map((project, index) => {
             const approachSteps = listFor(project.approach)
                 .map((item) => `<li>${escapeHtml(item)}</li>`)
                 .join('');
@@ -618,7 +643,7 @@ const projectShowcaseData = [
             `;
         }).join('');
 
-        dotsEl.innerHTML = projectShowcaseData.map((_, index) => `
+        dotsEl.innerHTML = normalizedProjects.map((_, index) => `
             <button
                 type="button"
                 class="project-showcase-dot ${index === current ? 'active' : ''}"
@@ -641,15 +666,35 @@ const projectShowcaseData = [
         }
 
         if (nextBtn) {
-            nextBtn.disabled = current === total - 1;
-            nextBtn.classList.toggle('is-disabled', current === total - 1);
+            nextBtn.disabled = current === (total - 1);
+            nextBtn.classList.toggle('is-disabled', current === (total - 1));
             nextBtn.setAttribute('aria-label', t('projectNextAria'));
         }
     }
 
     function goTo(index) {
+        const total = totalProjects();
+        if (!total) return;
         current = clamp(index, 0, total - 1);
         render();
+    }
+
+    async function loadProjectsFromApi() {
+        try {
+            const response = await fetch(`${apiBase}/api/project-showcase`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            const fromApi = normalizeProjectShowcaseCollection(payload && payload.projects ? payload.projects : []);
+            normalizedProjects = fromApi;
+            current = fromApi.length ? clamp(current, 0, fromApi.length - 1) : 0;
+            render();
+        } catch (_) {
+            // Keep local fallback data silently if API is unavailable
+        }
     }
 
     if (prevBtn) {
@@ -678,6 +723,7 @@ const projectShowcaseData = [
     });
 
     render();
+    loadProjectsFromApi();
 })();
 
 // Helper to get current bot translations

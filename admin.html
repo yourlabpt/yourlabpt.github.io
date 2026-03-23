@@ -60,6 +60,32 @@
             gap: 10px;
         }
 
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .tab-btn {
+            background: var(--accent-dark);
+            color: var(--text-light);
+            border: 1px solid var(--accent-dark);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .tab-btn.active {
+            border-color: var(--accent-color);
+            background: rgba(232, 213, 183, 0.15);
+            color: var(--accent-color);
+        }
+
+        .view.hidden {
+            display: none;
+        }
+
         button {
             padding: 8px 16px;
             background: var(--accent-color);
@@ -262,6 +288,116 @@
             box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
         }
 
+        .projects-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .project-panel {
+            background: var(--secondary-dark);
+            border: 1px solid var(--accent-dark);
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .project-panel h2 {
+            font-size: 1rem;
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+
+        .project-panel p {
+            color: var(--text-muted);
+            font-size: 0.84rem;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        #projectJsonInput {
+            width: 100%;
+            min-height: 280px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.45;
+            padding: 12px;
+            color: var(--text-light);
+            background: var(--primary-dark);
+            border: 1px solid var(--accent-dark);
+            border-radius: 8px;
+            outline: none;
+        }
+
+        #projectJsonInput:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
+        }
+
+        .project-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .project-actions button {
+            font-size: 0.8rem;
+            padding: 7px 11px;
+            border-radius: 7px;
+        }
+
+        .btn-secondary {
+            background: var(--accent-dark);
+            color: var(--text-light);
+            border: 1px solid var(--accent-color);
+        }
+
+        .project-status {
+            margin-top: 10px;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            min-height: 1.2em;
+        }
+
+        .project-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .project-item {
+            border: 1px solid var(--accent-dark);
+            border-radius: 8px;
+            padding: 11px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .project-item h3 {
+            font-size: 0.9rem;
+            color: var(--accent-color);
+            margin-bottom: 6px;
+        }
+
+        .project-item p {
+            margin-bottom: 4px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .project-item-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .project-item-actions button {
+            font-size: 0.75rem;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+
         .toast {
             position: fixed;
             bottom: 20px;
@@ -376,6 +512,9 @@
             header { flex-direction: column; gap: 20px; align-items: flex-start; }
             .controls { width: 100%; }
             .controls button { flex: 1; }
+            .projects-layout { grid-template-columns: 1fr; }
+            .tabs { width: 100%; }
+            .tab-btn { flex: 1; }
         }
     </style>
 </head>
@@ -404,23 +543,63 @@
             </div>
         </header>
 
-        <div class="stats" id="stats">
-            <div class="stat-card">
-                <h3>Total Inquiries</h3>
-                <div class="number" id="totalCount">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Last Updated</h3>
-                <div id="lastUpdate" style="color: var(--accent-color); font-size: 0.9rem; margin-top: 10px;">-</div>
-            </div>
+        <div class="tabs">
+            <button id="tabInquiries" class="tab-btn active" onclick="switchTab('inquiries')">Inquiries</button>
+            <button id="tabProjects" class="tab-btn" onclick="switchTab('projects')">Project Showcase</button>
         </div>
 
-        <div class="filter-section">
-            <input type="text" id="searchInput" placeholder="Search by name, email, or business idea...">
-            <button onclick="clearSearch()">Clear</button>
-        </div>
+        <section id="inquiriesView" class="view">
+            <div class="stats" id="stats">
+                <div class="stat-card">
+                    <h3>Total Inquiries</h3>
+                    <div class="number" id="totalCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Published Projects</h3>
+                    <div class="number" id="projectCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Last Updated</h3>
+                    <div id="lastUpdate" style="color: var(--accent-color); font-size: 0.9rem; margin-top: 10px;">-</div>
+                </div>
+            </div>
 
-        <div id="content" class="inquiries-grid"></div>
+            <div class="filter-section">
+                <input type="text" id="searchInput" placeholder="Search by name, email, or business idea...">
+                <button onclick="clearSearch()">Clear</button>
+            </div>
+
+            <div id="content" class="inquiries-grid"></div>
+        </section>
+
+        <section id="projectsView" class="view hidden">
+            <div class="projects-layout">
+                <div class="project-panel">
+                    <h2>Apply Agent JSON</h2>
+                    <p>Paste the JSON output from your AI agent (raw JSON or <code>```json</code> fenced). It accepts both direct project objects and wrapped payloads with <code>operation/target_id/project</code>.</p>
+                    <textarea id="projectJsonInput" placeholder='{
+  "operation": "add",
+  "target_id": "",
+  "project": {
+    "id": "my-project-id",
+    "title": { "pt": "...", "en": "..." }
+  }
+}'></textarea>
+                    <div class="project-actions">
+                        <button onclick="applyProjectPayload()">Apply Payload</button>
+                        <button class="btn-secondary" onclick="replaceAllProjects()">Replace Collection</button>
+                        <button class="btn-secondary" onclick="clearProjectInput()">Clear</button>
+                    </div>
+                    <div id="projectStatus" class="project-status"></div>
+                </div>
+
+                <div class="project-panel">
+                    <h2>Published Projects</h2>
+                    <p>The website uses this list automatically via API.</p>
+                    <div id="projectList" class="project-list"></div>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script>
@@ -467,6 +646,8 @@
                     setToken(data.token);
                     hideLoginOverlay();
                     loadInquiries();
+                    loadProjects();
+                    switchTab('inquiries');
                 } else {
                     document.getElementById('login-error').textContent = data.error || 'Invalid password.';
                 }
@@ -487,6 +668,8 @@
 
         // ── Data loading ──────────────────────────────────────
         let allInquiries = [];
+        let projectItems = [];
+        let activeTab = 'inquiries';
 
         async function loadInquiries() {
             try {
@@ -500,6 +683,22 @@
                 console.error('Error loading inquiries:', error);
                 showError('Failed to load inquiries. Make sure the backend is running.');
             }
+        }
+
+        function switchTab(tab) {
+            activeTab = tab === 'projects' ? 'projects' : 'inquiries';
+            const inquiriesView = document.getElementById('inquiriesView');
+            const projectsView = document.getElementById('projectsView');
+            const tabInquiries = document.getElementById('tabInquiries');
+            const tabProjects = document.getElementById('tabProjects');
+
+            if (!inquiriesView || !projectsView || !tabInquiries || !tabProjects) return;
+
+            const showProjects = activeTab === 'projects';
+            inquiriesView.classList.toggle('hidden', showProjects);
+            projectsView.classList.toggle('hidden', !showProjects);
+            tabInquiries.classList.toggle('active', !showProjects);
+            tabProjects.classList.toggle('active', showProjects);
         }
 
         function field(label, value) {
@@ -562,8 +761,203 @@
             }).join('');
         }
 
+        async function loadProjects() {
+            try {
+                const response = await fetch(`${API_BASE}/api/project-showcase`, { headers: authHeaders() });
+                if (response.status === 401) { clearToken(); showLoginOverlay('Session expired. Please sign in again.'); return; }
+                const data = await response.json();
+                projectItems = Array.isArray(data.projects) ? data.projects : [];
+                displayProjects(projectItems);
+                updateStats();
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                setProjectStatus('Failed to load projects from server.', true);
+            }
+        }
+
+        function displayProjects(projects) {
+            const target = document.getElementById('projectList');
+            if (!target) return;
+
+            if (!projects.length) {
+                target.innerHTML = `
+                    <div class="empty-state" style="padding: 25px 10px;">
+                        <p>No published projects yet.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            target.innerHTML = projects.map((project) => {
+                const titlePt = escapeHtml(project && project.title && project.title.pt || 'Untitled');
+                const titleEn = escapeHtml(project && project.title && project.title.en || '');
+                const id = escapeHtml(project && project.id || '');
+                const sector = escapeHtml(project && project.sector && (project.sector.pt || project.sector.en) || '');
+                return `
+                    <article class="project-item">
+                        <h3>${titlePt}</h3>
+                        ${titleEn ? `<p><strong>EN:</strong> ${titleEn}</p>` : ''}
+                        <p><strong>ID:</strong> ${id || '-'}</p>
+                        <p><strong>Sector:</strong> ${sector || '-'}</p>
+                        <div class="project-item-actions">
+                            <button class="btn-small btn-copy" onclick='copyProject(${JSON.stringify(JSON.stringify(project))})'>📋 Copy JSON</button>
+                            <button class="btn-small btn-delete" onclick="deleteProject('${id}')">🗑️ Delete</button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function setProjectStatus(message, isError = false) {
+            const status = document.getElementById('projectStatus');
+            if (!status) return;
+            status.textContent = message || '';
+            status.style.color = isError ? 'var(--danger-color)' : 'var(--success-color)';
+        }
+
+        function parseProjectInput() {
+            const input = document.getElementById('projectJsonInput');
+            if (!input) throw new Error('Project input textarea not found.');
+            const raw = (input.value || '').trim();
+            if (!raw) throw new Error('Paste the JSON payload first.');
+
+            let candidate = raw;
+
+            // Accept common AI output shape: ```json ... ```
+            const fenced = candidate.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+            if (fenced && fenced[1]) {
+                candidate = fenced[1].trim();
+            }
+
+            // If extra text exists around JSON, extract the first root object/array.
+            if (!(candidate.startsWith('{') || candidate.startsWith('['))) {
+                const start = candidate.search(/[\[{]/);
+                const endObject = candidate.lastIndexOf('}');
+                const endArray = candidate.lastIndexOf(']');
+                const end = Math.max(endObject, endArray);
+                if (start >= 0 && end > start) {
+                    candidate = candidate.slice(start, end + 1).trim();
+                }
+            }
+
+            try {
+                return JSON.parse(candidate);
+            } catch (error) {
+                throw new Error('Invalid JSON. Paste only the JSON payload from the agent output.');
+            }
+        }
+
+        async function applyProjectPayload() {
+            try {
+                const parsed = parseProjectInput();
+                const response = await fetch(`${API_BASE}/api/project-showcase/apply`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ payload: parsed })
+                });
+
+                if (response.status === 401) {
+                    clearToken();
+                    showLoginOverlay('Session expired. Please sign in again.');
+                    return;
+                }
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || data.details || 'Failed to apply payload.');
+
+                projectItems = Array.isArray(data.projects) ? data.projects : [];
+                displayProjects(projectItems);
+                updateStats();
+                setProjectStatus(`Applied successfully. Actions: ${(data.actions || []).join(', ') || 'done'}.`);
+                showToast('Project payload applied.');
+            } catch (error) {
+                setProjectStatus(error.message || 'Invalid JSON payload.', true);
+                showError(error.message || 'Could not apply project payload.');
+            }
+        }
+
+        async function replaceAllProjects() {
+            try {
+                const parsed = parseProjectInput();
+                const source = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.projects) ? parsed.projects : null);
+                if (!source) throw new Error('Replace requires a JSON array (or an object with a `projects` array).');
+
+                const response = await fetch(`${API_BASE}/api/project-showcase`, {
+                    method: 'PUT',
+                    headers: authHeaders(),
+                    body: JSON.stringify({ payload: source })
+                });
+
+                if (response.status === 401) {
+                    clearToken();
+                    showLoginOverlay('Session expired. Please sign in again.');
+                    return;
+                }
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || data.details || 'Failed to replace collection.');
+
+                projectItems = Array.isArray(data.projects) ? data.projects : [];
+                displayProjects(projectItems);
+                updateStats();
+                setProjectStatus(`Collection replaced. Total projects: ${projectItems.length}.`);
+                showToast('Project collection replaced.');
+            } catch (error) {
+                setProjectStatus(error.message || 'Could not replace collection.', true);
+                showError(error.message || 'Could not replace collection.');
+            }
+        }
+
+        async function deleteProject(id) {
+            const cleanId = String(id || '').trim();
+            if (!cleanId) return;
+            if (!confirm(`Delete project "${cleanId}"?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/project-showcase/${encodeURIComponent(cleanId)}`, {
+                    method: 'DELETE',
+                    headers: authHeaders()
+                });
+
+                if (response.status === 401) {
+                    clearToken();
+                    showLoginOverlay('Session expired. Please sign in again.');
+                    return;
+                }
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || data.details || 'Failed to delete project.');
+
+                projectItems = Array.isArray(data.projects) ? data.projects : [];
+                displayProjects(projectItems);
+                updateStats();
+                setProjectStatus(`Deleted project: ${cleanId}`);
+                showToast('Project deleted.');
+            } catch (error) {
+                setProjectStatus(error.message || 'Could not delete project.', true);
+                showError(error.message || 'Could not delete project.');
+            }
+        }
+
+        function clearProjectInput() {
+            const input = document.getElementById('projectJsonInput');
+            if (input) input.value = '';
+            setProjectStatus('');
+        }
+
+        function copyProject(jsonStr) {
+            try {
+                navigator.clipboard.writeText(JSON.stringify(JSON.parse(jsonStr), null, 2));
+                showToast('Project JSON copied!');
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
         function updateStats() {
             document.getElementById('totalCount').textContent = allInquiries.length;
+            const projectCountEl = document.getElementById('projectCount');
+            if (projectCountEl) projectCountEl.textContent = projectItems.length;
             document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
         }
 
@@ -589,9 +983,28 @@
             } catch (error) { showError('Failed to delete inquiry'); }
         }
 
-        function refreshData() { loadInquiries(); showToast('Refreshed!'); }
+        function refreshData() {
+            if (activeTab === 'projects') {
+                loadProjects();
+            } else {
+                loadInquiries();
+            }
+            showToast('Refreshed!');
+        }
 
         function exportData() {
+            if (activeTab === 'projects') {
+                if (projectItems.length === 0) { showError('No projects to export'); return; }
+                const blob = new Blob([JSON.stringify(projectItems, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `yourlab_projects_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                showToast('Exported!');
+                return;
+            }
+
             if (allInquiries.length === 0) { showError('No inquiries to export'); return; }
             const blob = new Blob([JSON.stringify(allInquiries, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -628,7 +1041,11 @@
         if (getToken()) {
             hideLoginOverlay();
             loadInquiries();
-            setInterval(loadInquiries, 15000);
+            loadProjects();
+            switchTab('inquiries');
+            setInterval(() => {
+                if (activeTab === 'inquiries') loadInquiries();
+            }, 15000);
         } else {
             showLoginOverlay();
         }

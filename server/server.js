@@ -140,6 +140,11 @@ if (!fs.existsSync(inquiriesDir)) {
     fs.mkdirSync(inquiriesDir, { recursive: true });
 }
 
+const projectShowcaseFile = path.join(__dirname, 'project-showcase.json');
+if (!fs.existsSync(projectShowcaseFile)) {
+    fs.writeFileSync(projectShowcaseFile, '[]\n');
+}
+
 const conversationSessions = new Map();
 let mailTransporter = null;
 
@@ -745,6 +750,209 @@ function normalizeInquiryFilename(id) {
     return safeId.endsWith('.json') ? safeId : `${safeId}.json`;
 }
 
+function normalizeProjectId(value, fallback = '') {
+    const raw = cleanText(value, 160).toLowerCase();
+    const normalized = raw
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return normalized || cleanText(fallback, 160).toLowerCase() || '';
+}
+
+function normalizeProjectLangValue(value, fallback = '') {
+    if (typeof value === 'string') {
+        return {
+            pt: cleanText(value, 600),
+            en: cleanText(value, 600)
+        };
+    }
+    if (!value || typeof value !== 'object') {
+        return { pt: fallback, en: fallback };
+    }
+
+    const pt = cleanText(
+        typeof value.pt === 'string' ? value.pt : (typeof value.en === 'string' ? value.en : fallback),
+        600
+    );
+    const en = cleanText(
+        typeof value.en === 'string' ? value.en : (typeof value.pt === 'string' ? value.pt : fallback),
+        600
+    );
+
+    return { pt, en };
+}
+
+function normalizeProjectLangList(value, fallback = []) {
+    const source = Array.isArray(value)
+        ? value
+        : (value && Array.isArray(value.pt))
+            ? value.pt
+            : (value && Array.isArray(value.en))
+                ? value.en
+                : fallback;
+
+    const sourcePt = (value && Array.isArray(value.pt)) ? value.pt : source;
+    const sourceEn = (value && Array.isArray(value.en)) ? value.en : source;
+
+    return {
+        pt: sourcePt.map((item) => cleanText(item, 320)).filter(Boolean),
+        en: sourceEn.map((item) => cleanText(item, 320)).filter(Boolean)
+    };
+}
+
+function normalizeProjectEntry(input, index = 0) {
+    if (!input || typeof input !== 'object') return null;
+
+    const source = (input.project && typeof input.project === 'object')
+        ? input.project
+        : input;
+
+    const title = normalizeProjectLangValue(source.title, '');
+    if (!title.pt && !title.en) return null;
+
+    const solutionDeliveredRaw = source.solutionDelivered || source.finalResult;
+    let solutionDelivered = normalizeProjectLangList(solutionDeliveredRaw, []);
+    const finalResultText = normalizeProjectLangValue(source.finalResult || '', '');
+
+    if (!solutionDelivered.pt.length && finalResultText.pt) {
+        solutionDelivered.pt = [finalResultText.pt];
+    }
+    if (!solutionDelivered.en.length && finalResultText.en) {
+        solutionDelivered.en = [finalResultText.en];
+    }
+
+    const fallbackId = `project-${index + 1}`;
+    const id = normalizeProjectId(source.id, fallbackId) || fallbackId;
+
+    return {
+        id,
+        title,
+        clientProfile: normalizeProjectLangValue(source.clientProfile || source.client || source.audience || '', ''),
+        sector: normalizeProjectLangValue(source.sector || source.industry || '', ''),
+        timeline: normalizeProjectLangValue(source.timeline || '', ''),
+        strategicRequest: normalizeProjectLangValue(source.strategicRequest || source.request || '', ''),
+        painSnapshot: normalizeProjectLangValue(source.painSnapshot || source.requestPain || '', ''),
+        businessImpact: normalizeProjectLangValue(source.businessImpact || '', ''),
+        approach: normalizeProjectLangList(source.approach || source.processProposal || [], []),
+        solutionDelivered,
+        results: normalizeProjectLangList(source.results || [], []),
+        dailyUse: normalizeProjectLangList(source.dailyUse || [], []),
+        ctaText: normalizeProjectLangValue(source.ctaText || '', '')
+    };
+}
+
+function normalizeProjectCollection(input) {
+    const source = Array.isArray(input)
+        ? input
+        : (input && Array.isArray(input.projects))
+            ? input.projects
+            : [input];
+
+    return source
+        .map((entry, index) => normalizeProjectEntry(entry, index))
+        .filter(Boolean);
+}
+
+function readProjectShowcaseData() {
+    try {
+        if (!fs.existsSync(projectShowcaseFile)) return [];
+        const raw = fs.readFileSync(projectShowcaseFile, 'utf8').trim();
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return normalizeProjectCollection(parsed);
+    } catch (error) {
+        console.error('Failed to read project showcase data:', error.message);
+        return [];
+    }
+}
+
+function writeProjectShowcaseData(projects) {
+    const normalized = normalizeProjectCollection(projects);
+    fs.writeFileSync(projectShowcaseFile, JSON.stringify(normalized, null, 2));
+    return normalized;
+}
+
+function applyProjectPayload(currentProjects, payload) {
+    let next = [...currentProjects];
+    const actions = [];
+
+    function upsertProject(project, targetId = '') {
+        const normalized = normalizeProjectEntry(project, next.length);
+        if (!normalized) return;
+
+        const normalizedTarget = normalizeProjectId(targetId, '');
+        const effectiveId = normalizedTarget || normalized.id;
+        normalized.id = effectiveId;
+
+        const index = next.findIndex((item) => item.id === effectiveId);
+        if (index >= 0) {
+            next[index] = normalized;
+            actions.push(`updated:${effectiveId}`);
+        } else {
+            next.push(normalized);
+            actions.push(`added:${effectiveId}`);
+        }
+    }
+
+    function processNode(node) {
+        if (node == null) return;
+
+        if (typeof node === 'string') {
+            try {
+                const parsed = JSON.parse(node);
+                processNode(parsed);
+            } catch (_) {
+                throw new Error('Invalid JSON string payload.');
+            }
+            return;
+        }
+
+        if (Array.isArray(node)) {
+            node.forEach(processNode);
+            return;
+        }
+
+        if (typeof node !== 'object') return;
+
+        if (Array.isArray(node.projects)) {
+            const replaced = normalizeProjectCollection(node.projects);
+            next = replaced;
+            actions.push(`replaced:${replaced.length}`);
+            return;
+        }
+
+        const operation = cleanText(node.operation || node.mode, 40).toLowerCase();
+        const targetId = cleanText(node.target_id || node.targetId || node.id, 160);
+
+        if (operation === 'delete') {
+            const normalizedId = normalizeProjectId(targetId, '');
+            if (!normalizedId) return;
+            const before = next.length;
+            next = next.filter((item) => item.id !== normalizedId);
+            if (next.length !== before) {
+                actions.push(`deleted:${normalizedId}`);
+            }
+            return;
+        }
+
+        if (operation === 'replace' && node.project && typeof node.project === 'object') {
+            const replaced = normalizeProjectCollection([node.project]);
+            next = replaced;
+            actions.push(`replaced:${replaced.length}`);
+            return;
+        }
+
+        if (node.project && typeof node.project === 'object') {
+            upsertProject(node.project, operation === 'update' ? targetId : '');
+            return;
+        }
+
+        upsertProject(node, targetId);
+    }
+
+    processNode(payload);
+    return { projects: next, actions };
+}
+
 function saveInquiry(inquiry, existingFile = '') {
     const preferredId = cleanText(existingFile, 220);
     const filename = preferredId || (() => {
@@ -1319,12 +1527,103 @@ app.delete('/api/inquiries/:id', requireAdmin, (req, res) => {
     }
 });
 
+// Project showcase (public)
+app.get('/api/project-showcase', (req, res) => {
+    try {
+        const projects = readProjectShowcaseData();
+        return res.json({
+            count: projects.length,
+            projects
+        });
+    } catch (error) {
+        console.error('Error reading project showcase data:', error);
+        return res.status(500).json({
+            error: 'Failed to read project showcase data',
+            details: error.message
+        });
+    }
+});
+
+// Project showcase replace (admin)
+app.put('/api/project-showcase', requireAdmin, (req, res) => {
+    try {
+        const payload = Object.prototype.hasOwnProperty.call(req.body || {}, 'payload')
+            ? req.body.payload
+            : req.body;
+        const projects = writeProjectShowcaseData(payload);
+        return res.json({
+            success: true,
+            count: projects.length,
+            projects
+        });
+    } catch (error) {
+        console.error('Error replacing project showcase data:', error);
+        return res.status(500).json({
+            error: 'Failed to replace project showcase data',
+            details: error.message
+        });
+    }
+});
+
+// Project showcase apply update/add payload (admin)
+app.post('/api/project-showcase/apply', requireAdmin, (req, res) => {
+    try {
+        const payload = Object.prototype.hasOwnProperty.call(req.body || {}, 'payload')
+            ? req.body.payload
+            : req.body;
+        const currentProjects = readProjectShowcaseData();
+        const { projects, actions } = applyProjectPayload(currentProjects, payload);
+        const saved = writeProjectShowcaseData(projects);
+        return res.json({
+            success: true,
+            count: saved.length,
+            actions,
+            projects: saved
+        });
+    } catch (error) {
+        console.error('Error applying project showcase payload:', error);
+        return res.status(400).json({
+            error: 'Failed to apply project showcase payload',
+            details: error.message
+        });
+    }
+});
+
+// Project showcase delete item by id (admin)
+app.delete('/api/project-showcase/:id', requireAdmin, (req, res) => {
+    try {
+        const id = normalizeProjectId(req.params.id, '');
+        if (!id) return res.status(400).json({ error: 'Invalid project id.' });
+
+        const current = readProjectShowcaseData();
+        const next = current.filter((project) => project.id !== id);
+        if (next.length === current.length) {
+            return res.status(404).json({ error: 'Project not found.' });
+        }
+
+        const saved = writeProjectShowcaseData(next);
+        return res.json({
+            success: true,
+            count: saved.length,
+            deletedId: id,
+            projects: saved
+        });
+    } catch (error) {
+        console.error('Error deleting project showcase item:', error);
+        return res.status(500).json({
+            error: 'Failed to delete project',
+            details: error.message
+        });
+    }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         inquiriesCount: fs.readdirSync(inquiriesDir).filter((f) => f.endsWith('.json')).length,
+        projectShowcaseCount: readProjectShowcaseData().length,
         ollamaUrl: OLLAMA_BASE_URL,
         modelBig: OLLAMA_MODEL_BIG,
         modelSmall: OLLAMA_MODEL_SMALL,
