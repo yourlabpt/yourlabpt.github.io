@@ -369,6 +369,7 @@ const sendButton = chatForm.querySelector('.send-btn');
 const chatState = {
     sessionId: localStorage.getItem('yourlab_chat_session_id') || '',
     processing: false,
+    offlineMode: false,   // once true, skip all server retries for this session
     turns: [],
     fallbackConversation: {
         messages: [],
@@ -621,6 +622,15 @@ function setChatStatus(mode) {
 
 async function processUserMessage(userText) {
     addUserMessage(userText);
+
+    // If the server already failed this session, stay offline — never retry
+    if (chatState.offlineMode) {
+        setChatStatus('offline');
+        const fallbackReply = processFallbackUserMessage(userText);
+        setTimeout(() => addBotMessage(fallbackReply), 250);
+        return;
+    }
+
     const typingIndicator = addTypingIndicator();
     setChatStatus('connecting');
 
@@ -675,9 +685,10 @@ async function processUserMessage(userText) {
         }
     } catch (error) {
         clearTimeout(slowMessageTimer);
-        console.warn('AI backend unavailable, using fallback flow:', error.message);
+        console.warn('AI backend unavailable, switching to offline mode:', error.message);
         removeTypingIndicator(typingIndicator);
         setChatStatus('offline');
+        chatState.offlineMode = true;
         const fallbackReply = processFallbackUserMessage(userText);
         setTimeout(() => addBotMessage(fallbackReply), 250);
     }
