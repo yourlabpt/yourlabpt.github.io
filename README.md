@@ -12,6 +12,7 @@ A beautiful, modern single-page business card website with an intelligent chat a
 
 🤖 **Intelligent Chat Agent**
 - Real AI conversation flow with session memory
+- Offline-only lead bot mode configurable from `.env` (`CHAT_MODE=offline`)
 - Automatic extraction and enrichment of lead data (name, email, phone, business context)
 - Lead qualification scoring and stage tracking (discover, qualify, capture, commit)
 - Human-style conversation prompts tuned for business discovery
@@ -72,8 +73,10 @@ npm install
 cp .env.example .env
 ```
 Then set:
-- `OPENAI_API_KEY` (required for real AI chat)
-- `OPENAI_MODEL` (default: `gpt-5-mini`)
+- `CHAT_MODE` (`auto` or `offline`)
+  - `auto`: use local models and fallback when needed
+  - `offline`: disable all model calls and use the offline lead bot only
+- `OLLAMA_BASE_URL`, `OLLAMA_MODEL_SMALL`, `OLLAMA_MODEL_BIG` (when `CHAT_MODE=auto`)
 - `LEAD_NOTIFY_TO` (email address that receives new lead summaries)
 - SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`)
 - `ADMIN_PASSWORD` (password used on the `/admin/` dashboard)
@@ -213,6 +216,8 @@ showSavedConversations()
 
 ### Chat Agent Intelligence
 - Automatically detects email addresses, phone numbers, and names in user input
+- Validates contact syntax (phone/email) and enforces at least one contact channel
+- In offline mode: asks phone first, falls back to email if refused
 - Asks follow-up questions based on collected information
 - Prevents duplicate data requests
 - Guides users through the entire inquiry process

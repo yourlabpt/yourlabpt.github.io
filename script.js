@@ -810,7 +810,8 @@ const chatState = {
             callTime: ''
         },
         businessIdea: '',
-        submitted: false
+        submitted: false,
+        contactChannel: 'phone'
     }
 };
 
@@ -906,108 +907,235 @@ async function sendMessageToAi(userText) {
     return response.json();
 }
 
-function parseFallbackInput(text, field) {
-    // field: 'name' | 'contact' | 'idea' | 'callTime' — only extract what we're currently asking for
-    const fc = chatState.fallbackConversation;
+const FALLBACK_NAME_STOP_WORDS = new Set([
+    'hi', 'hello', 'hey', 'ola', 'bom', 'boa', 'sim', 'nao', 'ok', 'okay', 'yes', 'no',
+    'maybe', 'talvez', 'team', 'equipa', 'yourlab', 'alex', 'name', 'nome',
+    'phone', 'number', 'telefone', 'numero', 'email', 'business', 'negocio'
+]);
 
-    if (field === 'contact' || !field) {
-        const emailMatch = text.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
-        const phoneMatch = text.match(/(?:\+?\d[\d\s().-]{6,}\d)/);
-        if (emailMatch) fc.contact.email = emailMatch[0].toLowerCase();
-        if (phoneMatch && phoneMatch[0].replace(/\D/g, '').length >= 8) fc.contact.phone = phoneMatch[0];
-    }
-    if (field === 'name' || !field) {
-        if (!fc.contact.name) {
-            const SKIP = /^(hi|hey|hello|oi|olá|ola|bom|boa|tudo|sim|não|nao|ok|okay|claro|yes|no|sure|maybe|talvez|sup|yo|great|fixe)$/i;
-            const single = text.trim().match(/^([A-Za-zÀ-ÿ]{2,20}(?:\s[A-Za-zÀ-ÿ]{2,20})?)\s*\.?$/);
-            if (single && !SKIP.test(single[1].trim())) fc.contact.name = single[1].trim();
-        }
-    }
-    if (field === 'idea') fc.businessIdea = text.trim();
-    if (field === 'callTime') fc.contact.callTime = text.trim();
+function normalizeFallbackForComparison(value) {
+    return (value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
 }
 
-// Detect which collection step the fallback bot is currently on
+function normalizeFallbackEmail(value) {
+    const text = (value || '').trim().toLowerCase();
+    return /^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(text) ? text : '';
+}
+
+function normalizeFallbackPhone(value) {
+    const text = (value || '').trim();
+    const digits = text.replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 16) return '';
+    return text;
+}
+
+function normalizeFallbackNameCandidate(value) {
+    const cleaned = (value || '')
+        .trim()
+        .replace(/[.,;:!?]+$/g, '')
+        .replace(/^['"`]+|['"`]+$/g, '');
+    if (!cleaned || /\d|@/.test(cleaned)) return '';
+
+    const tokens = cleaned
+        .split(/\s+/)
+        .map((token) => token.replace(/[^A-Za-zÀ-ÿ'-]/g, ''))
+        .filter(Boolean);
+    if (!tokens.length || tokens.length > 4) return '';
+    if (tokens.some((token) => token.length < 2 || token.length > 24)) return '';
+
+    const joined = normalizeFallbackForComparison(tokens.join(' '));
+    if (FALLBACK_NAME_STOP_WORDS.has(joined)) return '';
+    if (/(^| )(contact|contacto|email|telefone|numero|phone|number|name|nome)( |$)/.test(joined)) return '';
+
+    return tokens
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .join(' ');
+}
+
+function extractFallbackName(text) {
+    const source = (text || '').trim();
+    if (!source) return '';
+
+    const patterns = [
+        /(?:my name is|i am|i'm|this is|call me)\s+([A-Za-zÀ-ÿ' -]{2,80})/i,
+        /(?:meu nome e|o meu nome e|chamo-me|chamo me|eu sou|sou o|sou a|pode chamar(?:-me)?)\s+([A-Za-zÀ-ÿ' -]{2,80})/i
+    ];
+    for (const pattern of patterns) {
+        const match = source.match(pattern);
+        if (!match) continue;
+        const candidate = normalizeFallbackNameCandidate(match[1]);
+        if (candidate) return candidate;
+    }
+
+    const standalone = source
+        .replace(/[!?.,;:()[\]{}"]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!standalone || standalone.split(' ').length > 4) return '';
+    if (!/^[A-Za-zÀ-ÿ' -]{2,80}$/.test(standalone)) return '';
+    return normalizeFallbackNameCandidate(standalone);
+}
+
+function isFallbackPhoneRefusal(text) {
+    const value = normalizeFallbackForComparison(text);
+    return /\b(no phone|no number|d(?:on'?t|o not) share.*(phone|number)|prefer email|sem telefone|sem numero|nao quero.*(telefone|numero)|prefiro email)\b/.test(value);
+}
+
+function isFallbackEmailRefusal(text) {
+    const value = normalizeFallbackForComparison(text);
+    return /\b(no email|d(?:on'?t|o not) share.*email|nao tenho email|nao quero.*email|sem email|prefiro telefone|prefiro numero)\b/.test(value);
+}
+
+function isValidFallbackBusinessBrief(text) {
+    const value = (text || '').trim();
+    if (!value) return false;
+    if (/^(yes|no|sim|nao|ok|talvez|maybe|none|n\/a|nada)$/i.test(value)) return false;
+    if (normalizeFallbackEmail(value) || normalizeFallbackPhone(value)) return false;
+    const words = value.split(/\s+/).filter(Boolean);
+    const alphaChars = (value.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+    return value.length >= 18 && words.length >= 4 && alphaChars >= 12;
+}
+
+function looksLikeFallbackCallTime(text) {
+    const value = normalizeFallbackForComparison(text);
+    if (!value) return false;
+    const hasDayWord = /\b(today|tomorrow|tonight|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|hoje|amanha|logo|depois|segunda|terca|quarta|quinta|sexta|sabado|domingo|proxima)\b/.test(value);
+    const hasHour = /\b\d{1,2}(?::\d{2})?\s?(am|pm|h)?\b/.test(value);
+    const hasMeetingWord = /\b(video|zoom|meet|teams|online|in person|in-person|presencial|call|chamada|reuniao)\b/.test(value);
+    return hasDayWord || hasHour || hasMeetingWord;
+}
+
+function parseFallbackInput(text, field) {
+    const fc = chatState.fallbackConversation;
+    const clean = (text || '').trim();
+    const emailMatch = clean.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+    const phoneMatch = clean.match(/(?:\+?\d[\d\s().-]{6,}\d)/);
+    const parsedEmail = emailMatch ? normalizeFallbackEmail(emailMatch[0]) : '';
+    const parsedPhone = phoneMatch ? normalizeFallbackPhone(phoneMatch[0]) : '';
+
+    if (!fc.contact.email && parsedEmail) fc.contact.email = parsedEmail;
+    if (!fc.contact.phone && parsedPhone) fc.contact.phone = parsedPhone;
+    if (!fc.contact.name) {
+        const parsedName = extractFallbackName(clean);
+        if (parsedName) fc.contact.name = parsedName;
+    }
+
+    const hasContact = Boolean(fc.contact.phone || fc.contact.email);
+    if (field === 'phone' && !hasContact && isFallbackPhoneRefusal(clean)) {
+        fc.contactChannel = 'email';
+    }
+    if (field === 'email' && !hasContact && isFallbackEmailRefusal(clean)) {
+        fc.contactChannel = 'phone';
+    }
+
+    if ((field === 'business' || field === 'idea') && !fc.businessIdea && isValidFallbackBusinessBrief(clean)) {
+        fc.businessIdea = clean;
+    }
+    if (field === 'callTime' && !fc.contact.callTime && looksLikeFallbackCallTime(clean)) {
+        fc.contact.callTime = clean;
+    }
+}
+
 function getFallbackStep() {
     const fc = chatState.fallbackConversation;
-    const c  = fc.contact;
-    if (!c.name)                       return 'name';
-    if (!c.email && !c.phone)          return 'contact';
-    if (!fc.businessIdea)              return 'idea';
-    if (!c.callTime)                   return 'callTime';
+    const c = fc.contact;
+    if (!c.name) return 'name';
+    if (!c.phone && !c.email) return fc.contactChannel === 'email' ? 'email' : 'phone';
+    if (!isValidFallbackBusinessBrief(fc.businessIdea)) return 'business';
+    if (!c.callTime) return 'callTime';
     return 'done';
 }
 
 function processFallbackUserMessage(userText) {
-    const fc      = chatState.fallbackConversation;
-    const isPt    = currentLang === 'pt';
-    const isFirst = fc.messages.length === 0;
-    const step    = getFallbackStep(); // step BEFORE we process this message
+    const fc = chatState.fallbackConversation;
+    const isPt = currentLang === 'pt';
+    const stepBefore = getFallbackStep();
 
-    // Parse the user's answer into the right field
-    parseFallbackInput(userText, step);
+    parseFallbackInput(userText, stepBefore);
 
-    const contact    = fc.contact;
-    const name       = contact.name || '';
-    const nextStep   = getFallbackStep(); // step AFTER parsing
+    const contact = fc.contact;
+    const name = contact.name || '';
+    const stepAfter = getFallbackStep();
+    const hasContact = Boolean(contact.phone || contact.email);
 
-    // Funny "AI sleeping" intro — prepended only on the very first fallback reply
-    const sleepingIntro = isPt
-        ? '😴 O nosso AI foi a dormir. Provavelmente sonha com pipelines de dados. Mas eu estou cá — a versão prática e sem floreados.\n\n'
-        : '😴 Our AI went to sleep. Probably dreaming of data pipelines. But I\'m here — the practical, no-nonsense version.\n\n';
+    const askName = isPt
+        ? 'Para avancarmos, diz-me o teu nome e apelido.'
+        : 'To move forward, tell me your first and last name.';
+    const askPhone = isPt
+        ? 'Qual e o melhor numero de telefone para contacto? Se preferires, responde "prefiro email".'
+        : 'What is the best phone number to reach you? If you prefer, reply with "I prefer email".';
+    const askEmail = isPt
+        ? 'Sem problema. Partilha um email valido para contacto.'
+        : 'No problem. Share a valid email address for contact.';
+    const askBusiness = isPt
+        ? 'Em 2-4 frases, descreve o negocio, o problema principal e para quem e.'
+        : 'In 2-4 sentences, describe the business, the main problem, and who it is for.';
+    const askBusinessRetry = isPt
+        ? 'Preciso de mais contexto para validar: problema, cliente alvo e impacto no negocio.'
+        : 'I need a bit more context to validate: problem, target customer, and business impact.';
+    const askCallTime = isPt
+        ? 'Qual o melhor dia e horario para uma chamada curta? Exemplo: quarta 15h, amanha de manha.'
+        : 'What day and time work best for a short call? Example: Wednesday 3pm, tomorrow morning.';
+    const askCallTimeRetry = isPt
+        ? 'Nao consegui validar o horario. Indica dia e hora aproximada.'
+        : 'I could not validate the time. Please share a day and approximate hour.';
+    const requireContact = isPt
+        ? 'Preciso de pelo menos um contacto valido para continuar: telefone ou email.'
+        : 'I need at least one valid contact to continue: phone number or email.';
+
+    const nextQuestionByStep = (step) => {
+        if (step === 'phone') return askPhone;
+        if (step === 'email') return askEmail;
+        if (step === 'business') return askBusiness;
+        if (step === 'callTime') return askCallTime;
+        return '';
+    };
 
     let botResponse = '';
-
-    if (step === 'name') {
-        if (nextStep === 'contact') {
-            // Got the name
-            botResponse = (isFirst ? sleepingIntro : '') + (isPt
-                ? `Boa, ${name}! 📬 Qual o teu email ou número de telefone?`
-                : `Got it, ${name}! 📬 What's your email or phone number?`);
-        } else {
-            // Couldn't extract the name — ask again (or first prompt)
-            botResponse = (isFirst ? sleepingIntro : '') + (isPt
-                ? 'Como te chamas?'
-                : 'What\'s your name?');
-        }
-    } else if (step === 'contact') {
-        if (nextStep === 'idea') {
-            botResponse = isPt
-                ? `Anotado. 💡 Em poucas palavras — qual é a ideia ou problema que queres resolver?`
-                : `Noted. 💡 In a few words — what's the idea or problem you want to solve?`;
-        } else {
-            botResponse = isPt
-                ? 'Preciso de um email válido ou número de telefone para a equipa te contactar.'
-                : "I need a valid email or phone number so the team can reach you.";
-        }
-    } else if (step === 'idea') {
-        if (nextStep === 'callTime') {
-            botResponse = isPt
-                ? `Entendido. 📅 Quando preferes uma chamada rápida? (ex: "amanhã de tarde", "segunda às 10h", "próxima semana")`
-                : `Got it. 📅 When's a good time for a quick call? (e.g. "tomorrow afternoon", "Monday at 10am", "next week")`;
-        } else {
-            botResponse = isPt
-                ? 'Conta-me um pouco mais sobre a ideia — só um ou dois parágrafos.'
-                : 'Tell me a bit more about the idea — just a sentence or two.';
-        }
-    } else if (step === 'callTime') {
-        // All info collected — save and notify
-        fc.submitted = true;
-        const displayEmail = contact.email || contact.phone;
+    if (stepBefore === stepAfter) {
+        if (stepAfter === 'name') botResponse = askName;
+        else if (stepAfter === 'phone') botResponse = fc.contactChannel === 'email' ? askEmail : askPhone;
+        else if (stepAfter === 'email') botResponse = `${requireContact} ${askEmail}`;
+        else if (stepAfter === 'business') botResponse = askBusinessRetry;
+        else if (stepAfter === 'callTime') botResponse = askCallTimeRetry;
+        else botResponse = isPt
+            ? 'Ja temos tudo. A equipa vai entrar em contacto em breve.'
+            : 'We already have everything. The team will contact you shortly.';
+    } else if (stepAfter === 'done') {
+        const contactTarget = contact.phone || contact.email || '';
         botResponse = isPt
-            ? `Tudo guardado, ${name}! ✅\nA equipa da YourLab vai entrar em contacto antes da hora que indicaste. Vai receber um convite de calendário em ${displayEmail}. O AI acorda na próxima visita 🤖`
-            : `All done, ${name}! ✅\nThe YourLab team will reach out before your preferred time. You'll get a calendar invite at ${displayEmail}. The AI will be awake next time you visit 🤖`;
+            ? `Obrigado, ${name}. Ja temos contacto e contexto. A equipa da YourLab envia os proximos passos em ate 1 dia util. Contacto registado: ${contactTarget}.`
+            : `Thanks, ${name}. We now have contact and context. The YourLab team will send next steps within 1 business day. Contact saved: ${contactTarget}.`;
+    } else if ((stepBefore === 'phone' || stepBefore === 'email') && !hasContact) {
+        botResponse = `${requireContact} ${nextQuestionByStep(stepAfter)}`;
+    } else {
+        const ack = isPt
+            ? `Perfeito${name ? `, ${name}` : ''}.`
+            : `Perfect${name ? `, ${name}` : ''}.`;
+        botResponse = `${ack} ${nextQuestionByStep(stepAfter)}`.trim();
+    }
 
-        // Save locally
+    const messageRecord = {
+        user: userText,
+        bot: botResponse,
+        timestamp: new Date().toISOString()
+    };
+
+    if (stepAfter === 'done' && !fc.submitted) {
+        fc.submitted = true;
+
         saveConversationLocally({
             timestamp: new Date().toISOString(),
             contact: { ...contact },
             businessIdea: fc.businessIdea,
-            messages: [...fc.messages, { user: userText, bot: botResponse, timestamp: new Date().toISOString() }],
+            messages: [...fc.messages, messageRecord],
             source: 'frontend-offline-bot'
         });
 
-        // POST to server so it sends the email + calendar invite
         const apiBase = (window.YOURLAB_API_URL || '').replace(/\/$/, '');
         fetch(`${apiBase}/api/save-inquiry`, {
             method: 'POST',
@@ -1018,25 +1146,19 @@ function processFallbackUserMessage(userText) {
                 businessIdea: fc.businessIdea,
                 preferredCallTime: contact.callTime,
                 lead: {
-                    name: contact.name, email: contact.email, phone: contact.phone,
-                    problem: fc.businessIdea, callTime: contact.callTime
+                    name: contact.name,
+                    email: contact.email,
+                    phone: contact.phone,
+                    problem: fc.businessIdea,
+                    goal: fc.businessIdea,
+                    callTime: contact.callTime
                 },
-                messages: fc.messages
+                messages: [...fc.messages, messageRecord]
             })
-        }).catch(err => console.warn('Could not reach server to save offline lead:', err.message));
-    } else {
-        // Already done — no more questions
-        botResponse = isPt
-            ? 'Já temos tudo! A equipa vai entrar em contacto em breve.'
-            : 'We already have everything! The team will be in touch soon.';
+        }).catch((err) => console.warn('Could not reach server to save offline lead:', err.message));
     }
 
-    fc.messages.push({
-        user: userText,
-        bot: botResponse,
-        timestamp: new Date().toISOString()
-    });
-
+    fc.messages.push(messageRecord);
     return botResponse;
 }
 
