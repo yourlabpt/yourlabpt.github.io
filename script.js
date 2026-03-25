@@ -126,20 +126,23 @@ const translations = {
         gameFinalLevel4: 'Level 4 · Internalize the rhythm',
         // Project Showcase
         projectShowcaseKicker: 'PROVEN PROJECT STORIES',
-        projectShowcaseHeading: 'What we build, how we build it, and the outcomes clients get',
-        projectShowcaseDescription: 'Every case shows the full path: business request, initial pain, our execution strategy, and a flexible solution ready for daily operations.',
+        projectShowcaseHeading: 'From pain to system: how client ideas become daily operations',
+        projectShowcaseDescription: 'Each case follows one clear arc: the pain, the build, and the final result running in real life.',
         projectCaseLabel: 'Case',
         projectBuiltForLabel: 'Built for',
         projectSectorLabel: 'Sector',
         projectTimelineLabel: 'Timeline',
-        projectRequestLabel: 'Strategic request',
-        projectPainLabel: 'Initial request and pain',
-        projectBusinessImpactLabel: 'Business impact of the pain',
-        projectProcessLabel: 'Approach and execution',
-        projectResultLabel: 'Solution delivered',
-        projectOutcomesLabel: 'Results achieved',
-        projectDailyUseLabel: 'Flexible daily use',
-        projectCtaText: 'Want this type of result in your business? Tell us your scenario and we will map the best first version with you.',
+        projectStoryLabel: 'The story',
+        projectSystemLabel: 'Pain to system',
+        projectFinalResultLabel: 'Result in operation',
+        projectRequestLabel: 'Client request',
+        projectPainLabel: 'Initial pain',
+        projectBusinessImpactLabel: 'Business impact',
+        projectProcessLabel: 'How we built it',
+        projectResultLabel: 'System delivered',
+        projectOutcomesLabel: 'Final result',
+        projectDailyUseLabel: 'How it runs today',
+        projectCtaText: 'Want to turn your pain into a practical system? Share your scenario and we map the best first version with you.',
         projectCtaButton: 'Talk to the team',
         projectPrevAria: 'Previous project',
         projectNextAria: 'Next project',
@@ -300,20 +303,23 @@ const translations = {
         gameFinalLevel4: 'N\u00EDvel 4 \u00B7 Interiorizar o ritmo',
         // Project Showcase
         projectShowcaseKicker: 'CASOS COM RESULTADO REAL',
-        projectShowcaseHeading: 'O que construimos, como executamos e quais resultados entregamos',
-        projectShowcaseDescription: 'Cada caso mostra a jornada completa: pedido de negocio, dor inicial, estrategia de execucao e solucao flexivel pronta para operacao diaria.',
+        projectShowcaseHeading: 'Da dor ao sistema: como ideias viram operacao real',
+        projectShowcaseDescription: 'Cada caso segue um arco simples: dor inicial, construcao do sistema e resultado em uso diario.',
         projectCaseLabel: 'Caso',
         projectBuiltForLabel: 'Construido para',
         projectSectorLabel: 'Setor',
         projectTimelineLabel: 'Prazo',
-        projectRequestLabel: 'Pedido estrategico',
-        projectPainLabel: 'Pedido e dor inicial',
-        projectBusinessImpactLabel: 'Impacto da dor no negocio',
-        projectProcessLabel: 'Abordagem e execucao',
-        projectResultLabel: 'Solucao entregue',
-        projectOutcomesLabel: 'Resultados alcancados',
-        projectDailyUseLabel: 'Uso di\u00E1rio flex\u00EDvel',
-        projectCtaText: 'Quer este tipo de resultado no seu negocio? Conte o seu cenario e mapeamos com voce a melhor primeira versao.',
+        projectStoryLabel: 'A historia',
+        projectSystemLabel: 'Da dor ao sistema',
+        projectFinalResultLabel: 'Resultado em operacao',
+        projectRequestLabel: 'Pedido do cliente',
+        projectPainLabel: 'Dor inicial',
+        projectBusinessImpactLabel: 'Impacto no negocio',
+        projectProcessLabel: 'Como construimos',
+        projectResultLabel: 'Sistema entregue',
+        projectOutcomesLabel: 'Resultado final',
+        projectDailyUseLabel: 'Como funciona no dia a dia',
+        projectCtaText: 'Quer transformar uma dor num sistema pratico? Partilhe o cenario e mapeamos consigo a melhor primeira versao.',
         projectCtaButton: 'Falar com a equipa',
         projectPrevAria: 'Projeto anterior',
         projectNextAria: 'Pr\u00F3ximo projeto',
@@ -618,20 +624,43 @@ function normalizeProjectShowcaseCollection(input) {
         }
 
         slidesEl.innerHTML = normalizedProjects.map((project, index) => {
-            const approachSteps = listFor(project.approach)
-                .map((item) => `<li>${escapeHtml(item)}</li>`)
-                .join('');
-            const deliveredItems = listFor(project.solutionDelivered)
-                .map((item) => `<li>${escapeHtml(item)}</li>`)
-                .join('');
-            const resultPoints = listFor(project.results)
-                .map((item) => `<li>${escapeHtml(item)}</li>`)
-                .join('');
-            const dailyUsePoints = listFor(project.dailyUse)
-                .map((item) => `<li>${escapeHtml(item)}</li>`)
-                .join('');
+            const approachSteps = listFor(project.approach);
+            const deliveredItems = listFor(project.solutionDelivered);
+            const resultPoints = listFor(project.results);
+            const dailyUsePoints = listFor(project.dailyUse);
             const isActive = index === current;
             const ctaLine = textFor(project.ctaText) || t('projectCtaText');
+            const requestText = textFor(project.strategicRequest);
+            const painText = textFor(project.painSnapshot);
+            const impactText = textFor(project.businessImpact);
+
+            const renderList = (items) => items
+                .map((item) => `<li>${escapeHtml(item)}</li>`)
+                .join('');
+
+            const storySections = [
+                requestText ? `<p><strong>${t('projectRequestLabel')}:</strong> ${escapeHtml(requestText)}</p>` : '',
+                painText ? `<p><strong>${t('projectPainLabel')}:</strong> ${escapeHtml(painText)}</p>` : '',
+                impactText ? `<p><strong>${t('projectBusinessImpactLabel')}:</strong> ${escapeHtml(impactText)}</p>` : ''
+            ].join('');
+
+            const systemSections = [
+                approachSteps.length
+                    ? `<h5>${t('projectProcessLabel')}</h5><ul>${renderList(approachSteps)}</ul>`
+                    : '',
+                deliveredItems.length
+                    ? `<h5>${t('projectResultLabel')}</h5><ul>${renderList(deliveredItems)}</ul>`
+                    : ''
+            ].join('');
+
+            const outcomeSections = [
+                resultPoints.length
+                    ? `<h5>${t('projectOutcomesLabel')}</h5><ul>${renderList(resultPoints)}</ul>`
+                    : '',
+                dailyUsePoints.length
+                    ? `<h5>${t('projectDailyUseLabel')}</h5><ul>${renderList(dailyUsePoints)}</ul>`
+                    : ''
+            ].join('');
 
             return `
                 <article class="project-case-slide ${isActive ? 'active' : ''}" data-project-index="${index}" aria-hidden="${String(!isActive)}">
@@ -649,34 +678,20 @@ function normalizeProjectShowcaseCollection(input) {
                         <span class="project-meta-chip"><strong>${t('projectTimelineLabel')}:</strong> ${escapeHtml(textFor(project.timeline))}</span>
                     </div>
 
-                    <article class="project-case-value-card">
-                        <h4>${t('projectRequestLabel')}</h4>
-                        <p>${escapeHtml(textFor(project.strategicRequest))}</p>
-                    </article>
-
                     <div class="project-case-grid">
-                        <article class="project-case-block">
-                            <h4>${t('projectPainLabel')}</h4>
-                            <p>${escapeHtml(textFor(project.painSnapshot))}</p>
-                            <h5>${t('projectBusinessImpactLabel')}</h5>
-                            <p>${escapeHtml(textFor(project.businessImpact))}</p>
+                        <article class="project-case-block project-case-story">
+                            <h4>${t('projectStoryLabel')}</h4>
+                            ${storySections || `<p>${escapeHtml(ctaLine)}</p>`}
                         </article>
 
                         <article class="project-case-block">
-                            <h4>${t('projectProcessLabel')}</h4>
-                            <ul>${approachSteps}</ul>
+                            <h4>${t('projectSystemLabel')}</h4>
+                            ${systemSections || `<p>${escapeHtml(requestText || ctaLine)}</p>`}
                         </article>
 
                         <article class="project-case-block">
-                            <h4>${t('projectResultLabel')}</h4>
-                            <ul>${deliveredItems}</ul>
-                        </article>
-
-                        <article class="project-case-block project-case-block-results">
-                            <h4>${t('projectOutcomesLabel')}</h4>
-                            <ul>${resultPoints}</ul>
-                            <h5>${t('projectDailyUseLabel')}</h5>
-                            <ul>${dailyUsePoints}</ul>
+                            <h4>${t('projectFinalResultLabel')}</h4>
+                            ${outcomeSections || `<p>${escapeHtml(ctaLine)}</p>`}
                         </article>
                     </div>
 

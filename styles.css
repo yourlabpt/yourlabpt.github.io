@@ -1429,6 +1429,10 @@ body {
     gap: 12px;
 }
 
+.project-case-story {
+    grid-column: span 2;
+}
+
 .project-case-block {
     border: 1px solid rgba(232, 213, 183, 0.23);
     border-radius: 14px;
@@ -1461,12 +1465,25 @@ body {
     overflow-wrap: anywhere;
 }
 
+.project-case-block p + p {
+    margin-top: 7px;
+}
+
 .project-case-block ul {
     margin: 0;
     padding: 0;
     list-style: none;
     display: grid;
     gap: 7px;
+}
+
+.project-case-block h5 + ul {
+    margin-top: 2px;
+}
+
+.project-case-block ul + h5,
+.project-case-block p + h5 {
+    margin-top: 6px;
 }
 
 .project-case-block li {
@@ -1487,10 +1504,6 @@ body {
     height: 6px;
     border-radius: 50%;
     background: rgba(232, 213, 183, 0.8);
-}
-
-.project-case-block-results {
-    grid-column: span 2;
 }
 
 .project-case-cta {
@@ -1628,7 +1641,7 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .project-case-block-results {
+    .project-case-story {
         grid-column: auto;
     }
 

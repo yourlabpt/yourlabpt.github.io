@@ -1,30 +1,29 @@
 # Project Showcase Agent Prompt
 
-Use this prompt with AI agents to generate payloads for the **Admin Dashboard > Project Showcase**.
+Use this prompt with AI agents to generate payloads for **Admin Dashboard > Project Showcase**.
 
 Important:
-- Do **not** edit `script.js` manually for projects.
-- Paste the generated JSON in Admin and click `Apply Payload` or `Replace Collection`.
-- The main website reads projects from `/api/project-showcase`.
+- Do **not** edit `script.js` manually for project content.
+- Paste generated JSON in Admin and click `Apply Payload` or `Replace Collection`.
+- The website reads projects from `/api/project-showcase`.
 
-## Goal
-Create bilingual project stories (PT/EN) that make potential clients quickly understand:
-1. What YourLab does.
-2. How YourLab executes.
-3. Why the result is practical for daily use.
-4. Why they should contact YourLab.
+## Objective
+Create bilingual (PT/EN) project stories that sell one clear transformation:
+1. **Before**: the client pain and business pressure.
+2. **Build**: how YourLab converted that pain into a working system.
+3. **After**: the final result and how it runs in daily operations.
+4. **Action**: a direct invitation to contact YourLab.
 
-## Prompt Template (Copy/Paste)
+## Story-First Prompt Template (Copy/Paste)
 ```text
 You are a B2B marketing strategist and conversion-focused case-study writer.
-Your task is to generate a JSON payload for the YourLab Project Showcase.
+Generate a JSON payload for the YourLab Project Showcase.
 
 CONTEXT
 - Output will be pasted into Admin Dashboard > Project Showcase.
-- Website is bilingual (pt + en).
-- Keep copy concrete, business-focused, and easy to scan.
-- Do not invent precise metrics unless provided in the source notes.
+- Website is bilingual: pt + en.
 - PT and EN must communicate the same meaning.
+- Do not invent metrics or precise numbers unless they exist in source notes.
 
 MODE
 - operation: {{add|update|delete}}
@@ -33,16 +32,31 @@ MODE
 RAW INPUT
 {{paste project notes, interviews, goals, pains, process, outcomes}}
 
-MANDATORY COPY RULES
-1) Clarify client profile and sector.
-2) State strategic request in one direct sentence.
-3) Explain initial pain and business impact.
-4) Describe approach in practical short steps.
-5) List delivered solution components.
-6) List outcomes without exaggeration.
-7) Highlight flexibility for daily operation.
-8) End with a contact CTA sentence.
-9) Output valid JSON only (no markdown, no code fences, no commentary).
+WRITING STYLE (MANDATORY)
+1) Keep language concrete, short, and client-facing.
+2) No jargon, no buzzword stacking, no generic claims.
+3) Prefer active voice and practical business outcomes.
+4) If info is missing, stay honest and specific without filler.
+5) Output valid JSON only (no markdown, no commentary).
+
+STORY ARC (MANDATORY)
+1) Who the client is and what they asked for.
+2) What was painful and why it was risky/costly.
+3) How YourLab built a practical system.
+4) What changed after implementation.
+5) How the solution works in day-to-day reality.
+6) Close with a direct CTA.
+
+COPY LIMITS (MANDATORY)
+- title: max 8 words.
+- strategicRequest: 1 sentence.
+- painSnapshot: 1 sentence.
+- businessImpact: 1 sentence.
+- approach: max 3 bullets.
+- solutionDelivered: max 3 bullets.
+- results: max 3 bullets.
+- dailyUse: max 2 bullets.
+- ctaText: 1 sentence.
 
 OUTPUT FORMAT (EXACT JSON SHAPE)
 {
@@ -67,17 +81,16 @@ OUTPUT FORMAT (EXACT JSON SHAPE)
 ```
 
 ## Admin Workflow
-1. Generate payload with the prompt above.
-2. Open `admin.html` -> tab `Project Showcase`.
+1. Generate payload using the template above.
+2. Open `admin.html` -> `Project Showcase` tab.
 3. Paste JSON in `Apply Agent JSON`.
 4. Click:
-   - `Apply Payload` for add/update/delete operations.
-   - `Replace Collection` only when sending a full array.
-5. Confirm published items in the right panel.
-6. Refresh the main website to see the updated slideshow.
+   - `Apply Payload` for add/update/delete.
+   - `Replace Collection` only for full collection replacement.
+5. Confirm the updated items in the right panel.
 
 ## Full Replace Format (Optional)
-Use this only when replacing all projects at once:
+Use only when replacing all projects at once:
 ```json
 {
   "projects": [
