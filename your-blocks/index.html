@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Blocks — Premium Cosmic Puzzle Game</title>
+  <meta name="description" content="Your Blocks is a premium ad-free puzzle game. 3 galaxies, 21 planets, 105 handcrafted boards. Train your brain. Buy once, play forever.">
+  <meta property="og:title" content="Your Blocks — Premium Cosmic Puzzle Game">
+  <meta property="og:description" content="No ads. 105 cosmic puzzles. Train your brain daily with fast, satisfying rounds for all ages.">
+  <meta property="og:type" content="website">
+  <meta name="apple-itunes-app" content="app-id=YOUR_APP_ID">
+  <style>
+    :root {
+      --bg-deep: #0b0e17;
+      --bg-card: #141828;
+      --accent: #3fa9f5;
+      --accent-glow: rgba(63, 169, 245, 0.25);
+      --pink: #e84393;
+      --purple: #6c5ce7;
+      --text: #e8ecf1;
+      --text-muted: #8a94a6;
+      --radius: 16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Cosmic background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(108, 92, 231, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(232, 67, 147, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(63, 169, 245, 0.05) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      padding: 24px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-group img {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+    }
+    .logo-group span {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(63, 169, 245, 0.12);
+      border: 1px solid rgba(63, 169, 245, 0.25);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+    .hero h1 .gradient-text {
+      background: linear-gradient(135deg, var(--accent), var(--purple), var(--pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 36px;
+    }
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent);
+      color: #fff;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 24px var(--accent-glow);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px var(--accent-glow);
+    }
+    .btn-primary svg { width: 20px; height: 20px; }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      color: var(--text);
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .btn-secondary:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    /* Screenshots carousel */
+    .screenshots {
+      padding: 40px 0 80px;
+      overflow: hidden;
+    }
+    .screenshots-track {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      padding: 20px 24px;
+      scrollbar-width: none;
+    }
+    .screenshots-track::-webkit-scrollbar { display: none; }
+    .screenshots-track img {
+      flex: 0 0 auto;
+      width: 220px;
+      border-radius: var(--radius);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      scroll-snap-align: center;
+      transition: transform 0.3s;
+    }
+    .screenshots-track img:hover {
+      transform: scale(1.04);
+    }
+
+    /* Features */
+    .features {
+      padding: 80px 0;
+    }
+    .section-label {
+      text-align: center;
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      text-align: center;
+      font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+    .section-subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 520px;
+      margin: 0 auto 48px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+      border-color: rgba(63, 169, 245, 0.2);
+      transform: translateY(-4px);
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* Stats */
+    .stats {
+      padding: 60px 0;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 24px;
+      text-align: center;
+    }
+    .stat-item h3 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-item p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    /* Pricing */
+    .pricing {
+      padding: 80px 0;
+      text-align: center;
+    }
+    .price-card {
+      max-width: 420px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border: 1px solid rgba(63, 169, 245, 0.2);
+      border-radius: 20px;
+      padding: 48px 36px;
+      box-shadow: 0 0 60px rgba(63, 169, 245, 0.08);
+    }
+    .price-card .price {
+      font-size: 3rem;
+      font-weight: 800;
+      margin: 16px 0 8px;
+    }
+    .price-card .price-note {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 28px;
+    }
+    .price-perks {
+      list-style: none;
+      text-align: left;
+      margin-bottom: 32px;
+    }
+    .price-perks li {
+      padding: 8px 0;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .price-perks li::before {
+      content: '✓';
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-inner p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .footer-links {
+      display: flex;
+      gap: 20px;
+    }
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .hero { padding: 48px 0 32px; }
+      .screenshots-track img { width: 180px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .features-grid { grid-template-columns: 1fr; }
+      .header-inner { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="container header-inner">
+      <div class="logo-group">
+        <img src="logos/logo128.png" alt="Your Blocks icon">
+        <span>Your Blocks</span>
+      </div>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#pricing">Pricing</a>
+        <a href="privacy.html">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">No Ads &middot; Premium Puzzle Game</div>
+      <h1>Train Your Brain Across<br><span class="gradient-text">3 Galaxies</span></h1>
+      <p>Your Blocks is a premium puzzle game built for focus, flow, and fun. 105 handcrafted boards across 3 galaxies and 21 planets. Buy once, play forever.</p>
+      <div class="cta-group">
+        <a href="https://apps.apple.com/app/your-blocks/idYOUR_APP_ID" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          Download on the App Store
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="screenshots" id="screenshots">
+    <div class="screenshots-track">
+      <img src="screenshots/your_blocks_store_assets_v4/iphone_6_9/marketing/01_iphone_6_9_marketing.jpg" alt="Your Blocks - Build Your Block Adventure" loading="lazy">
+      <img src="screenshots/your_blocks_store_assets_v4/iphone_6_9/marketing/02_iphone_6_9_marketing.jpg" alt="Your Blocks - Train Your Brain Daily" loading="lazy">
+      <img src="screenshots/your_blocks_store_assets_v4/iphone_6_9/marketing/03_iphone_6_9_marketing.jpg" alt="Your Blocks - 105 Boards Across 3 Galaxies" loading="lazy">
+      <img src="screenshots/your_blocks_store_assets_v4/iphone_6_9/marketing/04_iphone_6_9_marketing.jpg" alt="Your Blocks - Fast Rounds, Endless Mastery" loading="lazy">
+      <img src="screenshots/your_blocks_store_assets_v4/iphone_6_9/marketing/05_iphone_6_9_marketing.jpg" alt="Your Blocks - For All Ages" loading="lazy">
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <p class="section-label">Why Your Blocks</p>
+      <h2 class="section-title">Premium Puzzles, Zero Interruptions</h2>
+      <p class="section-subtitle">A one-time purchase. No ads, no subscriptions, no in-app purchases. Just pure puzzle gameplay.</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🚫</div>
+          <h3>Zero Ads</h3>
+          <p>No banners, no interstitials, no rewarded videos. Your focus stays on the puzzle, always.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌌</div>
+          <h3>3 Galaxies to Explore</h3>
+          <p>Journey through Aurora Verge, and beyond. Each galaxy brings new visual themes and increasing challenge.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧩</div>
+          <h3>105 Handcrafted Boards</h3>
+          <p>21 planets, 5 boards each. Every board is tuned for its own challenge curve and scoring targets.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧠</div>
+          <h3>Brain Training</h3>
+          <p>Sharpen spatial reasoning, pattern recognition, and strategic thinking with every round you play.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Quick & Deep Sessions</h3>
+          <p>Play a fast 2-minute round on the bus or dive into a full galaxy campaign. You choose your pace.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">👨‍👩‍👧‍👦</div>
+          <h3>For All Ages</h3>
+          <p>Family-friendly content with no violent or inappropriate material. Fun for kids, challenging for adults.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <h3>105</h3>
+          <p>Puzzle Boards</p>
+        </div>
+        <div class="stat-item">
+          <h3>3</h3>
+          <p>Galaxies</p>
+        </div>
+        <div class="stat-item">
+          <h3>21</h3>
+          <p>Planets</p>
+        </div>
+        <div class="stat-item">
+          <h3>0</h3>
+          <p>Ads. Ever.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <p class="section-label">Simple Pricing</p>
+      <h2 class="section-title">Buy Once, Play Forever</h2>
+      <p class="section-subtitle">No subscriptions. No hidden costs. One purchase unlocks everything.</p>
+
+      <div class="price-card">
+        <div class="hero-badge">Premium</div>
+        <div class="price">&euro;2.99</div>
+        <div class="price-note">One-time purchase</div>
+        <ul class="price-perks">
+          <li>Full access to all 105 boards</li>
+          <li>All 3 galaxies and 21 planets</li>
+          <li>No advertisements whatsoever</li>
+          <li>No in-app purchases</li>
+          <li>Offline play — no internet needed</li>
+          <li>All future updates included</li>
+        </ul>
+        <a href="https://apps.apple.com/app/your-blocks/idYOUR_APP_ID" class="btn-primary" style="width: 100%; justify-content: center;">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          Get Your Blocks
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container footer-inner">
+      <p>&copy; 2026 YourLab. All rights reserved.</p>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="mailto:support@yourlab.app">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

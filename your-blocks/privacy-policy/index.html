@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Your Blocks</title>
+  <meta name="description" content="Privacy Policy for the Your Blocks mobile application by YourLab.">
+  <style>
+    :root {
+      --bg-deep: #0b0e17;
+      --bg-card: #141828;
+      --accent: #3fa9f5;
+      --text: #e8ecf1;
+      --text-muted: #8a94a6;
+      --radius: 16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(108, 92, 231, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(232, 67, 147, 0.06) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      padding: 24px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-group img {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+    }
+    .logo-group a {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* Content */
+    main {
+      padding: 60px 0 80px;
+    }
+    main h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .effective-date {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 40px;
+    }
+    main h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-top: 36px;
+      margin-bottom: 12px;
+      color: var(--accent);
+    }
+    main p {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+    }
+    main ul {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      padding-left: 24px;
+      font-size: 0.95rem;
+    }
+    main ul li {
+      margin-bottom: 6px;
+    }
+    main a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    main a:hover { text-decoration: underline; }
+
+    .highlight-box {
+      background: var(--bg-card);
+      border: 1px solid rgba(63, 169, 245, 0.15);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 24px 0;
+    }
+    .highlight-box p {
+      color: var(--text);
+      margin-bottom: 0;
+      font-weight: 500;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 32px 0;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-inner p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .footer-links {
+      display: flex;
+      gap: 20px;
+    }
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="container header-inner">
+      <div class="logo-group">
+        <img src="logos/logo128.png" alt="Your Blocks icon">
+        <a href="index.html">Your Blocks</a>
+      </div>
+      <nav class="nav-links">
+        <a href="index.html">Home</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Privacy Policy -->
+  <main>
+    <div class="container">
+      <h1>Privacy Policy</h1>
+      <p class="effective-date">Effective date: March 31, 2026</p>
+
+      <div class="highlight-box">
+        <p>Your Blocks does not collect, store, or transmit any personal data. Your privacy is fully respected.</p>
+      </div>
+
+      <h2>1. Introduction</h2>
+      <p>This Privacy Policy describes how YourLab ("we", "us", or "our") handles information in the Your Blocks mobile application (the "App"). We are committed to protecting your privacy and being transparent about our practices.</p>
+
+      <h2>2. Information We Collect</h2>
+      <p>We do not collect any personal information. Specifically:</p>
+      <ul>
+        <li><strong>No personal data:</strong> We do not ask for or collect your name, email address, phone number, or any other personally identifiable information.</li>
+        <li><strong>No analytics data:</strong> The App does not include any third-party analytics SDKs. All analytics events are processed locally on your device for debugging purposes only and are never transmitted.</li>
+        <li><strong>No advertising data:</strong> The App contains no advertising SDKs. No advertising identifiers (such as IDFA) are collected or used.</li>
+        <li><strong>No tracking:</strong> We do not track you across apps or websites owned by other companies.</li>
+      </ul>
+
+      <h2>3. Data Stored on Your Device</h2>
+      <p>The App stores game progress and settings locally on your device using standard system storage (UserDefaults). This data includes:</p>
+      <ul>
+        <li>Game progress (completed boards, planets, galaxies)</li>
+        <li>High scores and best records</li>
+        <li>Current campaign selection</li>
+      </ul>
+      <p>This data never leaves your device and is not accessible to us or any third party.</p>
+
+      <h2>4. Third-Party Services</h2>
+      <p>The App does not integrate any third-party services, SDKs, or APIs that collect user data. There are no:</p>
+      <ul>
+        <li>Ad networks</li>
+        <li>Analytics platforms</li>
+        <li>Social media integrations</li>
+        <li>Crash reporting services that collect personal data</li>
+      </ul>
+
+      <h2>5. Children's Privacy</h2>
+      <p>Because we do not collect any personal data from any user, the App is safe for users of all ages. We comply with the Children's Online Privacy Protection Act (COPPA) and similar regulations by simply not collecting data.</p>
+
+      <h2>6. Data Sharing</h2>
+      <p>We do not share any data with third parties because we do not collect any data in the first place.</p>
+
+      <h2>7. Data Security</h2>
+      <p>Since no personal data is collected or transmitted, there is no risk of personal data breach through our App. Your local game data is protected by your device's built-in security features.</p>
+
+      <h2>8. Your Rights</h2>
+      <p>Under applicable data protection regulations (including GDPR and CCPA), you have rights regarding your personal data. Since we do not collect personal data, these rights are inherently satisfied. You can delete all locally stored game data at any time by uninstalling the App from your device.</p>
+
+      <h2>9. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. Any changes will be reflected on this page with an updated effective date. We encourage you to review this page periodically.</p>
+
+      <h2>10. Contact Us</h2>
+      <p>If you have any questions or concerns about this Privacy Policy or our practices, please contact us at:</p>
+      <p><strong>Email:</strong> <a href="mailto:support@yourlab.app">support@yourlab.app</a></p>
+      <p><strong>Developer:</strong> YourLab</p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container footer-inner">
+      <p>&copy; 2026 YourLab. All rights reserved.</p>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="mailto:support@yourlab.app">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
