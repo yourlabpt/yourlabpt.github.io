@@ -1,0 +1,148 @@
+{
+  "mode": "commercial",
+  "config": {
+    "projectName": "City Pass",
+    "clientName": "Impakta",
+    "proposalCode": "GF-CP-2026-001",
+    "subtitle": "Proposta Comercial e Tecnica",
+    "currency": "EUR",
+    "date": "2026-07-03",
+    "summary": {
+      "businessContext": "A Impakta em parceria com Douglas pretende disponibilizar uma experiência digital premium para promover os seus restaurantes, vender planos de desconto e facilitar a validação de benefícios diretamente no restaurante.",
+      "goals": [
+        "Aumentar a frequência de clientes nos restaurantes dos parceiros cadastrados.",
+        "Permitir a compra simples de planos de desconto digitais.",
+        "Facilitar a geração e validação de cupons com QR Code e código manual.",
+        "Centralizar informação sobre restaurantes, menus, websites, planos e histórico de utilização.",
+        "Entregar uma aplicação com identidade visual elegante, alinhada com gastronomia premium, Lisboa e exclusividade."
+      ],
+      "scopeInPlainLanguage": "O MVP inclui uma aplicação mobile para clientes com registo, login, lista de restaurantes, detalhe de restaurante, escolha de plano, pagamento, área de cupons, geração de QR Code, perfil e histórico de utilização. Inclui também backend, base de dados e estrutura mínima para gerir conteúdos essenciais.",
+      "solutionOverview": "A solução será composta por frontend mobile, backend API e base de dados. O frontend apresentará a experiência do utilizador. O backend irá gerir autenticação, restaurantes, planos, pagamentos, cupons, validade e histórico. A base de dados guardará utilizadores, restaurantes, planos, pagamentos e cupons."
+    },
+    "customerRequestExcerpt": "Abaixo está uma especificação organizada de requisitos de cliente, stakeholders, funcionalidades, páginas e identidade visual para a aplicação Grupo Ferreira — City Pass Gastronómico, baseada na imagem e na descrição fornecida.\n\n1. Visão geral do produto\n\nA aplicação será um City Pass Gastronómico do Grupo Ferreira, permitindo que clientes comprem planos de desconto e utilizem cupons digitais em restaurantes participantes.\n\nO utilizador poderá criar conta, consultar restaurantes, ver detalhes de cada restaurante, comprar um plano de desconto por dias e número de pessoas, gerar cupons com QR Code e acompanhar o histórico de utilização.\n\n2. Objetivo do cliente\n\nO objetivo principal é criar uma aplicação premium, simples e confiável para:\n\nAumentar a frequência de clientes nos restaurantes do Grupo Ferreira.\n\nFacilitar a venda de planos de desconto digitais.\n\nPermitir que o cliente use cupons de forma rápida no restaurante.\n\nCentralizar informações sobre restaurantes, menus, websites e benefícios.\n\nCriar uma experiência visual elegante, associada à gastronomia, Lisboa, exclusividade e confiança.\n\n3. Stakeholders\n\n3.1 Cliente final / utilizador da app\n\nPessoa que baixa a aplicação, cria conta, compra um plano e utiliza cupons nos restaurantes.\n\nNecessidades principais:\n\nConsultar restaurantes disponíveis.\n\nComprar plano de desconto.\n\nGerar cupom no momento da refeição.\n\nApresentar QR Code ao funcionário.\n\nVer dias restantes e benefícios ativos.\n\nConsultar histórico de utilização.\n\nGerir perfil, métodos de pagamento e dados pessoais.\n\n3.2 Grupo Ferreira\n\nEmpresa proprietária da aplicação e dos restaurantes participantes.\n\nNecessidades principais:\n\nDivulgar os restaurantes do grupo.\n\nAumentar vendas e reservas.\n\nControlar planos ativos.\n\nValidar cupons utilizados.\n\nTer consistência visual da marca.\n\nGarantir que o desconto é aplicado apenas a utilizadores elegíveis.\n\n3.3 Restaurantes participantes\n\nUnidades como Los Chanetes, Casa Augusta, Brasa D’Ouro, A Capela, entre outros.\n\nNecessidades principais:\n\nAparecer na lista da aplicação.\n\nDisponibilizar fotos, localização, website e menu.\n\nReceber clientes com cupons válidos.\n\nValidar QR Code ou código manualmente.\n\nConsultar se o cupom está ativo, expirado ou já utilizado.\n\n3.4 Funcionários dos restaurantes\n\nPessoas responsáveis por validar o cupom no momento do pagamento.\n\nNecessidades principais:\n\nVer rapidamente o QR Code.\n\nConfirmar código do cupom.\n\nValidar se o cupom ainda está dentro do prazo.\n\nConfirmar número de pessoas abrangidas pelo plano.\n\nAplicar o desconto correto.\n\n3.5 Administrador da plataforma\n\nPessoa ou equipa que gere conteúdos, restaurantes, planos e utilizadores.\n\nNecessidades principais:\n\nGerir restaurantes.\n\nAtualizar fotos, menus e websites.\n\nCriar ou alterar planos disponíveis.\n\nConsultar utilizadores e planos ativos.\n\nConsultar histórico de cupons.\n\nGerir termos, suporte e métodos de pagamento.\n\n4. Requisitos funcionais gerais\n\nRF01 — Registo de conta\n\nA aplicação deve permitir criar uma nova conta com:\n\nNome completo.\n\nE-mail.\n\nPalavra-passe.\n\nTambém deve permitir autenticação social com:\n\nGoogle.\n\nApple.\n\nRF02 — Login\n\nA aplicação deve permitir que utilizadores já registados acedam à conta.\n\nO ecrã deve conter opção “Já tem conta? Entrar”.\n\nRF03 — Splash screen\n\nA aplicação deve apresentar uma tela inicial com:\n\nImagem de Lisboa.\n\nLogótipo Grupo Ferreira.\n\nTexto “City Pass Gastronómico”.\n\nChamada principal: “Descubra Lisboa. Poupe em cada refeição.”\n\nBotão “Começar…",
+    "phases": [
+      {
+        "order": 1,
+        "id": "F6_1782763391853",
+        "name": "Fase 1 - MVP, Fundação, Identidade Visual e Experiência Base",
+        "objective": "Entregar o MVP validável do CityPass: autenticação, catálogo base, compra de plano, geração/validação de cupons, dados essenciais e identidade visual premium.",
+        "durationWeeks": 6,
+        "amount": 6500
+      },
+      {
+        "order": 2,
+        "id": "F7_1782763393028",
+        "name": "Fase 2 - Mapa, Roteiros e Experiência Turística",
+        "objective": "Conectar a experiência turística ao mapa, geolocalização e roteiros sugeridos, usando dados persistidos de parceiros, atrações e pontos do roteiro.",
+        "durationWeeks": 4,
+        "amount": 2000
+      },
+      {
+        "order": 3,
+        "id": "F8_1782763393795",
+        "name": "Fase 3 - Dashboard administrativo completo",
+        "objective": "Completar analytics administrativo, relatórios, rankings e exportações para acompanhamento comercial e operacional.",
+        "durationWeeks": 4,
+        "amount": 2000
+      },
+      {
+        "order": 4,
+        "id": "F9_1782763394678",
+        "name": "Fase 4 - Integracoes: Google Pay, Apple Pay, MBway, Google/apple Authentication",
+        "objective": "Adicionar integrações externas de autenticação e pagamento reduzindo fricção sem comprometer segurança ou conformidade.",
+        "durationWeeks": 5,
+        "amount": 2000
+      },
+      {
+        "order": 5,
+        "id": "F6_1782763442052",
+        "name": "Fase 5 -  Plataforma do parceiro com historico e dashboard.",
+        "objective": "Dar ao parceiro visibilidade operacional e financeira sobre validações, cupons e valor gerado pelo CityPass.",
+        "durationWeeks": 4,
+        "amount": 3000
+      }
+    ],
+    "initialPercent": 20,
+    "finalPercent": 20,
+    "validityDays": 30,
+    "warrantyDays": 30,
+    "exclusions": [
+      "Custos de fornecedores externos, gateway de pagamento, App Store, Google Play, domínios, alojamento e serviços cloud não inclusos na proposta.",
+      "Publicação nas lojas (Apple Store ou Google Play) caso exija contas, validações ou materiais não fornecidos pelo cliente.",
+      "Integração com POS, faturação, reservas ou sistemas internos dos restaurantes.",
+      "Design institucional completo da marca.",
+      "Alterações relevantes de escopo após aprovação da proposta.",
+      "Certificações financeiras e serviços burocráticos de conformidade com autoridades financeiras e de pagamentos."
+    ],
+    "notes": [
+      "Estimativa baseada em produtividade aumentada com AI e escopo MVP.",
+      "A estimativa pode variar caso as regras de pagamento, validação de cupom ou publicação nas lojas sejam mais complexas do que o previsto.",
+      "Conteúdos finais, imagens, textos legais, logótipos e contas de serviços externos devem ser fornecidos pela Impakta."
+    ],
+    "payment": {
+      "total": 15500,
+      "currency": "EUR",
+      "milestones": [
+        {
+          "key": "initial",
+          "label": "Pagamento inicial (adjudicacao)",
+          "trigger": "Assinatura do contrato",
+          "percent": 20,
+          "amount": 3100
+        },
+        {
+          "key": "phase_1",
+          "label": "Entrega — #1 Fase 1 - MVP, Fundação, Identidade Visual e Experiência Base",
+          "trigger": "Conclusao e aceitacao da fase 1",
+          "percent": 25.2,
+          "amount": 3900,
+          "phaseOrder": 1
+        },
+        {
+          "key": "phase_2",
+          "label": "Entrega — #2 Fase 2 - Mapa, Roteiros e Experiência Turística",
+          "trigger": "Conclusao e aceitacao da fase 2",
+          "percent": 7.7,
+          "amount": 1200,
+          "phaseOrder": 2
+        },
+        {
+          "key": "phase_3",
+          "label": "Entrega — #3 Fase 3 - Dashboard administrativo completo",
+          "trigger": "Conclusao e aceitacao da fase 3",
+          "percent": 7.7,
+          "amount": 1200,
+          "phaseOrder": 3
+        },
+        {
+          "key": "phase_4",
+          "label": "Entrega — #4 Fase 4 - Integracoes: Google Pay, Apple Pay, MBway, Google/apple Authentication",
+          "trigger": "Conclusao e aceitacao da fase 4",
+          "percent": 7.7,
+          "amount": 1200,
+          "phaseOrder": 4
+        },
+        {
+          "key": "phase_5",
+          "label": "Entrega — #5 Fase 5 -  Plataforma do parceiro com historico e dashboard.",
+          "trigger": "Conclusao e aceitacao da fase 5",
+          "percent": 11.6,
+          "amount": 1800,
+          "phaseOrder": 5
+        },
+        {
+          "key": "final",
+          "label": "Pagamento final",
+          "trigger": "Entrega definitiva e aceitacao final do projecto",
+          "percent": 20,
+          "amount": 3100
+        }
+      ],
+      "initialPercent": 20,
+      "finalPercent": 20,
+      "middlePercent": 60
+    },
+    "generatedAt": "2026-07-03T16:11:29.410Z"
+  },
+  "phaseGroups": 5
+}

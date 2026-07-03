@@ -95,6 +95,7 @@ if (FORCE_OFFLINE_CHAT) {
 // CORS — allow same-origin requests and known production/dev origins
 const ALLOWED_ORIGINS = [
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://localhost:5500',
     'http://127.0.0.1:5500',
     'https://yourlabpt.com',
@@ -103,10 +104,20 @@ const ALLOWED_ORIGINS = [
     ...(process.env.ALLOWED_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean)
 ].filter(Boolean);
 
+function isLocalDevOrigin(origin) {
+    if (process.env.NODE_ENV === 'production') return false;
+    try {
+        const parsed = new URL(origin);
+        return ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+    } catch {
+        return false;
+    }
+}
+
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no Origin header (same-origin, curl, mobile)
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        if (!origin || ALLOWED_ORIGINS.includes(origin) || isLocalDevOrigin(origin)) {
             callback(null, true);
         } else {
             callback(new Error(`CORS: origin ${origin} not allowed`));

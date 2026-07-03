@@ -60,6 +60,7 @@ const AGENT_TYPES = [
   'meeting_classification',
   'discovery_research',
   'roadmap_plan',
+  'roadmap_milestones',
   'implementation_stack',
   'implementation_tasks',
   'commercial_proposal',
@@ -658,6 +659,7 @@ function normalizeHumanReview(raw) {
     status,
     readingTimeMinutes: numberOr(raw?.readingTimeMinutes, 5),
     decisionsCount,
+    preApprovalSnapshotId: textOr(raw?.preApprovalSnapshotId),
     preApplySnapshotId: textOr(raw?.preApplySnapshotId),
     repromptFromRunId: textOr(raw?.repromptFromRunId),
     createdAt: textOr(raw?.createdAt, nowIso()),
@@ -847,6 +849,7 @@ function normalizeRoadmapPhase(raw, index) {
   const src = raw && typeof raw === 'object' ? raw : {};
   return {
     id: textOr(src.id, `rmp_${crypto.randomUUID().slice(0, 8)}`),
+    planPhaseId: textOr(src.planPhaseId),
     order: Number.isFinite(src.order) ? src.order : index,
     name: textOr(src.name || src.title, `Fase ${index + 1}`),
     goalMarkdown: textOr(src.goalMarkdown || src.objectiveMarkdown || src.summaryMarkdown),
@@ -1467,6 +1470,7 @@ Schema de output (discovery_v1):
 }
 
 function buildRoadmapPrompt(project) {
+  const roadmapSync = require('./roadmap-sync');
   const ctx = buildContextPack(project, { maxRequirements: 80 });
   const capabilities = ensureArray(project.capabilities).map((c) => ({
     id: c.id, name: c.name, requirementIds: c.requirementIds, moduleIds: c.moduleIds,
@@ -1474,37 +1478,59 @@ function buildRoadmapPrompt(project) {
   const diagrams = ensureArray(project.diagramArtifacts).map((d) => ({
     title: d.title, type: d.type, module: d.module, linkedRequirementIds: d.linkedRequirementIds,
   }));
+  const implementationPlanPhases = roadmapSync.buildPlanPhasesContext(project);
   const existing = ensureArray(project.roadmap?.phases).map((p) => ({
-    id: p.id, name: p.name, requirementIds: p.requirementIds, designPattern: p.designPattern,
-    startDate: p.startDate, endDate: p.endDate,
+    id: p.id,
+    planPhaseId: p.planPhaseId,
+    name: p.name,
+    goalMarkdown: textOr(p.goalMarkdown).slice(0, 300),
+    requirementIds: p.requirementIds,
+    designPattern: p.designPattern,
+    milestones: p.milestones,
+    startDate: p.startDate,
+    endDate: p.endDate,
   }));
+
+  const planInstructions = implementationPlanPhases.length
+    ? `
+**IMPORTANTE — fases do plano já definidas (${implementationPlanPhases.length}):**
+O cliente/equipa já definiu fases de implementação em implementationPlanPhases.
+- Produz **exactamente ${implementationPlanPhases.length} fases** no roadmap, na mesma ordem.
+- Usa o mesmo planPhaseId (ex.: F1, F2) em cada fase do output.
+- Mantém os **nomes** das fases do plano.
+- Enriquece com entregável, design pattern, testes, riscos, datas coerentes com durationWeeks, e milestones (sub-marcos).
+- Atribui requirementIds com base nos requisitos da fase (ver requirementCount no plano).
+- Não inventes fases extra.`
+    : `
+Se não houver fases no plano, propõe 3–6 fases pequenas e entregáveis.`;
 
   return `Tu és um tech lead / engenheiro de entrega YourLab.
 
-Tarefa: a partir dos requisitos, capabilities, arquitetura (diagramas) e descoberta,
+Tarefa: a partir dos requisitos, capabilities, arquitectura (diagramas), **plano de fases do projecto** e descoberta,
 montar um **roadmap de implementação** por fases. Cada fase precisa de:
-- um **entregável concreto** (deliverableMarkdown) — o que fica pronto e demonstrável;
-- os **requirementIds** que essa fase satisfaz (rastreabilidade — usa SÓ ids existentes);
-- um **design pattern** recomendado e os **moduleTags** envolvidos;
-- **testes** que validam a entrega e **riscos**;
-- **datas** (startDate/endDate em ISO yyyy-mm-dd) e **dependsOn** (lista de "id" de fases anteriores deste roadmap, ex.: ["p1"]);
-- **milestones** chave.
+- planPhaseId — id da fase no plano (F1, F2…) quando existir; senão "";
+- um **entregável concreto** (deliverableMarkdown);
+- **requirementIds** (SÓ ids existentes);
+- **design pattern** e **moduleTags**;
+- **testes**, **riscos**, **datas** (yyyy-mm-dd), **dependsOn**;
+- **milestones** — sub-marcos dentro da fase (2–5 por fase).
+
+${planInstructions}
 
 Princípios:
 - Responde APENAS com JSON válido (sem \`\`\` fences).
-- Ordena por sequência lógica de construção (o que se constrói primeiro).
-- summaryMarkdown = visão geral do plano em 1-2 parágrafos legíveis.
-- Sê realista nas datas e mantém fases pequenas e entregáveis.
+- summaryMarkdown = visão geral em 1-2 parágrafos.
 
 Contexto:
-${JSON.stringify({ ...ctx, capabilities, diagrams, existingRoadmap: existing }, null, 2)}
+${JSON.stringify({ ...ctx, capabilities, diagrams, implementationPlanPhases, existingRoadmap: existing }, null, 2)}
 
 Schema de output (roadmap_v1):
 {
   "roadmap": {
     "summaryMarkdown": "",
     "phases": [{
-      "id": "p1",
+      "id": "rmp_f1",
+      "planPhaseId": "F1",
       "name": "",
       "goalMarkdown": "",
       "deliverableMarkdown": "",
@@ -1519,6 +1545,46 @@ Schema de output (roadmap_v1):
       "milestones": [{ "name": "", "date": "" }]
     }]
   },
+  "requiresHumanConfirmation": true
+}`;
+}
+
+function buildRoadmapMilestonesPrompt(project, roadmapPhaseId) {
+  const ctx = buildContextPack(project, { maxRequirements: 40 });
+  const phase = ensureArray(project.roadmap?.phases).find((p) => p.id === roadmapPhaseId);
+  if (!phase) return 'Fase de roadmap não encontrada.';
+  const planPhases = require('./roadmap-sync').buildPlanPhasesContext(project);
+  const planMatch = planPhases.find((p) => p.id === phase.planPhaseId);
+
+  return `Tu és um tech lead YourLab.
+
+Tarefa: propor **sub-milestones** para UMA fase do roadmap. Não alteres outras fases.
+
+Fase alvo:
+${JSON.stringify({
+  id: phase.id,
+  planPhaseId: phase.planPhaseId,
+  name: phase.name,
+  goalMarkdown: phase.goalMarkdown,
+  deliverableMarkdown: textOr(phase.deliverableMarkdown).slice(0, 600),
+  startDate: phase.startDate,
+  endDate: phase.endDate,
+  requirementIds: phase.requirementIds,
+  existingMilestones: phase.milestones,
+  planPhase: planMatch || null,
+}, null, 2)}
+
+Contexto:
+${JSON.stringify(ctx, null, 2)}
+
+Regras:
+- Responde APENAS com JSON válido (sem \`\`\` fences).
+- 2–6 milestones concretos, ordenados no tempo.
+- Datas yyyy-mm-dd dentro do intervalo da fase.
+
+Schema:
+{
+  "milestones": [{ "name": "", "date": "" }],
   "requiresHumanConfirmation": true
 }`;
 }
@@ -3372,6 +3438,18 @@ function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
     project.roadmap = normalizeRoadmap({ ...parsed.roadmap, updatedAt: nowIso() }, project);
   }
 
+  if (run.agentType === 'roadmap_milestones' && Array.isArray(parsed.milestones) && project.roadmap) {
+    const phaseId = textOr(run.contextPack?.roadmapPhaseId);
+    const phase = ensureArray(project.roadmap.phases).find((p) => p.id === phaseId);
+    if (phase) {
+      phase.milestones = parsed.milestones.map((m) => {
+        if (typeof m === 'string') return { name: m, date: '' };
+        return { name: textOr(m?.name || m?.title), date: textOr(m?.date) };
+      }).filter((m) => m.name);
+      project.roadmap.updatedAt = nowIso();
+    }
+  }
+
   if (parsed.proposal && typeof parsed.proposal === 'object' && run.agentType !== 'commercial_proposal') {
     project.proposal = normalizeProposal({ ...parsed.proposal, updatedAt: nowIso() });
   }
@@ -3537,19 +3615,37 @@ function syncHumanReviewFromPromptRun(project, run, parsed, rawOutput) {
   return result.payload;
 }
 
+function cloneForSnapshot(value) {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value));
+}
+
 function createProjectSnapshot(project, label, userId, stageId) {
   return normalizeVersionSnapshot({
     label,
     stageId,
     createdBy: userId,
     snapshotData: {
-      requirements: project.requirements,
-      capabilities: project.capabilities,
-      requirementClusters: project.requirementClusters,
-      artifacts: project.artifacts,
-      traceLinks: project.traceLinks,
-      stages: project.stages,
-      ideaBriefMarkdown: project.ideaBriefMarkdown,
+      requirements: cloneForSnapshot(project.requirements),
+      capabilities: cloneForSnapshot(project.capabilities),
+      requirementClusters: cloneForSnapshot(project.requirementClusters),
+      artifacts: cloneForSnapshot(project.artifacts),
+      traceLinks: cloneForSnapshot(project.traceLinks),
+      stages: cloneForSnapshot(project.stages),
+      ideaBriefMarkdown: cloneForSnapshot(project.ideaBriefMarkdown),
+      documents: cloneForSnapshot(project.documents),
+      informationEntries: cloneForSnapshot(project.informationEntries),
+      roadmap: cloneForSnapshot(project.roadmap),
+      implementation: cloneForSnapshot(project.implementation),
+      approvals: cloneForSnapshot(project.approvals),
+      impactReports: cloneForSnapshot(project.impactReports),
+      executionPlans: cloneForSnapshot(project.executionPlans),
+      promptRuns: cloneForSnapshot(project.promptRuns),
+      humanReviews: cloneForSnapshot(project.humanReviews),
+      diagramArtifacts: cloneForSnapshot(project.diagramArtifacts),
+      decisions: cloneForSnapshot(project.decisions),
+      changeRequests: cloneForSnapshot(project.changeRequests),
+      deliveryLevel: cloneForSnapshot(project.deliveryLevel),
     },
   });
 }
@@ -3835,6 +3931,7 @@ function registerDeliveryOsRoutes(app, deps) {
             snapshotId: snap.id,
             metadata: { reviewId: review.id, agentType: review.suggestedChanges?.agentType },
           }, appendActivity, store);
+          review.preApprovalSnapshotId = snap.id;
         }
         if (approved && applyChanges !== false) {
           let parsed = review.suggestedChanges?.parsed || null;
@@ -4105,6 +4202,11 @@ function registerDeliveryOsRoutes(app, deps) {
       } else if (agentType === 'roadmap_plan') {
         fullPrompt = buildRoadmapPrompt(project);
         targetOutput = 'roadmap_v1';
+      } else if (agentType === 'roadmap_milestones') {
+        const roadmapPhaseId = textOr(body.roadmapPhaseId);
+        fullPrompt = buildRoadmapMilestonesPrompt(project, roadmapPhaseId);
+        contextPack = { roadmapPhaseId };
+        targetOutput = 'roadmap_milestones_v1';
       } else if (agentType === 'implementation_stack') {
         fullPrompt = buildImplementationStackPrompt(project);
         targetOutput = 'implementation_stack_v1';
@@ -4557,6 +4659,24 @@ function registerDeliveryOsRoutes(app, deps) {
       await updateStore(async (store) => {
         const p = store.projects.find((e) => e.id === projectId);
         if (!p) throw new Error('Projeto nao encontrado.');
+        if (body.savePromptPack !== false) {
+          const phaseContent = getPhaseContent();
+          const promptPackMarkdown = executionPlans.buildPromptPackMarkdown(plan, p);
+          const document = phaseContent.normalizeProjectDocument({
+            title: `Prompt pack — ${plan.agentType || 'agent'} — ${nowIso().slice(0, 16).replace('T', ' ')}`,
+            contentMarkdown: promptPackMarkdown,
+            docType: 'log',
+            deliveryStageId: plan.toStageId || plan.stageId || 'requirements',
+            origin: 'system',
+            contentType: 'text/markdown',
+            uploadedBy: req.auth.user.id,
+            uploadedAt: nowIso(),
+          });
+          p.documents = ensureArray(p.documents);
+          p.documents.unshift(document);
+          p.documents = p.documents.slice(0, 80);
+          plan.promptPackDocumentId = document.id;
+        }
         p.executionPlans = ensureArray(p.executionPlans);
         p.executionPlans.unshift(plan);
         p.executionPlans = p.executionPlans.slice(0, 20);
@@ -4564,6 +4684,26 @@ function registerDeliveryOsRoutes(app, deps) {
       });
 
       return res.json({ plan });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/projects/projects/:projectId/execution-plans/:planId/prompt-pack', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const plan = ensureArray(req.loadedProject.executionPlans)
+        .find((p) => p.id === req.params.planId);
+      if (!plan) return res.status(404).json({ message: 'Plano nao encontrado.' });
+      const normalized = executionPlans.normalizeExecutionPlan(plan);
+      const saved = normalized.promptPackDocumentId
+        ? ensureArray(req.loadedProject.documents).find((d) => d.id === normalized.promptPackDocumentId)
+        : null;
+      const markdown = saved?.contentMarkdown || saved?.extractedText || executionPlans.buildPromptPackMarkdown(normalized, req.loadedProject);
+      return res.json({
+        planId: normalized.id,
+        documentId: saved?.id || normalized.promptPackDocumentId || null,
+        markdown,
+      });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -4585,6 +4725,16 @@ function registerDeliveryOsRoutes(app, deps) {
       const plan = executionPlans.normalizeExecutionPlan(planRaw);
       let task = plan.tasks.find((t) => t.id === taskId);
       if (!task) throw new Error('Tarefa nao encontrada.');
+      const incompleteDeps = ensureArray(task.dependsOn).filter((depId) => {
+        const dep = ensureArray(plan.tasks).find((t) => t.id === depId);
+        return !dep || !['done', 'verified', 'skipped'].includes(dep.status);
+      });
+      if (incompleteDeps.length) {
+        throw new Error(`Tarefa bloqueada. Conclua primeiro: ${incompleteDeps.join(', ')}`);
+      }
+      if (task.status === 'needs_recheck' || task.status === 'reverted') {
+        throw new Error('Esta tarefa precisa de recheck ou nova execução antes de continuar.');
+      }
 
       let syncedPlan = plan;
       if (executionPlans.isPhasedRequirementsPlan(plan)) {
@@ -4657,8 +4807,33 @@ function registerDeliveryOsRoutes(app, deps) {
         if (!pl) throw new Error('Plano nao encontrado.');
         const tk = ensureArray(pl.tasks).find((x) => x.id === taskId);
         if (!tk) throw new Error('Tarefa nao encontrada.');
+        if (tk.revertedAt) throw new Error('Esta tarefa foi revertida. Crie uma nova execução para continuar.');
 
         const phasedPlan = executionPlans.isPhasedRequirementsPlan(pl);
+        let auditRecord = null;
+        if (projectAudit && !tk.preTaskSnapshotId) {
+          const snap = projectAudit.capturePreChangeSnapshot(
+            project,
+            `Antes da tarefa ${taskId}`,
+            req.auth.user.id,
+            pl.toStageId || pl.stageId || tk.phaseId
+          );
+          auditRecord = projectAudit.recordProjectAudit(project, {
+            actorUserId: req.auth.user.id,
+            actorName: getUserName ? getUserName(store, req.auth.user.id) : req.auth.user.name,
+            action: 'execution_task_submitted',
+            summary: `Tarefa submetida: ${tk.title || taskId}`,
+            snapshotId: snap.id,
+            metadata: {
+              planId,
+              taskId,
+              promptRunId: tk.promptRunId || null,
+              agentType: pl.agentType,
+            },
+          }, appendActivity, store);
+          tk.preTaskSnapshotId = snap.id;
+          tk.auditId = auditRecord.id;
+        }
 
         if (parsed && phasedPlan) {
           parsed = executionPlans.normalizePhasedTaskOutput(parsed, project, pl, tk);
@@ -4717,6 +4892,7 @@ function registerDeliveryOsRoutes(app, deps) {
           }
           const upsert = upsertHumanReviewFromPromptRun(project, mergeRun, merged, mergeRun.rawOutput);
           mergedReview = upsert.review;
+          if (auditRecord && mergedReview?.id) auditRecord.metadata.reviewId = mergedReview.id;
           pl.status = upsert.actionable ? 'pending_review' : 'applied';
         };
 
@@ -4753,6 +4929,7 @@ function registerDeliveryOsRoutes(app, deps) {
         } else if (run && parsed && deferApply) {
           const upsert = upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput);
           resultReview = upsert.review;
+          if (auditRecord && resultReview?.id) auditRecord.metadata.reviewId = resultReview.id;
         } else if (run && parsed && !deferApply) {
           applyPromptRunOutput(project, run, parsed, req.auth.user.id, { normalizeRequirementRecord });
           run.status = 'applied';
@@ -4767,6 +4944,87 @@ function registerDeliveryOsRoutes(app, deps) {
         project: sanitizeProject(updated, req.auth.user),
         review: mergedReview || resultReview,
         noChanges: Boolean(parsed && !mergedReview && !resultReview),
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/execution-plans/:planId/tasks/:taskId/revert', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const { projectId, planId, taskId } = req.params;
+      let revertedAudit = null;
+
+      await updateStore(async (store) => {
+        const project = store.projects.find((e) => e.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+        const plan = ensureArray(project.executionPlans).find((p) => p.id === planId);
+        if (!plan) throw new Error('Plano nao encontrado.');
+        const task = ensureArray(plan.tasks).find((t) => t.id === taskId);
+        if (!task) throw new Error('Tarefa nao encontrada.');
+        if (task.revertedAt) throw new Error('Esta tarefa ja foi revertida.');
+
+        const auditId = task.auditId || ensureArray(project.auditLog).find(
+          (entry) => entry?.metadata?.planId === planId && entry?.metadata?.taskId === taskId && entry.snapshotId
+        )?.id;
+        if (!auditId) throw new Error('Sem snapshot/auditoria para reverter esta tarefa.');
+
+        const result = projectAudit.revertAuditEntry(
+          project,
+          auditId,
+          req.auth.user.id,
+          getUserName ? getUserName(store, req.auth.user.id) : req.auth.user.name
+        );
+        revertedAudit = result.entry;
+
+        const restoredPlan = ensureArray(project.executionPlans).find((p) => p.id === planId);
+        const restoredTasks = ensureArray(restoredPlan?.tasks);
+        const restoredTask = restoredTasks.find((t) => t.id === taskId);
+        if (restoredTask) {
+          restoredTask.status = 'reverted';
+          restoredTask.revertedAt = nowIso();
+          restoredTask.revertedBy = req.auth.user.id;
+          restoredTask.auditId = auditId;
+        }
+
+        const queue = [taskId];
+        const seen = new Set(queue);
+        while (queue.length) {
+          const currentId = queue.shift();
+          restoredTasks.forEach((candidate) => {
+            if (seen.has(candidate.id)) return;
+            const deps = ensureArray(candidate.dependsOn);
+            const ctx = ensureArray(candidate.contextFromTaskIds);
+            if (deps.includes(currentId) || ctx.includes(currentId)) {
+              if (!['reverted', 'planned'].includes(candidate.status)) {
+                candidate.status = 'needs_recheck';
+              }
+              seen.add(candidate.id);
+              queue.push(candidate.id);
+            }
+          });
+        }
+
+        if (restoredPlan) {
+          restoredPlan.status = 'in_progress';
+          restoredPlan.updatedAt = nowIso();
+        }
+        project.updatedAt = nowIso();
+        appendActivity(store, {
+          projectId,
+          actorUserId: req.auth.user.id,
+          action: 'execution_task_reverted',
+          auditId,
+          details: { planId, taskId },
+        });
+      });
+
+      const store = await readStore();
+      const updated = store.projects.find((e) => e.id === projectId);
+      return res.json({
+        ok: true,
+        reverted: revertedAudit,
+        project: sanitizeProject(updated, req.auth.user),
       });
     } catch (error) {
       return res.status(400).json({ message: error.message });

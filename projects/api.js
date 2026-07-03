@@ -7,11 +7,14 @@ const deliveryOs = require('./lib/delivery-os');
 const deliveryOsPlatform = require('./lib/delivery-os-platform');
 const projectAccess = require('./lib/project-access');
 const projectAudit = require('./lib/project-audit');
-const { createProjectStoreLayer } = require('./lib/project-store');
+const { createSplitStoreLayer } = require('./lib/split-store');
+const projectPayload = require('./lib/project-payload');
+const zlib = require('zlib');
 const { registerAgentRuntimeRoutes } = require('./lib/agent-runtime-routes');
 const phaseContent = require('./lib/phase-content');
 const reqHierarchy = require('./lib/requirement-hierarchy');
 const phaseSync = require('./lib/phase-sync');
+const roadmapSync = require('./lib/roadmap-sync');
 const proposalGenerator = require('./lib/proposal-generator');
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
@@ -139,31 +142,34 @@ function registerRequirementsPlatform(app, options) {
       needsPersist = true;
     }
 
-    store.projects = store.projects.map((project) => {
-      const normalized = { ...project };
-      normalized.deliveryLevel = normalizeDeliveryLevel(project.deliveryLevel);
-      normalized.requirements = ensureArray(project.requirements).map((entry) => normalizeRequirementRecord(entry));
-      normalized.clarificationQuestions = normalizeClarificationQuestions(project.clarificationQuestions || project.questions);
-      normalized.meetingMinutes = normalizeMeetingMinutes(project.meetingMinutes);
-      normalized.minutesPromptHistory = normalizeMinutesPromptHistory(project.minutesPromptHistory);
-      normalized.documents = phaseContent.normalizeProjectDocuments(project.documents);
-      normalized.stages = normalizeProjectStages(project.stages, normalized.deliveryLevel);
-      normalized.artifacts = normalizeArtifacts(project.artifacts);
-      normalized.approvals = normalizeApprovals(project.approvals);
-      normalized.impactReports = normalizeImpactReports(project.impactReports);
-      Object.assign(normalized, deliveryOs.normalizeProjectV3Fields(project));
-      Object.assign(normalized, deliveryOsPlatform.normalizePlatformFields(project));
-      normalized.auditLog = projectAudit.normalizeAuditLog(project.auditLog);
-      normalized.requirements = normalized.requirements.map((entry) => deliveryOs.enrichRequirementWithModuleTags(entry));
-      normalized.traceLinks = normalizeTraceLinks(project.traceLinks, normalized.requirements, normalized.artifacts, normalized);
-      normalized.generated = ensureArray(project.generated).map((entry) => ({
-        ...entry,
-        selectedModules: normalizeArchitectureModuleList(entry?.selectedModules),
-      }));
-      return normalized;
-    });
+    store.projects = store.projects.map((project) => normalizeOneProject(project));
 
     return { store, needsPersist: needsPersist || previousSchema < 3 };
+  }
+
+  function normalizeOneProject(project) {
+    const normalized = { ...project };
+    normalized.deliveryLevel = normalizeDeliveryLevel(project.deliveryLevel);
+    normalized.requirements = ensureArray(project.requirements).map((entry) => normalizeRequirementRecord(entry));
+    normalized.clarificationQuestions = normalizeClarificationQuestions(project.clarificationQuestions || project.questions);
+    normalized.meetingMinutes = normalizeMeetingMinutes(project.meetingMinutes);
+    normalized.minutesPromptHistory = normalizeMinutesPromptHistory(project.minutesPromptHistory);
+    normalized.documents = phaseContent.normalizeProjectDocuments(project.documents);
+    normalized.stages = normalizeProjectStages(project.stages, normalized.deliveryLevel);
+    normalized.artifacts = normalizeArtifacts(project.artifacts);
+    normalized.approvals = normalizeApprovals(project.approvals);
+    normalized.impactReports = normalizeImpactReports(project.impactReports);
+    Object.assign(normalized, deliveryOs.normalizeProjectV3Fields(project));
+    Object.assign(normalized, deliveryOsPlatform.normalizePlatformFields(project));
+    normalized.auditLog = projectAudit.normalizeAuditLog(project.auditLog);
+    normalized.requirements = normalized.requirements.map((entry) => deliveryOs.enrichRequirementWithModuleTags(entry));
+    normalized.traceLinks = normalizeTraceLinks(project.traceLinks, normalized.requirements, normalized.artifacts, normalized);
+    normalized.generated = ensureArray(project.generated).map((entry) => ({
+      ...entry,
+      selectedModules: normalizeArchitectureModuleList(entry?.selectedModules),
+    }));
+    projectPayload.pruneProjectStorage(normalized);
+    return normalized;
   }
 
   async function ensureStoreInitialized() {
@@ -179,7 +185,9 @@ function registerRequirementsPlatform(app, options) {
       await fs.mkdir(dataDir, { recursive: true });
       await fs.mkdir(uploadsDir, { recursive: true });
 
-      if (!(await fileExists(storePath))) {
+      const indexPath = path.join(dataDir, 'store-index.json');
+
+      if (!(await fileExists(storePath)) && !(await fileExists(indexPath))) {
         const passwordHash = hashPassword(process.env.REQ_PLATFORM_SUPER_ADMIN_PASSWORD || 'change-me-now');
         const seedStore = {
           version: 1,
@@ -187,6 +195,7 @@ function registerRequirementsPlatform(app, options) {
             createdAt: nowIso(),
             updatedAt: nowIso(),
             schemaVersion: 3,
+            storageLayout: 'split-v1',
           },
           users: [
             {
@@ -204,26 +213,34 @@ function registerRequirementsPlatform(app, options) {
           activity: [],
         };
 
-        await writeJson(storePath, seedStore);
+        await writeJson(indexPath, {
+          version: seedStore.version,
+          meta: seedStore.meta,
+          users: seedStore.users,
+          activity: seedStore.activity,
+          projects: [],
+        }, { compact: true });
         storeLayer.seedMemoryStore(seedStore);
         storeInitialized = true;
         return;
       }
 
-      const store = await readJson(storePath);
-      const { store: normalizedStore, needsPersist } = normalizeStoreRecord(store);
-      if (needsPersist) {
-        normalizedStore.meta.updatedAt = nowIso();
-        await writeJson(storePath, normalizedStore);
+      if (await fileExists(storePath)) {
+        const store = await readJson(storePath);
+        const { store: normalizedStore, needsPersist } = normalizeStoreRecord(store);
+        if (needsPersist) {
+          normalizedStore.meta.updatedAt = nowIso();
+          await writeJson(storePath, normalizedStore, { compact: true });
+        }
       }
-      storeLayer.seedMemoryStore(normalizedStore);
+
+      await storeLayer.migrateMonolithicIfNeeded();
       storeInitialized = true;
     });
   }
 
   async function ensureStore() {
     await ensureStoreInitialized();
-    return readJson(storePath);
   }
 
   const upload = multer({
@@ -233,10 +250,15 @@ function registerRequirementsPlatform(app, options) {
     },
   });
 
-  const storeLayer = createProjectStoreLayer({
+  const storeLayer = createSplitStoreLayer({
+    dataDir,
+    storePath,
     readJson,
     writeJson,
-    storePath,
+    pruneProject: (project) => {
+      Object.assign(project, normalizeOneProject(project));
+      return projectPayload.pruneProjectStorage(project);
+    },
     withStoreLock,
     nowIso,
   });
@@ -246,7 +268,15 @@ function registerRequirementsPlatform(app, options) {
   }
 
   async function updateStore(mutator, options) {
-    return storeLayer.updateStore(mutator, ensureStoreInitialized, options);
+    const result = await storeLayer.updateStore(mutator, ensureStoreInitialized, options);
+    projectPayload.clearSanitizeCache();
+    return result;
+  }
+
+  async function ensureProjectLoaded(projectId) {
+    const project = await storeLayer.ensureProjectLoaded(projectId);
+    if (project) Object.assign(project, normalizeOneProject(project));
+    return project;
   }
 
   function appendActivity(store, entry) {
@@ -357,7 +387,7 @@ function registerRequirementsPlatform(app, options) {
     return normalizePhases(phases);
   }
 
-  function sanitizeProject(project, viewer) {
+  function sanitizeProjectFull(project, viewer) {
     const sanitized = {
       id: project.id,
       name: project.name,
@@ -412,10 +442,12 @@ function registerRequirementsPlatform(app, options) {
         diagramFormat: doc.diagramFormat,
         contentMarkdown: doc.contentMarkdown,
       })),
-      generated: ensureArray(project.generated).map((entry) => ({
-        ...entry,
-        selectedModules: normalizeArchitectureModuleList(entry?.selectedModules),
-      })),
+      generated: viewer?.role === 'super_admin'
+        ? ensureArray(project.generated).map((entry) => ({
+          ...entry,
+          selectedModules: normalizeArchitectureModuleList(entry?.selectedModules),
+        }))
+        : [],
       meetingMinutes: normalizeMeetingMinutes(project.meetingMinutes),
       minutesPromptHistory: normalizeMinutesPromptHistory(project.minutesPromptHistory),
       ...deliveryOs.normalizeProjectV3Fields(project),
@@ -428,25 +460,53 @@ function registerRequirementsPlatform(app, options) {
       project.commercialTerms || DEFAULT_COMMERCIAL_TERMS
     );
 
+    if (viewer?.role !== 'super_admin') {
+      sanitized.proposal = {};
+    }
+
     return sanitized;
   }
 
+  const sanitizeProject = projectPayload.wrapSanitizeProject(sanitizeProjectFull);
+
+  function compressJsonMiddleware(req, res, next) {
+    const origJson = res.json.bind(res);
+    res.json = function jsonWithOptionalGzip(body) {
+      try {
+        const payload = JSON.stringify(body);
+        if (payload.length > 32768 && req.headers['accept-encoding']?.includes('gzip')) {
+          res.setHeader('Content-Encoding', 'gzip');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          return res.send(zlib.gzipSync(payload));
+        }
+      } catch {
+        // fall through
+      }
+      return origJson(body);
+    };
+    next();
+  }
+
+  app.use('/api/projects', compressJsonMiddleware);
+
   async function loadProjectForUser(req, res, next) {
     const projectId = req.params.projectId;
-    const store = await readStore();
-    const project = store.projects.find((entry) => entry.id === projectId);
+    try {
+      const project = await ensureProjectLoaded(projectId);
+      if (!project) {
+        return res.status(404).json({ message: 'Projeto nao encontrado.' });
+      }
 
-    if (!project) {
-      return res.status(404).json({ message: 'Projeto nao encontrado.' });
+      if (!canAccessProject(req.auth.user, project)) {
+        return res.status(403).json({ message: 'Sem permissao para este projeto.' });
+      }
+
+      req.loadedStore = await readStore();
+      req.loadedProject = project;
+      return next();
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
     }
-
-    if (!canAccessProject(req.auth.user, project)) {
-      return res.status(403).json({ message: 'Sem permissao para este projeto.' });
-    }
-
-    req.loadedStore = store;
-    req.loadedProject = project;
-    return next();
   }
 
   app.get('/projects', (req, res) => {
@@ -497,6 +557,7 @@ function registerRequirementsPlatform(app, options) {
       tabStageAffinity: deliveryOs.TAB_STAGE_AFFINITY,
       meetingImpactScopes: deliveryOs.MEETING_IMPACT_SCOPES,
       traceNodeTypes: deliveryOs.TRACE_NODE_TYPES,
+      agentModelProfiles: require('./lib/execution-plans').MODEL_PROFILES,
       defaultAdminEmail: process.env.REQ_PLATFORM_SUPER_ADMIN_EMAIL || 'admin@yourlab.local',
       note: 'Se for primeiro acesso, use a password definida em REQ_PLATFORM_SUPER_ADMIN_PASSWORD ou change-me-now.',
       agentRuntime: {
@@ -653,9 +714,10 @@ function registerRequirementsPlatform(app, options) {
   });
 
   app.get('/api/projects/projects', authMiddleware, async (req, res) => {
-    const store = await readStore();
-    const visible = store.projects.filter((project) => canAccessProject(req.auth.user, project));
-    return res.json({ projects: visible.map((project) => sanitizeProject(project, req.auth.user)) });
+    await ensureStoreInitialized();
+    const idx = await storeLayer.loadIndex();
+    const visible = ensureArray(idx.projects).filter((entry) => canAccessProject(req.auth.user, entry));
+    return res.json({ projects: visible.map((entry) => projectPayload.buildProjectListItem(entry)) });
   });
 
   app.post('/api/projects/projects', authMiddleware, requireRole('super_admin'), async (req, res) => {
@@ -748,7 +810,8 @@ function registerRequirementsPlatform(app, options) {
   });
 
   app.get('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, async (req, res) => {
-    return res.json({ project: sanitizeProject(req.loadedProject, req.auth.user) });
+    const full = req.query.full === '1' || req.query.full === 'true';
+    return res.json({ project: sanitizeProject(req.loadedProject, req.auth.user, { full }) });
   });
 
   app.patch('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
@@ -757,6 +820,8 @@ function registerRequirementsPlatform(app, options) {
       const patch = req.body || {};
       let requirementsPhaseRenamed = 0;
       let requirementsPhaseSynced = 0;
+      let roadmapSynced = false;
+      let roadmapSyncedCount = 0;
 
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === projectId);
@@ -800,6 +865,12 @@ function registerRequirementsPlatform(app, options) {
           project.phases = normalizePhases(patch.phases);
           requirementsPhaseRenamed = cascadeRequirementPhaseRenames(project, previousPhases, project.phases);
           requirementsPhaseSynced = phaseSync.syncRequirementsToPlanPhases(project, { nowIso });
+          const syncedRoadmap = roadmapSync.syncRoadmapFromPlanPhases(project);
+          if (syncedRoadmap.changed) {
+            project.roadmap = deliveryOs.normalizeRoadmap(syncedRoadmap.roadmap, project);
+            roadmapSynced = true;
+            roadmapSyncedCount = syncedRoadmap.planPhaseCount || 0;
+          }
         }
 
         project.summary = normalizeSummary(project.summary);
@@ -831,6 +902,8 @@ function registerRequirementsPlatform(app, options) {
         project: sanitizeProject(updated, req.auth.user),
         requirementsPhaseRenamed: requirementsPhaseRenamed || 0,
         requirementsPhaseSynced: requirementsPhaseSynced || 0,
+        roadmapSynced,
+        roadmapSyncedCount,
       });
     } catch (error) {
       return res.status(400).json({ message: error.message });
@@ -1705,6 +1778,35 @@ function registerRequirementsPlatform(app, options) {
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
+  });
+
+  app.get('/api/projects/projects/:projectId/prompt-runs/:runId', authMiddleware, loadProjectForUser, async (req, res) => {
+    const runId = req.params.runId;
+    const runs = ensureArray(req.loadedProject.promptRuns);
+    const run = runs.find((entry) => entry.id === runId);
+    if (!run) {
+      return res.status(404).json({ message: 'Execução IA nao encontrada.' });
+    }
+    return res.json({
+      promptRun: {
+        id: run.id,
+        agentType: run.agentType,
+        stageId: run.stageId,
+        capabilityId: run.capabilityId,
+        moduleTag: run.moduleTag,
+        targetOutput: run.targetOutput,
+        summaryMarkdown: run.summaryMarkdown,
+        status: run.status,
+        version: run.version,
+        createdAt: run.createdAt,
+        createdBy: run.createdBy,
+        reviewedAt: run.reviewedAt,
+        reviewedBy: run.reviewedBy,
+        fullPrompt: run.fullPrompt || '',
+        rawOutput: run.rawOutput || '',
+        parsedOutput: run.parsedOutput ?? null,
+      },
+    });
   });
 
   app.patch('/api/projects/projects/:projectId/prompt-runs/:runId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
@@ -2602,6 +2704,85 @@ function registerRequirementsPlatform(app, options) {
     return res.json({ activity, auditLog });
   });
 
+  app.post('/api/projects/projects/:projectId/roadmap/sync-from-phases', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const project = req.loadedProject;
+      const synced = roadmapSync.syncRoadmapFromPlanPhases(project);
+      if (!synced.changed) {
+        return res.status(400).json({ message: synced.message || 'Não há fases no plano para sincronizar.' });
+      }
+
+      project.roadmap = deliveryOs.normalizeRoadmap(synced.roadmap, project);
+      project.updatedAt = nowIso();
+
+      await updateStore(async (store) => {
+        if (!store.projects.some((entry) => entry.id === project.id)) {
+          store.projects.push(project);
+        }
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId: project.id,
+          action: 'roadmap_synced_from_phases',
+          details: { phaseCount: synced.planPhaseCount },
+        });
+      });
+
+      projectPayload.clearSanitizeCache(project.id);
+      return res.json({
+        message: `Roadmap criado a partir de ${synced.planPhaseCount} fase(s) do plano.`,
+        project: sanitizeProject(project, req.auth.user, { bypassCache: true }),
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch('/api/projects/projects/:projectId/roadmap/phases/:phaseId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const phaseId = req.params.phaseId;
+      const patch = req.body || {};
+      const project = req.loadedProject;
+
+      project.roadmap = deliveryOs.normalizeRoadmap(project.roadmap || {}, project);
+      const phase = ensureArray(project.roadmap.phases).find((p) => p.id === phaseId);
+      if (!phase) {
+        return res.status(404).json({ message: 'Fase de roadmap não encontrada.' });
+      }
+
+      if (patch.milestones !== undefined) {
+        phase.milestones = ensureArray(patch.milestones).map((m) => {
+          if (typeof m === 'string') return { name: m, date: '' };
+          return { name: String(m?.name || m?.title || '').trim(), date: String(m?.date || '').trim() };
+        }).filter((m) => m.name);
+      }
+      if (patch.name !== undefined) phase.name = String(patch.name).trim();
+      if (patch.goalMarkdown !== undefined) phase.goalMarkdown = String(patch.goalMarkdown);
+      if (patch.deliverableMarkdown !== undefined) phase.deliverableMarkdown = String(patch.deliverableMarkdown);
+      if (patch.startDate !== undefined) phase.startDate = String(patch.startDate);
+      if (patch.endDate !== undefined) phase.endDate = String(patch.endDate);
+
+      project.roadmap.updatedAt = nowIso();
+      project.updatedAt = nowIso();
+
+      await updateStore(async (store) => {
+        if (!store.projects.some((entry) => entry.id === project.id)) {
+          store.projects.push(project);
+        }
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId: project.id,
+          action: 'roadmap_phase_updated',
+          details: { phaseId },
+        });
+      });
+
+      projectPayload.clearSanitizeCache(project.id);
+      return res.json({ project: sanitizeProject(project, req.auth.user, { bypassCache: true }) });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get('/api/projects/projects/:projectId/proposal-config', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     const project = req.loadedProject;
     project.phases = normalizePhases(project.phases);
@@ -2612,6 +2793,10 @@ function registerRequirementsPlatform(app, options) {
 
   app.get('/api/projects/projects/:projectId/generated/:genId/:format', authMiddleware, loadProjectForUser, async (req, res) => {
     try {
+      if (req.auth.user.role !== 'super_admin') {
+        return res.status(403).json({ message: 'Apenas o administrador pode aceder ao historico de propostas.' });
+      }
+
       const { genId, format } = req.params;
       const download = req.query.download === '1';
       const project = req.loadedProject;
@@ -2650,6 +2835,67 @@ function registerRequirementsPlatform(app, options) {
       return res.status(400).json({ message: 'Formato invalido. Use markdown ou html.' });
     } catch (error) {
       return res.status(500).json({ message: `Erro ao obter proposta: ${error.message}` });
+    }
+  });
+
+  app.delete('/api/projects/projects/:projectId/generated/:genId', authMiddleware, loadProjectForUser, async (req, res) => {
+    try {
+      if (req.auth.user.role !== 'super_admin') {
+        return res.status(403).json({ message: 'Apenas o administrador pode eliminar propostas geradas.' });
+      }
+
+      const projectId = req.params.projectId;
+      const genId = req.params.genId;
+      const project = req.loadedProject;
+      if (!project || project.id !== projectId) {
+        return res.status(404).json({ message: 'Projeto nao encontrado.' });
+      }
+
+      const generated = ensureArray(project.generated);
+      const index = generated.findIndex((item) => item.id === genId);
+      if (index < 0) {
+        return res.status(404).json({ message: 'Geracao nao encontrada.' });
+      }
+
+      const removedEntry = generated[index];
+      if (removedEntry.mode !== 'commercial') {
+        return res.status(400).json({ message: 'Apenas propostas comerciais podem ser eliminadas nesta vista.' });
+      }
+
+      project.generated = generated.filter((item) => item.id !== genId);
+      project.updatedAt = nowIso();
+
+      await updateStore(async (store) => {
+        if (!store.projects.some((entry) => entry.id === projectId)) {
+          store.projects.push(project);
+        }
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId,
+          action: 'proposal_bundle_deleted',
+          details: {
+            genId,
+            mode: removedEntry.mode,
+            generatedAt: removedEntry.generatedAt,
+          },
+        });
+      });
+
+      if (removedEntry.folder) {
+        const folderPath = fromPublicPath(rootBase, removedEntry.folder);
+        if (folderPath) {
+          await fs.rm(folderPath, { recursive: true, force: true }).catch(() => {});
+        }
+      }
+
+      projectPayload.clearSanitizeCache(projectId);
+      const freshProject = await ensureProjectLoaded(projectId);
+      return res.json({
+        message: 'Proposta comercial eliminada.',
+        project: sanitizeProject(freshProject || project, req.auth.user, { bypassCache: true }),
+      });
+    } catch (error) {
+      return res.status(500).json({ message: error.message || 'Erro ao eliminar proposta.' });
     }
   });
 
@@ -5202,12 +5448,15 @@ async function readJson(target) {
   return JSON.parse(raw);
 }
 
-async function writeJson(target, value) {
+async function writeJson(target, value, options = {}) {
   const dir = path.dirname(target);
   await fs.mkdir(dir, { recursive: true });
   const tempPath = `${target}.${process.pid}.${Date.now()}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  const body = options.compact
+    ? `${JSON.stringify(value)}\n`
+    : `${JSON.stringify(value, null, 2)}\n`;
   try {
-    await fs.writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf-8');
+    await fs.writeFile(tempPath, body, 'utf-8');
     await fs.rename(tempPath, target);
   } catch (error) {
     try {

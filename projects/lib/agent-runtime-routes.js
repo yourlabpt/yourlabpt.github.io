@@ -93,7 +93,6 @@ const RUNTIME_ACTIVE_STATUSES = new Set([
 ]);
 
 const STALE_DISPATCH_MS = 120000;
-const STALE_YAR_UNREACHABLE_MS = 30000;
 
 function registerAgentRuntimeRoutes(app, deps) {
   const {
@@ -118,10 +117,8 @@ function registerAgentRuntimeRoutes(app, deps) {
     const ageMs = Date.now() - Date.parse(agentJob.updatedAt || agentJob.createdAt);
     if (!RUNTIME_ACTIVE_STATUSES.has(agentJob.status)) return agentJob;
 
-    if (!agentJob.yarJobId && ageMs > STALE_DISPATCH_MS) {
-      const error = agentJob.status === 'dispatching'
-        ? 'Agent Runtime nao respondeu ao pedido inicial'
-        : 'Execucao sem ligacao ao Agent Runtime';
+    if (!agentJob.yarJobId && agentJob.status === 'dispatching' && ageMs > STALE_DISPATCH_MS) {
+      const error = 'Agent Runtime nao respondeu ao pedido inicial';
       await updateStore(async (mutableStore) => {
         const mutableProject = mutableStore.projects.find((e) => e.id === agentJob.projectId);
         const job = ensureArray(mutableProject?.agentJobs).find((e) => e.id === agentJob.id);
@@ -293,6 +290,7 @@ function registerAgentRuntimeRoutes(app, deps) {
 
       const maxSubtasks = Number(options.maxSubtasks || budget.maxSubtasks || 8);
       let taskPlan = null;
+      let executionPlanMeta = null;
       try {
         const executionPlans = require('./execution-plans');
         const ep = executionPlans.buildExecutionPlan(platformAgentType, project, {
@@ -300,6 +298,7 @@ function registerAgentRuntimeRoutes(app, deps) {
           stageId: options.stageId,
           maxSubtasks,
         }, { deliveryOs });
+        executionPlanMeta = ep;
         if (ep?.tasks?.length) {
           taskPlan = {
             masterPlanMarkdown: ep.masterPlanMarkdown,
@@ -307,6 +306,13 @@ function registerAgentRuntimeRoutes(app, deps) {
               id: t.id,
               title: t.title,
               instruction: t.instruction,
+              estimatedInputTokens: t.estimatedInputTokens,
+              targetOutputTokens: t.targetOutputTokens,
+              contextFromTaskIds: t.contextFromTaskIds,
+              verificationPrompt: t.verificationPrompt,
+              regressionGuardPrompt: t.regressionGuardPrompt,
+              mergePrompt: t.mergePrompt,
+              reversePrompt: t.reversePrompt,
               diagramType: t.diagramType,
               role: t.role,
               requirementIds: t.requirementIds,
@@ -338,6 +344,9 @@ function registerAgentRuntimeRoutes(app, deps) {
         taskPlan,
         runtimeReachable,
         runtimeHealth,
+        modelProfileId: executionPlanMeta?.modelProfileId || options.modelProfileId || 'medium',
+        targetInputTokens: executionPlanMeta?.targetInputTokens || options.targetInputTokens,
+        targetOutputTokens: executionPlanMeta?.targetOutputTokens || options.targetOutputTokens,
       });
     } catch (error) {
       return res.status(500).json({ message: error.message });
@@ -507,6 +516,12 @@ function registerAgentRuntimeRoutes(app, deps) {
           yarJob: null,
           subtasks: [],
           yarError: null,
+          runtimeMeta: {
+            checkedAt: nowIso(),
+            reachable: false,
+            lastSeenAt: agentJob.updatedAt || agentJob.createdAt || null,
+            warning: agentJob.status === 'dispatching' ? 'A aguardar ligação ao Agent Runtime.' : null,
+          },
           events: [],
           project: project ? sanitizeProject(project, req.auth.user) : null,
         });
@@ -516,31 +531,29 @@ function registerAgentRuntimeRoutes(app, deps) {
       let yarSubtasks = [];
       let yarError = null;
       let events = [];
+      let runtimeMeta = {
+        checkedAt: nowIso(),
+        reachable: false,
+        lastSeenAt: agentJob.updatedAt || agentJob.createdAt || null,
+        warning: null,
+      };
 
       try {
         yarJob = await runtime.getJob(agentJob.yarJobId);
         yarSubtasks = yarJob?.subtasks || [];
+        runtimeMeta = {
+          checkedAt: nowIso(),
+          reachable: true,
+          lastSeenAt: yarJob?.job?.updatedAt || yarJob?.job?.startedAt || agentJob.updatedAt || agentJob.createdAt || null,
+          warning: null,
+        };
       } catch (err) {
         yarError = err.message;
       }
 
       if (yarError && RUNTIME_ACTIVE_STATUSES.has(agentJob.status)) {
-        const ageMs = Date.now() - Date.parse(agentJob.updatedAt || agentJob.createdAt);
-        if (ageMs > STALE_YAR_UNREACHABLE_MS) {
-          const error = `Agent Runtime indisponivel: ${yarError}`;
-          await updateStore(async (mutableStore) => {
-            const mutableProject = mutableStore.projects.find((e) => e.id === agentJob.projectId);
-            const job = ensureArray(mutableProject?.agentJobs).find((e) => e.id === agentJob.id);
-            if (job && RUNTIME_ACTIVE_STATUSES.has(job.status)) {
-              job.status = 'failed';
-              job.error = error;
-              job.updatedAt = nowIso();
-            }
-          });
-          agentJob = { ...agentJob, status: 'failed', error };
-        } else {
-          agentJob = { ...agentJob, error: yarError };
-        }
+        runtimeMeta.warning = `Agent Runtime indisponivel: ${yarError}`;
+        agentJob = { ...agentJob, error: yarError };
       }
 
       if (agentJob.yarJobId && yarJob?.job) {
@@ -585,22 +598,6 @@ function registerAgentRuntimeRoutes(app, deps) {
           };
         }
 
-        const yarAgeMs = Date.now() - Date.parse(yarJob.job.updatedAt || yarJob.job.startedAt || agentJob.createdAt);
-        if (yarStatus === 'planning' && yarAgeMs > 180000) {
-          const error = 'Planeamento excedeu tempo limite — verifique Ollama e ligacao a plataforma';
-          await updateStore(async (mutableStore) => {
-            const mutableProject = mutableStore.projects.find((e) => e.id === agentJob.projectId);
-            const job = ensureArray(mutableProject?.agentJobs).find((e) => e.id === agentJob.id);
-            if (job && RUNTIME_ACTIVE_STATUSES.has(job.status)) {
-              job.status = 'failed';
-              job.error = error;
-              job.updatedAt = nowIso();
-            }
-          });
-          try { await runtime.cancelJob(agentJob.yarJobId); } catch { /* ignore */ }
-          agentJob = { ...agentJob, status: 'failed', error };
-          yarJob = { job: { ...yarJob.job, status: 'failed', error } };
-        }
       }
 
       return res.json({
@@ -608,6 +605,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         yarJob: yarJob?.job || null,
         subtasks: yarSubtasks,
         yarError,
+        runtimeMeta,
         events,
         project: project ? sanitizeProject(project, req.auth.user) : null,
       });

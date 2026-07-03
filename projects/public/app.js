@@ -1045,7 +1045,7 @@ function renderProjectDetails() {
       p.classList.toggle('hidden', !show);
     });
     renderPhaseContextBar();
-    window.ProposalDownloads?.mountBar?.(null);
+    window.ProposalDownloads?.mountBar?.();
     renderProjectsPage();
     return;
   }
@@ -1091,7 +1091,8 @@ function renderProjectDetails() {
   renderImplementationPlan(project);
   renderRiskAssumptionView(project);
   renderGenerated(project);
-  window.ProposalDownloads?.mountBar?.(project);
+  window.ProposalDownloads?.mountBar?.();
+  window.PdosUI?.renderAgentOverviewCockpit?.(project);
   if (window.PdosUI) window.PdosUI.renderAll(project);
   document.querySelectorAll('.tab-panel').forEach((p) => {
     p.classList.toggle('hidden', p.dataset.panel !== state.activeTab);
@@ -1592,6 +1593,9 @@ async function saveImplementationPhases() {
     if (res.requirementsPhaseSynced) {
       msg += ` ${res.requirementsPhaseSynced} requisito(s) alinhados por número de fase (#1, #2…).`;
     }
+    if (res.roadmapSynced) {
+      msg += ` Roadmap sincronizado (${res.roadmapSyncedCount || phases.length} fase(s)).`;
+    }
     showToast(msg, 'ok');
   } catch (error) {
     showToast(error.message || 'Erro ao guardar fases.', 'error');
@@ -1828,6 +1832,7 @@ function renderImplementationPlan(project) {
             <button type="button" class="btn tiny ghost" data-edit-phases>Editar fases</button>
           ` : '')}
       </div>
+      ${!implPhasesEditing && phaseDefs.length ? `<p class="ip-muted">Ao guardar, o <button type="button" class="btn link inline-link-btn" data-goto-tab="deliveryos" data-set-stage="roadmap">roadmap</button> na Linha de Entrega é criado ou actualizado automaticamente.</p>` : ''}
       ${implPhasesEditing
         ? buildImplementationPhasesEditorHtml()
         : (phaseDefs.length ? `
@@ -1965,8 +1970,22 @@ function renderRequirements(project) {
 
 function renderGenerated(project) {
   if (!els.generatedLinks) return;
+  const historySection = els.generatedLinks.closest('.section-panel')?.querySelector('.subsection-label');
+  const canSeeHistory = typeof isSuperAdmin === 'function' && isSuperAdmin();
+  if (historySection) {
+    historySection.classList.toggle('hidden', !canSeeHistory);
+  }
+  if (!canSeeHistory) {
+    els.generatedLinks.innerHTML = '';
+    els.generatedLinks.classList.add('hidden');
+    return;
+  }
+  els.generatedLinks.classList.remove('hidden');
   if (window.ProposalDownloads?.renderGeneratedList) {
-    els.generatedLinks.innerHTML = window.ProposalDownloads.renderGeneratedList(project);
+    els.generatedLinks.innerHTML = window.ProposalDownloads.renderGeneratedList(project, {
+      commercialOnly: true,
+      showDelete: true,
+    });
     return;
   }
 

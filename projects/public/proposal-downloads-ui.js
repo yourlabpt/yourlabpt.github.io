@@ -12,6 +12,14 @@
       .replace(/"/g, '&quot;');
   }
 
+  function canViewProposalHistory() {
+    try {
+      return typeof isSuperAdmin === 'function' && isSuperAdmin();
+    } catch {
+      return false;
+    }
+  }
+
   function findLatestCommercial(project) {
     const generated = Array.isArray(project?.generated) ? project.generated : [];
     return generated.find((entry) => entry.mode === 'commercial') || null;
@@ -80,7 +88,8 @@
     return tab;
   }
 
-  function renderActions(projectId, entry, { compact = false } = {}) {
+  function renderActions(projectId, entry, { compact = false, showDelete = false } = {}) {
+    if (!canViewProposalHistory()) return '';
     if (!projectId || !entry?.id) return '';
 
     const dateLabel = entry.generatedAt
@@ -94,6 +103,7 @@
         <button type="button" class="${cls}" data-proposal-action="view-html" data-project-id="${escapeHtml(projectId)}" data-gen-id="${escapeHtml(entry.id)}">Ver HTML</button>
         <button type="button" class="${cls}" data-proposal-action="download-html" data-project-id="${escapeHtml(projectId)}" data-gen-id="${escapeHtml(entry.id)}">Download HTML</button>
         <button type="button" class="${cls}" data-proposal-action="download-md" data-project-id="${escapeHtml(projectId)}" data-gen-id="${escapeHtml(entry.id)}">Download MD</button>
+        ${showDelete && entry.mode === 'commercial' ? `<button type="button" class="${cls} ghost danger" data-proposal-action="delete" data-project-id="${escapeHtml(projectId)}" data-gen-id="${escapeHtml(entry.id)}">Eliminar</button>` : ''}
       </div>
     `;
   }
@@ -114,32 +124,62 @@
     `;
   }
 
-  function renderGeneratedList(project) {
-    const generated = Array.isArray(project?.generated) ? project.generated : [];
+  function renderGeneratedList(project, options = {}) {
+    const { commercialOnly = false, showDelete = false } = options;
+    if (!canViewProposalHistory()) {
+      return '';
+    }
+    let generated = Array.isArray(project?.generated) ? project.generated : [];
+    if (commercialOnly) {
+      generated = generated.filter((entry) => entry.mode === 'commercial');
+    }
     if (!generated.length) {
-      return '<div class="simple-item"><small>Nenhum pacote gerado ainda.</small></div>';
+      return `<div class="simple-item"><small>${commercialOnly ? 'Nenhuma proposta comercial gerada ainda.' : 'Nenhum pacote gerado ainda.'}</small></div>`;
     }
 
-    return generated.slice(0, 8).map((entry) => `
-      <div class="simple-item">
-        <strong>${escapeHtml(entry.mode || 'bundle')} · ${entry.generatedAt ? new Date(entry.generatedAt).toLocaleString('pt-PT') : ''}</strong>
-        <small>Módulos: ${entry.selectedModules?.length ? escapeHtml(entry.selectedModules.join(', ')) : 'todos'}</small>
-        ${renderActions(project.id, entry)}
+    return generated.slice(0, 20).map((entry) => `
+      <div class="simple-item proposal-generated-item" data-gen-id="${escapeHtml(entry.id)}">
+        <strong>${escapeHtml(entry.mode === 'commercial' ? 'Proposta comercial' : (entry.mode || 'bundle'))} · ${entry.generatedAt ? new Date(entry.generatedAt).toLocaleString('pt-PT') : ''}</strong>
+        ${entry.mode !== 'commercial' ? `<small>Módulos: ${entry.selectedModules?.length ? escapeHtml(entry.selectedModules.join(', ')) : 'todos'}</small>` : ''}
+        ${renderActions(project.id, entry, { showDelete })}
       </div>
     `).join('');
   }
 
-  function mountBar(project) {
-    const bar = document.getElementById('proposalDownloadBar');
-    if (!bar) return;
-    const entry = project?.id ? findLatestCommercial(project) : null;
-    if (!project?.id || !entry) {
-      bar.classList.add('hidden');
-      bar.innerHTML = '';
+  async function deleteGeneratedProposal(projectId, genId) {
+    if (typeof apiRequest === 'function') {
+      return apiRequest(
+        `/projects/${encodeURIComponent(projectId)}/generated/${encodeURIComponent(genId)}`,
+        { method: 'DELETE' }
+      );
+    }
+    const res = await fetch(apiBase(projectId, genId), {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(payload.message || 'Nao foi possivel eliminar a proposta.');
+    }
+    return payload;
+  }
+
+  async function reloadProjectAfterChange(projectId) {
+    if (typeof loadProjectById === 'function') {
+      await loadProjectById(projectId, { switchTab: false });
       return;
     }
-    bar.classList.remove('hidden');
-    bar.innerHTML = renderBar(project);
+    if (typeof renderProjectDetails === 'function') renderProjectDetails();
+    if (global.PdosUI?.renderAll && global.state?.selectedProject) {
+      global.PdosUI.renderAll(global.state.selectedProject);
+    }
+  }
+
+  function mountBar() {
+    const bar = document.getElementById('proposalDownloadBar');
+    if (!bar) return;
+    bar.classList.add('hidden');
+    bar.innerHTML = '';
   }
 
   async function handleActionClick(event) {
@@ -168,6 +208,17 @@
         await downloadProposal(projectId, genId, 'html');
       } else if (action === 'download-md') {
         await downloadProposal(projectId, genId, 'markdown');
+      } else if (action === 'delete') {
+        if (!global.confirm('Eliminar esta proposta comercial? Os ficheiros gerados serão removidos.')) {
+          return;
+        }
+        btn.textContent = 'A eliminar…';
+        await deleteGeneratedProposal(projectId, genId);
+        await reloadProjectAfterChange(projectId);
+        if (typeof global.showToast === 'function') {
+          global.showToast('Proposta eliminada.', 'ok');
+        }
+        return;
       }
       if (typeof global.showToast === 'function') {
         global.showToast(action === 'view-html' ? 'Proposta aberta num novo separador.' : 'Download iniciado.', 'ok');
@@ -188,12 +239,14 @@
   document.addEventListener('click', handleActionClick);
 
   global.ProposalDownloads = {
+    canViewProposalHistory,
     findLatestCommercial,
     findLatestAny,
     renderActions,
     renderBar,
     renderGeneratedList,
     mountBar,
+    deleteGeneratedProposal,
     downloadProposal,
     viewProposalHtml,
   };

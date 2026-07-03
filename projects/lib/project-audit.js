@@ -100,18 +100,23 @@ function restoreProjectFromSnapshot(project, snapshotData) {
   if (!snapshotData || typeof snapshotData !== 'object') {
     throw new Error('Snapshot invalido.');
   }
-  if (snapshotData.requirements) project.requirements = snapshotData.requirements;
-  if (snapshotData.capabilities) project.capabilities = snapshotData.capabilities;
-  if (snapshotData.requirementClusters) project.requirementClusters = snapshotData.requirementClusters;
-  if (snapshotData.artifacts) project.artifacts = snapshotData.artifacts;
-  if (snapshotData.traceLinks) project.traceLinks = snapshotData.traceLinks;
-  if (snapshotData.stages) project.stages = snapshotData.stages;
-  if (snapshotData.ideaBriefMarkdown) project.ideaBriefMarkdown = snapshotData.ideaBriefMarkdown;
+  const restoreKeys = [
+    'requirements', 'capabilities', 'requirementClusters', 'artifacts', 'traceLinks',
+    'stages', 'ideaBriefMarkdown', 'documents', 'informationEntries', 'roadmap',
+    'implementation', 'approvals', 'impactReports', 'executionPlans', 'promptRuns',
+    'humanReviews', 'diagramArtifacts', 'decisions', 'changeRequests', 'deliveryLevel',
+  ];
+  restoreKeys.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(snapshotData, key)) {
+      project[key] = snapshotData[key];
+    }
+  });
   project.updatedAt = nowIso();
 }
 
 function revertAuditEntry(project, auditId, userId, userName) {
-  const entry = normalizeAuditLog(project.auditLog).find((e) => e.id === auditId);
+  project.auditLog = normalizeAuditLog(project.auditLog);
+  const entry = project.auditLog.find((e) => e.id === auditId);
   if (!entry) throw new Error('Registo de auditoria nao encontrado.');
   if (entry.revertedAt) throw new Error('Esta accao ja foi revertida.');
   if (!entry.snapshotId) throw new Error('Sem snapshot para reverter.');

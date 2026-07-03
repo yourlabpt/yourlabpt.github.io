@@ -158,24 +158,30 @@ function countOrphanRequirements(project) {
   const reqs = ensureArray(project.requirements);
   const traceLinks = ensureArray(project.traceLinks);
   const implTasks = ensureArray(project.implementation?.tasks);
-  const frIds = new Set(reqs.filter((r) => String(r.type).toLowerCase() === 'functional').map((r) => r.id));
+  const frReqs = reqs.filter((r) => String(r.type).toLowerCase() === 'functional');
+  const frIds = new Set(frReqs.map((r) => r.id));
   const stkIds = new Set(reqs.filter((r) => String(r.type).toLowerCase() === 'stakeholder').map((r) => r.id));
+  const taskReqIds = (task) => [
+    ...ensureArray(task?.linkedRequirementIds),
+    ...ensureArray(task?.requirementIds),
+  ].map(String).filter(Boolean);
 
   let frWithoutStk = 0;
   let frWithoutImpl = 0;
-  frIds.forEach((frId) => {
+  frReqs.forEach((fr) => {
+    const frId = fr.id;
     const hasStk = traceLinks.some((l) =>
       (l.targetId === frId && l.sourceType?.includes('stakeholder'))
       || (l.sourceId === frId && l.targetType?.includes('stakeholder'))
-    ) || reqs.some((r) => r.parentId && stkIds.has(r.parentId));
+    ) || stkIds.has(fr.parentId) || stkIds.has(fr.stakeholderRequirementLink);
     if (!hasStk) frWithoutStk += 1;
 
-    const hasTask = implTasks.some((t) => ensureArray(t.linkedRequirementIds).includes(frId));
+    const hasTask = implTasks.some((t) => taskReqIds(t).includes(frId));
     if (!hasTask) frWithoutImpl += 1;
   });
 
   const tasksWithoutFr = implTasks.filter((t) => {
-    const links = ensureArray(t.linkedRequirementIds);
+    const links = taskReqIds(t);
     return !links.length || !links.some((id) => frIds.has(id));
   }).length;
 

@@ -6321,6 +6321,52 @@ body.help-drawer-open {
   padding-top: 8px;
 }
 
+.pdos-plan-bridge {
+  margin-top: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.02));
+}
+
+.pdos-plan-bridge .pdos-card-actions {
+  margin-top: 12px;
+}
+
+.rm-milestones-edit {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rm-ms-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rm-ms-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.rm-ms-row .rm-ms-name {
+  min-width: 0;
+}
+
+.rm-ms-row .rm-ms-date-input {
+  width: 9.5rem;
+}
+
+.rm-sync-hint {
+  margin: 0 0 8px;
+}
+
 @media (max-width: 640px) {
   .rm-phase {
     gap: 12px;
@@ -7626,6 +7672,132 @@ body.help-drawer-open {
 .pdos-agent-runtime-bar.hidden { display: none; }
 .pdos-agent-runtime-bar:hover {
   border-color: var(--accent-gold);
+}
+.pdos-exec-plan-task.needs-recheck button {
+  border-color: #c98a2e;
+  color: #c98a2e;
+}
+.pdos-exec-plan-task.is-reverted button {
+  border-color: #c44;
+  color: #c44;
+}
+.pdos-exec-plan-task button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+.project-agent-cockpit {
+  margin-top: 12px;
+}
+.project-agent-cockpit.hidden { display: none; }
+.agent-cockpit-shell {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-gold) 34%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-gold) 5%, var(--surface-2));
+}
+.agent-cockpit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.agent-cockpit-head h4 {
+  margin: 2px 0 4px;
+  font-size: 1rem;
+}
+.agent-cockpit-head p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.agent-cockpit-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.agent-cockpit-meter {
+  height: 6px;
+  margin: 12px 0 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.agent-cockpit-meter > div {
+  height: 100%;
+  min-width: 5%;
+  background: var(--accent-gold);
+  transition: width 0.35s ease;
+}
+.agent-cockpit-progress {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+}
+.agent-cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.agent-cockpit-grid h5 {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: var(--heading);
+}
+.agent-cockpit-list,
+.agent-cockpit-log {
+  margin: 0;
+  padding-left: 1.1rem;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 0.78rem;
+}
+.agent-cockpit-list li {
+  margin-bottom: 5px;
+}
+.agent-cockpit-list small {
+  display: block;
+  color: var(--muted);
+}
+.agent-cockpit-log li {
+  margin-bottom: 4px;
+  color: var(--text-muted, var(--muted));
+}
+.agent-cockpit-history {
+  margin-top: 10px;
+}
+.agent-cockpit-history-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agent-cockpit-history-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.agent-cockpit-history-list button:hover {
+  border-color: var(--accent-gold);
+}
+@media (max-width: 760px) {
+  .agent-cockpit-grid {
+    grid-template-columns: 1fr;
+  }
+  .agent-cockpit-actions {
+    justify-content: flex-start;
+  }
 }
 .pdos-agent-panel-head {
   display: flex;
@@ -9421,4 +9593,3 @@ body.is-client-readonly [data-writes-only] {
 .pdos-card-req-bridge {
   border-color: var(--accent);
 }
-

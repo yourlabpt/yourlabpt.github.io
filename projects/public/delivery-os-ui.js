@@ -12,6 +12,13 @@
     { id: 'Operations', label: 'Operação', title: 'Monitorização e produção' },
   ];
 
+  /** Módulo técnico só é relevante a partir da arquitectura — oculto em Requisitos e fases anteriores. */
+  const STAGES_WITH_MODULE_NAV = new Set(['architecture', 'roadmap', 'implementation', 'validation']);
+
+  function shouldShowModuleNav(stageId) {
+    return STAGES_WITH_MODULE_NAV.has(stageId);
+  }
+
   const FALLBACK_CONCEPTS = {
     capability: { title: 'Funcionalidade do produto', short: 'Bloco de valor que o sistema oferece — ex.: «Comprar plano», «Gerar cupom».', example: '' },
     cluster: { title: 'Grupo de requisitos', short: 'Requisitos relacionados dentro de uma funcionalidade.', example: '' },
@@ -59,6 +66,9 @@
     activePlanTaskId: '',
     promptLoadToken: 0,
     lastRuntimeOptions: null,
+    lastRuntimePoll: null,
+    lastRuntimeEvents: [],
+    lastRuntimeSubtasks: [],
   };
 
   function nextPromptLoadToken() {
@@ -189,6 +199,25 @@
     };
   }
 
+  function agentModelProfiles() {
+    return window.state?.config?.agentModelProfiles || {};
+  }
+
+  function selectedModelProfile() {
+    const id = $('pdosAgentCfgModelProfile')?.value || 'medium';
+    return agentModelProfiles()[id] || agentModelProfiles().medium || {
+      id: 'medium',
+      targetInputTokens: 14000,
+      targetOutputTokens: 2500,
+    };
+  }
+
+  function syncAgentProfileFields() {
+    const profile = selectedModelProfile();
+    if ($('pdosAgentCfgInputTokens')) $('pdosAgentCfgInputTokens').value = profile.targetInputTokens || 14000;
+    if ($('pdosAgentCfgOutputTokens')) $('pdosAgentCfgOutputTokens').value = profile.targetOutputTokens || 2500;
+  }
+
   function closeAgentConfigModal() {
     $('pdosAgentConfigModal')?.classList.add('hidden');
     pdosState.pendingAgentConfig = null;
@@ -204,6 +233,9 @@
       options: {
         ...cfg.options,
         enableWebSearch: Boolean($('pdosAgentCfgWebSearch')?.checked),
+        modelProfileId: $('pdosAgentCfgModelProfile')?.value || cfg.options.modelProfileId || 'medium',
+        targetInputTokens: Number($('pdosAgentCfgInputTokens')?.value) || cfg.options.targetInputTokens,
+        targetOutputTokens: Number($('pdosAgentCfgOutputTokens')?.value) || cfg.options.targetOutputTokens,
       },
       budget: {
         maxTokens: Number($('pdosAgentCfgMaxTokens')?.value) || cfg.prepare?.budget?.maxTokens || 120000,
@@ -217,7 +249,14 @@
     if (!canRunViaAgentRuntime(agentType)) {
       return false;
     }
-    const options = { ...buildAgentRuntimeOptions(agentType, project), ...extraOptions };
+    const defaultProfile = agentModelProfiles().medium || { targetInputTokens: 14000, targetOutputTokens: 2500 };
+    const options = {
+      modelProfileId: 'medium',
+      targetInputTokens: defaultProfile.targetInputTokens,
+      targetOutputTokens: defaultProfile.targetOutputTokens,
+      ...buildAgentRuntimeOptions(agentType, project),
+      ...extraOptions,
+    };
     pdosState.pendingAgentConfig = { agentType, project, options, prepare: null };
     $('pdosAgentConfigModal')?.classList.remove('hidden');
     $('pdosAgentConfigTitle').textContent = `Configurar — ${agentFriendlyLabel(agentType)}`;
@@ -233,6 +272,16 @@
       pdosState.pendingAgentConfig.prepare = prepare;
       pdosState.pendingAgentConfig.options = options;
 
+      const profileSelect = $('pdosAgentCfgModelProfile');
+      if (profileSelect) {
+        const profiles = agentModelProfiles();
+        const ids = Object.keys(profiles);
+        if (ids.length) {
+          profileSelect.innerHTML = ids.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+        }
+        profileSelect.value = options.modelProfileId || prepare.modelProfileId || 'medium';
+      }
+      syncAgentProfileFields();
       $('pdosAgentCfgMaxTokens').value = prepare.budget?.maxTokens ?? 120000;
       $('pdosAgentCfgMaxMinutes').value = prepare.budget?.maxWallClockMinutes ?? 45;
       $('pdosAgentCfgMaxSubtasks').value = prepare.budget?.maxSubtasks ?? 8;
@@ -253,6 +302,13 @@
                 id: t.id,
                 title: t.title,
                 instruction: t.instruction,
+                estimatedInputTokens: t.estimatedInputTokens,
+                targetOutputTokens: t.targetOutputTokens,
+                contextFromTaskIds: t.contextFromTaskIds,
+                verificationPrompt: t.verificationPrompt,
+                regressionGuardPrompt: t.regressionGuardPrompt,
+                mergePrompt: t.mergePrompt,
+                reversePrompt: t.reversePrompt,
                 diagramType: t.diagramType,
                 role: t.role,
                 requirementIds: t.requirementIds,
@@ -269,6 +325,7 @@
       $('pdosAgentCfgMaxSubtasks')?.addEventListener('change', () => {
         renderAgentConfigPlan(pdosState.pendingAgentConfig?.prepare, Number($('pdosAgentCfgMaxSubtasks').value));
       });
+      $('pdosAgentCfgModelProfile')?.addEventListener('change', syncAgentProfileFields);
 
       if (healthEl) {
         if (prepare.runtimeReachable) {
@@ -306,6 +363,13 @@
         id: t.id,
         title: t.title,
         instruction: t.instruction,
+        estimatedInputTokens: t.estimatedInputTokens,
+        targetOutputTokens: t.targetOutputTokens,
+        contextFromTaskIds: t.contextFromTaskIds,
+        verificationPrompt: t.verificationPrompt,
+        regressionGuardPrompt: t.regressionGuardPrompt,
+        mergePrompt: t.mergePrompt,
+        reversePrompt: t.reversePrompt,
         diagramType: t.diagramType,
         role: t.role,
         requirementIds: t.requirementIds,
@@ -403,6 +467,14 @@
     $('pdosAgentContinueModal')?.classList.remove('hidden');
   }
 
+  function openManualAuxPrompt(task, key, title) {
+    closeManualTasksModal();
+    openPromptWorkbench({
+      prompt: task?.[key] || '',
+      promptRun: { summaryMarkdown: `${title}: ${task?.title || 'tarefa'}` },
+    }, { bumpToken: false });
+  }
+
   async function openManualPromptFromConfig() {
     const cfg = readAgentConfigFromForm();
     if (!cfg) return;
@@ -416,10 +488,29 @@
         list.innerHTML = taskPlan.runtimeTasks.map((task, index) => `
           <article class="pdos-agent-manual-task-card">
             <h4>${index + 1}. ${escapeHtml(task.title)}</h4>
-            <p>${escapeHtml(task.diagramType || task.role || 'tarefa')} · ${task.requirementIds?.length || 0} requisito(s)</p>
-            <button type="button" class="btn tiny primary" data-manual-task-prompt="${index}">Abrir prompt desta tarefa</button>
+            <p>${escapeHtml(task.diagramType || task.role || 'tarefa')} · ${task.requirementIds?.length || 0} requisito(s) · ${task.estimatedInputTokens || 0}/${task.targetOutputTokens || 0} tokens</p>
+            <div class="pdos-agent-runtime-actions">
+              <button type="button" class="btn tiny primary" data-manual-task-prompt="${index}">Prompt</button>
+              ${task.verificationPrompt ? `<button type="button" class="btn tiny" data-manual-task-aux="${index}:verificationPrompt">Verificação</button>` : ''}
+              ${task.regressionGuardPrompt ? `<button type="button" class="btn tiny" data-manual-task-aux="${index}:regressionGuardPrompt">Regression guard</button>` : ''}
+              ${task.reversePrompt ? `<button type="button" class="btn tiny" data-manual-task-aux="${index}:reversePrompt">Reverse</button>` : ''}
+              ${task.mergePrompt ? `<button type="button" class="btn tiny" data-manual-task-aux="${index}:mergePrompt">Merge</button>` : ''}
+            </div>
           </article>`).join('');
         pdosState.manualTaskPrompts = taskPlan.runtimeTasks;
+        list.querySelectorAll('[data-manual-task-aux]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const [idx, key] = String(btn.dataset.manualTaskAux || '').split(':');
+            const task = pdosState.manualTaskPrompts[Number(idx)];
+            const labels = {
+              verificationPrompt: 'Prompt de verificação',
+              regressionGuardPrompt: 'Regression guard',
+              reversePrompt: 'Reverse propagation',
+              mergePrompt: 'Prompt de merge',
+            };
+            openManualAuxPrompt(task, key, labels[key] || 'Prompt auxiliar');
+          });
+        });
         list.querySelectorAll('[data-manual-task-prompt]').forEach((btn) => {
           btn.addEventListener('click', async () => {
             const task = pdosState.manualTaskPrompts[Number(btn.dataset.manualTaskPrompt)];
@@ -632,12 +723,20 @@
     ).trim();
   }
 
+  function proposalCanViewHistory() {
+    try {
+      return window.ProposalDownloads?.canViewProposalHistory?.() || (typeof isSuperAdmin === 'function' && isSuperAdmin());
+    } catch {
+      return false;
+    }
+  }
+
   function renderProjectHeader(project) {
     const el = $('pdosProjectHeader');
     if (!el || !project) return;
     const desc = projectDescription(project);
     const goals = (project.summary?.goals || []).slice(0, 2);
-    const latestCommercial = window.ProposalDownloads?.findLatestCommercial?.(project);
+    const latestCommercial = proposalCanViewHistory() && window.ProposalDownloads?.findLatestCommercial?.(project);
     const downloadActions = latestCommercial && window.ProposalDownloads?.renderActions
       ? window.ProposalDownloads.renderActions(project.id, latestCommercial, { compact: true })
       : '';
@@ -732,6 +831,7 @@
         renderStageGuidance(project);
         renderCurrentFocus(project);
         renderStageConceptBanner();
+        renderModuleNav();
         renderHumanReviewsSection(project);
         renderCardFeed(project);
         renderTracePanel(project);
@@ -936,8 +1036,18 @@
   }
 
   function renderModuleNav() {
+    const stageId = window.state?.deliverySelectedStageId || 'requirements';
+    const block = document.querySelector('.pdos-module-block');
+    const show = shouldShowModuleNav(stageId);
+    if (block) block.classList.toggle('hidden', !show);
+
     const el = $('pdosModuleNav');
     if (!el) return;
+    if (!show) {
+      el.innerHTML = '';
+      return;
+    }
+
     el.innerHTML = MODULE_NAV.map((m) => `
       <button type="button" class="pdos-module-pill ${pdosState.moduleFilter === m.id ? 'active' : ''}" data-module="${escapeHtml(m.id)}" title="${escapeHtml(m.title || m.label)}">${escapeHtml(m.label)}</button>
     `).join('');
@@ -1503,21 +1613,47 @@
     return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
+  function planPhasesForRoadmap(project) {
+    return ensureArray(project?.phases).filter((p) => String(p?.name || '').trim());
+  }
+
   function renderRoadmapStage(project) {
     const r = roadmapData(project);
-    const genLabel = agentButtonLabel(r.phases.length ? 'Regenerar roadmap com IA' : 'Gerar roadmap com IA', 'roadmap_plan');
+    const planPhases = planPhasesForRoadmap(project);
+    const planCount = planPhases.length;
+    const genLabel = agentButtonLabel(r.phases.length ? 'Enriquecer roadmap com IA' : 'Gerar roadmap com IA', 'roadmap_plan');
+    const canEdit = window.canEditProject?.() !== false;
 
     if (!r.phases.length) {
+      const planBridge = planCount
+        ? `
+          <div class="pdos-plan-bridge read-card">
+            <p><strong>${planCount} fase(s)</strong> já definidas no plano de implementação (#Fases).</p>
+            <p class="muted-text">Crie o roadmap em segundos a partir dessas fases — depois pode enriquecer com IA ou editar sub-milestones manualmente.</p>
+            <div class="pdos-card-actions">
+              ${canEdit ? `<button type="button" class="btn primary" data-roadmap-sync>Criar roadmap a partir das fases</button>` : ''}
+              <button type="button" class="btn ghost" data-goto-tab="fases">Ver / editar fases</button>
+              ${canEdit ? `<button type="button" class="btn ghost" data-agent="roadmap_plan">${genLabel}</button>` : ''}
+            </div>
+          </div>`
+        : `
+          <p class="muted-text">Defina primeiro as fases na aba <button type="button" class="btn link inline-link-btn" data-goto-tab="fases">Fases</button> ou peça à IA para propor o roadmap completo.</p>
+          <div class="pdos-card-actions">
+            <button type="button" class="btn ghost" data-goto-tab="fases">Ir para Fases</button>
+            ${canEdit ? `<button type="button" class="btn primary" data-agent="roadmap_plan">${genLabel}</button>` : ''}
+          </div>`;
+
       return `
         <article class="pdos-card idea-empty">
           <h4>O roadmap de implementação ainda não foi criado</h4>
-          <p class="muted-text">Gere um plano por fases — cada fase com entregável concreto, requisitos ligados, design pattern, testes e datas — a partir dos requisitos e da arquitetura.</p>
-          <div class="pdos-card-actions">
-            <button type="button" class="btn primary" data-agent="roadmap_plan">${genLabel}</button>
-          </div>
+          ${planBridge}
         </article>
       `;
     }
+
+    const syncHint = planCount && planCount !== r.phases.length
+      ? `<p class="muted-text rm-sync-hint">O plano tem ${planCount} fase(s) e o roadmap ${r.phases.length}. <button type="button" class="btn link inline-link-btn" data-roadmap-sync>Re-sincronizar com o plano</button></p>`
+      : (planCount ? `<p class="muted-text">Alinhado com <strong>${planCount}</strong> fase(s) do plano. <button type="button" class="btn link inline-link-btn" data-goto-tab="fases">Editar fases</button></p>` : '');
 
     const reqMap = {};
     (Array.isArray(project.requirements) ? project.requirements : []).forEach((req) => { reqMap[req.id] = req; });
@@ -1526,6 +1662,7 @@
 
     const phaseCards = r.phases.map((p, i) => {
       const dates = [fmtDate(p.startDate), fmtDate(p.endDate)].filter(Boolean).join(' → ');
+      const planBadge = p.planPhaseId ? `<span class="chip tiny" title="Fase do plano">${escapeHtml(p.planPhaseId)}</span>` : '';
       const reqChips = (p.requirementIds || []).map((id) => {
         const req = reqMap[id];
         const label = req ? (req.title || id) : id;
@@ -1536,6 +1673,24 @@
       const milestones = (p.milestones || []).map((m) => `<li>${escapeHtml(m.name)}${m.date ? ` <span class="rm-ms-date">${escapeHtml(fmtDate(m.date))}</span>` : ''}</li>`).join('');
       const tests = (p.tests || []).map((t) => `<li>${escapeHtml(t)}</li>`).join('');
       const risks = (p.risks || []).map((t) => `<li>${escapeHtml(t)}</li>`).join('');
+      const msEditor = canEdit ? `
+        <div class="rm-milestones-edit" data-rm-phase-id="${escapeHtml(p.id)}">
+          <span class="rm-label">Sub-milestones</span>
+          <div class="rm-ms-rows">
+            ${(p.milestones || []).map((m, mi) => `
+              <div class="rm-ms-row" data-ms-index="${mi}">
+                <input type="text" class="rm-ms-name" value="${escapeHtml(m.name)}" placeholder="Nome do marco" />
+                <input type="date" class="rm-ms-date-input" value="${escapeHtml(m.date || '')}" />
+                <button type="button" class="btn tiny ghost rm-ms-remove" title="Remover">✕</button>
+              </div>
+            `).join('')}
+          </div>
+          <div class="pdos-card-actions">
+            <button type="button" class="btn tiny ghost" data-rm-add-ms="${escapeHtml(p.id)}">+ Marco</button>
+            <button type="button" class="btn tiny" data-rm-milestones-ai="${escapeHtml(p.id)}">IA: sugerir marcos</button>
+            <button type="button" class="btn tiny primary" data-rm-save-ms="${escapeHtml(p.id)}">Guardar marcos</button>
+          </div>
+        </div>` : (milestones ? `<div class="rm-sub"><span class="rm-label">Milestones</span><ul class="rm-milestones">${milestones}</ul></div>` : '');
 
       return `
         <article class="rm-phase">
@@ -1543,15 +1698,16 @@
           <div class="rm-phase-body">
             <header class="rm-phase-head">
               <h4>${escapeHtml(p.name || `Fase ${i + 1}`)}</h4>
+              ${planBadge}
               ${dates ? `<span class="rm-dates">${escapeHtml(dates)}</span>` : ''}
             </header>
             ${p.designPattern ? `<span class="rm-pattern">Design pattern: ${escapeHtml(p.designPattern)}</span>` : ''}
             <div class="idea-md" data-rm-md="goal-${i}"></div>
             ${p.deliverableMarkdown ? `<div class="rm-deliverable"><span class="rm-label">Entregável</span><div class="idea-md" data-rm-md="deliverable-${i}"></div></div>` : ''}
             ${modules ? `<div class="rm-modules">${modules}</div>` : ''}
-            ${reqChips ? `<div class="rm-reqs"><span class="rm-label">Requisitos</span><div class="rm-req-chips">${reqChips}</div></div>` : ''}
+            ${reqChips ? `<div class="rm-reqs"><span class="rm-label">Requisitos (${(p.requirementIds || []).length})</span><div class="rm-req-chips">${reqChips}</div></div>` : ''}
             ${tests ? `<div class="rm-sub"><span class="rm-label">Testes</span><ul>${tests}</ul></div>` : ''}
-            ${milestones ? `<div class="rm-sub"><span class="rm-label">Milestones</span><ul class="rm-milestones">${milestones}</ul></div>` : ''}
+            ${msEditor}
             ${risks ? `<div class="rm-sub"><span class="rm-label">Riscos</span><ul>${risks}</ul></div>` : ''}
             ${deps.length ? `<div class="rm-deps">Depende de: ${deps.map((d) => escapeHtml(d)).join(', ')}</div>` : ''}
           </div>
@@ -1564,8 +1720,10 @@
         <header class="idea-hero">
           <span class="idea-eyebrow">ROADMAP</span>
           <h2 class="idea-headline">Plano de implementação</h2>
+          ${syncHint}
           <div class="pdos-card-actions">
-            <button type="button" class="btn tiny" data-agent="roadmap_plan">${genLabel}</button>
+            ${canEdit && planCount ? `<button type="button" class="btn tiny ghost" data-roadmap-sync>Sincronizar com fases</button>` : ''}
+            ${canEdit ? `<button type="button" class="btn tiny" data-agent="roadmap_plan">${genLabel}</button>` : ''}
           </div>
         </header>
         <div class="idea-md idea-main" data-rm-md="summary"></div>
@@ -1585,6 +1743,60 @@
       fill(`goal-${i}`, p.goalMarkdown);
       fill(`deliverable-${i}`, p.deliverableMarkdown);
     });
+  }
+
+  async function syncRoadmapFromPlanPhases(project) {
+    const res = await apiRequest(`/projects/${encodeURIComponent(project.id)}/roadmap/sync-from-phases`, { method: 'POST' });
+    showToast(res.message || 'Roadmap sincronizado.', 'ok');
+    await reloadProject(project.id);
+  }
+
+  function collectMilestonesFromPhaseEditor(phaseId) {
+    const wrap = $('pdosCardFeed')?.querySelector(`[data-rm-phase-id="${phaseId}"]`);
+    if (!wrap) return [];
+    return [...wrap.querySelectorAll('.rm-ms-row')].map((row) => ({
+      name: row.querySelector('.rm-ms-name')?.value?.trim() || '',
+      date: row.querySelector('.rm-ms-date-input')?.value?.trim() || '',
+    })).filter((m) => m.name);
+  }
+
+  function addMilestoneRow(phaseId) {
+    const wrap = $('pdosCardFeed')?.querySelector(`[data-rm-phase-id="${phaseId}"] .rm-ms-rows`);
+    if (!wrap) return;
+    const row = document.createElement('div');
+    row.className = 'rm-ms-row';
+    row.innerHTML = `
+      <input type="text" class="rm-ms-name" value="" placeholder="Nome do marco" />
+      <input type="date" class="rm-ms-date-input" value="" />
+      <button type="button" class="btn tiny ghost rm-ms-remove" title="Remover">✕</button>
+    `;
+    row.querySelector('.rm-ms-remove')?.addEventListener('click', () => row.remove());
+    wrap.appendChild(row);
+    row.querySelector('.rm-ms-name')?.focus();
+  }
+
+  async function saveRoadmapMilestones(project, phaseId) {
+    const milestones = collectMilestonesFromPhaseEditor(phaseId);
+    await apiRequest(`/projects/${encodeURIComponent(project.id)}/roadmap/phases/${encodeURIComponent(phaseId)}`, {
+      method: 'PATCH',
+      body: { milestones },
+    });
+    showToast('Marcos guardados.', 'ok');
+    await reloadProject(project.id);
+  }
+
+  async function runRoadmapMilestonesAgent(project, phaseId) {
+    const res = await apiRequest(`/projects/${encodeURIComponent(project.id)}/prompt-runs`, {
+      method: 'POST',
+      body: {
+        agentType: 'roadmap_milestones',
+        stageId: 'roadmap',
+        roadmapPhaseId: phaseId,
+      },
+    });
+    pdosState.pendingPromptRun = res.promptRun;
+    openPromptWorkbench(res);
+    showToast('Prompt de sub-milestones — cole o JSON no workbench');
   }
 
   // ---- Implementation phase ----------------------------------------------
@@ -2161,9 +2373,25 @@
     return Boolean(p.headlineMarkdown || p.valueJustificationMarkdown || p.phases.length || p.totalValue || p.paymentTermsMarkdown);
   }
 
+  function renderProposalHistoryBlock(project) {
+    if (!proposalCanViewHistory() || !window.ProposalDownloads?.renderGeneratedList) return '';
+    const commercialProject = {
+      ...project,
+      generated: ensureArray(project.generated).filter((entry) => entry.mode === 'commercial'),
+    };
+    const list = window.ProposalDownloads.renderGeneratedList(commercialProject);
+    if (!list) return '';
+    return `
+      <section class="idea-block prop-history-block">
+        <h4 class="idea-block-title">Histórico de propostas geradas</h4>
+        <div class="simple-list">${list}</div>
+      </section>`;
+  }
+
   function renderProposalStage(project) {
     const p = proposalData(project);
     const showMoney = proposalCanViewBudget();
+    const showHistory = proposalCanViewHistory();
     const reqCount = (project.requirements || []).length;
 
     if (!proposalHasContent(p)) {
@@ -2175,6 +2403,14 @@
           <div class="pdos-card-actions">
             <button type="button" class="btn primary" data-agent="commercial_proposal">Gerar proposta com IA</button>
           </div>
+        </article>`;
+    }
+
+    if (!showHistory) {
+      return `
+        <article class="pdos-card idea-empty">
+          <h4>Proposta comercial gerada</h4>
+          <p class="muted-text">O conteúdo e o histórico das propostas ficam visíveis apenas para o administrador. Pode gerar uma nova proposta com o botão <strong>Gerar proposta</strong> acima.</p>
         </article>`;
     }
 
@@ -2210,6 +2446,7 @@
             <button type="button" class="btn tiny primary" data-agent="commercial_proposal">Gerar proposta</button>
           </div>
         </div>
+        ${renderProposalHistoryBlock(project)}
       </article>`;
   }
 
@@ -2396,6 +2633,44 @@
           showToast(err.message, 'error');
         }
       });
+    });
+
+    $('pdosCardFeed')?.querySelectorAll('[data-roadmap-sync]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await syncRoadmapFromPlanPhases(project);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
+
+    $('pdosCardFeed')?.querySelectorAll('[data-rm-add-ms]').forEach((btn) => {
+      btn.addEventListener('click', () => addMilestoneRow(btn.dataset.rmAddMs));
+    });
+
+    $('pdosCardFeed')?.querySelectorAll('[data-rm-save-ms]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await saveRoadmapMilestones(project, btn.dataset.rmSaveMs);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
+
+    $('pdosCardFeed')?.querySelectorAll('[data-rm-milestones-ai]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await runRoadmapMilestonesAgent(project, btn.dataset.rmMilestonesAi);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
+
+    $('pdosCardFeed')?.querySelectorAll('.rm-ms-remove').forEach((btn) => {
+      btn.addEventListener('click', () => btn.closest('.rm-ms-row')?.remove());
     });
   }
 
@@ -2673,6 +2948,39 @@
     return 'is-running';
   }
 
+  function canDebugAgentRuntime() {
+    return window.state?.user?.role === 'super_admin';
+  }
+
+  function runtimeStatusValue(job, pollPayload) {
+    if (!job && !pollPayload?.agentJob) return '';
+    return pollPayload?.yarJob?.status || pollPayload?.agentJob?.status || job?.status || 'running';
+  }
+
+  function runtimeProgressParts(job, pollPayload) {
+    const yar = pollPayload?.yarJob;
+    const source = yar || pollPayload?.agentJob || job || {};
+    const parts = [];
+    if (source.subtasksTotal) parts.push(`${source.subtasksCompleted || 0}/${source.subtasksTotal} sub-tarefas`);
+    if (source.tokensUsed) parts.push(`${Number(source.tokensUsed).toLocaleString('pt-PT')} tokens`);
+    if (source.budget?.maxTokens && source.tokensUsed) {
+      parts.push(`${Math.min(100, Math.round((source.tokensUsed / source.budget.maxTokens) * 100))}% orçamento`);
+    }
+    return parts;
+  }
+
+  function runtimeProgressPercent(job, pollPayload) {
+    const yar = pollPayload?.yarJob;
+    const source = yar || pollPayload?.agentJob || job || {};
+    if (source.subtasksTotal) {
+      return Math.round(((source.subtasksCompleted || 0) / source.subtasksTotal) * 100);
+    }
+    if (source.budget?.maxTokens && source.tokensUsed) {
+      return Math.min(100, Math.round((source.tokensUsed / source.budget.maxTokens) * 100));
+    }
+    return RUNTIME_DONE_STATUSES.has(source.status) ? 100 : 8;
+  }
+
   function updateAgentRuntimePanel(payload) {
     const yar = payload?.yarJob;
     const agentJob = payload?.agentJob;
@@ -2768,11 +3076,16 @@
     pdosState.lastRuntimePoll = payload;
     renderAgentSubtasks(payload);
     renderAgentRuntimeBar(window.state?.selectedProject, payload);
+    renderAgentOverviewCockpit(window.state?.selectedProject, payload);
   }
 
   function appendAgentRuntimeLog(events, replace = false) {
     const log = $('pdosAgentRuntimeLog');
-    if (!log || !events?.length) return;
+    if (!events?.length) return;
+    if (replace) pdosState.lastRuntimeEvents = [];
+    pdosState.lastRuntimeEvents = [...pdosState.lastRuntimeEvents, ...events].slice(-80);
+    renderAgentOverviewCockpit(window.state?.selectedProject, pdosState.lastRuntimePoll);
+    if (!log) return;
     if (replace) log.innerHTML = '';
     events.forEach((ev) => {
       const li = document.createElement('li');
@@ -2786,14 +3099,14 @@
 
   function stopAgentRuntimeMonitor() {
     if (pdosState.activeRuntimeRun?.intervalId) {
-      clearInterval(pdosState.activeRuntimeRun.intervalId);
+      clearTimeout(pdosState.activeRuntimeRun.intervalId);
     }
     if (pdosState.activeRuntimeRun) {
       pdosState.activeRuntimeRun.intervalId = null;
     }
   }
 
-  function startAgentRuntimeMonitor(runId, projectId, { openPanel = false } = {}) {
+  function startAgentRuntimeMonitor(runId, projectId, { openPanel = false, pollMs = 12000, fastPollMs = 5000, fastForMs = 0 } = {}) {
     stopAgentRuntimeMonitor();
     pdosState.activeRuntimeRun = {
       runId,
@@ -2802,10 +3115,20 @@
       intervalId: null,
       agentType: null,
       pollErrors: 0,
+      fastUntil: Date.now() + Math.max(0, Number(fastForMs) || 0),
     };
-    $('pdosAgentRuntimeLog').innerHTML = '';
+    const log = $('pdosAgentRuntimeLog');
+    if (log) log.innerHTML = '';
+    pdosState.lastRuntimeEvents = [];
     pdosState.lastRuntimeSubtasks = [];
     if (openPanel) openYourlabAgentPanel();
+
+    const scheduleNext = () => {
+      if (!pdosState.activeRuntimeRun || pdosState.activeRuntimeRun.runId !== runId) return;
+      const fast = Date.now() < (pdosState.activeRuntimeRun.fastUntil || 0);
+      const delay = fast ? Math.max(3000, Number(fastPollMs) || 5000) : Math.max(10000, Number(pollMs) || 12000);
+      pdosState.activeRuntimeRun.intervalId = setTimeout(tick, delay);
+    };
 
     const tick = async () => {
       if (!pdosState.activeRuntimeRun || pdosState.activeRuntimeRun.runId !== runId) return;
@@ -2833,8 +3156,7 @@
           renderAgentRuntimeHistory(project || window.state?.selectedProject);
           return;
         }
-        if (RUNTIME_ERROR_STATUSES.has(yarStatus)
-          || (status.yarError && pdosState.activeRuntimeRun.pollErrors >= 3)) {
+        if (RUNTIME_ERROR_STATUSES.has(yarStatus)) {
           stopAgentRuntimeMonitor();
           showToast(status.yarJob?.error || status.agentJob?.error || status.yarError || `YourLab Agent: ${yarStatus}`, 'error');
           const project = await reloadProject(projectId);
@@ -2845,10 +3167,10 @@
         const progress = $('pdosAgentRuntimeProgress');
         if (progress) progress.textContent = `Erro ao actualizar: ${err.message}`;
       }
+      scheduleNext();
     };
 
     tick();
-    pdosState.activeRuntimeRun.intervalId = setInterval(tick, 2000);
   }
 
   async function runYourlabAgent(agentType, project, runConfig = {}) {
@@ -2876,7 +3198,7 @@
       const runId = res.agentJob?.promptRunId || res.promptRun?.id;
       openYourlabAgentPanel();
       updateAgentRuntimePanel({ agentJob: res.agentJob, yarJob: res.yarJob, events: [], subtasks: [] });
-      startAgentRuntimeMonitor(runId, project.id);
+      startAgentRuntimeMonitor(runId, project.id, { fastForMs: 45000 });
       showToast('YourLab Agent iniciado');
       const updated = await reloadProject(project.id);
       renderAgentRuntimeHistory(updated || project);
@@ -2895,7 +3217,9 @@
       projectId: project.id,
       lastEventId: 0,
     };
-    $('pdosAgentRuntimeLog').innerHTML = '';
+    const log = $('pdosAgentRuntimeLog');
+    if (log) log.innerHTML = '';
+    pdosState.lastRuntimeEvents = [];
     try {
       const status = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status?afterEventId=0`);
       updateAgentRuntimePanel(status);
@@ -2939,7 +3263,7 @@
       });
       closeAgentContinueModal();
       showToast(finishPartial ? 'YourLab Agent a concluir parcialmente' : 'YourLab Agent retomado');
-      startAgentRuntimeMonitor(runId, projectId);
+      startAgentRuntimeMonitor(runId, projectId, { fastForMs: 45000 });
       await reloadProject(projectId);
     } catch (err) {
       showToast(err.message, 'error');
@@ -2975,7 +3299,9 @@
       if (pdosState.activeRuntimeRun?.runId === runId) {
         stopAgentRuntimeMonitor();
         pdosState.activeRuntimeRun = null;
-        $('pdosAgentRuntimeLog').innerHTML = '';
+        const log = $('pdosAgentRuntimeLog');
+        if (log) log.innerHTML = '';
+        pdosState.lastRuntimeEvents = [];
         $('pdosAgentRuntimeProgress').textContent = 'Sem execução activa.';
         $('pdosAgentRuntimeMeter')?.classList.add('hidden');
       }
@@ -3015,7 +3341,7 @@
           body: { options: opts || {} },
         });
         showToast('Execução reiniciada', 'ok');
-        startAgentRuntimeMonitor(res.promptRunId || runId, project.id, { openPanel: true });
+        startAgentRuntimeMonitor(res.promptRunId || runId, project.id, { openPanel: true, fastForMs: 45000 });
         await reloadProject(project.id);
         return res;
       } catch {
@@ -3026,6 +3352,166 @@
     }
     stopAgentRuntimeMonitor();
     return openAgentConfigModal(agentType, project, opts || {});
+  }
+
+  function renderAgentOverviewCockpit(project, pollPayload) {
+    const el = $('projectAgentCockpit');
+    if (!el) return;
+
+    if (!project || !isAgentRuntimeEnabled() || !canDebugAgentRuntime()) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      return;
+    }
+
+    const jobs = getRuntimeJobs(project);
+    const poll = pollPayload || pdosState.lastRuntimePoll;
+    const activeRunId = pdosState.activeRuntimeRun?.runId;
+    let current = null;
+
+    if (poll?.agentJob && (!activeRunId || poll.agentJob.promptRunId === activeRunId || poll.agentJob.id === activeRunId)) {
+      current = poll.agentJob;
+    }
+    if (!current) current = getActiveRuntimeJob(project) || jobs[0] || null;
+
+    el.classList.remove('hidden');
+
+    if (!current) {
+      el.innerHTML = `
+        <section class="agent-cockpit-shell">
+          <div class="agent-cockpit-head">
+            <div>
+              <span class="pdos-section-label">YourLab Agent</span>
+              <h4>Sem execuções registadas</h4>
+            </div>
+            <button type="button" class="btn tiny" data-goto-tab="deliveryos">Abrir Entrega</button>
+          </div>
+          <p class="muted-text">Quando um agente correr, o progresso e os registos recentes aparecem aqui.</p>
+        </section>
+      `;
+      return;
+    }
+
+    const runId = current.promptRunId || current.id;
+    const status = runtimeStatusValue(current, poll);
+    const progressParts = runtimeProgressParts(current, poll);
+    const progressPct = Math.max(5, Math.min(100, runtimeProgressPercent(current, poll)));
+    const updatedAt = current.updatedAt || current.createdAt || '';
+    const logs = (poll?.agentJob?.promptRunId === runId || poll?.agentJob?.id === runId)
+      ? pdosState.lastRuntimeEvents.slice(-12)
+      : [];
+    const subtasks = (poll?.subtasks?.length ? poll.subtasks : pdosState.lastRuntimeSubtasks || []).slice(0, 8);
+    const errorText = poll?.yarJob?.error || current.error || poll?.yarError || '';
+    const canCancel = RUNTIME_ACTIVE_STATUSES.has(status) || RUNTIME_PAUSED_STATUSES.has(status);
+    const canResume = RUNTIME_PAUSED_STATUSES.has(status);
+    const canRerun = RUNTIME_ERROR_STATUSES.has(status) || RUNTIME_DONE_STATUSES.has(status);
+
+    el.innerHTML = `
+      <section class="agent-cockpit-shell">
+        <div class="agent-cockpit-head">
+          <div>
+            <span class="pdos-section-label">YourLab Agent</span>
+            <h4>${escapeHtml(agentFriendlyLabel(current.agentType || current.platformAgentType))}</h4>
+            <p class="muted-text">
+              <span class="pdos-agent-runtime-badge ${runtimeBadgeClass(status)}">${escapeHtml(runtimeStatusLabel(status))}</span>
+              ${updatedAt ? `<span>Actualizado ${escapeHtml(new Date(updatedAt).toLocaleString('pt-PT'))}</span>` : ''}
+            </p>
+          </div>
+          <div class="agent-cockpit-actions">
+            <button type="button" class="btn tiny primary" data-cockpit-view="${escapeHtml(runId)}">Ver detalhe</button>
+            <button type="button" class="btn tiny ghost" data-cockpit-reconnect>Testar ligação</button>
+            ${canRerun ? `<button type="button" class="btn tiny" data-cockpit-rerun="${escapeHtml(runId)}" data-agent-type="${escapeHtml(current.agentType || current.platformAgentType || '')}">Repetir</button>` : ''}
+            ${canResume ? `<button type="button" class="btn tiny primary" data-cockpit-resume="${escapeHtml(runId)}">Continuar</button>` : ''}
+            ${canCancel ? `<button type="button" class="btn tiny danger" data-cockpit-cancel="${escapeHtml(runId)}">Parar</button>` : ''}
+            <button type="button" class="btn tiny ghost" data-cockpit-dismiss="${escapeHtml(runId)}">Remover</button>
+          </div>
+        </div>
+
+        <div class="agent-cockpit-meter" aria-hidden="true">
+          <div style="width:${progressPct}%"></div>
+        </div>
+        <p class="agent-cockpit-progress muted-text">${escapeHtml(progressParts.join(' · ') || runtimeStatusLabel(status))}</p>
+        ${errorText ? `<p class="pdos-agent-runtime-error">${escapeHtml(String(errorText).slice(0, 220))}</p>` : ''}
+
+        <div class="agent-cockpit-grid">
+          <section>
+            <h5>Sub-tarefas</h5>
+            ${subtasks.length ? `
+              <ol class="agent-cockpit-list">
+                ${subtasks.map((task) => `
+                  <li>
+                    <span>${escapeHtml(task.title || task.label || task.id || 'Sub-tarefa')}</span>
+                    <small>${escapeHtml(runtimeStatusLabel(task.status || 'queued'))}</small>
+                  </li>
+                `).join('')}
+              </ol>
+            ` : '<p class="muted-text">Sem sub-tarefas recebidas nesta vista.</p>'}
+          </section>
+          <section>
+            <h5>Registo recente</h5>
+            ${logs.length ? `
+              <ol class="agent-cockpit-log">
+                ${logs.map((ev) => `
+                  <li>${escapeHtml(`${ev.timestamp ? `${new Date(ev.timestamp).toLocaleTimeString('pt-PT')} — ` : ''}${ev.message || ev.type || 'Evento'}`)}</li>
+                `).join('')}
+              </ol>
+            ` : '<p class="muted-text">Abra o detalhe para carregar ou acompanhar o registo desta execução.</p>'}
+          </section>
+        </div>
+
+        <details class="collapsible agent-cockpit-history">
+          <summary>Histórico recente</summary>
+          <div class="agent-cockpit-history-list">
+            ${jobs.slice(0, 6).map((job) => {
+              const historyRunId = job.promptRunId || job.id;
+              const historyStatus = job.status || '—';
+              return `
+                <button type="button" data-cockpit-view="${escapeHtml(historyRunId)}">
+                  <strong>${escapeHtml(agentFriendlyLabel(job.agentType || job.platformAgentType))}</strong>
+                  <span class="pdos-agent-runtime-badge ${runtimeBadgeClass(historyStatus)}">${escapeHtml(runtimeStatusLabel(historyStatus))}</span>
+                  <small>${escapeHtml(job.updatedAt ? new Date(job.updatedAt).toLocaleString('pt-PT') : '')}</small>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </details>
+      </section>
+    `;
+
+    el.querySelectorAll('[data-cockpit-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openYourlabAgentPanel();
+        selectRuntimeHistoryRun(btn.dataset.cockpitView, project);
+      });
+    });
+    el.querySelector('[data-cockpit-reconnect]')?.addEventListener('click', () => reconnectAgentRuntime(project));
+    el.querySelectorAll('[data-cockpit-rerun]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        pdosState.activeRuntimeRun = {
+          ...(pdosState.activeRuntimeRun || {}),
+          runId: btn.dataset.cockpitRerun,
+          projectId: project.id,
+          agentType: btn.dataset.agentType,
+        };
+        rerunAgentRuntime(btn.dataset.agentType, project);
+      });
+    });
+    el.querySelectorAll('[data-cockpit-resume]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        pdosState.activeRuntimeRun = {
+          ...(pdosState.activeRuntimeRun || {}),
+          runId: btn.dataset.cockpitResume,
+          projectId: project.id,
+        };
+        openAgentContinueModal('Execução pausada — pode continuar com mais orçamento ou concluir parcialmente.');
+      });
+    });
+    el.querySelectorAll('[data-cockpit-cancel]').forEach((btn) => {
+      btn.addEventListener('click', () => cancelAgentRuntime(btn.dataset.cockpitCancel, project.id));
+    });
+    el.querySelectorAll('[data-cockpit-dismiss]').forEach((btn) => {
+      btn.addEventListener('click', () => dismissAgentRuntime(btn.dataset.cockpitDismiss, project.id));
+    });
   }
 
   function renderAgentRuntimeBar(project, pollPayload) {
@@ -3222,6 +3708,46 @@
     }
   }
 
+  async function fetchExecutionPromptPack(project, plan) {
+    if (!project?.id || !plan?.id) return null;
+    return apiRequest(`/projects/${encodeURIComponent(project.id)}/execution-plans/${encodeURIComponent(plan.id)}/prompt-pack`);
+  }
+
+  async function copyExecutionPromptPack(project, plan) {
+    try {
+      const res = await fetchExecutionPromptPack(project, plan);
+      await copyToClipboard(res?.markdown || '');
+      showToast('Prompt pack copiado', 'ok');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  async function downloadExecutionPromptPack(project, plan) {
+    try {
+      const res = await fetchExecutionPromptPack(project, plan);
+      downloadTextFile(res?.markdown || '', `prompt-pack-${plan.id}.md`);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  async function revertExecutionTask(project, plan, taskId) {
+    if (!confirm('Reverter esta tarefa? O projecto volta ao snapshot anterior a esta execução e tarefas dependentes podem precisar de recheck.')) return;
+    try {
+      const res = await apiRequest(
+        `/projects/${encodeURIComponent(project.id)}/execution-plans/${encodeURIComponent(plan.id)}/tasks/${encodeURIComponent(taskId)}/revert`,
+        { method: 'POST', body: {} }
+      );
+      showToast('Tarefa revertida', 'ok');
+      closePromptWorkbench();
+      await reloadProject(project.id);
+      if (res.project) window.PdosUI?.renderAll?.(res.project);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
   function renderExecutionPlanBar(plan) {
     const bar = $('pdosExecPlanBar');
     if (!bar || !plan?.tasks?.length) {
@@ -3239,19 +3765,35 @@
         ${plan.tasks.map((task) => {
           const active = task.id === pdosState.activePlanTaskId;
           const done = task.status === 'done';
+          const needsRecheck = task.status === 'needs_recheck';
+          const reverted = task.status === 'reverted' || task.revertedAt;
+          const blocked = (task.dependsOn || []).some((depId) => {
+            const dep = (plan.tasks || []).find((t) => t.id === depId);
+            return !dep || !['done', 'verified', 'skipped'].includes(dep.status);
+          });
           return `
-            <li class="pdos-exec-plan-task ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}">
-              <button type="button" class="btn tiny ghost" data-exec-task="${escapeHtml(task.id)}">
-                ${done ? '✓' : '○'} ${escapeHtml(task.title)}
+            <li class="pdos-exec-plan-task ${active ? 'is-active' : ''} ${done ? 'is-done' : ''} ${needsRecheck ? 'needs-recheck' : ''} ${reverted ? 'is-reverted' : ''}">
+              <button type="button" class="btn tiny ghost" data-exec-task="${escapeHtml(task.id)}" ${blocked || needsRecheck || reverted ? 'disabled' : ''}>
+                ${reverted ? '↶' : done ? '✓' : needsRecheck ? '!' : blocked ? '⏳' : '○'} ${escapeHtml(task.title)}
               </button>
+              ${task.auditId && !task.revertedAt ? `<button type="button" class="btn tiny ghost" data-revert-exec-task="${escapeHtml(task.id)}">Reverter</button>` : ''}
             </li>`;
         }).join('')}
       </ol>
       <div class="pdos-exec-plan-actions">
+        <button type="button" class="btn tiny" id="pdosExecCopyPack">Copiar prompt pack</button>
+        <button type="button" class="btn tiny ghost" id="pdosExecDownloadPack">Baixar pack</button>
         ${runtimeAgent ? `
           <button type="button" class="btn tiny primary" id="pdosExecRunAgent">Executar com YourLab Agent</button>
         ` : ''}
       </div>`;
+    bar.querySelectorAll('[data-revert-exec-task]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const project = window.state?.selectedProject;
+        if (project && pdosState.activePlan) revertExecutionTask(project, pdosState.activePlan, btn.dataset.revertExecTask);
+      });
+    });
     bar.querySelectorAll('[data-exec-task]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const project = window.state?.selectedProject;
@@ -3285,6 +3827,14 @@
         toStageId: pdosState.activePlan.toStageId,
         direction: pdosState.activePlan.direction,
       });
+    });
+    $('pdosExecCopyPack')?.addEventListener('click', () => {
+      const project = window.state?.selectedProject;
+      if (project && pdosState.activePlan) copyExecutionPromptPack(project, pdosState.activePlan);
+    });
+    $('pdosExecDownloadPack')?.addEventListener('click', () => {
+      const project = window.state?.selectedProject;
+      if (project && pdosState.activePlan) downloadExecutionPromptPack(project, pdosState.activePlan);
     });
   }
 
@@ -3378,23 +3928,51 @@
     if (!on) $('pdosJobAuto')?.classList.add('hidden');
   }
 
-  function openPromptWorkbench(res, options = {}) {
+  async function fetchPromptRunFull(project, promptRun) {
+    if (!promptRun?.id || !project?.id) return promptRun;
+    if (promptRun.fullPrompt || !promptRun.hasFullPrompt) return promptRun;
+    const res = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/prompt-runs/${encodeURIComponent(promptRun.id)}`
+    );
+    return res.promptRun || promptRun;
+  }
+
+  async function openPromptWorkbench(res, options = {}) {
     if (options.bumpToken !== false) nextPromptLoadToken();
     const modal = $('pdosPromptWorkbench');
     if (!modal) return;
     pdosState.activeJob = null;
     pdosState.activePlan = null;
     pdosState.activePlanTaskId = '';
-    pdosState.pendingPromptRun = res.promptRun || null;
+    let promptRun = res.promptRun || null;
+    pdosState.pendingPromptRun = promptRun;
     $('pdosExecPlanBar')?.classList.add('hidden');
     setWorkbenchJobMode(false);
     modal.classList.remove('hidden');
     $('pdosPromptAwaitBanner')?.classList.remove('hidden');
-    $('pdosPromptSummary').textContent = res.promptRun?.summaryMarkdown || 'Prompt gerado.';
-    $('pdosPromptRaw').value = res.prompt || res.promptRun?.fullPrompt || '';
+    $('pdosPromptSummary').textContent = promptRun?.summaryMarkdown || 'Prompt gerado.';
+    $('pdosPromptRaw').value = res.prompt || promptRun?.fullPrompt || '';
     $('pdosPromptRaw').dataset.loading = '';
-    $('pdosPromptOutput').value = res.promptRun?.rawOutput || '';
-    $('pdosPromptRunId').value = res.promptRun?.id || '';
+    $('pdosPromptOutput').value = promptRun?.rawOutput || '';
+    $('pdosPromptRunId').value = promptRun?.id || '';
+
+    const project = window.state?.selectedProject;
+    if (project && promptRun?.id && !promptRun.fullPrompt && promptRun.hasFullPrompt) {
+      $('pdosPromptRaw').value = 'A carregar prompt…';
+      $('pdosPromptRaw').dataset.loading = '1';
+      try {
+        promptRun = await fetchPromptRunFull(project, promptRun);
+        pdosState.pendingPromptRun = promptRun;
+        $('pdosPromptRaw').value = res.prompt || promptRun.fullPrompt || '';
+        $('pdosPromptRaw').dataset.loading = '';
+        if (promptRun.rawOutput && !$('pdosPromptOutput').value) {
+          $('pdosPromptOutput').value = promptRun.rawOutput;
+        }
+      } catch (err) {
+        $('pdosPromptRaw').dataset.loading = '';
+        showToast(err.message || 'Nao foi possivel carregar o prompt.', 'error');
+      }
+    }
   }
 
   function closePromptWorkbench() {
@@ -3882,6 +4460,7 @@
     renderModuleNav();
     renderHumanReviewsSection(project);
     renderAgentRuntimeBar(project);
+    renderAgentOverviewCockpit(project);
     renderCardFeed(project);
     window.DiagramsUI?.renderShell?.(project);
     window.DeliveryOsPlatform?.refreshPlatformUi?.(project);
@@ -4237,6 +4816,7 @@
     renderPdosShell(project);
     renderTracePanel(project);
     watchActiveAgentRuns(project);
+    renderAgentOverviewCockpit(project);
   }
 
   function wirePdosEvents() {
@@ -4313,6 +4893,7 @@
     renderPdosShell,
     renderTracePanel,
     renderAll,
+    renderAgentOverviewCockpit,
     loadTraceMap,
     wirePdosEvents,
     wireTraceEvents,

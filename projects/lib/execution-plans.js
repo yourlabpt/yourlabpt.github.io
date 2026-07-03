@@ -3,6 +3,41 @@
  */
 const crypto = require('crypto');
 
+const MODEL_PROFILES = {
+  small: {
+    id: 'small',
+    label: 'Small',
+    targetInputTokens: 6000,
+    targetOutputTokens: 1200,
+    maxTasks: 10,
+    responseGuidance: 'Resposta curta e estritamente no schema.',
+  },
+  medium: {
+    id: 'medium',
+    label: 'Medium',
+    targetInputTokens: 14000,
+    targetOutputTokens: 2500,
+    maxTasks: 14,
+    responseGuidance: 'Resposta completa, mas compacta e sem texto fora do JSON.',
+  },
+  large: {
+    id: 'large',
+    label: 'Large',
+    targetInputTokens: 32000,
+    targetOutputTokens: 5000,
+    maxTasks: 20,
+    responseGuidance: 'Pode resolver tarefas mais ambíguas, mantendo decisões e IDs explícitos.',
+  },
+  long_context: {
+    id: 'long_context',
+    label: 'Long context',
+    targetInputTokens: 90000,
+    targetOutputTokens: 8000,
+    maxTasks: 32,
+    responseGuidance: 'Apto para contexto longo; ainda assim devolver JSON bounded e verificável.',
+  },
+};
+
 const STAGE_TRANSITION_TASKS = {
   'idea->discovery': {
     forward: [
@@ -95,8 +130,28 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function estimateTokens(value) {
+  return Math.max(1, Math.ceil(String(value || '').length / 4));
+}
+
+function normalizeModelProfileId(value) {
+  const id = textOr(value, 'medium');
+  return MODEL_PROFILES[id] ? id : 'medium';
+}
+
+function resolveModelProfile(options = {}, rawConfig = {}) {
+  const profileId = normalizeModelProfileId(options.modelProfileId || rawConfig.modelProfileId);
+  const base = MODEL_PROFILES[profileId] || MODEL_PROFILES.medium;
+  return {
+    ...base,
+    targetInputTokens: Number(options.targetInputTokens || rawConfig.targetInputTokens || base.targetInputTokens),
+    targetOutputTokens: Number(options.targetOutputTokens || rawConfig.targetOutputTokens || base.targetOutputTokens),
+    maxTasks: Number(options.maxTasks || rawConfig.maxTasks || base.maxTasks),
+  };
+}
+
 function normalizeExecutionTask(raw, order = 0) {
-  const statuses = ['planned', 'running', 'awaiting_paste', 'done', 'failed', 'skipped', 'deferred'];
+  const statuses = ['planned', 'running', 'awaiting_paste', 'done', 'verified', 'failed', 'skipped', 'deferred', 'needs_recheck', 'reverted'];
   const status = textOr(raw?.status, 'planned');
   return {
     id: textOr(raw?.id, `task_${order + 1}`),
@@ -106,11 +161,23 @@ function normalizeExecutionTask(raw, order = 0) {
     outputSchema: textOr(raw?.outputSchema),
     role: textOr(raw?.role, 'artifact'),
     dependsOn: ensureArray(raw?.dependsOn).map(String),
+    contextFromTaskIds: ensureArray(raw?.contextFromTaskIds).map(String),
     status: statuses.includes(status) ? status : 'planned',
     promptRunId: textOr(raw?.promptRunId),
     estimatedTokens: Number(raw?.estimatedTokens) || 0,
+    estimatedInputTokens: Number(raw?.estimatedInputTokens || raw?.estimatedTokens) || 0,
+    targetOutputTokens: Number(raw?.targetOutputTokens) || 0,
     parsedOutput: raw?.parsedOutput ?? null,
     rawOutput: textOr(raw?.rawOutput),
+    verificationPrompt: textOr(raw?.verificationPrompt),
+    mergePrompt: textOr(raw?.mergePrompt),
+    regressionGuardPrompt: textOr(raw?.regressionGuardPrompt),
+    reversePrompt: textOr(raw?.reversePrompt),
+    preTaskSnapshotId: textOr(raw?.preTaskSnapshotId),
+    preApprovalSnapshotId: textOr(raw?.preApprovalSnapshotId),
+    auditId: textOr(raw?.auditId),
+    revertedAt: textOr(raw?.revertedAt),
+    revertedBy: textOr(raw?.revertedBy),
     diagramType: textOr(raw?.diagramType),
     requirementIds: ensureArray(raw?.requirementIds).map(String),
     reqKind: textOr(raw?.reqKind),
@@ -123,6 +190,7 @@ function normalizeExecutionPlan(raw) {
   const statuses = ['planned', 'in_progress', 'awaiting_paste', 'pending_review', 'applied', 'cancelled'];
   const status = textOr(raw?.status, 'planned');
   const config = raw?.config && typeof raw.config === 'object' ? raw.config : {};
+  const profile = resolveModelProfile(raw || {}, config);
   return {
     id: textOr(raw?.id, `plan_${crypto.randomUUID().slice(0, 8)}`),
     agentType: textOr(raw?.agentType),
@@ -131,11 +199,26 @@ function normalizeExecutionPlan(raw) {
     fromStageId: textOr(raw?.fromStageId),
     toStageId: textOr(raw?.toStageId),
     direction: textOr(raw?.direction),
+    propagationDirection: ['forward', 'backward', 'bidirectional'].includes(textOr(raw?.propagationDirection || config.propagationDirection))
+      ? textOr(raw?.propagationDirection || config.propagationDirection)
+      : (textOr(raw?.direction) === 'backward' ? 'backward' : 'forward'),
+    splitStrategy: ['deterministic', 'planner_prompt'].includes(textOr(raw?.splitStrategy || config.splitStrategy))
+      ? textOr(raw?.splitStrategy || config.splitStrategy)
+      : 'deterministic',
+    modelProfileId: profile.id,
+    targetInputTokens: profile.targetInputTokens,
+    targetOutputTokens: profile.targetOutputTokens,
+    promptPackDocumentId: textOr(raw?.promptPackDocumentId),
     config: {
       systemPrompt: textOr(config.systemPrompt),
       outputSchema: textOr(config.outputSchema),
       maxTokens: Number(config.maxTokens) || 120000,
       maxSubtasks: Number(config.maxSubtasks) || 8,
+      modelProfileId: profile.id,
+      targetInputTokens: profile.targetInputTokens,
+      targetOutputTokens: profile.targetOutputTokens,
+      splitStrategy: textOr(raw?.splitStrategy || config.splitStrategy, 'deterministic'),
+      propagationDirection: textOr(raw?.propagationDirection || config.propagationDirection, textOr(raw?.direction) === 'backward' ? 'backward' : 'forward'),
       enableWebSearch: config.enableWebSearch !== false,
       capabilityId: textOr(config.capabilityId),
       moduleTag: textOr(config.moduleTag),
@@ -148,6 +231,120 @@ function normalizeExecutionPlan(raw) {
     createdBy: textOr(raw?.createdBy),
     updatedAt: textOr(raw?.updatedAt, nowIso()),
   };
+}
+
+function compactTaskOutputContext(plan, task, maxTokens = 900) {
+  const wanted = new Set(ensureArray(task?.contextFromTaskIds).length ? task.contextFromTaskIds : task?.dependsOn);
+  if (!wanted.size) return '';
+  const chunks = ensureArray(plan?.tasks)
+    .filter((t) => wanted.has(t.id) && (t.status === 'done' || t.status === 'verified') && (t.parsedOutput || t.rawOutput))
+    .map((t) => {
+      const parsed = t.parsedOutput
+        ? JSON.stringify(t.parsedOutput, null, 2)
+        : String(t.rawOutput || '');
+      return `## ${t.title}\n${parsed.slice(0, Math.max(600, maxTokens * 4))}`;
+    });
+  return chunks.join('\n\n').slice(0, maxTokens * 4);
+}
+
+function buildVerificationPrompt(task, profile) {
+  return [
+    `# Verificação da tarefa: ${task.title}`,
+    'Verifica se a resposta da IA cumpre o schema, respeita os IDs existentes e não introduz regressões.',
+    'Devolve APENAS JSON:',
+    '{"status":"pass|fail","issues":[],"requiredFixes":[],"safeToMerge":false}',
+    `Limite esperado de resposta: ${profile.targetOutputTokens} tokens.`,
+  ].join('\n\n');
+}
+
+function buildRegressionGuardPrompt(task, plan) {
+  const destructive = plan.propagationDirection === 'backward'
+    ? 'Qualquer remoção/descontinuação exige classificação explícita e revisão humana.'
+    : 'Preserva trabalho aprovado excepto quando houver contradição explícita.';
+  return [
+    `# Regression guard: ${task.title}`,
+    destructive,
+    'Classifica cada alteração como append, modify, deprecate ou no_change.',
+    'Mantém IDs estáveis quando possível e adiciona traceLinks para novas mudanças.',
+    'Devolve APENAS JSON: {"changes":[{"id":"","classification":"append|modify|deprecate|no_change","reason":"","requiresHumanApproval":true}],"regressionRisk":"low|medium|high"}',
+  ].join('\n\n');
+}
+
+function buildMergePrompt(task, plan) {
+  return [
+    `# Merge: ${task.title}`,
+    `Plano: ${plan.agentType} ${plan.fromStageId || ''}->${plan.toStageId || ''}`.trim(),
+    'Consolida apenas outputs verificados das tarefas dependentes.',
+    'Preserva IDs existentes, junta traceLinks e assinala conflitos.',
+    'Devolve APENAS JSON válido no schema final do agente.',
+  ].join('\n\n');
+}
+
+function buildReversePrompt(task, plan) {
+  return [
+    `# Reverse propagation: ${task.title}`,
+    `Direcção: ${plan.propagationDirection}`,
+    'Propaga alterações de fases posteriores para artefactos anteriores sem apagar trabalho aprovado.',
+    'Adapta ou acrescenta alterações; usa deprecate só quando for inevitável e exigir revisão humana.',
+    'Devolve JSON com classifications append|modify|deprecate|no_change.',
+  ].join('\n\n');
+}
+
+function enrichTasksForProfile(tasks, plan, profile) {
+  const targetOutputTokens = profile.targetOutputTokens;
+  return ensureArray(tasks).map((task, index) => {
+    const instruction = textOr(task.instruction);
+    const estimatedInputTokens = estimateTokens(instruction);
+    return {
+      ...task,
+      order: Number(task.order ?? index),
+      contextFromTaskIds: ensureArray(task.contextFromTaskIds).length
+        ? task.contextFromTaskIds
+        : ensureArray(task.dependsOn),
+      estimatedTokens: Number(task.estimatedTokens) || estimatedInputTokens,
+      estimatedInputTokens,
+      targetOutputTokens: Number(task.targetOutputTokens) || targetOutputTokens,
+      verificationPrompt: task.verificationPrompt || buildVerificationPrompt(task, profile),
+      mergePrompt: task.mergePrompt || (task.role === 'merge' ? buildMergePrompt(task, plan) : ''),
+      regressionGuardPrompt: task.regressionGuardPrompt || buildRegressionGuardPrompt(task, plan),
+      reversePrompt: task.reversePrompt || (plan.propagationDirection !== 'forward' ? buildReversePrompt(task, plan) : ''),
+    };
+  });
+}
+
+function needsPlannerFallback(tasks, profile) {
+  if (ensureArray(tasks).length > profile.maxTasks) return true;
+  return ensureArray(tasks).some((task) => Number(task.estimatedInputTokens || estimateTokens(task.instruction)) > profile.targetInputTokens);
+}
+
+function buildPlannerTask(agentType, project, options, profile) {
+  const reqIds = ensureArray(project?.requirements).map((r) => r.id).filter(Boolean).sort();
+  return normalizeExecutionTask({
+    id: 'plan_breakdown',
+    order: 0,
+    title: 'Plan breakdown',
+    role: 'planning',
+    dependsOn: [],
+    targetOutputTokens: profile.targetOutputTokens,
+    estimatedInputTokens: Math.min(profile.targetInputTokens, 1200 + reqIds.length * 4),
+    instruction: [
+      '# Plan breakdown',
+      `Agent type: ${agentType}`,
+      `Model profile: ${profile.id}`,
+      `Target input tokens per task: ${profile.targetInputTokens}`,
+      `Target output tokens per task: ${profile.targetOutputTokens}`,
+      'Create a deterministic task breakdown that fits these ranges.',
+      'Use stable task IDs, explicit dependsOn, contextFromTaskIds, and mark independent tasks with empty dependsOn.',
+      'Return ONLY JSON: {"tasks":[{"id":"","title":"","role":"","dependsOn":[],"contextFromTaskIds":[],"objective":"","expectedOutput":""}]}',
+      `Requirement IDs: ${reqIds.join(', ')}`,
+      `Options: ${JSON.stringify({
+        fromStageId: options.fromStageId,
+        toStageId: options.toStageId,
+        direction: options.direction,
+        propagationDirection: options.propagationDirection,
+      })}`,
+    ].join('\n\n'),
+  });
 }
 
 function defaultTaskSplit(fullPrompt, agentType, titlePrefix = 'Parte') {
@@ -960,11 +1157,23 @@ function buildStageTransitionTasks(fromStageId, toStageId, direction, project = 
 function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
   const deliveryOs = deps.deliveryOs || require('./delivery-os');
   const stageId = textOr(options.stageId);
+  const profile = resolveModelProfile(options);
+  const propagationDirection = ['forward', 'backward', 'bidirectional'].includes(textOr(options.propagationDirection))
+    ? textOr(options.propagationDirection)
+    : (textOr(options.direction) === 'backward' ? 'backward' : 'forward');
+  const requestedSplitStrategy = ['deterministic', 'planner_prompt'].includes(textOr(options.splitStrategy))
+    ? textOr(options.splitStrategy)
+    : 'deterministic';
   const config = {
     systemPrompt: textOr(options.systemPrompt, 'Tu és um agente de systems engineering YourLab.'),
     outputSchema: textOr(options.outputSchema, 'JSON válido apenas.'),
     maxTokens: Number(options.maxTokens) || 120000,
     maxSubtasks: Number(options.maxSubtasks) || 8,
+    modelProfileId: profile.id,
+    targetInputTokens: profile.targetInputTokens,
+    targetOutputTokens: profile.targetOutputTokens,
+    splitStrategy: requestedSplitStrategy,
+    propagationDirection,
     enableWebSearch: options.enableWebSearch !== false,
     capabilityId: textOr(options.capabilityId),
     moduleTag: textOr(options.moduleTag),
@@ -1150,6 +1359,23 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
     }));
   }
 
+  const planForPrompts = {
+    agentType,
+    fromStageId: options.fromStageId,
+    toStageId: options.toStageId,
+    direction: options.direction,
+    propagationDirection,
+    config,
+  };
+  tasks = enrichTasksForProfile(tasks, planForPrompts, profile);
+  let splitStrategy = requestedSplitStrategy;
+  if (splitStrategy !== 'planner_prompt' && needsPlannerFallback(tasks, profile)) {
+    splitStrategy = 'planner_prompt';
+    const planner = buildPlannerTask(agentType, project, options, profile);
+    tasks = enrichTasksForProfile([planner], { ...planForPrompts, splitStrategy }, profile);
+    masterPlanMarkdown = `${masterPlanMarkdown}\n\nPlaneamento automático necessário: o contexto excede o perfil ${profile.id}.`;
+  }
+
   return normalizeExecutionPlan({
     agentType,
     stageId,
@@ -1163,6 +1389,11 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
       ? resolveStageTransitionSpec(options.fromStageId, options.toStageId, options.direction).direction
       : options.direction,
     mode: textOr(options.mode, 'manual'),
+    modelProfileId: profile.id,
+    targetInputTokens: profile.targetInputTokens,
+    targetOutputTokens: profile.targetOutputTokens,
+    splitStrategy,
+    propagationDirection,
     config,
     tasks,
     masterPlanMarkdown,
@@ -1240,13 +1471,75 @@ function buildTaskPrompt(plan, task, project, deps = {}) {
     return buildRequirementsPhaseTaskPrompt(syncedPlan, syncedTask, project, deliveryOs);
   }
 
-  return buildTaskInstruction(
+  const base = buildTaskInstruction(
     buildFullPromptForType(plan.agentType, project, plan.config, deliveryOs),
     task,
     plan.agentType,
     project,
     { ...plan.config, fromStageId: plan.fromStageId, toStageId: plan.toStageId, direction: plan.direction }
   );
+  const carryover = compactTaskOutputContext(plan, task, Math.max(600, Math.floor((plan.targetInputTokens || 14000) * 0.15)));
+  if (!carryover) return base;
+  return `${base}\n\n---\n\n# Previous verified task outputs\nUse this compact context from completed dependencies. Do not copy raw text blindly; preserve IDs and decisions.\n\n${carryover}`;
+}
+
+function buildPromptPackMarkdown(planRaw, project = null) {
+  const plan = normalizeExecutionPlan(planRaw);
+  const profile = resolveModelProfile(plan, plan.config);
+  const lines = [
+    `# Prompt Pack — ${plan.agentType || 'agent'}`,
+    '',
+    `Plano: ${plan.id}`,
+    `Perfil: ${profile.id} (${profile.label})`,
+    `Input alvo/tarefa: ${profile.targetInputTokens} tokens`,
+    `Output alvo/tarefa: ${profile.targetOutputTokens} tokens`,
+    `Split: ${plan.splitStrategy}`,
+    `Propagação: ${plan.propagationDirection}`,
+    '',
+    '## Resumo',
+    plan.masterPlanMarkdown || 'Sem resumo.',
+    '',
+    '## Grafo de dependências',
+    ...ensureArray(plan.tasks).map((task) => `- ${task.id}: ${task.title} | dependsOn: ${ensureArray(task.dependsOn).join(', ') || 'independent'} | contextFrom: ${ensureArray(task.contextFromTaskIds).join(', ') || 'none'}`),
+    '',
+  ];
+
+  ensureArray(plan.tasks).forEach((task, index) => {
+    const prompt = task.instruction || (project ? buildTaskPrompt(plan, task, project) : '');
+    lines.push(
+      `## Task ${index + 1}: ${task.title}`,
+      '',
+      `ID: ${task.id}`,
+      `Role: ${task.role}`,
+      `Estimated input tokens: ${task.estimatedInputTokens || estimateTokens(prompt)}`,
+      `Target output tokens: ${task.targetOutputTokens || profile.targetOutputTokens}`,
+      `Rollback: capture snapshot before applying this task; revert via task audit if needed.`,
+      '',
+      '### Task prompt',
+      '```text',
+      prompt,
+      '```',
+      '',
+      '### Verification prompt',
+      '```text',
+      task.verificationPrompt || buildVerificationPrompt(task, profile),
+      '```',
+      '',
+      '### Regression guard prompt',
+      '```text',
+      task.regressionGuardPrompt || buildRegressionGuardPrompt(task, plan),
+      '```',
+      ''
+    );
+    if (task.reversePrompt || plan.propagationDirection !== 'forward') {
+      lines.push('### Reverse propagation prompt', '```text', task.reversePrompt || buildReversePrompt(task, plan), '```', '');
+    }
+    if (task.role === 'merge' || task.mergePrompt) {
+      lines.push('### Merge prompt', '```text', task.mergePrompt || buildMergePrompt(task, plan), '```', '');
+    }
+  });
+
+  return `${lines.join('\n')}\n`;
 }
 
 function mergeTaskOutputs(plan, taskOutputs) {
@@ -1313,10 +1606,18 @@ function getGateCheckAgentForTransition(fromStageId, toStageId) {
 }
 
 module.exports = {
+  MODEL_PROFILES,
   STAGE_TRANSITION_TASKS,
+  estimateTokens,
+  resolveModelProfile,
   normalizeExecutionPlan,
   normalizeExecutionTask,
   buildExecutionPlan,
+  buildPromptPackMarkdown,
+  buildVerificationPrompt,
+  buildRegressionGuardPrompt,
+  buildMergePrompt,
+  compactTaskOutputContext,
   buildTaskPrompt,
   buildTaskInstruction,
   resolveStageTransitionSpec,

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=63" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=65" />
 </head>
 <body>
   <div class="page-bg"></div>
@@ -100,8 +100,6 @@
 
           <div id="projectWorkspace">
 
-            <div id="proposalDownloadBar" class="proposal-download-bar hidden" aria-live="polite"></div>
-
             <nav class="section-tabs section-tabs-compact hidden" id="sectionTabs" aria-hidden="true">
               <button class="tab-btn" data-tab="projetos"><span>Projetos</span></button>
               <button class="tab-btn active" data-tab="projeto"><span>Projeto</span></button>
@@ -149,6 +147,7 @@
                 </div>
                 <div id="projectKpis" class="kpi-strip"></div>
                 <div id="projectReadability" class="readability-grid mt-8"></div>
+                <div id="projectAgentCockpit" class="project-agent-cockpit hidden" aria-live="polite"></div>
               </section>
               <section class="panel section-panel">
                 <div class="panel-title-row">
@@ -541,7 +540,7 @@
                   <div id="generationModules" class="module-chip-list"></div>
                 </details>
                 <div class="section-divider"></div>
-                <p class="subsection-label">Documentos gerados</p>
+                <p class="subsection-label">Propostas comerciais geradas</p>
                 <div id="generatedLinks" class="simple-list mt-8"></div>
               </section>
             </div>
@@ -939,6 +938,20 @@
 
       <form id="pdosAgentConfigForm" class="pdos-agent-config-form">
         <div class="pdos-agent-config-grid">
+          <label>Perfil do modelo
+            <select id="pdosAgentCfgModelProfile">
+              <option value="small">small</option>
+              <option value="medium" selected>medium</option>
+              <option value="large">large</option>
+              <option value="long_context">long_context</option>
+            </select>
+          </label>
+          <label>Input alvo / tarefa
+            <input type="number" id="pdosAgentCfgInputTokens" min="1000" max="200000" step="1000" />
+          </label>
+          <label>Output alvo / tarefa
+            <input type="number" id="pdosAgentCfgOutputTokens" min="500" max="50000" step="500" />
+          </label>
           <label>Tokens máximos
             <input type="number" id="pdosAgentCfgMaxTokens" min="10000" max="500000" step="5000" required />
           </label>
@@ -1170,15 +1183,15 @@
   <script src="/projects/static/phase-content-client.js?v=3"></script>
   <script src="/projects/static/phase-sync-client.js?v=1"></script>
   <script src="/projects/static/help-ui.js?v=3"></script>
-  <script src="/projects/static/proposal-downloads-ui.js?v=2"></script>
+  <script src="/projects/static/proposal-downloads-ui.js?v=5"></script>
   <script src="/projects/static/proposal-configurator-ui.js?v=3"></script>
-  <script src="/projects/static/app.js?v=38"></script>
+  <script src="/projects/static/app.js?v=40"></script>
   <script src="/projects/static/requirements-map-ui.js?v=11"></script>
   <script src="/projects/static/requirements-ui.js?v=15"></script>
   <script src="/projects/static/documents-ui.js?v=4"></script>
   <script src="/projects/static/minutes-ui.js?v=3"></script>
   <script src="/projects/static/diagrams-ui.js?v=8"></script>
-  <script src="/projects/static/delivery-os-ui.js?v=52"></script>
+  <script src="/projects/static/delivery-os-ui.js?v=57"></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=2"></script>
   <script src="/projects/static/client-portal-ui.js?v=2"></script>
   <script>
