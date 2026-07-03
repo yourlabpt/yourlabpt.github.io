@@ -4,19 +4,20 @@ const fs = require('fs').promises;
 const { execFileSync } = require('child_process');
 const multer = require('multer');
 const deliveryOs = require('./lib/delivery-os');
+const deliveryOsPlatform = require('./lib/delivery-os-platform');
+const projectAccess = require('./lib/project-access');
+const projectAudit = require('./lib/project-audit');
+const { createProjectStoreLayer } = require('./lib/project-store');
 const { registerAgentRuntimeRoutes } = require('./lib/agent-runtime-routes');
 const phaseContent = require('./lib/phase-content');
 const reqHierarchy = require('./lib/requirement-hierarchy');
+const phaseSync = require('./lib/phase-sync');
+const proposalGenerator = require('./lib/proposal-generator');
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const sessions = new Map();
 
 const DEFAULT_COMMERCIAL_TERMS = {
-  paymentTerms: [
-    '40% na adjudicacao',
-    '40% na entrega funcional das fases de implementacao',
-    '20% na entrega final e validacao'
-  ],
   validityDays: 30,
   warrantyDays: 30,
   exclusions: [],
@@ -151,6 +152,8 @@ function registerRequirementsPlatform(app, options) {
       normalized.approvals = normalizeApprovals(project.approvals);
       normalized.impactReports = normalizeImpactReports(project.impactReports);
       Object.assign(normalized, deliveryOs.normalizeProjectV3Fields(project));
+      Object.assign(normalized, deliveryOsPlatform.normalizePlatformFields(project));
+      normalized.auditLog = projectAudit.normalizeAuditLog(project.auditLog);
       normalized.requirements = normalized.requirements.map((entry) => deliveryOs.enrichRequirementWithModuleTags(entry));
       normalized.traceLinks = normalizeTraceLinks(project.traceLinks, normalized.requirements, normalized.artifacts, normalized);
       normalized.generated = ensureArray(project.generated).map((entry) => ({
@@ -202,6 +205,7 @@ function registerRequirementsPlatform(app, options) {
         };
 
         await writeJson(storePath, seedStore);
+        storeLayer.seedMemoryStore(seedStore);
         storeInitialized = true;
         return;
       }
@@ -212,6 +216,7 @@ function registerRequirementsPlatform(app, options) {
         normalizedStore.meta.updatedAt = nowIso();
         await writeJson(storePath, normalizedStore);
       }
+      storeLayer.seedMemoryStore(normalizedStore);
       storeInitialized = true;
     });
   }
@@ -228,20 +233,20 @@ function registerRequirementsPlatform(app, options) {
     },
   });
 
+  const storeLayer = createProjectStoreLayer({
+    readJson,
+    writeJson,
+    storePath,
+    withStoreLock,
+    nowIso,
+  });
+
   async function readStore() {
-    await ensureStoreInitialized();
-    return readJson(storePath);
+    return storeLayer.readStore(ensureStoreInitialized);
   }
 
-  async function updateStore(mutator) {
-    return withStoreLock(async () => {
-      await ensureStoreInitialized();
-      const store = await readJson(storePath);
-      await mutator(store);
-      store.meta = store.meta || {};
-      store.meta.updatedAt = nowIso();
-      await writeJson(storePath, store);
-    });
+  async function updateStore(mutator, options) {
+    return storeLayer.updateStore(mutator, ensureStoreInitialized, options);
   }
 
   function appendActivity(store, entry) {
@@ -304,10 +309,29 @@ function registerRequirementsPlatform(app, options) {
   }
 
   function canAccessProject(user, project) {
-    if (!user || !project) return false;
-    if (user.role === 'super_admin') return true;
+    return projectAccess.canAccessProject(user, project);
+  }
 
-    return ensureArray(project.members).some((member) => member.userId === user.id);
+  const requireProjectEditor = projectAccess.createRequireProjectEditor();
+  const requireSuperAdminProjectSettings = projectAccess.createRequireSuperAdminOnlyProjectSettings();
+
+  function getUserName(store, userId) {
+    const user = ensureArray(store.users).find((entry) => entry.id === userId);
+    return user?.name || userId;
+  }
+
+  function auditedMutate(store, project, user, { action, summary, stageId, metadata, mutator }) {
+    return projectAudit.auditAndMutate(project, {
+      userId: user.id,
+      userName: getUserName(store, user.id),
+      action,
+      summary,
+      stageId: stageId || 'requirements',
+      metadata: metadata || {},
+      appendActivity,
+      store,
+      mutator,
+    });
   }
 
   function canViewBudget(user) {
@@ -329,24 +353,11 @@ function registerRequirementsPlatform(app, options) {
     };
   }
 
-  function sanitizePhasesForViewer(phases, viewer) {
-    const normalized = ensureArray(phases);
-    if (canViewBudget(viewer)) return normalized;
-
-    return normalized.map((phase) => {
-      const { cost, totalCost, price, budget, ...phaseRest } = phase || {};
-      return {
-        ...phaseRest,
-        items: ensureArray(phase?.items).map((item) => {
-          const { rate, cost, totalCost, price, budget, ...itemRest } = item || {};
-          return itemRest;
-        }),
-      };
-    });
+  function sanitizePhasesForViewer(phases) {
+    return normalizePhases(phases);
   }
 
   function sanitizeProject(project, viewer) {
-    const includeBudget = canViewBudget(viewer);
     const sanitized = {
       id: project.id,
       name: project.name,
@@ -374,7 +385,7 @@ function registerRequirementsPlatform(app, options) {
         };
       }),
       clarificationQuestions: normalizeClarificationQuestions(project.clarificationQuestions || project.questions),
-      phases: sanitizePhasesForViewer(project.phases, viewer),
+      phases: sanitizePhasesForViewer(project.phases),
       sourceText: project.sourceText || '',
       aiPrompt: project.aiPrompt || '',
       aiRawJson: project.aiRawJson || '',
@@ -408,22 +419,14 @@ function registerRequirementsPlatform(app, options) {
       meetingMinutes: normalizeMeetingMinutes(project.meetingMinutes),
       minutesPromptHistory: normalizeMinutesPromptHistory(project.minutesPromptHistory),
       ...deliveryOs.normalizeProjectV3Fields(project),
+      ...deliveryOsPlatform.normalizePlatformFields(project),
+      auditLog: projectAudit.normalizeAuditLog(project.auditLog),
     };
 
-    if (includeBudget) {
-      sanitized.currency = project.currency || 'EUR';
-      sanitized.hourlyRate = numberOr(project.hourlyRate, 30);
-      sanitized.targetBudgetMin = numberOr(project.targetBudgetMin, 5000);
-      sanitized.targetBudgetMax = numberOr(project.targetBudgetMax, 6000);
-      sanitized.commercialTerms = project.commercialTerms || { ...DEFAULT_COMMERCIAL_TERMS };
-    } else if (sanitized.proposal) {
-      // Strip monetary values from the proposal for viewers without budget access.
-      sanitized.proposal = {
-        ...sanitized.proposal,
-        totalValue: 0,
-        phases: ensureArray(sanitized.proposal.phases).map((p) => ({ ...p, value: 0 })),
-      };
-    }
+    sanitized.currency = project.currency || 'EUR';
+    sanitized.commercialTerms = proposalGenerator.normalizeCommercialTermsNonPrice(
+      project.commercialTerms || DEFAULT_COMMERCIAL_TERMS
+    );
 
     return sanitized;
   }
@@ -674,10 +677,7 @@ function registerRequirementsPlatform(app, options) {
         proposalCode: String(body.proposalCode || ''),
         subtitle: String(body.subtitle || 'Proposta Comercial e Tecnica'),
         currency: String(body.currency || 'EUR'),
-        hourlyRate: numberOr(body.hourlyRate, 30),
         language: String(body.language || 'pt-PT'),
-        targetBudgetMin: numberOr(body.targetBudgetMin, 5000),
-        targetBudgetMax: numberOr(body.targetBudgetMax, 6000),
         createdAt: nowIso(),
         updatedAt: nowIso(),
         createdBy: req.auth.user.id,
@@ -690,7 +690,7 @@ function registerRequirementsPlatform(app, options) {
         commercialTerms: { ...DEFAULT_COMMERCIAL_TERMS },
         requirements: [],
         clarificationQuestions: [],
-        phases: defaultPhases(numberOr(body.hourlyRate, 30)),
+        phases: proposalGenerator.defaultPlanPhases(),
         sourceText: '',
         aiPrompt: '',
         aiRawJson: '',
@@ -711,6 +711,7 @@ function registerRequirementsPlatform(app, options) {
         promptRuns: [],
         agentJobs: [],
         humanReviews: [],
+        executionPlans: [],
         versionSnapshots: [],
         alternativeResponses: [],
         informationEntries: [],
@@ -720,6 +721,12 @@ function registerRequirementsPlatform(app, options) {
         diagramVersions: [],
         diagramReviews: [],
         diagramGenerationJobs: [],
+        decisions: [],
+        changeRequests: [],
+        integrationMappings: [],
+        projectVisits: {},
+        gateFindings: [],
+        auditLog: [],
       };
 
       await updateStore(async (store) => {
@@ -744,10 +751,12 @@ function registerRequirementsPlatform(app, options) {
     return res.json({ project: sanitizeProject(req.loadedProject, req.auth.user) });
   });
 
-  app.patch('/api/projects/projects/:projectId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.patch('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const patch = req.body || {};
+      let requirementsPhaseRenamed = 0;
+      let requirementsPhaseSynced = 0;
 
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === projectId);
@@ -763,10 +772,7 @@ function registerRequirementsPlatform(app, options) {
           'proposalCode',
           'subtitle',
           'currency',
-          'hourlyRate',
           'language',
-          'targetBudgetMin',
-          'targetBudgetMax',
           'summary',
           'assumptions',
           'risks',
@@ -779,22 +785,33 @@ function registerRequirementsPlatform(app, options) {
           'stages',
         ];
 
+        const previousPhases = patch.phases !== undefined
+          ? ensureArray(project.phases).map((phase) => ({ ...phase }))
+          : null;
+
         for (const field of writableFields) {
-          if (patch[field] !== undefined) {
+          if (patch[field] !== undefined && field !== 'phases') {
             project[field] = patch[field];
           }
         }
 
-        project.hourlyRate = numberOr(project.hourlyRate, 30);
-        project.targetBudgetMin = numberOr(project.targetBudgetMin, 5000);
-        project.targetBudgetMax = numberOr(project.targetBudgetMax, 6000);
+        if (patch.phases !== undefined) {
+          assertUniquePhaseNames(patch.phases);
+          project.phases = normalizePhases(patch.phases);
+          requirementsPhaseRenamed = cascadeRequirementPhaseRenames(project, previousPhases, project.phases);
+          requirementsPhaseSynced = phaseSync.syncRequirementsToPlanPhases(project, { nowIso });
+        }
+
         project.summary = normalizeSummary(project.summary);
         project.assumptions = normalizeStringArray(project.assumptions);
         project.risks = normalizeStringArray(project.risks);
         project.integrations = normalizeIntegrations(project.integrations);
         project.technicalApproach = normalizeTechnicalApproach(project.technicalApproach);
         project.commercialTerms = normalizeCommercialTerms(project.commercialTerms);
-        project.phases = normalizePhases(project.phases, project.hourlyRate);
+        if (patch.phases === undefined) {
+          project.phases = normalizePhases(project.phases);
+        }
+        proposalGenerator.stripBudgetFromProject(project);
         project.deliveryLevel = normalizeDeliveryLevel(project.deliveryLevel);
         project.stages = normalizeProjectStages(project.stages, project.deliveryLevel);
 
@@ -810,7 +827,44 @@ function registerRequirementsPlatform(app, options) {
 
       const store = await readStore();
       const updated = store.projects.find((entry) => entry.id === projectId);
-      return res.json({ project: sanitizeProject(updated, req.auth.user) });
+      return res.json({
+        project: sanitizeProject(updated, req.auth.user),
+        requirementsPhaseRenamed: requirementsPhaseRenamed || 0,
+        requirementsPhaseSynced: requirementsPhaseSynced || 0,
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/phases/sync-requirements', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      let updated = 0;
+
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+
+        project.phases = normalizePhases(project.phases);
+        updated = phaseSync.syncRequirementsToPlanPhases(project, { nowIso });
+        if (updated) {
+          project.updatedAt = nowIso();
+          appendActivity(store, {
+            actorUserId: req.auth.user.id,
+            projectId,
+            action: 'requirements_phases_synced',
+            details: { count: updated },
+          });
+        }
+      });
+
+      const store = await readStore();
+      const project = store.projects.find((entry) => entry.id === projectId);
+      return res.json({
+        project: sanitizeProject(project, req.auth.user),
+        updated,
+      });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -871,7 +925,7 @@ function registerRequirementsPlatform(app, options) {
     });
   });
 
-  app.post('/api/projects/projects/:projectId/artifacts', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/artifacts', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const payload = req.body || {};
@@ -921,7 +975,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/trace-links', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/trace-links', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const payload = req.body || {};
@@ -1038,7 +1092,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/members', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/members', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const userId = String(req.body?.userId || '').trim();
@@ -1083,7 +1137,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.delete('/api/projects/projects/:projectId/members/:userId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.delete('/api/projects/projects/:projectId/members/:userId', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const userId = req.params.userId;
@@ -1113,7 +1167,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/source-text', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/source-text', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const sourceText = String(req.body?.sourceText || '');
@@ -1143,7 +1197,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/meeting-minutes', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/meeting-minutes', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const rawText = typeof req.body?.rawText === 'string' ? req.body.rawText : '';
@@ -1191,7 +1245,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/meeting-minutes/propagation-plan', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/meeting-minutes/propagation-plan', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const store = await readStore();
       const project = store.projects.find((entry) => entry.id === req.params.projectId);
@@ -1213,7 +1267,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/meeting-minutes/propagation-prompt', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/meeting-minutes/propagation-prompt', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const requestedIds = normalizeStringArray(req.body?.minuteIds);
@@ -1232,7 +1286,6 @@ function registerRequirementsPlatform(app, options) {
       const plan = deliveryOs.buildMinutePropagationPlan(selected);
       const prompt = deliveryOs.buildMinutePropagationPrompt(project, selected, plan);
       let promptRun = null;
-      let review = null;
 
       await updateStore(async (mutableStore) => {
         const mutableProject = mutableStore.projects.find((entry) => entry.id === projectId);
@@ -1243,28 +1296,13 @@ function registerRequirementsPlatform(app, options) {
           agentType: 'impact_regeneration',
           stageId: plan.primaryStageIds[0] || 'requirements',
           moduleTag: '',
-          prompt,
-          status: 'pending',
+          fullPrompt: prompt,
+          status: 'awaiting_output',
           createdAt: nowIso(),
           createdBy: req.auth.user.id,
         });
         mutableProject.promptRuns = ensureArray(mutableProject.promptRuns);
         mutableProject.promptRuns.unshift(promptRun);
-
-        review = deliveryOs.normalizeHumanReview({
-          type: 'meeting_minute_propagation',
-          title: `Propagação de ${selected.length} ata(s) na linha de entrega`,
-          summaryMarkdown: plan.hints.join(' ') || 'Analisar impacto nas fases afectadas.',
-          bodyMarkdown: prompt,
-          sourceType: 'prompt_run',
-          sourceId: promptRun.id,
-          promptRunId: promptRun.id,
-          status: 'pending',
-          suggestedChanges: { plan, minuteIds: selected.map((m) => m.id) },
-          readingTimeMinutes: Math.max(2, Math.ceil(prompt.length / 900)),
-        });
-        mutableProject.humanReviews = ensureArray(mutableProject.humanReviews);
-        mutableProject.humanReviews.unshift(review);
         mutableProject.updatedAt = nowIso();
 
         appendActivity(mutableStore, {
@@ -1281,7 +1319,6 @@ function registerRequirementsPlatform(app, options) {
         prompt,
         plan,
         promptRun,
-        review,
         project: sanitizeProject(updated, req.auth.user),
       });
     } catch (error) {
@@ -1290,7 +1327,7 @@ function registerRequirementsPlatform(app, options) {
   });
 
   // Generate an AI prompt that classifies a single ata's impact across phases.
-  app.post('/api/projects/projects/:projectId/meeting-minutes/:minuteId/classify-prompt', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/meeting-minutes/:minuteId/classify-prompt', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, minuteId } = req.params;
       const store = await readStore();
@@ -1307,7 +1344,7 @@ function registerRequirementsPlatform(app, options) {
   });
 
   // Apply the AI classification output directly onto the ata (metadata only).
-  app.post('/api/projects/projects/:projectId/meeting-minutes/:minuteId/classify', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/meeting-minutes/:minuteId/classify', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, minuteId } = req.params;
       const rawInput = String(req.body?.rawOutput || (req.body?.parsedOutput ? JSON.stringify(req.body.parsedOutput) : ''));
@@ -1348,7 +1385,7 @@ function registerRequirementsPlatform(app, options) {
   });
 
   // Lightweight implementation edits: confirm the stack, update per-task LLM size/status.
-  app.post('/api/projects/projects/:projectId/implementation', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/implementation', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId } = req.params;
       const body = req.body || {};
@@ -1411,7 +1448,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/build-minutes-prompt', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/build-minutes-prompt', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const objective = String(req.body?.objective || '').trim() || 'requirements_update';
@@ -1588,7 +1625,7 @@ function registerRequirementsPlatform(app, options) {
     return res.send(content);
   });
 
-  app.post('/api/projects/projects/:projectId/documents/text', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/documents/text', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -1631,7 +1668,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/documents/:documentId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/documents/:documentId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const documentId = req.params.documentId;
@@ -1670,7 +1707,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/prompt-runs/:runId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/prompt-runs/:runId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const runId = req.params.runId;
@@ -1705,7 +1742,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/information-entries/:entryId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/information-entries/:entryId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const entryId = req.params.entryId;
@@ -1740,7 +1777,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/build-prompt', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/build-prompt', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const extraInstructions = String(req.body?.extraInstructions || '').trim();
@@ -1773,7 +1810,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/import-ai', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/import-ai', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const raw = String(req.body?.aiJson || '').trim();
@@ -1813,7 +1850,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/import-requirement-changes', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/import-requirement-changes', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const raw = String(req.body?.changeJson || '').trim();
@@ -1854,7 +1891,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/requirements', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/requirements', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const type = normalizeRequirementType(req.body?.type);
@@ -1885,14 +1922,14 @@ function registerRequirementsPlatform(app, options) {
           throw new Error(`Requisito funcional incompleto para status ${requirement.status}. Campos em falta: ${smartErrors.join(', ')}`);
         }
 
-        project.requirements.push(requirement);
-        project.updatedAt = nowIso();
-
-        appendActivity(store, {
-          actorUserId: req.auth.user.id,
-          projectId,
+        auditedMutate(store, project, req.auth.user, {
           action: 'requirement_created',
-          details: { requirementId: requirement.id, type: requirement.type },
+          summary: `Requisito criado: ${reqId}`,
+          metadata: { requirementId: reqId, type },
+          mutator: () => {
+            project.requirements.push(requirement);
+            project.updatedAt = nowIso();
+          },
         });
       });
 
@@ -1904,7 +1941,56 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/requirements/:requirementId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/requirements/batch', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      const requirementIds = ensureArray(req.body?.requirementIds).map(normalizeRequirementIdToken).filter(Boolean);
+      const changes = req.body?.changes && typeof req.body.changes === 'object' ? req.body.changes : req.body;
+      if (!requirementIds.length) {
+        return res.status(400).json({ message: 'requirementIds e obrigatorio.' });
+      }
+
+      let updated = 0;
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+
+        project.requirements = ensureArray(project.requirements);
+        const allowed = new Set(requirementIds);
+        for (const requirement of project.requirements) {
+          if (!allowed.has(requirement.id)) continue;
+          const patch = { ...changes };
+          delete patch.requirementIds;
+          const normalized = normalizeRequirementRecord({
+            ...requirement,
+            ...patch,
+            id: requirement.id,
+            type: requirement.type,
+            updatedAt: nowIso(),
+            updatedBy: req.auth.user.id,
+          });
+          Object.assign(requirement, normalized);
+          updated += 1;
+        }
+        if (!updated) throw new Error('Nenhum requisito encontrado para actualizar.');
+        project.updatedAt = nowIso();
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId,
+          action: 'requirements_batch_updated',
+          details: { count: updated, fields: Object.keys(changes || {}) },
+        });
+      });
+
+      const store = await readStore();
+      const project = store.projects.find((entry) => entry.id === projectId);
+      return res.json({ project: sanitizeProject(project, req.auth.user), updated });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch('/api/projects/projects/:projectId/requirements/:requirementId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const requirementId = req.params.requirementId;
@@ -1953,17 +2039,13 @@ function registerRequirementsPlatform(app, options) {
           }
         }
 
-        Object.assign(requirement, normalized);
-        project.updatedAt = nowIso();
-
-        appendActivity(store, {
-          actorUserId: req.auth.user.id,
-          projectId,
+        auditedMutate(store, project, req.auth.user, {
           action: 'requirement_updated',
-          details: {
-            requirementId: requirement.id,
-            module: requirement.module,
-            phase: requirement.phase,
+          summary: `Requisito actualizado: ${requirementId}`,
+          metadata: { requirementId, module: normalized.module, phase: normalized.phase },
+          mutator: () => {
+            Object.assign(requirement, normalized);
+            project.updatedAt = nowIso();
           },
         });
       });
@@ -1986,7 +2068,7 @@ function registerRequirementsPlatform(app, options) {
     return res.json(tree);
   });
 
-  app.post('/api/projects/projects/:projectId/requirements/hierarchy/repair', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/requirements/hierarchy/repair', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const selections = ensureArray(req.body?.forRequirementIds);
@@ -2017,7 +2099,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/requirements/hierarchy/repair/revert', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/requirements/hierarchy/repair/revert', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const stakeholderIds = ensureArray(req.body?.stakeholderIds);
@@ -2053,7 +2135,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/requirements/hierarchy/drop', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/requirements/hierarchy/drop', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -2094,7 +2176,118 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/requirements/:requirementId/hierarchy', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.post('/api/projects/projects/:projectId/requirements/hierarchy/create', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      const body = req.body || {};
+      let created = null;
+
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+
+        const result = reqHierarchy.createRequirementInLayer(project, {
+          layerType: body.layerType,
+          focusStakeholderId: body.focusStakeholderId,
+          title: body.title,
+          targetSlot: body.targetSlot,
+        });
+        project.requirements = result.requirements.map((entry) => normalizeRequirementRecord({
+          ...entry,
+          updatedBy: req.auth.user.id,
+        }));
+        created = result.requirement;
+        project.updatedAt = nowIso();
+
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId,
+          action: 'requirement_hierarchy_created',
+          details: { requirementId: created.id, layerType: created.type },
+        });
+      });
+
+      const store = await readStore();
+      const project = store.projects.find((entry) => entry.id === projectId);
+      return res.json({ project: sanitizeProject(project, req.auth.user), requirement: created });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/requirements/:requirementId/renumber', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      const requirementId = req.params.requirementId;
+      const targetSlot = Number(req.body?.number ?? req.body?.slot ?? req.body?.targetSlot);
+      if (!Number.isFinite(targetSlot) || targetSlot < 1) {
+        return res.status(400).json({ message: 'number/slot invalido (>= 1).' });
+      }
+
+      let changedId = requirementId;
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+
+        const result = reqHierarchy.renumberRequirementInProject(project, requirementId, targetSlot);
+        project.requirements = result.requirements.map((entry) => normalizeRequirementRecord(entry));
+        changedId = result.changedId;
+        project.updatedAt = nowIso();
+
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId,
+          action: 'requirement_renumbered',
+          details: { from: requirementId, to: changedId, slot: targetSlot, idMap: Object.fromEntries(result.idMap) },
+        });
+      });
+
+      const store = await readStore();
+      const project = store.projects.find((entry) => entry.id === projectId);
+      return res.json({ project: sanitizeProject(project, req.auth.user), changedId });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/requirements/:requirementId/hierarchy/unlink', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      const requirementId = req.params.requirementId;
+
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+
+        project.requirements = ensureArray(project.requirements);
+        const idx = project.requirements.findIndex((entry) => entry.id === requirementId);
+        if (idx < 0) throw new Error('Requisito nao encontrado.');
+
+        const unlinked = reqHierarchy.unlinkRequirementFromHierarchy(project.requirements[idx], project);
+        project.requirements[idx] = normalizeRequirementRecord({
+          ...unlinked,
+          updatedAt: nowIso(),
+          updatedBy: req.auth.user.id,
+        });
+        project.updatedAt = nowIso();
+
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId,
+          action: 'requirement_hierarchy_unlinked',
+          details: { requirementId },
+        });
+      });
+
+      const store = await readStore();
+      const project = store.projects.find((entry) => entry.id === projectId);
+      return res.json({ project: sanitizeProject(project, req.auth.user) });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.patch('/api/projects/projects/:projectId/requirements/:requirementId/hierarchy', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const requirementId = req.params.requirementId;
@@ -2108,7 +2301,12 @@ function registerRequirementsPlatform(app, options) {
         const requirement = project.requirements.find((entry) => entry.id === requirementId);
         if (!requirement) throw new Error('Requisito nao encontrado.');
 
-        const moved = reqHierarchy.applyHierarchyMove(requirement, patch, project);
+        let moved;
+        if (patch.unlink || patch.parentId === null) {
+          moved = reqHierarchy.unlinkRequirementFromHierarchy(requirement, project);
+        } else {
+          moved = reqHierarchy.applyHierarchyMove(requirement, patch, project);
+        }
         Object.assign(requirement, normalizeRequirementRecord({
           ...requirement,
           ...moved,
@@ -2138,7 +2336,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.delete('/api/projects/projects/:projectId/requirements/:requirementId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.delete('/api/projects/projects/:projectId/requirements/:requirementId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const requirementId = req.params.requirementId;
@@ -2194,7 +2392,7 @@ function registerRequirementsPlatform(app, options) {
 
   // Clear ALL requirements (and the structures derived from them) so the user
   // can restart the requirements process from scratch.
-  app.delete('/api/projects/projects/:projectId/requirements', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.delete('/api/projects/projects/:projectId/requirements', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let removedCount = 0;
@@ -2299,7 +2497,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/questions/:questionId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/questions/:questionId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const questionId = req.params.questionId;
@@ -2350,7 +2548,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.delete('/api/projects/projects/:projectId/questions/:questionId', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.delete('/api/projects/projects/:projectId/questions/:questionId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const questionId = req.params.questionId;
@@ -2388,12 +2586,74 @@ function registerRequirementsPlatform(app, options) {
     const activity = ensureArray(req.loadedStore.activity)
       .filter((entry) => entry.projectId === req.loadedProject.id)
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-      .slice(0, 300);
+      .slice(0, 300)
+      .map((entry) => ({
+        ...entry,
+        actorName: getUserName(req.loadedStore, entry.actorUserId),
+      }));
 
-    return res.json({ activity });
+    const auditLog = projectAudit.normalizeAuditLog(req.loadedProject.auditLog)
+      .map((entry) => ({
+        ...entry,
+        actorName: entry.actorName || getUserName(req.loadedStore, entry.actorUserId),
+        canRevert: Boolean(entry.snapshotId) && !entry.revertedAt,
+      }));
+
+    return res.json({ activity, auditLog });
   });
 
-  app.post('/api/projects/projects/:projectId/generate', authMiddleware, requireRole('super_admin'), async (req, res) => {
+  app.get('/api/projects/projects/:projectId/proposal-config', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    const project = req.loadedProject;
+    project.phases = normalizePhases(project.phases);
+    const config = proposalGenerator.buildProposalConfigDefaults(project);
+    const paymentPreview = proposalGenerator.computePaymentMilestones(config);
+    return res.json({ config, paymentPreview });
+  });
+
+  app.get('/api/projects/projects/:projectId/generated/:genId/:format', authMiddleware, loadProjectForUser, async (req, res) => {
+    try {
+      const { genId, format } = req.params;
+      const download = req.query.download === '1';
+      const project = req.loadedProject;
+      const entry = ensureArray(project.generated).find((item) => item.id === genId);
+      if (!entry) {
+        return res.status(404).json({ message: 'Geracao nao encontrada.' });
+      }
+
+      const slug = sanitizeFileName(project.name) || 'proposta';
+      const normalizedFormat = String(format || '').toLowerCase();
+
+      if (normalizedFormat === 'markdown') {
+        const content = await readGeneratedMarkdown(rootBase, entry);
+        if (!content) {
+          return res.status(404).json({ message: 'Markdown nao disponivel.' });
+        }
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        if (download) {
+          res.setHeader('Content-Disposition', `attachment; filename="${slug}_proposta.md"`);
+        }
+        return res.send(content);
+      }
+
+      if (normalizedFormat === 'html') {
+        const html = await readGeneratedHtml(rootBase, entry, project);
+        if (!html) {
+          return res.status(404).json({ message: 'HTML nao disponivel.' });
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        if (download) {
+          res.setHeader('Content-Disposition', `attachment; filename="${slug}_proposta.html"`);
+        }
+        return res.send(html);
+      }
+
+      return res.status(400).json({ message: 'Formato invalido. Use markdown ou html.' });
+    } catch (error) {
+      return res.status(500).json({ message: `Erro ao obter proposta: ${error.message}` });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/generate', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const mode = req.body?.mode === 'technical' ? 'technical' : 'commercial';
@@ -2416,7 +2676,7 @@ function registerRequirementsPlatform(app, options) {
         return res.status(404).json({ message: 'Projeto nao encontrado.' });
       }
 
-      const proposal = buildProposalFromProject(project, mode, { selectedModules });
+      project.phases = normalizePhases(project.phases);
       const folderHint = sanitizeFileName(project.name) || 'project';
       const runFolder = path.join(
         rootBase,
@@ -2427,39 +2687,83 @@ function registerRequirementsPlatform(app, options) {
       const proposalInput = path.join(runFolder, 'proposal_input.json');
 
       await fs.mkdir(outputDir, { recursive: true });
-      await fs.writeFile(proposalInput, `${JSON.stringify(proposal, null, 2)}\n`, 'utf-8');
 
+      const genId = `gen_${crypto.randomUUID()}`;
       let execLog = '';
-      const canUseExternalBuilder = Boolean(resolvedBuildScriptPath) && await fileExists(resolvedBuildScriptPath);
+      let links = {};
+      let generator = 'internal-fallback';
+      let proposalConfigSnapshot = null;
 
-      if (canUseExternalBuilder) {
-        const args = [
-          resolvedBuildScriptPath,
-          '--input', proposalInput,
-          '--output-dir', outputDir,
-          '--logo', resolvedLogoPath,
-        ];
-        if (dryRun) {
-          args.push('--dry-run');
+      if (mode === 'commercial') {
+        if (!req.body?.proposalConfig) {
+          return res.status(400).json({ message: 'proposalConfig e obrigatorio para proposta comercial.' });
+        }
+        const config = proposalGenerator.normalizeProposalConfig(req.body.proposalConfig, project);
+        const validation = proposalGenerator.validateProposalConfig(config);
+        if (!validation.valid) {
+          return res.status(400).json({ message: validation.errors.join(' ') });
+        }
+        const payment = proposalGenerator.computePaymentMilestones(config);
+        proposalConfigSnapshot = { ...config, payment, generatedAt: nowIso() };
+        await fs.writeFile(
+          path.join(runFolder, 'proposal_config.json'),
+          `${JSON.stringify(proposalConfigSnapshot, null, 2)}\n`,
+          'utf-8'
+        );
+
+        const slug = sanitizeFileName(project.name) || 'projeto';
+        const bundle = await proposalGenerator.writeCommercialProposalBundle({
+          project,
+          config,
+          outputDir,
+          slug,
+        });
+        execLog = '[proposal-generator] Proposta comercial gerada (markdown persistido; HTML sob pedido).';
+        generator = 'proposal-generator';
+
+        const markdownPublic = toPublicPath(rootBase, bundle.markdownPath);
+        links = buildCommercialGeneratedLinks(projectId, genId, markdownPublic);
+        await fs.writeFile(
+          proposalInput,
+          `${JSON.stringify({ mode, config: proposalConfigSnapshot, phaseGroups: bundle.content?.phaseGroups?.length || 0 }, null, 2)}\n`,
+          'utf-8'
+        );
+      } else {
+        const proposal = buildProposalFromProject(project, mode, { selectedModules });
+        await fs.writeFile(proposalInput, `${JSON.stringify(proposal, null, 2)}\n`, 'utf-8');
+
+        const canUseExternalBuilder = Boolean(resolvedBuildScriptPath) && await fileExists(resolvedBuildScriptPath);
+
+        if (canUseExternalBuilder) {
+          const args = [
+            resolvedBuildScriptPath,
+            '--input', proposalInput,
+            '--output-dir', outputDir,
+            '--logo', resolvedLogoPath,
+          ];
+          if (dryRun) {
+            args.push('--dry-run');
+          }
+
+          execLog = execFileSync('node', args, {
+            cwd: rootBase,
+            timeout: 300000,
+            maxBuffer: 100 * 1024 * 1024,
+            encoding: 'utf-8',
+          });
+          generator = 'external';
+        } else {
+          execLog = await generateProposalBundleFallback({
+            proposal: buildProposalFromProject(project, mode, { selectedModules }),
+            outputDir,
+            mode,
+            selectedModules,
+          });
         }
 
-        execLog = execFileSync('node', args, {
-          cwd: rootBase,
-          timeout: 300000,
-          maxBuffer: 100 * 1024 * 1024,
-          encoding: 'utf-8',
-        });
-      } else {
-        execLog = await generateProposalBundleFallback({
-          proposal,
-          outputDir,
-          mode,
-          selectedModules,
-        });
+        const fileEntries = await fs.readdir(outputDir);
+        links = buildGeneratedLinksFromDir(rootBase, outputDir, fileEntries);
       }
-
-      const fileEntries = await fs.readdir(outputDir);
-      const links = buildGeneratedLinksFromDir(rootBase, outputDir, fileEntries);
 
       await updateStore(async (mutableStore) => {
         const mutableProject = mutableStore.projects.find((entry) => entry.id === projectId);
@@ -2469,13 +2773,14 @@ function registerRequirementsPlatform(app, options) {
 
         mutableProject.generated = ensureArray(mutableProject.generated);
         mutableProject.generated.unshift({
-          id: `gen_${crypto.randomUUID()}`,
+          id: genId,
           mode,
           dryRun,
           selectedModules,
           generatedAt: nowIso(),
           folder: toPublicPath(rootBase, runFolder),
           proposalInput: toPublicPath(rootBase, proposalInput),
+          proposalConfig: proposalConfigSnapshot ? toPublicPath(rootBase, path.join(runFolder, 'proposal_config.json')) : null,
           outputs: links,
         });
         mutableProject.generated = mutableProject.generated.slice(0, 50);
@@ -2491,14 +2796,16 @@ function registerRequirementsPlatform(app, options) {
 
       return res.json({
         message: 'Bundle gerado com sucesso.',
+        id: genId,
         mode,
         dryRun,
         selectedModules,
         folder: toPublicPath(rootBase, runFolder),
         proposalInput: toPublicPath(rootBase, proposalInput),
+        proposalConfig: proposalConfigSnapshot,
         outputs: links,
         log: execLog,
-        generator: canUseExternalBuilder ? 'external' : 'internal-fallback',
+        generator,
       });
     } catch (error) {
       return res.status(500).json({ message: `Erro ao gerar bundle: ${error.message}` });
@@ -2507,7 +2814,7 @@ function registerRequirementsPlatform(app, options) {
 
   deliveryOs.registerDeliveryOsRoutes(app, {
     authMiddleware,
-    requireRole,
+    requireProjectEditor,
     loadProjectForUser,
     readStore,
     updateStore,
@@ -2519,6 +2826,31 @@ function registerRequirementsPlatform(app, options) {
     normalizeMeetingMinutes,
     normalizeRequirementRecord,
     numberOr,
+    projectAudit,
+    getUserName,
+  });
+
+  deliveryOsPlatform.registerDeliveryOsPlatformRoutes(app, {
+    authMiddleware,
+    requireRole,
+    requireProjectEditor,
+    loadProjectForUser,
+    readStore,
+    updateStore,
+    appendActivity,
+    sanitizeProject,
+    normalizeApprovals,
+  });
+
+  projectAudit.registerProjectAuditRoutes(app, {
+    authMiddleware,
+    loadProjectForUser,
+    requireProjectEditor,
+    readStore,
+    updateStore,
+    appendActivity,
+    sanitizeProject,
+    getUserName,
   });
 
   registerAgentRuntimeRoutes(app, {
@@ -2551,9 +2883,6 @@ function normalizeAiPayloadIntoProject(project, payload, actorUserId) {
   const nextSubtitle = textOr(projectPayload.subtitle || payload.subtitle);
   const nextCurrency = textOr(projectPayload.currency || payload.currency);
   const nextLanguage = textOr(projectPayload.language || payload.language);
-  const nextHourlyRateRaw = projectPayload.hourlyRate !== undefined ? projectPayload.hourlyRate : payload.hourlyRate;
-  const nextBudgetMinRaw = projectPayload.targetBudgetMin !== undefined ? projectPayload.targetBudgetMin : payload.targetBudgetMin;
-  const nextBudgetMaxRaw = projectPayload.targetBudgetMax !== undefined ? projectPayload.targetBudgetMax : payload.targetBudgetMax;
 
   if (nextName) project.name = nextName;
   if (nextClientName) project.clientName = nextClientName;
@@ -2563,9 +2892,6 @@ function normalizeAiPayloadIntoProject(project, payload, actorUserId) {
   if (nextSubtitle) project.subtitle = nextSubtitle;
   if (nextCurrency) project.currency = nextCurrency;
   if (nextLanguage) project.language = nextLanguage;
-  if (nextHourlyRateRaw !== undefined) project.hourlyRate = numberOr(nextHourlyRateRaw, numberOr(project.hourlyRate, 30));
-  if (nextBudgetMinRaw !== undefined) project.targetBudgetMin = numberOr(nextBudgetMinRaw, numberOr(project.targetBudgetMin, 5000));
-  if (nextBudgetMaxRaw !== undefined) project.targetBudgetMax = numberOr(nextBudgetMaxRaw, numberOr(project.targetBudgetMax, 6000));
 
   const stakeholderRaw = payload.stakeholderRequirements || payload.stakeholders || [];
   const functionalRaw = payload.functionalRequirements || payload?.requirements?.functional || [];
@@ -2575,25 +2901,34 @@ function normalizeAiPayloadIntoProject(project, payload, actorUserId) {
   const outOfScopeRaw = payload.outOfScope || payload.notIncluded || [];
 
   const existing = ensureArray(project.requirements);
+  let mergeStats = { added: 0, updated: 0, skipped: 0 };
 
-  const stakeholder = normalizeImportedRequirements(stakeholderRaw, 'stakeholder', existing);
-  const functional = normalizeImportedRequirements(functionalRaw, 'functional', existing.concat(stakeholder));
-  const nonFunctional = normalizeImportedRequirements(nonFunctionalRaw, 'non_functional', existing.concat(stakeholder, functional));
-  const testCases = normalizeImportedRequirements(testCasesRaw, 'test_case', existing.concat(stakeholder, functional, nonFunctional));
-  const undefinedItems = normalizeImportedRequirements(undefinedRaw, 'undefined', existing.concat(stakeholder, functional, nonFunctional, testCases));
-  const outOfScope = normalizeImportedRequirements(outOfScopeRaw, 'out_of_scope', existing.concat(stakeholder, functional, nonFunctional, testCases, undefinedItems));
+  const mergeType = (rawList, type) => {
+    const result = reqHierarchy.mergeRequirementsByDedupe(
+      project.requirements,
+      rawList,
+      type,
+      (entry) => normalizeRequirementRecord({ ...entry, updatedBy: actorUserId })
+    );
+    project.requirements = result.requirements;
+    mergeStats.added += result.added;
+    mergeStats.updated += result.updated;
+    mergeStats.skipped += result.skipped;
+  };
 
-  const newReqs = [...stakeholder, ...functional, ...nonFunctional, ...testCases, ...undefinedItems, ...outOfScope].map((req) => ({
+  mergeType(stakeholderRaw, 'stakeholder');
+  mergeType(functionalRaw, 'functional');
+  mergeType(nonFunctionalRaw, 'non_functional');
+  mergeType(testCasesRaw, 'test_case');
+  mergeType(undefinedRaw, 'undefined');
+  mergeType(outOfScopeRaw, 'out_of_scope');
+
+  project.requirements = project.requirements.map((req) => ({
     ...req,
     createdAt: req.createdAt || nowIso(),
     updatedAt: nowIso(),
     updatedBy: actorUserId,
   }));
-
-  // Append new AI-generated requirements to the existing ones.
-  // Each type is numbered from max(existing)+1 so IDs remain sequential.
-  // Existing requirements from types not present in the AI response are kept intact.
-  project.requirements = [...existing, ...newReqs];
 
   if (payload.summary) {
     project.summary = normalizeSummary(payload.summary);
@@ -2620,16 +2955,19 @@ function normalizeAiPayloadIntoProject(project, payload, actorUserId) {
   }
 
   if (Array.isArray(payload.phases) && payload.phases.length) {
-    project.phases = normalizePhases(payload.phases, numberOr(project.hourlyRate, 30));
+    project.phases = normalizePhases(payload.phases);
   }
 
+  proposalGenerator.stripBudgetFromProject(project);
+
   return {
-    stakeholder: stakeholder.length,
-    functional: functional.length,
-    nonFunctional: nonFunctional.length,
-    testCases: testCases.length,
-    undefinedItems: undefinedItems.length,
-    outOfScope: outOfScope.length,
+    stakeholder: ensureArray(stakeholderRaw).length,
+    functional: ensureArray(functionalRaw).length,
+    nonFunctional: ensureArray(nonFunctionalRaw).length,
+    testCases: ensureArray(testCasesRaw).length,
+    undefinedItems: ensureArray(undefinedRaw).length,
+    outOfScope: ensureArray(outOfScopeRaw).length,
+    mergeStats,
   };
 }
 
@@ -2963,7 +3301,6 @@ function generateRequirementId(requirements, type) {
 }
 
 function buildStructuredPrompt(project, extraInstructions) {
-  const targetBudget = `${numberOr(project.targetBudgetMin, 5000)}-${numberOr(project.targetBudgetMax, 6000)} ${project.currency || 'EUR'}`;
   const sourceText = String(project.sourceText || '').trim();
   const minutes = normalizeMeetingMinutes(project.meetingMinutes).slice(0, 5);
   const openQuestions = normalizeClarificationQuestions(project.clarificationQuestions)
@@ -2992,12 +3329,10 @@ Projeto:
 - Cliente: ${project.clientName}
 - Idioma: ${project.language || 'pt-PT'}
 - Moeda: ${project.currency || 'EUR'}
-- Taxa horária de referência: ${numberOr(project.hourlyRate, 30)}
-- Faixa orçamental alvo (considerando produtividade com AI): ${targetBudget}
 
 Instruções obrigatórias:
 1) Organiza conteúdo em linguagem clara para não técnicos.
-2) Preenche TODOS os campos do objeto project (name, clientName, description, status, proposalCode, subtitle, currency, hourlyRate, language, targetBudgetMin, targetBudgetMax).
+2) Preenche TODOS os campos do objeto project (name, clientName, description, status, proposalCode, subtitle, currency, language).
 Se não houver informação explícita, usa defaults coerentes sem deixar campos vazios.
 3) Mantém separação de níveis:
 - stakeholderRequirements
@@ -3018,16 +3353,15 @@ Se não houver informação explícita, usa defaults coerentes sem deixar campos
 6) Sempre que algo não estiver definido, coloca em undefinedItems com perguntas objetivas.
 7) Tudo que não está incluído no MVP deve ir para outOfScope.
 8) Define plano de desenvolvimento claro com 3 fases principais (F1, F2, F3), sem criar fases extras vagas.
-Cada fase deve ter objetivo, duração, entregáveis, critérios de aceitação e itens com horas/rate/cost.
-9) Evita superestimar horas e mantém coerência entre horas, rate e custo.
-10) Módulos de arquitetura são determinísticos e obrigatórios:
+Cada fase deve ter objetivo, duração, entregáveis e critérios de aceitação (sem valores monetários).
+9) Módulos de arquitetura são determinísticos e obrigatórios:
 - Frontend
 - Backend
 - Database
 Usa também submodule para detalhar (ex: Login, Coupons, Reporting, Integrations).
-11) Para cada requisito, indica correlações com outros requisitos usando relatedRequirementIds.
-12) Usa nomes de fases consistentes: "Fase 1 - ...", "Fase 2 - ...", "Fase 3 - ...".
-13) Responde apenas com JSON válido (sem markdown, sem texto fora do JSON).
+10) Para cada requisito, indica correlações com outros requisitos usando relatedRequirementIds.
+11) Usa nomes de fases consistentes: "Fase 1 - ...", "Fase 2 - ...", "Fase 3 - ...".
+12) Responde apenas com JSON válido (sem markdown, sem texto fora do JSON).
 
 Esquema mínimo esperado:
 {
@@ -3039,10 +3373,7 @@ Esquema mínimo esperado:
     "proposalCode": "${project.proposalCode || ''}",
     "subtitle": "${project.subtitle || 'Proposta Comercial e Tecnica'}",
     "currency": "${project.currency || 'EUR'}",
-    "hourlyRate": ${numberOr(project.hourlyRate, 30)},
-    "language": "${project.language || 'pt-PT'}",
-    "targetBudgetMin": ${numberOr(project.targetBudgetMin, 5000)},
-    "targetBudgetMax": ${numberOr(project.targetBudgetMax, 6000)}
+    "language": "${project.language || 'pt-PT'}"
   },
   "summary": {
     "businessContext": "...",
@@ -3118,9 +3449,9 @@ Esquema mínimo esperado:
   "outOfScope": ["..."],
   "integrations": [{"name":"...","direction":"Entrada|Saida|Bidirecional","complexity":"Baixa|Media|Alta","phase":"Fase 1|Fase 2|Fase 3","description":"..."}],
   "phases": [
-    {"id":"F1","name":"Fase 1 - ...","objective":"...","durationWeeks":4,"deliverables":["..."],"acceptanceCriteria":["..."],"assumptions":["..."],"priceDrivers":["..."],"items":[{"name":"...","hours":10,"rate":${numberOr(project.hourlyRate, 30)},"cost":${numberOr(project.hourlyRate, 30) * 10},"justification":"..."}]},
-    {"id":"F2","name":"Fase 2 - ...","objective":"...","durationWeeks":3,"deliverables":["..."],"acceptanceCriteria":["..."],"assumptions":["..."],"priceDrivers":["..."],"items":[{"name":"...","hours":10,"rate":${numberOr(project.hourlyRate, 30)},"cost":${numberOr(project.hourlyRate, 30) * 10},"justification":"..."}]},
-    {"id":"F3","name":"Fase 3 - ...","objective":"...","durationWeeks":2,"deliverables":["..."],"acceptanceCriteria":["..."],"assumptions":["..."],"priceDrivers":["..."],"items":[{"name":"...","hours":10,"rate":${numberOr(project.hourlyRate, 30)},"cost":${numberOr(project.hourlyRate, 30) * 10},"justification":"..."}]}
+    {"id":"F1","name":"Fase 1 - ...","objective":"...","durationWeeks":4,"deliverables":["..."],"acceptanceCriteria":["..."],"assumptions":["..."]},
+    {"id":"F2","name":"Fase 2 - ...","objective":"...","durationWeeks":3,"deliverables":["..."],"acceptanceCriteria":["..."],"assumptions":["..."]},
+    {"id":"F3","name":"Fase 3 - ...","objective":"...","durationWeeks":2,"deliverables":["..."],"acceptanceCriteria":["..."],"assumptions":["..."]}
   ],
   "technicalApproach": {
     "architectureSummary":"...",
@@ -3130,7 +3461,6 @@ Esquema mínimo esperado:
     "deployment":["..."]
   },
   "commercialTerms": {
-    "paymentTerms": ["40% na adjudicacao","40% na entrega funcional das fases","20% na entrega final"],
     "validityDays": 30,
     "warrantyDays": 30,
     "exclusions": ["..."],
@@ -3184,7 +3514,7 @@ function buildProposalFromProject(project, mode, options = {}) {
       : moduleScopeNote;
   }
 
-  const phases = normalizePhases(project.phases, numberOr(project.hourlyRate, 30));
+  const phases = normalizePhases(project.phases);
   const technicalApproach = normalizeTechnicalApproach(project.technicalApproach);
   const commercialTerms = normalizeCommercialTerms(project.commercialTerms);
 
@@ -3207,7 +3537,6 @@ function buildProposalFromProject(project, mode, options = {}) {
       preparedBy: 'YourLab',
       date: nowIso().slice(0, 10),
       currency: project.currency || 'EUR',
-      hourlyRate: numberOr(project.hourlyRate, 30),
       language: project.language || 'pt-PT',
       proposalCode: project.proposalCode || '',
       subtitle: scopedSubtitle,
@@ -3300,13 +3629,7 @@ function normalizeTechnicalApproach(approach) {
 }
 
 function normalizeCommercialTerms(terms) {
-  return {
-    paymentTerms: normalizeStringArray(terms?.paymentTerms || DEFAULT_COMMERCIAL_TERMS.paymentTerms),
-    validityDays: numberOr(terms?.validityDays, DEFAULT_COMMERCIAL_TERMS.validityDays),
-    warrantyDays: numberOr(terms?.warrantyDays, DEFAULT_COMMERCIAL_TERMS.warrantyDays),
-    exclusions: normalizeStringArray(terms?.exclusions),
-    notes: normalizeStringArray(terms?.notes),
-  };
+  return proposalGenerator.normalizeCommercialTermsNonPrice(terms || DEFAULT_COMMERCIAL_TERMS);
 }
 
 function normalizeIntegrations(integrations) {
@@ -3319,116 +3642,62 @@ function normalizeIntegrations(integrations) {
   }));
 }
 
-function normalizePhases(phases, hourlyRate) {
-  const normalized = ensureArray(phases)
-    .map((phase, idx) => {
-      const items = ensureArray(phase?.items).map((item, itemIdx) => {
-        const hours = numberOr(item?.hours, 0);
-        const rate = numberOr(item?.rate, hourlyRate);
-        return {
-          name: String(item?.name || `Atividade ${itemIdx + 1}`).trim(),
-          hours,
-          rate,
-          cost: numberOr(item?.cost, hours * rate),
-          justification: String(item?.justification || '').trim(),
-        };
-      });
-
-      const explicitHours = phase?.hours !== undefined ? numberOr(phase.hours, 0) : null;
-      const explicitCost = phase?.cost !== undefined ? numberOr(phase.cost, 0) : null;
-      const computedHours = items.reduce((sum, item) => sum + numberOr(item.hours, 0), 0);
-      const computedCost = items.reduce((sum, item) => sum + numberOr(item.cost, 0), 0);
-
-      return {
-        id: String(phase?.id || `F${idx + 1}`).trim(),
-        name: String(phase?.name || `Fase ${idx + 1}`).trim(),
-        objective: String(phase?.objective || '').trim(),
-        durationWeeks: numberOr(phase?.durationWeeks, 0),
-        deliverables: normalizeStringArray(phase?.deliverables),
-        acceptanceCriteria: normalizeStringArray(phase?.acceptanceCriteria),
-        assumptions: normalizeStringArray(phase?.assumptions),
-        priceDrivers: normalizeStringArray(phase?.priceDrivers),
-        items,
-        hours: explicitHours !== null ? explicitHours : computedHours,
-        cost: explicitCost !== null ? explicitCost : computedCost,
-      };
-    })
-    .filter((phase) => phase.name);
-
-  if (normalized.length) {
-    return normalized;
+function cascadeRequirementPhaseRenames(project, oldPhases, newPhases) {
+  const oldById = new Map();
+  for (const phase of ensureArray(oldPhases)) {
+    const id = String(phase?.id || '').trim();
+    if (id) oldById.set(id, phase);
   }
-
-  return defaultPhases(hourlyRate);
+  const renames = [];
+  for (const phase of ensureArray(newPhases)) {
+    const id = String(phase?.id || '').trim();
+    const nextName = String(phase?.name || '').trim();
+    if (!id || !nextName) continue;
+    const prev = oldById.get(id);
+    const prevName = String(prev?.name || '').trim();
+    if (prevName && prevName !== nextName) {
+      renames.push({ from: prevName, to: nextName });
+    }
+  }
+  if (!renames.length) return 0;
+  let count = 0;
+  for (const req of ensureArray(project?.requirements)) {
+    const current = String(req?.phase || '').trim();
+    if (!current) continue;
+    const token = normalizeForCompare(current);
+    for (const { from, to } of renames) {
+      if (token === normalizeForCompare(from)) {
+        req.phase = to;
+        req.updatedAt = nowIso();
+        count += 1;
+        break;
+      }
+    }
+  }
+  return count;
 }
 
-function defaultPhases(hourlyRate) {
-  const rate = numberOr(hourlyRate, 30);
-  return [
-    {
-      id: 'F1',
-      name: 'Fase 1 - MVP validavel',
-      objective: 'Criar fluxo principal e validar valor com utilizadores reais.',
-      durationWeeks: 3,
-      deliverables: ['Fluxo principal operacional', 'Painel de acompanhamento inicial', 'Base de dados estruturada'],
-      acceptanceCriteria: ['Fluxo principal testado ponta a ponta', 'Requisitos criticos implementados'],
-      assumptions: ['Escopo controlado para MVP'],
-      priceDrivers: ['Implementacao dos fluxos centrais', 'Configuração base de segurança e dados'],
-      items: [
-        {
-          name: 'Implementacao MVP com apoio de AI',
-          hours: 60,
-          rate,
-          cost: 60 * rate,
-          justification: 'Entrega funcional do fluxo principal com rapidez e baixo risco.',
-        },
-      ],
-      hours: 60,
-      cost: 60 * rate,
-    },
-    {
-      id: 'F2',
-      name: 'Fase 2 - Operacao e relatorios',
-      objective: 'Melhorar rastreabilidade, operação e visibilidade para decisão.',
-      durationWeeks: 2,
-      deliverables: ['Relatorios principais', 'Refino de requisitos', 'Melhorias operacionais'],
-      acceptanceCriteria: ['Indicadores por fase e status'],
-      assumptions: ['Feedback da fase 1 já coletado'],
-      priceDrivers: ['Modelagem de analytics e fluxos operacionais'],
-      items: [
-        {
-          name: 'Dashboards e estabilizacao',
-          hours: 55,
-          rate,
-          cost: 55 * rate,
-          justification: 'Ajustes operacionais e dados para gestão.',
-        },
-      ],
-      hours: 55,
-      cost: 55 * rate,
-    },
-    {
-      id: 'F3',
-      name: 'Fase 3 - Integracoes finais',
-      objective: 'Preparar e conectar integrações de maior valor.',
-      durationWeeks: 3,
-      deliverables: ['Camada de integração', 'Testes integrados', 'Ajustes finais'],
-      acceptanceCriteria: ['Integrações prioritárias homologadas'],
-      assumptions: ['APIs externas disponíveis'],
-      priceDrivers: ['Integrações e testes com sistemas terceiros'],
-      items: [
-        {
-          name: 'Integracoes finais com otimização AI',
-          hours: 65,
-          rate,
-          cost: 65 * rate,
-          justification: 'Consolidação técnica e comercial para versão final.',
-        },
-      ],
-      hours: 65,
-      cost: 65 * rate,
-    },
-  ];
+function assertUniquePhaseNames(phases) {
+  const seen = new Map();
+  for (const phase of ensureArray(phases)) {
+    const name = String(phase?.name || '').trim();
+    if (!name) continue;
+    const token = normalizeForCompare(name);
+    if (seen.has(token)) {
+      throw new Error(`Nome de fase duplicado: «${name}» (igual a «${seen.get(token)}»). Cada fase precisa de um nome único.`);
+    }
+    seen.set(token, name);
+  }
+}
+
+function normalizePhases(phases) {
+  const normalized = proposalGenerator.normalizePlanPhases(phases);
+  if (normalized.length) return normalized;
+  return proposalGenerator.defaultPlanPhases();
+}
+
+function defaultPhases() {
+  return proposalGenerator.defaultPlanPhases();
 }
 
 function tryExtractText(fileName, buffer) {
@@ -4010,6 +4279,91 @@ function toPublicPath(rootDir, absolutePath) {
   return `/${relative.split(path.sep).join('/')}`;
 }
 
+function fromPublicPath(rootDir, publicPath) {
+  const trimmed = String(publicPath || '').trim();
+  if (!trimmed) return null;
+  const relative = trimmed.replace(/^\/+/, '');
+  const absolute = path.resolve(rootDir, relative);
+  if (!absolute.startsWith(path.resolve(rootDir))) return null;
+  return absolute;
+}
+
+function buildCommercialGeneratedLinks(projectId, genId, markdownPublicPath) {
+  const base = `/api/projects/projects/${encodeURIComponent(projectId)}/generated/${encodeURIComponent(genId)}`;
+  return {
+    fullDocumentMarkdown: markdownPublicPath,
+    fullDocumentHtml: `${base}/html`,
+    downloadMarkdown: `${base}/markdown?download=1`,
+    downloadHtml: `${base}/html?download=1`,
+  };
+}
+
+async function loadProposalConfigSnapshot(rootDir, entry, project) {
+  const candidates = [
+    entry?.proposalConfig,
+    entry?.proposalConfigPath,
+  ].filter(Boolean);
+
+  const folderPath = fromPublicPath(rootDir, entry?.folder);
+  if (folderPath) {
+    candidates.push(toPublicPath(rootDir, path.join(folderPath, 'proposal_config.json')));
+  }
+
+  for (const candidate of candidates) {
+    const configPath = fromPublicPath(rootDir, candidate);
+    if (!configPath || !(await fileExists(configPath))) continue;
+    const snapshot = JSON.parse(await fs.readFile(configPath, 'utf-8'));
+    return proposalGenerator.normalizeProposalConfig(snapshot, project);
+  }
+
+  return null;
+}
+
+async function readGeneratedMarkdown(rootDir, entry) {
+  const mdPublic = entry?.outputs?.fullDocumentMarkdown;
+  if (mdPublic) {
+    const mdPath = fromPublicPath(rootDir, mdPublic);
+    if (mdPath && await fileExists(mdPath)) {
+      return fs.readFile(mdPath, 'utf-8');
+    }
+  }
+
+  const folderPath = fromPublicPath(rootDir, entry?.folder);
+  if (!folderPath) return null;
+  const distDir = path.join(folderPath, 'dist');
+  if (!(await fileExists(distDir))) return null;
+  const entries = await fs.readdir(distDir);
+  const mdName = entries.find((name) => /\.md$/i.test(name));
+  if (!mdName) return null;
+  return fs.readFile(path.join(distDir, mdName), 'utf-8');
+}
+
+async function readGeneratedHtml(rootDir, entry, project) {
+  if (entry?.mode === 'commercial' || entry?.proposalConfig) {
+    const config = await loadProposalConfigSnapshot(rootDir, entry, project);
+    if (config) {
+      return proposalGenerator.renderProposalHtml(project, config).html;
+    }
+  }
+
+  const htmlPublic = entry?.outputs?.fullDocumentHtml;
+  if (htmlPublic && !String(htmlPublic).includes('/generated/')) {
+    const htmlPath = fromPublicPath(rootDir, htmlPublic);
+    if (htmlPath && await fileExists(htmlPath)) {
+      return fs.readFile(htmlPath, 'utf-8');
+    }
+  }
+
+  const folderPath = fromPublicPath(rootDir, entry?.folder);
+  if (!folderPath) return null;
+  const distDir = path.join(folderPath, 'dist');
+  if (!(await fileExists(distDir))) return null;
+  const entries = await fs.readdir(distDir);
+  const htmlName = entries.find((name) => /\.html$/i.test(name) && name.toLowerCase().includes('proposta'));
+  if (!htmlName) return null;
+  return fs.readFile(path.join(distDir, htmlName), 'utf-8');
+}
+
 function priorityLabel(priority) {
   if (priority === 'high') return 'Alta';
   if (priority === 'low') return 'Baixa';
@@ -4413,6 +4767,7 @@ function normalizeArtifactRecord(raw) {
     updatedAt: textOr(raw?.updatedAt, nowIso()),
     createdBy: textOr(raw?.createdBy),
     updatedBy: textOr(raw?.updatedBy),
+    provenance: deliveryOsPlatform.normalizeArtifactProvenance(raw?.provenance),
   };
 }
 

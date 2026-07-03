@@ -63,6 +63,8 @@ const AGENT_TYPES = [
   'implementation_stack',
   'implementation_tasks',
   'commercial_proposal',
+  'consistency_checker',
+  'traceability_auditor',
 ];
 
 const ONION_LAYERS = [
@@ -630,8 +632,19 @@ function normalizeAgentJob(raw) {
   };
 }
 
+const HUMAN_REVIEW_STATUSES = [
+  'pending', 'approved', 'changes_requested', 'rejected', 'awaiting_output', 'cancelled',
+];
+
 function normalizeHumanReview(raw) {
-  const status = textOr(raw?.status, 'pending');
+  let status = textOr(raw?.status, 'pending');
+  if (!HUMAN_REVIEW_STATUSES.includes(status)) status = 'pending';
+  const decisionsCount = numberOr(raw?.decisionsCount, 0);
+  const sections = ensureArray(raw?.suggestedChanges?.sections);
+  if (status === 'pending' && decisionsCount === 0 && !sections.length
+    && textOr(raw?.title).toLowerCase().includes('aguarda output')) {
+    status = 'awaiting_output';
+  }
   return {
     id: textOr(raw?.id, `hr_${crypto.randomUUID().slice(0, 8)}`),
     type: textOr(raw?.type, 'agent_output'),
@@ -642,14 +655,38 @@ function normalizeHumanReview(raw) {
     sourceId: textOr(raw?.sourceId),
     promptRunId: textOr(raw?.promptRunId),
     suggestedChanges: raw?.suggestedChanges ?? null,
-    status: ['pending', 'approved', 'changes_requested', 'rejected'].includes(status) ? status : 'pending',
+    status,
     readingTimeMinutes: numberOr(raw?.readingTimeMinutes, 5),
-    decisionsCount: numberOr(raw?.decisionsCount, 0),
+    decisionsCount,
+    preApplySnapshotId: textOr(raw?.preApplySnapshotId),
+    repromptFromRunId: textOr(raw?.repromptFromRunId),
     createdAt: textOr(raw?.createdAt, nowIso()),
     resolvedAt: textOr(raw?.resolvedAt),
     resolvedBy: textOr(raw?.resolvedBy),
     resolutionNotes: textOr(raw?.resolutionNotes),
   };
+}
+
+function isActionableReviewForPanel(review) {
+  if (!review) return false;
+  if (review.status !== 'pending') return false;
+  if (['information_classification', 'phase_link_sync'].includes(review.type)) return false;
+  const sections = ensureArray(review.suggestedChanges?.sections);
+  return review.decisionsCount > 0 || sections.length > 0;
+}
+
+function migrateHumanReviewsOnLoad(project) {
+  for (const review of ensureArray(project.humanReviews)) {
+    if (review.status !== 'pending') continue;
+    if (isActionableReviewForPanel(review)) continue;
+    if (textOr(review.title).toLowerCase().includes('aguarda output')
+      || textOr(review.summaryMarkdown).toLowerCase().includes('aguarda output')) {
+      review.status = 'awaiting_output';
+    } else if (review.decisionsCount === 0 && !ensureArray(review.suggestedChanges?.sections).length) {
+      review.status = 'cancelled';
+      review.resolutionNotes = textOr(review.resolutionNotes, 'Migrado: sem alterações acionáveis.');
+    }
+  }
 }
 
 function normalizeVersionSnapshot(raw) {
@@ -1000,6 +1037,8 @@ function normalizeProposal(raw) {
 
 function normalizeProjectV3Fields(project) {
   const diagramFields = require('./diagrams').normalizeProjectDiagramFields(project);
+  const executionPlans = require('./execution-plans');
+  migrateHumanReviewsOnLoad(project);
   return {
     capabilities: ensureArray(project.capabilities).map(normalizeCapability),
     requirementClusters: ensureArray(project.requirementClusters).map(normalizeCluster),
@@ -1008,6 +1047,7 @@ function normalizeProjectV3Fields(project) {
     promptRuns: ensureArray(project.promptRuns).map(normalizePromptRun),
     agentJobs: ensureArray(project.agentJobs).map(normalizeAgentJob),
     humanReviews: ensureArray(project.humanReviews).map(normalizeHumanReview),
+    executionPlans: ensureArray(project.executionPlans).map(executionPlans.normalizeExecutionPlan).slice(0, 20),
     versionSnapshots: ensureArray(project.versionSnapshots).map(normalizeVersionSnapshot),
     alternativeResponses: ensureArray(project.alternativeResponses).map(normalizeAlternativeResponse),
     informationEntries: ensureArray(project.informationEntries).map(normalizeInformationEntry),
@@ -1615,9 +1655,6 @@ function buildCommercialProposalPrompt(project, options = {}) {
     .slice(0, 12);
   const commercial = {
     currency: textOr(project.currency, 'EUR'),
-    hourlyRate: project.hourlyRate || null,
-    targetBudgetMin: project.targetBudgetMin || null,
-    targetBudgetMax: project.targetBudgetMax || null,
     commercialTerms: project.commercialTerms || null,
   };
 
@@ -2176,21 +2213,34 @@ Responde APENAS com JSON:
 }
 
 function buildStageTransitionPrompt(project, fromStageId, toStageId, direction = 'forward') {
-  const fromLabel = STAGE_FOCUS[fromStageId] || fromStageId;
-  const toLabel = STAGE_FOCUS[toStageId] || toStageId;
-  const ctx = buildContextPack(project, { stageId: toStageId, maxRequirements: 40 });
+  const dir = textOr(direction, 'forward');
+  const displayFrom = dir === 'backward' ? toStageId : fromStageId;
+  const displayTo = dir === 'backward' ? fromStageId : toStageId;
+  const fromLabel = STAGE_FOCUS[displayFrom] || displayFrom;
+  const toLabel = STAGE_FOCUS[displayTo] || displayTo;
+  const ctx = buildContextPack(project, { stageId: displayTo, maxRequirements: 40 });
   const transitionKey = `${fromStageId}->${toStageId}`;
   const reverseKey = `${toStageId}->${fromStageId}`;
-  const hint = direction === 'forward'
-    ? (STAGE_TRANSITION_AGENTS[transitionKey]?.forward || `Avançar de ${fromStageId} para ${toStageId}`)
-    : (STAGE_TRANSITION_AGENTS[reverseKey]?.backward || `Retroceder: gerar ${fromStageId} a partir de ${toStageId}`);
+  const agents = STAGE_TRANSITION_AGENTS[transitionKey] || STAGE_TRANSITION_AGENTS[reverseKey];
+  const hint = dir === 'forward'
+    ? (agents?.forward || `Avançar de ${displayFrom} para ${displayTo}`)
+    : (agents?.backward || `Retroceder: actualizar ${displayTo} a partir de ${displayFrom}`);
 
   return `Tu és um agente de systems engineering YourLab.
 
-Transição de fase (${direction === 'forward' ? 'AVANÇAR' : 'RETROCEDER'}):
-- De: ${fromStageId} (${fromLabel})
-- Para: ${toStageId} (${toLabel})
+Transição de fase (${dir === 'forward' ? 'AVANÇAR' : 'RETROCEDER'}):
+- De: ${displayFrom} (${fromLabel})
+- Para: ${displayTo} (${toLabel})
 - Acção: ${hint}
+
+${fromStageId === 'discovery' && toStageId === 'requirements' && dir === 'forward' ? `
+Pipeline recomendado (tarefas separadas no Execution Workbench):
+1. STK — todas as necessidades de negócio com implementationPhase
+2. FR — uma tarefa por fase de implementação, cada FR ligado a STK (parentId)
+3. RNF — constraints ligados a FR/STK
+4. TC — casos de teste ligados a FR (verified_by)
+5. Consolidar traceLinks + moduleMappings
+` : ''}
 
 Context pack (nunca enviar projecto inteiro):
 ${JSON.stringify(ctx, null, 2)}
@@ -2198,12 +2248,13 @@ ${JSON.stringify(ctx, null, 2)}
 Responde APENAS com JSON válido:
 {
   "transitionSummaryMarkdown": "",
-  "direction": "${direction}",
-  "fromStageId": "${fromStageId}",
-  "toStageId": "${toStageId}",
-  "artifacts": [{ "type": "", "name": "", "description": "", "bodyMarkdown": "", "stageId": "${toStageId}" }],
-  "stakeholderRequirements": [],
-  "technicalRequirements": [],
+  "direction": "${dir}",
+  "fromStageId": "${displayFrom}",
+  "toStageId": "${displayTo}",
+  "artifacts": [{ "type": "", "name": "", "description": "", "bodyMarkdown": "", "stageId": "${displayTo}" }],
+  "stakeholderRequirements": [{ "id": "STK-01", "title": "", "shall": "", "moduleTags": [], "parentId": "", "vLevel": 0 }],
+  "technicalRequirements": [{ "id": "FR-01", "title": "", "shall": "", "moduleTags": [] }],
+  "requirements": [{ "id": "STK-01", "type": "stakeholder", "title": "", "shall": "", "moduleTags": [] }],
   "capabilities": [],
   "requirementClusters": [],
   "openQuestions": [],
@@ -2236,8 +2287,7 @@ function applyGroupingResult(project, parsed, userId) {
   });
 
   for (const mapping of ensureArray(parsed.moduleMappings)) {
-    const req = ensureArray(project.requirements).find((r) => r.id === mapping.requirementId);
-    if (req) req.moduleTags = normalizeModuleTags(mapping.moduleTags, req.module);
+    applyModuleMappings(project, [mapping]);
   }
 
   return { capabilities: caps, requirementClusters: clusters };
@@ -2793,7 +2843,30 @@ function buildHumanReviewPayload(project, run, parsed, rawOutput) {
 
   const stakeholderReqs = ensureArray(parsed.stakeholderRequirements);
   const technicalReqs = ensureArray(parsed.technicalRequirements);
-  if (stakeholderReqs.length || technicalReqs.length) {
+  const unifiedReqs = extractRequirementsFromParsed(parsed);
+  if (unifiedReqs.length) {
+    const isExisting = (r) => (r.id && existingReqIds.has(r.id)) || existingReqTitleKeys.has(normalizeReqTitleKey(r.title));
+    const created = unifiedReqs.filter((r) => !isExisting(r));
+    const updated = unifiedReqs.filter((r) => isExisting(r));
+    if (created.length) {
+      pushSection(sections, {
+        kind: 'created',
+        entityType: 'requirement',
+        label: 'Requisitos (novos)',
+        items: created.map((r) => ({ id: r.id || '(auto)', title: itemLabel(r), type: r.type, shall: shortText(r.shall, 120) })),
+      });
+      decisionsCount += created.length;
+    }
+    if (updated.length) {
+      pushSection(sections, {
+        kind: 'updated',
+        entityType: 'requirement',
+        label: 'Requisitos (alterados)',
+        items: updated.map((r) => ({ id: r.id, title: itemLabel(r), shall: shortText(r.shall, 120) })),
+      });
+      decisionsCount += updated.length;
+    }
+  } else if (stakeholderReqs.length || technicalReqs.length) {
     const allReqs = [
       ...stakeholderReqs.map((r) => ({ ...r, type: 'stakeholder' })),
       ...technicalReqs.map((r) => ({ ...r, type: 'functional' })),
@@ -3097,6 +3170,11 @@ function applyArchitecturePack(project, parsed, run, userId) {
     createdAt: now,
     updatedAt: now,
     createdBy: userId,
+    provenance: require('./delivery-os-platform').normalizeArtifactProvenance({
+      source: 'ai',
+      promptRunId: run?.id,
+      agentType: run?.agentType,
+    }),
   };
 
   project.artifacts = [packArtifact, ...ensureArray(project.artifacts)];
@@ -3181,46 +3259,78 @@ function nextRequirementId(project, type) {
 }
 
 /**
+ * Normalise requirement lists from agent JSON — supports both legacy keys
+ * (stakeholderRequirements / technicalRequirements) and unified `requirements`.
+ */
+function extractRequirementsFromParsed(parsed) {
+  if (!parsed || typeof parsed !== 'object') return [];
+  const reqHierarchy = require('./requirement-hierarchy');
+  const out = [];
+
+  ensureArray(parsed.stakeholderRequirements).forEach((r) => {
+    out.push({ ...r, type: 'stakeholder', deliveryStageId: textOr(r.deliveryStageId, 'requirements') });
+  });
+  ensureArray(parsed.technicalRequirements).forEach((r) => {
+    out.push({
+      ...r,
+      type: reqHierarchy.normalizeRequirementType(r.type) || 'functional',
+      deliveryStageId: textOr(r.deliveryStageId, 'requirements'),
+    });
+  });
+  ensureArray(parsed.requirements).forEach((r) => {
+    out.push({
+      ...r,
+      type: reqHierarchy.normalizeRequirementType(r.type) || 'functional',
+      deliveryStageId: textOr(r.deliveryStageId, 'requirements'),
+      phase: textOr(r.phase, r.implementationPhase, r.implementation_phase),
+      implementationPhase: textOr(r.implementationPhase, r.implementation_phase, r.phase),
+    });
+  });
+
+  return out;
+}
+
+function applyModuleMappings(project, mappings) {
+  for (const mapping of ensureArray(mappings)) {
+    const req = ensureArray(project.requirements).find((r) => r.id === mapping.requirementId);
+    if (req) req.moduleTags = normalizeModuleTags(mapping.moduleTags, req.module);
+  }
+}
+
+/**
  * Merge AI-produced requirements into the project WITHOUT multiplying them.
  * If an incoming requirement matches an existing one by id or by normalized
  * title, it updates that record (filling empty fields) instead of appending.
  * New requirements get a sequential id when the agent omitted one.
  */
 function mergeRequirementsDedup(project, incoming, normalizeRequirementRecord) {
-  const existing = ensureArray(project.requirements).map((r) => normalizeRequirementRecord(r));
-  const byId = new Map(existing.map((r) => [String(r.id), r]));
-  const byTitle = new Map(existing.filter((r) => r.title).map((r) => [normalizeReqTitleKey(r.title), r]));
+  const reqHierarchy = require('./requirement-hierarchy');
   let added = 0;
   let updated = 0;
+  let skipped = 0;
+  const byType = new Map();
 
-  incoming.forEach((raw) => {
+  ensureArray(incoming).forEach((raw) => {
     const candidate = normalizeRequirementRecord(raw);
-    const titleKey = normalizeReqTitleKey(candidate.title);
-    const match = (candidate.id && byId.get(String(candidate.id))) || (titleKey && byTitle.get(titleKey)) || null;
-
-    if (match) {
-      Object.keys(candidate).forEach((k) => {
-        if (['id', 'createdAt'].includes(k)) return;
-        const val = candidate[k];
-        const isEmpty = val == null || val === '' || (Array.isArray(val) && val.length === 0);
-        if (!isEmpty) match[k] = val;
-      });
-      match.updatedAt = nowIso();
-      updated += 1;
-      return;
-    }
-
-    if (!candidate.id) candidate.id = nextRequirementId({ requirements: existing }, candidate.type);
-    candidate.createdAt = candidate.createdAt || nowIso();
-    candidate.updatedAt = nowIso();
-    existing.push(candidate);
-    byId.set(String(candidate.id), candidate);
-    if (titleKey) byTitle.set(titleKey, candidate);
-    added += 1;
+    const type = reqHierarchy.normalizeRequirementType(candidate.type) || 'functional';
+    if (!byType.has(type)) byType.set(type, []);
+    byType.get(type).push(candidate);
   });
 
-  project.requirements = existing;
-  return { added, updated };
+  for (const [type, items] of byType) {
+    const result = reqHierarchy.mergeRequirementsByDedupe(
+      project.requirements,
+      items,
+      type,
+      normalizeRequirementRecord
+    );
+    project.requirements = result.requirements;
+    added += result.added;
+    updated += result.updated;
+    skipped += result.skipped;
+  }
+
+  return { added, updated, skipped };
 }
 
 function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
@@ -3262,7 +3372,7 @@ function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
     project.roadmap = normalizeRoadmap({ ...parsed.roadmap, updatedAt: nowIso() }, project);
   }
 
-  if (parsed.proposal && typeof parsed.proposal === 'object') {
+  if (parsed.proposal && typeof parsed.proposal === 'object' && run.agentType !== 'commercial_proposal') {
     project.proposal = normalizeProposal({ ...parsed.proposal, updatedAt: nowIso() });
   }
 
@@ -3304,14 +3414,13 @@ function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
     project.nextDecision = parsed.nextDecision;
   }
 
-  if (parsed.stakeholderRequirements || parsed.technicalRequirements) {
-    const incoming = [
-      ...ensureArray(parsed.stakeholderRequirements).map((sr) => ({ ...sr, type: 'stakeholder', deliveryStageId: 'requirements' })),
-      ...ensureArray(parsed.technicalRequirements).map((tr) => ({ ...tr, type: 'functional', deliveryStageId: 'requirements' })),
-    ];
-    // Dedupe so re-running the agent updates existing requirements instead of
-    // appending duplicates (which previously caused runaway growth).
+  if (parsed.stakeholderRequirements || parsed.technicalRequirements || ensureArray(parsed.requirements).length) {
+    const incoming = extractRequirementsFromParsed(parsed);
     mergeRequirementsDedup(project, incoming, normalizeRequirementRecord);
+  }
+
+  if (ensureArray(parsed.moduleMappings).length) {
+    applyModuleMappings(project, parsed.moduleMappings);
   }
 
   if (ensureArray(parsed.updates).length) {
@@ -3342,29 +3451,90 @@ function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
     traceability.applyDiagramToRequirementsResult(project, run, parsed, { newRequirementIds });
   }
 
+  if (ensureArray(parsed.traceLinks).length) {
+    project.traceLinks = mergeTraceLinks(project.traceLinks, parsed.traceLinks);
+  }
+
   project.traceLinks = mergeTraceLinks(project.traceLinks, autoDeriveTraceLinks(project));
+  stampAiProvenanceOnArtifacts(project, run, userId);
 }
 
-function syncHumanReviewFromPromptRun(project, run, parsed, rawOutput) {
+function stampAiProvenanceOnArtifacts(project, run, userId) {
+  if (!run) return;
+  const platform = require('./delivery-os-platform');
+  const cutoff = run.createdAt || run.reviewedAt;
+  const cutoffMs = cutoff ? new Date(cutoff).getTime() : 0;
+  project.artifacts = ensureArray(project.artifacts).map((art) => {
+    const artMs = new Date(art.updatedAt || art.createdAt).getTime();
+    if (cutoffMs && artMs < cutoffMs - 5000) return art;
+    if (art.provenance?.source === 'human') return art;
+    return {
+      ...art,
+      provenance: platform.normalizeArtifactProvenance({
+        source: art.provenance?.editedBy ? 'mixed' : 'ai',
+        promptRunId: run.id,
+        agentType: run.agentType,
+        editedBy: art.provenance?.editedBy || null,
+        approvedBy: run.reviewedBy || null,
+        approvedAt: run.reviewedAt || null,
+      }),
+    };
+  });
+}
+
+function upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput) {
   const payload = buildHumanReviewPayload(project, run, parsed, rawOutput);
-  const review = ensureArray(project.humanReviews).find(
+  const actionable = payload.decisionsCount > 0 || ensureArray(payload.suggestedChanges?.sections).length > 0;
+  const existingIdx = ensureArray(project.humanReviews).findIndex(
     (r) => r.promptRunId === run.id || (r.sourceType === 'prompt_run' && r.sourceId === run.id)
   );
-  if (!review) return payload;
 
-  review.bodyMarkdown = payload.bodyMarkdown;
-  review.suggestedChanges = payload.suggestedChanges;
-  review.decisionsCount = payload.decisionsCount;
-  review.summaryMarkdown = payload.summaryMarkdown;
-  review.title = parsed
-    ? `Revisão: ${textOr(run.agentType, 'agent')}`
-    : review.title;
-  if (parsed && review.status === 'approved') {
+  if (!actionable) {
+    if (existingIdx >= 0) {
+      const existing = project.humanReviews[existingIdx];
+      if (['pending', 'awaiting_output'].includes(existing.status)) {
+        existing.status = 'cancelled';
+        existing.resolutionNotes = textOr(existing.resolutionNotes, 'Sem alterações detectadas no output.');
+        existing.resolvedAt = nowIso();
+      }
+    }
+    return { payload, review: null, actionable: false };
+  }
+
+  if (existingIdx >= 0) {
+    const review = project.humanReviews[existingIdx];
+    review.bodyMarkdown = payload.bodyMarkdown;
+    review.suggestedChanges = payload.suggestedChanges;
+    review.decisionsCount = payload.decisionsCount;
+    review.summaryMarkdown = payload.summaryMarkdown;
+    review.title = `Revisão: ${textOr(run.agentType, 'agent')}`;
     review.status = 'pending';
     review.resolvedAt = '';
     review.resolvedBy = '';
+    return { payload, review, actionable: true };
   }
-  return payload;
+
+  const review = normalizeHumanReview({
+    type: 'agent_output',
+    title: `Revisão: ${textOr(run.agentType, 'agent')}`,
+    summaryMarkdown: payload.summaryMarkdown,
+    bodyMarkdown: payload.bodyMarkdown,
+    suggestedChanges: payload.suggestedChanges,
+    decisionsCount: payload.decisionsCount,
+    promptRunId: run.id,
+    sourceType: 'prompt_run',
+    sourceId: run.id,
+    status: 'pending',
+    readingTimeMinutes: Math.max(1, Math.ceil(textOr(payload.bodyMarkdown).length / 800)),
+  });
+  project.humanReviews = ensureArray(project.humanReviews);
+  project.humanReviews.unshift(review);
+  return { payload, review, actionable: true };
+}
+
+function syncHumanReviewFromPromptRun(project, run, parsed, rawOutput) {
+  const result = upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput);
+  return result.payload;
 }
 
 function createProjectSnapshot(project, label, userId, stageId) {
@@ -3404,7 +3574,7 @@ function exportImpactReportMarkdown(report, project) {
 function registerDeliveryOsRoutes(app, deps) {
   const {
     authMiddleware,
-    requireRole,
+    requireProjectEditor,
     loadProjectForUser,
     readStore,
     updateStore,
@@ -3416,6 +3586,8 @@ function registerDeliveryOsRoutes(app, deps) {
     normalizeMeetingMinutes,
     normalizeRequirementRecord,
     numberOr: numOr,
+    projectAudit,
+    getUserName,
   } = deps;
   const phaseContent = getPhaseContent();
 
@@ -3454,7 +3626,7 @@ function registerDeliveryOsRoutes(app, deps) {
     });
   });
 
-  app.post('/api/projects/projects/:projectId/capabilities', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/capabilities', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -3474,7 +3646,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/add-information', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/add-information', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -3492,7 +3664,7 @@ function registerDeliveryOsRoutes(app, deps) {
           bodyMarkdown: entry.bodyMarkdown,
           sourceType: 'information_entry',
           sourceId: entry.id,
-          status: 'pending',
+          status: 'awaiting_output',
           readingTimeMinutes: Math.max(1, Math.ceil(entry.bodyMarkdown.length / 800)),
         });
       }
@@ -3535,7 +3707,7 @@ function registerDeliveryOsRoutes(app, deps) {
     return res.json({ reviews });
   });
 
-  app.post('/api/projects/projects/:projectId/human-reviews/:reviewId/enrich', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/human-reviews/:reviewId/enrich', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, reviewId } = req.params;
       let enriched = null;
@@ -3548,7 +3720,7 @@ function registerDeliveryOsRoutes(app, deps) {
           (r) => r.id === review.promptRunId || r.id === review.sourceId
         );
         if (run && (run.parsedOutput || run.rawOutput)) {
-          enriched = syncHumanReviewFromPromptRun(project, run, run.parsedOutput, run.rawOutput);
+          enriched = upsertHumanReviewFromPromptRun(project, run, run.parsedOutput, run.rawOutput);
           project.updatedAt = nowIso();
         }
       });
@@ -3561,23 +3733,112 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/human-reviews/:reviewId/resolve', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/human-reviews/:reviewId/resolve', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, reviewId } = req.params;
-      const { status, resolutionNotes, applyChanges } = req.body || {};
+      const { status, resolutionNotes, applyChanges, action } = req.body || {};
+      const resolvedAction = textOr(action, status);
+      let rollbackProject = null;
+      let repromptRun = null;
+
       await updateStore(async (store) => {
         const project = store.projects.find((e) => e.id === projectId);
         if (!project) throw new Error('Projeto nao encontrado.');
         const review = ensureArray(project.humanReviews).find((r) => r.id === reviewId);
         if (!review) throw new Error('Review nao encontrada.');
-        review.status = ['approved', 'changes_requested', 'rejected'].includes(status) ? status : 'approved';
+
+        if (resolvedAction === 'rollback' && review.preApplySnapshotId) {
+          const snap = ensureArray(project.versionSnapshots).find((s) => s.id === review.preApplySnapshotId);
+          if (!snap?.snapshotData) throw new Error('Snapshot de rollback nao encontrado.');
+          const data = snap.snapshotData;
+          if (data.requirements) project.requirements = data.requirements;
+          if (data.capabilities) project.capabilities = data.capabilities;
+          if (data.requirementClusters) project.requirementClusters = data.requirementClusters;
+          if (data.artifacts) project.artifacts = data.artifacts;
+          if (data.traceLinks) project.traceLinks = data.traceLinks;
+          if (data.stages) project.stages = data.stages;
+          if (data.ideaBriefMarkdown) project.ideaBriefMarkdown = data.ideaBriefMarkdown;
+          review.status = 'rejected';
+          review.resolutionNotes = textOr(resolutionNotes, 'Revertido para snapshot anterior.');
+          review.resolvedAt = nowIso();
+          review.resolvedBy = req.auth.user.id;
+          project.updatedAt = nowIso();
+          rollbackProject = true;
+          return;
+        }
+
+        if (resolvedAction === 'cancel') {
+          review.status = 'cancelled';
+          review.resolutionNotes = textOr(resolutionNotes);
+          review.resolvedAt = nowIso();
+          review.resolvedBy = req.auth.user.id;
+          project.updatedAt = nowIso();
+          return;
+        }
+
+        if (resolvedAction === 'needs_clarification') {
+          review.status = 'needs_clarification';
+          review.resolutionNotes = textOr(resolutionNotes, 'Necessita esclarecimento.');
+          review.resolvedAt = nowIso();
+          review.resolvedBy = req.auth.user.id;
+          project.updatedAt = nowIso();
+          return;
+        }
+
+        if (resolvedAction === 'deferred') {
+          review.status = 'deferred';
+          review.resolutionNotes = textOr(resolutionNotes, 'Adiado para revisão posterior.');
+          review.resolvedAt = nowIso();
+          review.resolvedBy = req.auth.user.id;
+          project.updatedAt = nowIso();
+          return;
+        }
+
+        if (resolvedAction === 'reprompt') {
+          review.status = 'changes_requested';
+          review.resolutionNotes = textOr(resolutionNotes, 'Reprompt solicitado.');
+          review.resolvedAt = nowIso();
+          review.resolvedBy = req.auth.user.id;
+          const linkedRun = ensureArray(project.promptRuns).find(
+            (r) => r.id === review.promptRunId || r.id === review.sourceId
+          );
+          if (linkedRun) {
+            linkedRun.status = 'awaiting_output';
+            repromptRun = linkedRun;
+          }
+          project.updatedAt = nowIso();
+          return;
+        }
+
+        review.status = ['approved', 'changes_requested', 'rejected', 'needs_clarification', 'deferred'].includes(resolvedAction)
+          ? resolvedAction
+          : (['approved', 'changes_requested', 'rejected', 'needs_clarification', 'deferred'].includes(status) ? status : 'approved');
         review.resolvedAt = nowIso();
         review.resolvedBy = req.auth.user.id;
         review.resolutionNotes = textOr(resolutionNotes);
         const approved = review.status === 'approved';
+        const linkedRunForAudit = ensureArray(project.promptRuns).find(
+          (r) => r.id === review.promptRunId || r.id === review.sourceId
+        );
+        if (approved && applyChanges !== false && projectAudit) {
+          const snap = projectAudit.capturePreChangeSnapshot(
+            project,
+            `Antes de revisão ${review.id.slice(0, 12)}`,
+            req.auth.user.id,
+            linkedRunForAudit?.stageId || review.sourceType
+          );
+          projectAudit.recordProjectAudit(project, {
+            actorUserId: req.auth.user.id,
+            actorName: getUserName ? getUserName(store, req.auth.user.id) : req.auth.user.name,
+            action: 'human_review_approved',
+            summary: `Revisão aprovada: ${textOr(review.title, review.id)}`,
+            snapshotId: snap.id,
+            metadata: { reviewId: review.id, agentType: review.suggestedChanges?.agentType },
+          }, appendActivity, store);
+        }
         if (approved && applyChanges !== false) {
           let parsed = review.suggestedChanges?.parsed || null;
-          const linkedRun = ensureArray(project.promptRuns).find(
+          const linkedRun = linkedRunForAudit || ensureArray(project.promptRuns).find(
             (r) => r.id === review.promptRunId || r.id === review.sourceId
           );
           if (!parsed && review.suggestedChanges?.rawOutput) {
@@ -3588,6 +3849,17 @@ function registerDeliveryOsRoutes(app, deps) {
             parsed = parseAgentJsonOutput(linkedRun.rawOutput).parsed;
           }
           if (parsed) {
+            const snap = createProjectSnapshot(
+              project,
+              `Antes de revisão ${review.id.slice(0, 12)}`,
+              req.auth.user.id,
+              linkedRun?.stageId || review.sourceType
+            );
+            project.versionSnapshots = ensureArray(project.versionSnapshots);
+            project.versionSnapshots.unshift(snap);
+            project.versionSnapshots = project.versionSnapshots.slice(0, 50);
+            review.preApplySnapshotId = snap.id;
+
             if (linkedRun && linkedRun.status !== 'applied') {
               applyPromptRunOutput(project, linkedRun, parsed, req.auth.user.id, { normalizeRequirementRecord });
               linkedRun.status = 'applied';
@@ -3606,13 +3878,18 @@ function registerDeliveryOsRoutes(app, deps) {
         project.updatedAt = nowIso();
       });
       const store = await readStore();
-      return res.json({ project: sanitizeProject(store.projects.find((e) => e.id === projectId), req.auth.user) });
+      const updated = store.projects.find((e) => e.id === projectId);
+      return res.json({
+        project: sanitizeProject(updated, req.auth.user),
+        rollback: Boolean(rollbackProject),
+        repromptRun,
+      });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
   });
 
-  app.post('/api/projects/projects/:projectId/stages/:stageId/approve', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/stages/:stageId/approve', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, stageId } = req.params;
       const notes = textOr(req.body?.notes);
@@ -3641,7 +3918,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/stages/:stageId', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/stages/:stageId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, stageId } = req.params;
       const { status } = req.body || {};
@@ -3658,7 +3935,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/snapshots', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/snapshots', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const label = textOr(req.body?.label, `Snapshot ${nowIso().slice(0, 10)}`);
@@ -3678,7 +3955,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/snapshots/:snapshotId/restore', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/snapshots/:snapshotId/restore', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, snapshotId } = req.params;
       await updateStore(async (store) => {
@@ -3703,7 +3980,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/trace-links/sync', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/trace-links/sync', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       await updateStore(async (store) => {
@@ -3723,7 +4000,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/relink-phases', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/relink-phases', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let report = null;
@@ -3753,26 +4030,12 @@ function registerDeliveryOsRoutes(app, deps) {
         project.documents = ensureArray(project.documents);
         project.documents.unshift(document);
 
-        review = normalizeHumanReview({
-          type: 'phase_link_sync',
-          title: 'Reaplicação de ligações entre fases',
-          summaryMarkdown: report.summary,
-          bodyMarkdown: report.markdown,
-          sourceType: 'document',
-          sourceId: document.id,
-          status: 'pending',
-          decisionsCount: report.stats.addedLinks,
-          readingTimeMinutes: Math.max(1, Math.ceil(report.markdown.length / 800)),
-        });
-        project.humanReviews = ensureArray(project.humanReviews);
-        project.humanReviews.unshift(review);
-
         project.updatedAt = nowIso();
         appendActivity(store, {
           actorUserId: req.auth.user.id,
           projectId,
           action: 'phase_links_reapplied',
-          details: { documentId: document.id, reviewId: review.id, ...report.stats },
+          details: { documentId: document.id, ...report.stats },
         });
       });
       const store = await readStore();
@@ -3781,14 +4044,13 @@ function registerDeliveryOsRoutes(app, deps) {
         project: sanitizeProject(updated, req.auth.user),
         report,
         documentId: document?.id,
-        reviewId: review?.id,
       });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/meeting-minutes/:minuteId', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/meeting-minutes/:minuteId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, minuteId } = req.params;
       await updateStore(async (store) => {
@@ -3818,7 +4080,7 @@ function registerDeliveryOsRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/prompt-runs', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/prompt-runs', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -3878,6 +4140,20 @@ function registerDeliveryOsRoutes(app, deps) {
         const direction = textOr(body.direction, 'forward');
         fullPrompt = buildStageTransitionPrompt(project, fromStageId, toStageId, direction);
         targetOutput = `stage_transition_${direction}`;
+      } else if (agentType === 'consistency_checker' || agentType === 'traceability_auditor') {
+        const platform = require('./delivery-os-platform');
+        const stageId = textOr(body.stageId, 'requirements');
+        const check = agentType === 'traceability_auditor'
+          ? platform.runTraceabilityAudit(project)
+          : platform.runConsistencyCheck(project, stageId);
+        fullPrompt = [
+          `Tu és um agente ${agentType === 'consistency_checker' ? 'de verificação de consistência' : 'auditor de rastreabilidade'} YourLab.`,
+          `Analisa o projecto na fase ${stageId} e valida os findings automáticos abaixo.`,
+          `Findings: ${JSON.stringify(check.findings, null, 2)}`,
+          'Responde em JSON: { "findings": [...], "passed": boolean, "summaryMarkdown": "..." }',
+        ].join('\n\n');
+        contextPack = { stageId, automatedCheck: check };
+        targetOutput = `${agentType}_v1`;
       } else {
         contextPack = buildContextPack(project, { stageId: body.stageId, capabilityId: body.capabilityId });
         fullPrompt = buildPromptRunFull(
@@ -3898,19 +4174,8 @@ function registerDeliveryOsRoutes(app, deps) {
         contextPack,
         fullPrompt,
         createdBy: req.auth.user.id,
+        status: 'awaiting_output',
         summaryMarkdown: `Prompt gerado para ${agentType}. Tempo estimado de leitura: ${Math.max(1, Math.ceil(fullPrompt.length / 1200))} min.`,
-      });
-
-      let review = normalizeHumanReview({
-        type: 'agent_output',
-        title: `Aguarda output: ${agentType}`,
-        summaryMarkdown: `Prompt gerado para **${agentType}**. Cole a resposta no Prompt Workbench e submeta para revisão.`,
-        bodyMarkdown: buildHumanReviewPayload(project, run, null, '').bodyMarkdown,
-        promptRunId: run.id,
-        sourceType: 'prompt_run',
-        sourceId: run.id,
-        status: 'pending',
-        readingTimeMinutes: Math.max(1, Math.ceil(fullPrompt.length / 1200)),
       });
 
       await updateStore(async (store) => {
@@ -3919,18 +4184,16 @@ function registerDeliveryOsRoutes(app, deps) {
         p.promptRuns = ensureArray(p.promptRuns);
         p.promptRuns.unshift(run);
         p.promptRuns = p.promptRuns.slice(0, 100);
-        p.humanReviews = ensureArray(p.humanReviews);
-        p.humanReviews.unshift(review);
         p.updatedAt = nowIso();
-      });
+      }, { deferPersist: true });
 
-      return res.json({ promptRun: run, review, prompt: fullPrompt });
+      return res.json({ promptRun: run, review: null, prompt: fullPrompt });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
   });
 
-  app.post('/api/projects/projects/:projectId/prompt-runs/:runId/apply', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/prompt-runs/:runId/apply', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, runId } = req.params;
       const rawInput = String(req.body?.rawOutput || (req.body?.parsedOutput ? JSON.stringify(req.body.parsedOutput) : ''));
@@ -3959,7 +4222,7 @@ function registerDeliveryOsRoutes(app, deps) {
           run.reviewedBy = req.auth.user.id;
         }
 
-        syncHumanReviewFromPromptRun(project, run, parsed, rawOutput);
+        upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput);
 
         if (!deferApply && parsed) {
           applyPromptRunOutput(project, run, parsed, req.auth.user.id, { normalizeRequirementRecord });
@@ -3970,20 +4233,24 @@ function registerDeliveryOsRoutes(app, deps) {
 
       const store = await readStore();
       const updated = store.projects.find((e) => e.id === projectId);
-      const review = ensureArray(updated?.humanReviews).find(
+      const reviewRaw = ensureArray(updated?.humanReviews).find(
         (r) => r.promptRunId === runId || r.sourceId === runId
       );
+      const review = reviewRaw && isActionableReviewForPanel(normalizeHumanReview(reviewRaw))
+        ? normalizeHumanReview(reviewRaw)
+        : null;
       return res.json({
         project: sanitizeProject(updated, req.auth.user),
-        review: review ? normalizeHumanReview(review) : null,
+        review,
         deferred: deferApply,
+        noChanges: Boolean(parsed && !review),
       });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
   });
 
-  app.post('/api/projects/projects/:projectId/prompt-runs/:runId/alternative', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/prompt-runs/:runId/alternative', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, runId } = req.params;
       const alt = normalizeAlternativeResponse({
@@ -4016,7 +4283,7 @@ function registerDeliveryOsRoutes(app, deps) {
   });
 
   // Cria um job em lotes para um agente batchavel (ex.: requirement_grouping).
-  app.post('/api/projects/projects/:projectId/agent-jobs', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/agent-jobs', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -4053,7 +4320,7 @@ function registerDeliveryOsRoutes(app, deps) {
 
   // Submete o output parcial de um lote. Quando todos os lotes obrigatorios
   // (nao-deferidos) estao concluidos, constroi o prompt de reconciliacao.
-  app.post('/api/projects/projects/:projectId/agent-jobs/:jobId/chunks/:index', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/agent-jobs/:jobId/chunks/:index', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, jobId } = req.params;
       const index = Number(req.params.index);
@@ -4104,7 +4371,7 @@ function registerDeliveryOsRoutes(app, deps) {
 
   // Recalcula o prompt de consolidacao a partir dos lotes concluidos (util para
   // jobs antigos pegarem a versao mais recente/compacta do prompt).
-  app.post('/api/projects/projects/:projectId/agent-jobs/:jobId/refresh-reconcile', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/agent-jobs/:jobId/refresh-reconcile', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, jobId } = req.params;
       let resultJob = null;
@@ -4137,7 +4404,7 @@ function registerDeliveryOsRoutes(app, deps) {
   // Finaliza o job: cria um promptRun + humanReview com o output consolidado,
   // reutilizando o fluxo de revisao/aplicacao existente. Se nao for colado
   // output, usa a fusao deterministica dos parciais como fallback.
-  app.post('/api/projects/projects/:projectId/agent-jobs/:jobId/reconcile', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/agent-jobs/:jobId/reconcile', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const { projectId, jobId } = req.params;
       const rawInput = String(req.body?.rawOutput || (req.body?.parsedOutput ? JSON.stringify(req.body.parsedOutput) : ''));
@@ -4189,24 +4456,27 @@ function registerDeliveryOsRoutes(app, deps) {
           summaryMarkdown: `Output final consolidado de ${job.agentType} (job em lotes${useMergeFallback ? ', fusao automatica' : ''}).`,
         });
         const payload = buildHumanReviewPayload(project, run, parsed, rawOutput);
-        const review = normalizeHumanReview({
-          type: 'agent_output',
-          title: `Rever consolidação: ${job.agentType}`,
-          summaryMarkdown: payload.summaryMarkdown,
-          bodyMarkdown: payload.bodyMarkdown,
-          suggestedChanges: payload.suggestedChanges,
-          decisionsCount: payload.decisionsCount,
-          promptRunId: run.id,
-          sourceType: 'prompt_run',
-          sourceId: run.id,
-          status: 'pending',
-        });
+        let review = null;
+        if (payload.decisionsCount > 0 || ensureArray(payload.suggestedChanges?.sections).length) {
+          review = normalizeHumanReview({
+            type: 'agent_output',
+            title: `Rever consolidação: ${job.agentType}`,
+            summaryMarkdown: payload.summaryMarkdown,
+            bodyMarkdown: payload.bodyMarkdown,
+            suggestedChanges: payload.suggestedChanges,
+            decisionsCount: payload.decisionsCount,
+            promptRunId: run.id,
+            sourceType: 'prompt_run',
+            sourceId: run.id,
+            status: 'pending',
+          });
+          project.humanReviews = ensureArray(project.humanReviews);
+          project.humanReviews.unshift(review);
+        }
 
         project.promptRuns = ensureArray(project.promptRuns);
         project.promptRuns.unshift(run);
         project.promptRuns = project.promptRuns.slice(0, 100);
-        project.humanReviews = ensureArray(project.humanReviews);
-        project.humanReviews.unshift(review);
 
         job.reconcileRaw = rawOutput;
         job.reconcileParsed = parsed;
@@ -4259,6 +4529,249 @@ function registerDeliveryOsRoutes(app, deps) {
   });
 
   require('./diagrams').registerDiagramRoutes(app, deps);
+
+  const executionPlans = require('./execution-plans');
+
+  app.post('/api/projects/projects/:projectId/execution-plans', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      const body = req.body || {};
+      const project = req.loadedProject;
+      const planOptions = { ...body, createdBy: req.auth.user.id };
+
+      if (body.agentType === 'impact_regeneration') {
+        const minuteIds = ensureArray(body.minuteIds);
+        const minutes = ensureArray(project.meetingMinutes).filter((m) => minuteIds.includes(m.id));
+        if (!minutes.length) throw new Error('Seleccione pelo menos uma ata.');
+        planOptions.minutes = minutes;
+        planOptions.propagationPlan = buildMinutePropagationPlan(minutes);
+        planOptions.stageId = textOr(body.stageId, planOptions.propagationPlan.primaryStageIds?.[0] || 'requirements');
+      }
+
+      const plan = executionPlans.buildExecutionPlan(body.agentType, project, planOptions, { deliveryOs: module.exports });
+
+      if (body.preview) {
+        return res.json({ plan });
+      }
+
+      await updateStore(async (store) => {
+        const p = store.projects.find((e) => e.id === projectId);
+        if (!p) throw new Error('Projeto nao encontrado.');
+        p.executionPlans = ensureArray(p.executionPlans);
+        p.executionPlans.unshift(plan);
+        p.executionPlans = p.executionPlans.slice(0, 20);
+        p.updatedAt = nowIso();
+      });
+
+      return res.json({ plan });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/projects/projects/:projectId/execution-plans/:planId', authMiddleware, loadProjectForUser, async (req, res) => {
+    const plan = ensureArray(req.loadedProject.executionPlans)
+      .find((p) => p.id === req.params.planId);
+    if (!plan) return res.status(404).json({ message: 'Plano nao encontrado.' });
+    return res.json({ plan: executionPlans.normalizeExecutionPlan(plan) });
+  });
+
+  app.post('/api/projects/projects/:projectId/execution-plans/:planId/tasks/:taskId/prompt-run', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const { projectId, planId, taskId } = req.params;
+      const project = req.loadedProject;
+      const planRaw = ensureArray(project.executionPlans).find((p) => p.id === planId);
+      if (!planRaw) throw new Error('Plano nao encontrado.');
+      const plan = executionPlans.normalizeExecutionPlan(planRaw);
+      let task = plan.tasks.find((t) => t.id === taskId);
+      if (!task) throw new Error('Tarefa nao encontrada.');
+
+      let syncedPlan = plan;
+      if (executionPlans.isPhasedRequirementsPlan(plan)) {
+        syncedPlan = executionPlans.preparePhasedRequirementsPlan(plan, project);
+        task = syncedPlan.tasks.find((t) => t.id === taskId) || task;
+      }
+
+      const fullPrompt = executionPlans.buildTaskPrompt(syncedPlan, task, project, { deliveryOs: module.exports });
+      const run = normalizePromptRun({
+        agentType: plan.agentType,
+        stageId: plan.stageId,
+        capabilityId: plan.config.capabilityId,
+        moduleTag: plan.config.moduleTag,
+        fullPrompt,
+        targetOutput: `${plan.agentType}_${task.id}`,
+        status: 'awaiting_output',
+        createdBy: req.auth.user.id,
+        summaryMarkdown: `Tarefa: ${task.title}`,
+      });
+
+      updateStore(async (store) => {
+        const p = store.projects.find((e) => e.id === projectId);
+        const pl = ensureArray(p.executionPlans).find((x) => x.id === planId);
+        if (pl && executionPlans.isPhasedRequirementsPlan(pl)) {
+          executionPlans.syncRequirementsFrTasks(pl, p);
+        }
+        const tk = ensureArray(pl?.tasks).find((x) => x.id === taskId);
+        if (tk) {
+          tk.promptRunId = run.id;
+          tk.status = 'awaiting_paste';
+        }
+        if (pl) {
+          pl.status = 'in_progress';
+          pl.updatedAt = nowIso();
+        }
+        p.promptRuns = ensureArray(p.promptRuns);
+        p.promptRuns.unshift(run);
+        p.promptRuns = p.promptRuns.slice(0, 100);
+        p.updatedAt = nowIso();
+      }).catch((err) => {
+        console.error('[prompt-run] persist failed:', err.message);
+      });
+
+      return res.json({ promptRun: run, prompt: fullPrompt, planId, taskId });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/execution-plans/:planId/tasks/:taskId/submit', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const { projectId, planId, taskId } = req.params;
+      const rawInput = String(req.body?.rawOutput || (req.body?.parsedOutput ? JSON.stringify(req.body.parsedOutput) : ''));
+      const parsedFromRaw = parseAgentJsonOutput(rawInput);
+      let parsed = req.body?.parsedOutput || parsedFromRaw.parsed;
+      let rawOutput = parsedFromRaw.rawOutput || rawInput;
+      const deferApply = req.body?.deferApply !== false;
+
+      if (rawOutput && !parsed) {
+        return res.status(400).json({ message: 'JSON inválido.' });
+      }
+
+      let resultReview = null;
+      let mergedReview = null;
+
+      await updateStore(async (store) => {
+        const project = store.projects.find((e) => e.id === projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+        const pl = ensureArray(project.executionPlans).find((x) => x.id === planId);
+        if (!pl) throw new Error('Plano nao encontrado.');
+        const tk = ensureArray(pl.tasks).find((x) => x.id === taskId);
+        if (!tk) throw new Error('Tarefa nao encontrada.');
+
+        const phasedPlan = executionPlans.isPhasedRequirementsPlan(pl);
+
+        if (parsed && phasedPlan) {
+          parsed = executionPlans.normalizePhasedTaskOutput(parsed, project, pl, tk);
+          rawOutput = JSON.stringify(parsed, null, 2);
+        }
+
+        if (phasedPlan && (tk.id === 'stk' || tk.reqKind === 'stakeholder')) {
+          tk.parsedOutput = parsed;
+          executionPlans.syncRequirementsFrTasks(pl, project);
+        }
+
+        tk.parsedOutput = parsed;
+        tk.rawOutput = rawOutput;
+        tk.status = 'done';
+        pl.updatedAt = nowIso();
+
+        const mergeTask = ensureArray(pl.tasks).find((t) => t.role === 'merge');
+        const extractedReqs = extractRequirementsFromParsed(parsed);
+        if (!phasedPlan && extractedReqs.length >= 3 && mergeTask && taskId !== mergeTask.id) {
+          ensureArray(pl.tasks).forEach((t) => {
+            if (t.role !== 'merge' && t.id !== taskId && t.status !== 'done' && t.status !== 'skipped') {
+              t.status = 'skipped';
+            }
+          });
+        }
+
+        const run = tk.promptRunId
+          ? ensureArray(project.promptRuns).find((r) => r.id === tk.promptRunId)
+          : null;
+        if (run) {
+          run.rawOutput = rawOutput;
+          run.parsedOutput = parsed;
+          run.status = deferApply ? 'pending_review' : 'applied';
+        }
+
+        const allDone = ensureArray(pl.tasks)
+          .filter((t) => t.role !== 'merge')
+          .every((t) => t.status === 'done' || t.status === 'skipped');
+
+        const finalizePlanMerge = (merged) => {
+          const mergeRun = normalizePromptRun({
+            agentType: pl.agentType,
+            stageId: pl.stageId,
+            fullPrompt: mergeTask?.instruction || pl.masterPlanMarkdown,
+            rawOutput: JSON.stringify(merged, null, 2),
+            parsedOutput: merged,
+            status: 'pending_review',
+            createdBy: req.auth.user.id,
+          });
+          project.promptRuns = ensureArray(project.promptRuns);
+          project.promptRuns.unshift(mergeRun);
+          if (mergeTask) {
+            mergeTask.parsedOutput = merged;
+            mergeTask.rawOutput = mergeRun.rawOutput;
+            mergeTask.status = 'done';
+          }
+          const upsert = upsertHumanReviewFromPromptRun(project, mergeRun, merged, mergeRun.rawOutput);
+          mergedReview = upsert.review;
+          pl.status = upsert.actionable ? 'pending_review' : 'applied';
+        };
+
+        if (allDone && mergeTask && taskId === mergeTask.id && parsed) {
+          const partials = ensureArray(pl.tasks)
+            .filter((t) => t.role !== 'merge' && t.parsedOutput)
+            .map((t) => t.parsedOutput);
+          const merged = executionPlans.mergeTaskOutputs(pl, partials) || parsed;
+          finalizePlanMerge(merged);
+        } else if (allDone && mergeTask && taskId !== mergeTask.id && parsed) {
+          const partials = ensureArray(pl.tasks)
+            .filter((t) => t.role !== 'merge' && t.parsedOutput)
+            .map((t) => t.parsedOutput);
+          partials.push(parsed);
+          const merged = executionPlans.mergeTaskOutputs(pl, partials) || parsed;
+          finalizePlanMerge(merged);
+        } else if (allDone && !mergeTask && parsed) {
+          const partials = ensureArray(pl.tasks).map((t) => t.parsedOutput).filter(Boolean);
+          const merged = executionPlans.mergeTaskOutputs(pl, partials) || parsed;
+          const mergeRun = normalizePromptRun({
+            agentType: pl.agentType,
+            stageId: pl.stageId,
+            fullPrompt: pl.masterPlanMarkdown,
+            rawOutput: JSON.stringify(merged, null, 2),
+            parsedOutput: merged,
+            status: 'pending_review',
+            createdBy: req.auth.user.id,
+          });
+          project.promptRuns = ensureArray(project.promptRuns);
+          project.promptRuns.unshift(mergeRun);
+          const upsert = upsertHumanReviewFromPromptRun(project, mergeRun, merged, mergeRun.rawOutput);
+          mergedReview = upsert.review;
+          pl.status = upsert.actionable ? 'pending_review' : 'applied';
+        } else if (run && parsed && deferApply) {
+          const upsert = upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput);
+          resultReview = upsert.review;
+        } else if (run && parsed && !deferApply) {
+          applyPromptRunOutput(project, run, parsed, req.auth.user.id, { normalizeRequirementRecord });
+          run.status = 'applied';
+        }
+
+        project.updatedAt = nowIso();
+      });
+
+      const store = await readStore();
+      const updated = store.projects.find((e) => e.id === projectId);
+      return res.json({
+        project: sanitizeProject(updated, req.auth.user),
+        review: mergedReview || resultReview,
+        noChanges: Boolean(parsed && !mergedReview && !resultReview),
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
 }
 
 module.exports = {
@@ -4312,6 +4825,9 @@ module.exports = {
   parseAgentJsonOutput,
   normalizeJsonInput,
   syncHumanReviewFromPromptRun,
+  upsertHumanReviewFromPromptRun,
+  isActionableReviewForPanel,
+  migrateHumanReviewsOnLoad,
   normalizeCapability,
   normalizeCluster,
   normalizePromptRun,
@@ -4322,10 +4838,13 @@ module.exports = {
   BATCHABLE_AGENTS,
   normalizeHumanReview,
   normalizeVersionSnapshot,
+  createProjectSnapshot,
   registerDeliveryOsRoutes,
   renderMarkdownToHtml,
   buildDiscoveryPrompt,
   buildImplementationStackPrompt,
   buildImplementationTasksPrompt,
   buildPromptRunFull,
+  extractRequirementsFromParsed,
+  applyModuleMappings,
 };

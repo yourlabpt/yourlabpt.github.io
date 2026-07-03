@@ -3,7 +3,7 @@
     focusStakeholderId: '',
     focusRequirementId: '',
     stkList: [],
-    showOrphans: false,
+    showOrphans: true,
     showVOverlay: true,
     showEdges: true,
     hierarchyCache: null,
@@ -16,10 +16,10 @@
   };
 
   const V_COLUMNS = [
-    { id: 'stakeholder', label: 'Stakeholder', short: 'STK', type: 'stakeholder' },
-    { id: 'functional', label: 'Funcional', short: 'FR', type: 'functional' },
-    { id: 'non_functional', label: 'Não funcional', short: 'RNF', type: 'non_functional' },
-    { id: 'test_case', label: 'Teste', short: 'TC', type: 'test_case' },
+    { id: 'stakeholder', label: 'Stakeholder', short: 'STK', type: 'stakeholder', layer: 0 },
+    { id: 'functional', label: 'Funcional', short: 'FR', type: 'functional', layer: 1 },
+    { id: 'non_functional', label: 'Não funcional', short: 'RNF', type: 'non_functional', layer: 2 },
+    { id: 'test_case', label: 'Teste / Aceite', short: 'TC', type: 'test_case', layer: 3 },
   ];
 
   function $(id) {
@@ -134,6 +134,12 @@
       ? `<span class="req-card-stk" title="Stakeholder raiz">↑ ${escapeHtml(stkRoot)}</span>`
       : '';
     const status = escapeHtml(req.status || 'draft');
+    const canUnlink = canEditMap() && !hero && !orphan && req.type !== 'stakeholder';
+    const actions = canUnlink ? `
+        <div class="req-map-card-actions">
+          <button type="button" class="btn tiny ghost req-map-unlink-btn" data-unlink-req="${escapeHtml(req.id)}" title="Remover da cadeia V (torna-se órfão)">Desligar</button>
+        </div>
+      ` : '';
     return `
       <article class="req-map-card req-map-card--${escapeHtml(req.type || 'other')} ${orphan ? 'is-orphan' : ''} ${hero ? 'is-l0-hero' : ''}"
         draggable="${canEditMap() && !hero ? 'true' : 'false'}"
@@ -151,6 +157,7 @@
             ${modBadge}
           </div>
         </button>
+        ${actions}
       </article>
     `;
   }
@@ -174,6 +181,7 @@
     const title = stkNode?.title || current?.title || mapState.focusStakeholderId || '—';
     const chain = stkChainStats(hierarchy);
     const stats = mapState.hierarchyFull?.stats || hierarchy?.stats || {};
+    const orphanCount = collectOrphansForPanel(hierarchy).length;
 
     if (!total) {
       return `
@@ -218,9 +226,9 @@
             <span class="req-map-stat-label">Cobertura V</span>
             <strong class="req-map-stat-value">${stats.coveragePct ?? 0}%</strong>
           </div>
-          ${stats.orphans ? `
-            <button type="button" class="req-map-orphans-toggle btn tiny ghost ${mapState.showOrphans ? 'is-active' : ''}" id="reqMapToggleOrphans">
-              Órfãos (${stats.orphans})
+          ${orphanCount ? `
+            <button type="button" class="req-map-orphans-toggle btn tiny ghost is-active" id="reqMapToggleOrphans" title="Órfãos visíveis na secção inferior">
+              Órfãos (${orphanCount})
             </button>
           ` : ''}
           <label class="req-map-toggle-edges checkline">
@@ -228,7 +236,7 @@
             Ligações
           </label>
         </div>
-        <p class="req-map-dnd-hint muted-text">Arraste órfãos ou requisitos entre colunas — liga ao STK actual ou cria ${escapeHtml(nextStkPreview(project))} na coluna STK se ainda não existir L0.</p>
+        <p class="req-map-dnd-hint muted-text">Camadas V-cycle: L0 STK → L1 FR → L2 RNF → L3 TC. Use «+ Adicionar» em cada coluna ou arraste órfãos entre camadas.</p>
       </div>
     `;
   }
@@ -237,21 +245,45 @@
     return renderStkNavigator(project, hierarchy);
   }
 
+  function collectOrphansForPanel(hierarchy) {
+    const full = mapState.hierarchyFull || hierarchy;
+    const list = [...(full?.orphans || [])];
+    const seen = new Set(list.map((o) => o.id));
+    for (const node of (full?.byLevel?.other || [])) {
+      if (!node?.id || seen.has(node.id)) continue;
+      seen.add(node.id);
+      list.push({
+        id: node.id,
+        type: node.type,
+        title: node.title,
+        reason: 'unclassified_type',
+      });
+    }
+    return list;
+  }
+
   function renderVMapColumns(project, hierarchy) {
-    const orphanIds = new Set((hierarchy?.orphans || []).map((o) => o.id));
+    const fullOrphans = collectOrphansForPanel(hierarchy);
+    const orphanIds = new Set(fullOrphans.map((o) => o.id));
     const filteredReqs = window.RequirementsUI?.getFilteredForUi
       ? window.RequirementsUI.getFilteredForUi(project)
       : (project.requirements || []);
     const allowed = new Set(filteredReqs.map((r) => r.id));
 
     const columnsHtml = V_COLUMNS.map((col) => {
-      const nodes = (hierarchy?.byLevel?.[col.type] || []).filter((n) => allowed.has(n.id));
+      const nodes = (hierarchy?.byLevel?.[col.type] || []).filter((n) => allowed.has(n.id) && !orphanIds.has(n.id));
       const isStkCol = col.type === 'stakeholder';
       return `
         <div class="req-map-column req-map-column--${escapeHtml(col.type)}" data-v-column="${escapeHtml(col.type)}">
           <div class="req-map-column-head">
+            <span class="req-map-layer-badge" title="Camada V-cycle ${col.layer}">L${col.layer}</span>
             <span class="req-map-level-badge">${escapeHtml(col.short)}</span>
             <strong>${escapeHtml(col.label)}</strong>
+            ${canEditMap() ? `
+              <button type="button" class="req-map-add-layer btn tiny ghost" data-add-layer="${escapeHtml(col.type)}" title="Adicionar requisito na camada L${col.layer}">
+                + Adicionar
+              </button>
+            ` : ''}
             <span class="req-count-badge">${nodes.length}</span>
           </div>
           <div class="req-map-column-body req-map-dropzone" data-drop-type="${escapeHtml(col.type)}" data-v-drop-column="${escapeHtml(col.type)}">
@@ -269,30 +301,27 @@
       `;
     }).join('');
 
-    const fullOrphans = mapState.hierarchyFull?.orphans || hierarchy?.orphans || [];
-    const showOrphanPanel = mapState.showOrphans || !mapState.stkList.length;
-    const orphanCol = showOrphanPanel
-      ? fullOrphans.filter((o) => allowed.has(o.id))
-      : [];
+    const orphanCol = fullOrphans;
+    const hasOrphans = orphanCol.length > 0;
 
-    const orphanHtml = orphanCol.length ? `
-      <div class="req-map-orphans">
+    const orphanHtml = hasOrphans ? `
+      <div class="req-map-orphans is-open">
         <div class="req-map-orphans-head">
           <div>
-            <strong>Sem stakeholder</strong>
-            <p class="muted-text">Arraste cada cartão para a coluna STK, FR, RNF ou TC do mapa — liga automaticamente ao STK em foco.</p>
+            <strong>Órfãos — sem ligação V-cycle</strong>
+            <p class="muted-text">Arraste cada cartão para L0–L3 para o ligar à cadeia V-cycle. Permanecem visíveis até serem ligados.</p>
           </div>
           <span class="req-count-badge is-warn">${orphanCol.length}</span>
         </div>
         <div class="req-map-orphan-list">
           ${orphanCol.map((o) => {
-            const req = reqById(project, o.id) || o;
-            return `
-              <div class="req-map-orphan-item">
-                ${renderMapCard(req, project, { orphan: true })}
-              </div>
-            `;
-          }).join('')}
+              const req = reqById(project, o.id) || o;
+              return `
+                <div class="req-map-orphan-item">
+                  ${renderMapCard(req, project, { orphan: true })}
+                </div>
+              `;
+            }).join('')}
         </div>
       </div>
     ` : '';
@@ -301,6 +330,7 @@
     const emptyStkColumn = `
       <div class="req-map-column req-map-column--stakeholder" data-v-column="stakeholder">
         <div class="req-map-column-head">
+          <span class="req-map-layer-badge">L0</span>
           <span class="req-map-level-badge">STK</span>
           <strong>Stakeholder</strong>
           <span class="req-count-badge">0</span>
@@ -512,6 +542,31 @@
     return res;
   }
 
+  async function createRequirementInLayer(project, layerType, title = '') {
+    const res = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/requirements/hierarchy/create`,
+      {
+        method: 'POST',
+        body: {
+          layerType,
+          focusStakeholderId: mapState.focusStakeholderId,
+          title: title || undefined,
+        },
+      }
+    );
+    state.selectedProject = res.project;
+    return res;
+  }
+
+  async function unlinkRequirementFromChain(project, requirementId) {
+    const res = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/requirements/${encodeURIComponent(requirementId)}/hierarchy/unlink`,
+      { method: 'POST', body: {} }
+    );
+    state.selectedProject = res.project;
+    return res;
+  }
+
   async function repairOrphans(project, forRequirementIds = []) {
     const res = await apiRequest(
       `/projects/${encodeURIComponent(project.id)}/requirements/hierarchy/repair`,
@@ -588,9 +643,57 @@
       await renderRequirementsMap(state.selectedProject || project, mode);
     });
 
-    $('reqMapToggleOrphans')?.addEventListener('click', async () => {
-      mapState.showOrphans = !mapState.showOrphans;
-      await renderRequirementsMap(state.selectedProject || project, mode);
+    $('reqMapToggleOrphans')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const panel = container.querySelector('.req-map-orphans');
+      if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+
+    container.querySelectorAll('[data-add-layer]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const layerType = btn.dataset.addLayer;
+        const col = V_COLUMNS.find((c) => c.type === layerType);
+        if (!col) return;
+        if (layerType !== 'stakeholder' && !mapState.focusStakeholderId) {
+          showToast('Seleccione um STK (L0) antes de adicionar a esta camada.', 'error');
+          return;
+        }
+        const defaultTitle = `${col.label} novo`;
+        const title = window.prompt(`Título do requisito (L${col.layer} · ${col.short}):`, defaultTitle);
+        if (title === null) return;
+        try {
+          const res = await createRequirementInLayer(state.selectedProject || project, layerType, title.trim() || defaultTitle);
+          if (layerType === 'stakeholder' && res.requirement?.id) {
+            mapState.focusStakeholderId = res.requirement.id;
+          }
+          showToast(`Criado ${res.requirement?.id || 'requisito'} na camada L${col.layer}.`, 'ok');
+          await renderRequirementsMap(state.selectedProject, mode);
+          if (typeof refreshHierarchyKpis === 'function') refreshHierarchyKpis(state.selectedProject);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
+
+    container.querySelectorAll('[data-unlink-req]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const reqId = btn.dataset.unlinkReq;
+        if (!reqId) return;
+        if (!window.confirm(`Desligar ${reqId} da cadeia V-cycle?`)) return;
+        try {
+          await unlinkRequirementFromChain(state.selectedProject || project, reqId);
+          mapState.showOrphans = true;
+          showToast(`${reqId} desligado — aparece em Órfãos.`, 'ok');
+          await renderRequirementsMap(state.selectedProject, mode);
+          if (typeof refreshHierarchyKpis === 'function') refreshHierarchyKpis(state.selectedProject);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
     });
 
     $('reqMapShowEdges')?.addEventListener('change', (e) => {
@@ -686,10 +789,12 @@
     }
   }
 
-  function setMapFocus(stakeholderId, requirementId) {
+  function setMapFocus(stakeholderId, requirementId, options = {}) {
     mapState.focusStakeholderId = stakeholderId || '';
     mapState.focusRequirementId = requirementId || '';
-    mapState.showOrphans = false;
+    if (!options.keepOrphansPanel) {
+      mapState.showOrphans = true;
+    }
   }
 
   function renderTraceLinkLists(upEl, downEl, upstream, downstream, traceMap) {

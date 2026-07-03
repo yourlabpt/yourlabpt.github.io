@@ -149,6 +149,7 @@
             <button type="button" class="btn tiny" data-diagram-download="${escapeHtml(diagram.id)}">Descarregar</button>
             ${viewerLink(diagram)}
             <button type="button" class="btn tiny ghost" data-diagram-recreate="${escapeHtml(diagram.id)}" title="Gerar um prompt para recriar este diagrama">Recriar</button>
+            <button type="button" class="btn tiny ghost" data-diagram-to-req="${escapeHtml(diagram.id)}" title="Extrair requisitos deste diagrama">→ Requisitos</button>
           </div>
         </div>
         ${renderReqChips(project, diagram)}
@@ -282,6 +283,11 @@
           moduleTag: d?.module || undefined,
           recreateDiagramId: d?.id,
         });
+      });
+    });
+    document.querySelectorAll('[data-diagram-to-req]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        window.PdosUI?.runDiagramToRequirements?.(project, { diagramArtifactId: btn.dataset.diagramToReq });
       });
     });
     document.querySelectorAll('[data-diagram-save]').forEach((btn) => {

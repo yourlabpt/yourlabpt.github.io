@@ -533,7 +533,7 @@ function parseAgentJsonOutput(raw) {
 function registerDiagramRoutes(app, deps) {
   const {
     authMiddleware,
-    requireRole,
+    requireProjectEditor,
     loadProjectForUser,
     updateStore,
     appendActivity,
@@ -561,7 +561,7 @@ function registerDiagramRoutes(app, deps) {
     return res.json({ diagrams, phase: ARCHITECTURE_PHASE });
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let diagram;
@@ -597,7 +597,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/link-requirements', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/link-requirements', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const diagramId = req.params.diagramId;
@@ -629,7 +629,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId/diagrams/:diagramId', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.patch('/api/projects/projects/:projectId/diagrams/:diagramId', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const diagramId = req.params.diagramId;
@@ -690,7 +690,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/approve', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/approve', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let diagram;
@@ -707,7 +707,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/reject', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/reject', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let diagram;
@@ -724,7 +724,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/versions', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/versions', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let version;
@@ -756,7 +756,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/rollback', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/:diagramId/rollback', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       let diagram;
@@ -771,7 +771,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/generate', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/generate', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const body = req.body || {};
@@ -812,7 +812,7 @@ function registerDiagramRoutes(app, deps) {
     }
   });
 
-  app.post('/api/projects/projects/:projectId/diagrams/jobs/:jobId/import', authMiddleware, requireRole('super_admin'), loadProjectForUser, async (req, res) => {
+  app.post('/api/projects/projects/:projectId/diagrams/jobs/:jobId/import', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const jobId = req.params.jobId;

@@ -139,7 +139,7 @@
         <p class="pdos-card-summary-text">${escapeHtml(summary || 'Sem resumo.')}</p>
         ${phaseBadges ? `<div class="pdos-module-badges">${phaseBadges}</div>` : ''}
         ${reqChips ? `<div class="minute-reqs">${reqChips}</div>` : ''}
-        ${decisions.length ? `<ul class="minute-decisions compact">${decisions.slice(0, 3).map((d) => `<li>${escapeHtml(d.text)}</li>`).join('')}</ul>` : ''}
+        ${decisions.length ? `<ul class="minute-decisions compact">${decisions.slice(0, 3).map((d, idx) => `<li>${escapeHtml(d.text)} <button type="button" class="btn-link tiny" data-promote-inline="${escapeHtml(entry.id)}" data-decision-index="${idx}">+ decisão</button></li>`).join('')}</ul>` : ''}
         <div class="pdos-card-actions">
           <button type="button" class="btn tiny primary" data-open-minute="${escapeHtml(entry.id)}">Abrir</button>
           <button type="button" class="btn tiny" data-classify-minute="${escapeHtml(entry.id)}">
@@ -334,6 +334,23 @@
     feed.querySelectorAll('[data-goto-requirement]').forEach((btn) => {
       btn.addEventListener('click', () => navigateToRequirement?.(btn.dataset.gotoRequirement));
     });
+    feed.querySelectorAll('[data-promote-inline]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/decisions/promote`, {
+            method: 'POST',
+            body: {
+              minuteId: btn.dataset.promoteInline,
+              decisionIndex: Number(btn.dataset.decisionIndex),
+            },
+          });
+          showToast('Decisão promovida.', 'ok');
+          await loadProjectById(project.id, { switchTab: false });
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
   }
 
   function wirePropagationStageButtons(root) {
@@ -364,6 +381,19 @@
       </div>
       <div class="pdos-module-badges mb-8">${impactedStages.map((s) => `<span class="module-badge">${escapeHtml(stageLabel(s))}</span>`).join('')}</div>
       ${minute.summaryMarkdown ? `<div class="read-card mb-8"><h4>Resumo</h4><p>${escapeHtml(minute.summaryMarkdown)}</p></div>` : ''}
+      ${(minute.decisions || []).filter((d) => d?.text).length ? `
+        <div class="read-card mb-8">
+          <h4>Decisões detectadas</h4>
+          <ul class="minute-decisions">
+            ${(minute.decisions || []).filter((d) => d?.text).map((d, idx) => `
+              <li>
+                ${escapeHtml(d.text)}
+                <button type="button" class="btn tiny" data-promote-decision="${escapeHtml(minuteId)}" data-decision-index="${idx}">Promover a decisão</button>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      ` : ''}
       <div class="read-card">
         <h4>Texto original</h4>
         <pre class="minute-raw drawer-raw">${escapeHtml(minute.rawText || '')}</pre>
@@ -373,6 +403,23 @@
       </div>
     `;
     $('minutesDrawerClose')?.addEventListener('click', closeMinuteDrawer);
+    content.querySelectorAll('[data-promote-decision]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/decisions/promote`, {
+            method: 'POST',
+            body: {
+              minuteId: btn.dataset.promoteDecision,
+              decisionIndex: Number(btn.dataset.decisionIndex),
+            },
+          });
+          showToast('Decisão promovida com sucesso.', 'ok');
+          await loadProjectById(project.id, { switchTab: false });
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
     content.querySelector('[data-classify-minute]')?.addEventListener('click', () => {
       closeMinuteDrawer();
       minUiState.activeView = 'atas';
@@ -481,19 +528,16 @@
       return;
     }
     try {
-      const payload = await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/meeting-minutes/propagation-prompt`, {
+      const payload = await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/execution-plans`, {
         method: 'POST',
-        body: { minuteIds },
+        body: { agentType: 'impact_regeneration', minuteIds },
       });
-      if (payload.plan) minUiState.propagationPlan = payload.plan;
-      if (payload.project) {
-        state.selectedProject = payload.project;
-        renderProjectDetails?.();
+      if (payload.plan) {
+        minUiState.propagationPlan = payload.plan.config?.propagationPlan || minUiState.propagationPlan;
+        await window.PdosUI?.openExecutionWorkbench?.(payload.plan, state.selectedProject);
       }
-      minUiState.activeView = 'requirements';
-      renderMinutesPage(state.selectedProject);
-      if ($('minutesPromptOutput') && payload.prompt) $('minutesPromptOutput').value = payload.prompt;
-      showToast('Prompt gerado — cole na vista Actualizar requisitos.', 'ok');
+      await loadProjectById(state.selectedProject.id);
+      showToast('Plano de propagação aberto no Execution Workbench.', 'ok');
     } catch (error) {
       showToast(error.message, 'error');
     }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=54" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=63" />
 </head>
 <body>
   <div class="page-bg"></div>
@@ -100,6 +100,8 @@
 
           <div id="projectWorkspace">
 
+            <div id="proposalDownloadBar" class="proposal-download-bar hidden" aria-live="polite"></div>
+
             <nav class="section-tabs section-tabs-compact hidden" id="sectionTabs" aria-hidden="true">
               <button class="tab-btn" data-tab="projetos"><span>Projetos</span></button>
               <button class="tab-btn active" data-tab="projeto"><span>Projeto</span></button>
@@ -133,8 +135,7 @@
                 <form id="createProjectForm" class="form-grid compact projects-create-form">
                   <label>Nome<input id="newProjectName" required /></label>
                   <label>Cliente<input id="newProjectClient" required /></label>
-                  <label data-sensitive-money>Rate/h<input id="newProjectRate" type="number" value="30" /></label>
-                  <label data-sensitive-money>Moeda<input id="newProjectCurrency" value="EUR" /></label>
+                  <label>Moeda<input id="newProjectCurrency" value="EUR" /></label>
                   <button class="btn primary" type="submit">Criar projecto</button>
                 </form>
               </section>
@@ -167,12 +168,7 @@
                   </label>
                   <label>Proposal Code<input id="projectCode" placeholder="Ex: RP-CITY-PASS" /></label>
                   <label>Idioma<input id="projectLanguage" value="pt-PT" placeholder="pt-PT" /></label>
-
-                  <p class="form-section-label full" data-sensitive-money>Comercial</p>
-                  <label data-sensitive-money>Rate por hora<input id="projectRate" type="number" min="0" placeholder="0" /></label>
-                  <label data-sensitive-money>Moeda<input id="projectCurrency" placeholder="EUR" /></label>
-                  <label data-sensitive-money>Budget mínimo<input id="projectBudgetMin" type="number" min="0" value="0" /></label>
-                  <label data-sensitive-money>Budget máximo<input id="projectBudgetMax" type="number" min="0" value="0" /></label>
+                  <label>Moeda<input id="projectCurrency" placeholder="EUR" /></label>
 
                   <p class="form-section-label full">Resumo e Visão</p>
                   <label class="full">Descrição curta
@@ -199,7 +195,7 @@
                 <div class="panel-title-row">
                   <h3 class="panel-heading"><span class="section-badge badge-gray">EQUIPA</span> Membros do Projeto</h3>
                 </div>
-                <p class="muted-text docs-section-intro">Associe clientes e parceiros ao projeto. Clientes e parceiros têm acesso apenas de leitura, podendo adicionar perguntas e documentos. Altere o perfil ou remova membros abaixo.</p>
+                <p class="muted-text docs-section-intro">Associe clientes e parceiros ao projeto. <strong>Parceiros</strong> podem editar requisitos, correr IA e aprovar revisões (com registo auditável). <strong>Clientes</strong> têm acesso só de leitura às páginas Entrega, Requisitos, Fases, Atas e Documentos.</p>
                 <form id="assignMemberForm" class="form-grid compact member-assign-form">
                   <label>Utilizador<select id="assignUserId"></select></label>
                   <label>Perfil no projeto
@@ -398,6 +394,7 @@
                   <div id="requirementsMeta" class="mini-meta"></div>
                   <button id="clearAllRequirementsBtn" type="button" class="btn tiny danger ghost" title="Apagar todos os requisitos e recomeçar">Limpar todos</button>
                 </div>
+                <div id="reqBatchBar" class="req-batch-bar hidden" aria-label="Acções em lote nos requisitos"></div>
                 <datalist id="submoduleSuggestions"></datalist>
                 <details class="collapsible">
                   <summary>Adicionar requisito</summary>
@@ -421,7 +418,9 @@
                         <option value="low">Baixa</option>
                       </select>
                     </label>
-                    <label>Fase<input id="reqPhase" placeholder="Fase 1" /></label>
+                    <label>Fase
+                      <span id="reqPhaseWrap" class="req-phase-field-wrap"></span>
+                    </label>
                     <label>Módulo
                       <select id="reqModule">
                         <option value="Frontend">Frontend</option>
@@ -505,7 +504,7 @@
                 <div class="panel-title-row">
                   <h3 class="panel-heading"><span class="section-badge badge-teal">PLAN</span> Fases de Implementação</h3>
                 </div>
-                <p class="muted-text docs-section-intro">Local central para gerir as fases do projecto. As fases são a mesma fonte de verdade usada nos requisitos: combinam o plano definido aqui com as fases atribuídas a cada requisito. Editar aqui reflecte-se em toda a aplicação.</p>
+                <p class="muted-text docs-section-intro">Gerir fases com números únicos (#1, #2…). Requisitos com «Fase 1», F1, etc. alinham automaticamente ao nome da fase correspondente. Renomeie livremente — a sincronização é automática.</p>
                 <div id="implementationPlanView"></div>
               </section>
               <section class="panel section-panel">
@@ -529,11 +528,11 @@
                     </span>
                     <span><strong>Pacote Técnico</strong><small>Arquitetura, requisitos e plano de implementação</small></span>
                   </button>
-                  <button class="btn primary generate-btn" id="generateCommercialBtn" data-sensitive-money>
+                  <button class="btn primary generate-btn" id="generateCommercialBtn">
                     <span class="generate-btn-icon" aria-hidden="true">
                       <svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4zM4 8v8l8 4 8-4V8M12 12v8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </span>
-                    <span><strong>Proposta Comercial + Técnica</strong><small>Documento completo para o cliente</small></span>
+                    <span><strong>Gerar Proposta Comercial</strong><small>Configurar valores e gerar MD + HTML para o cliente</small></span>
                   </button>
                 </div>
                 <label class="checkline mt-12"><input id="dryRunToggle" type="checkbox" /> Dry-run (sem PDF)</label>
@@ -552,6 +551,10 @@
               <section class="panel section-panel pdos-shell">
                 <div id="pdosProjectHeader" class="pdos-project-header"></div>
 
+                <div id="pdosNextActionBar" class="pdos-next-action-bar" aria-label="Próximas acções"></div>
+
+                <div id="pdosClientPortal" class="pdos-client-portal hidden" aria-label="Portal do cliente"></div>
+
                 <div class="pdos-timeline-block">
                   <div class="pdos-timeline-head">
                     <div class="pdos-timeline-head-main">
@@ -566,6 +569,10 @@
                   <div id="pdosGoldenTimeline" class="golden-timeline" aria-label="Fases de entrega do projecto"></div>
                   <div id="pdosStageGuidance" class="pdos-stage-guidance hidden" aria-hidden="true"></div>
                 </div>
+
+                <div id="pdosPhaseWorkspace" class="pdos-phase-workspace" aria-label="Painel contextual da fase"></div>
+
+                <div id="pdosFlowHealth" class="pdos-flow-health hidden" aria-label="Saúde do fluxo de entrega"></div>
 
                 <div id="pdosHumanReviews" class="pdos-human-reviews hidden" aria-label="Revisões humanas pendentes"></div>
 
@@ -761,11 +768,13 @@
                   </div>
                   <div class="section-divider"></div>
                   <div class="form-grid">
-                    <label class="full" data-sensitive-money>Fases comerciais (JSON)<textarea id="phasesJson" rows="8"></textarea></label>
+                    <label>Validade (dias)<input id="commercialValidityDays" type="number" min="1" value="30" /></label>
+                    <label>Garantia (dias)<input id="commercialWarrantyDays" type="number" min="0" value="30" /></label>
+                    <label class="full">Exclusões (1 por linha)<textarea id="commercialExclusions" rows="4"></textarea></label>
+                    <label class="full">Notas comerciais (1 por linha)<textarea id="commercialNotes" rows="3"></textarea></label>
                     <label class="full">Integrações (JSON)<textarea id="integrationsJson" rows="5"></textarea></label>
                     <label class="full">Riscos (1 por linha)<textarea id="risksText" rows="4"></textarea></label>
                     <label class="full">Assunções (1 por linha)<textarea id="assumptionsText" rows="4"></textarea></label>
-                    <label class="full" data-sensitive-money>Termos comerciais (JSON)<textarea id="commercialTermsJson" rows="5"></textarea></label>
                     <label class="full">Abordagem técnica (JSON)<textarea id="technicalApproachJson" rows="6"></textarea></label>
                   </div>
                 </div>
@@ -797,6 +806,55 @@
     </aside>
   </div>
 
+  <div id="proposalConfiguratorModal" class="pdos-modal hidden" aria-hidden="true" role="dialog" aria-labelledby="proposalConfiguratorTitle">
+    <div class="pdos-modal-backdrop" data-close-proposal-config></div>
+    <div class="pdos-modal-panel pdos-modal-wide proposal-configurator-panel">
+      <header class="proposal-configurator-head">
+        <h3 id="proposalConfiguratorTitle">Configurador de proposta comercial</h3>
+        <button type="button" class="help-drawer-close" id="proposalConfiguratorClose" aria-label="Fechar">×</button>
+      </header>
+      <div class="proposal-configurator-meta">
+        <div><span class="muted-text">Projecto</span> <strong id="proposalConfigProjectName">—</strong></div>
+        <div><span class="muted-text">Cliente</span> <strong id="proposalConfigClientName">—</strong></div>
+        <div><span class="muted-text">Código</span> <strong id="proposalConfigCode">—</strong></div>
+        <div><span class="muted-text">Moeda</span> <strong id="proposalConfigCurrency">EUR</strong></div>
+      </div>
+      <section class="proposal-config-section">
+        <h4>Fases do plano</h4>
+        <div class="proposal-config-table-wrap">
+          <table class="proposal-config-table">
+            <thead>
+              <tr><th>#</th><th>Fase</th><th>Sem.</th><th>Objectivo</th><th>Valor</th></tr>
+            </thead>
+            <tbody id="proposalPhaseRows"></tbody>
+          </table>
+        </div>
+        <p class="proposal-config-total">Total: <strong id="proposalPhaseTotal">€0,00</strong></p>
+      </section>
+      <section class="proposal-config-section">
+        <h4>Pagamento</h4>
+        <div class="form-grid compact">
+          <label>Inicial %<input id="proposalInitialPercent" type="number" min="0" max="100" value="30" /></label>
+          <label>Final %<input id="proposalFinalPercent" type="number" min="0" max="100" value="20" /></label>
+        </div>
+        <div id="proposalPaymentPreview" class="proposal-payment-preview"></div>
+      </section>
+      <section class="proposal-config-section">
+        <h4>Termos</h4>
+        <div class="form-grid compact">
+          <label>Validade (dias)<input id="proposalValidityDays" type="number" min="1" value="30" /></label>
+          <label>Garantia (dias)<input id="proposalWarrantyDays" type="number" min="0" value="30" /></label>
+          <label class="full">Exclusões (1 por linha)<textarea id="proposalExclusions" rows="3"></textarea></label>
+          <label class="full">Notas (1 por linha)<textarea id="proposalNotes" rows="2"></textarea></label>
+        </div>
+      </section>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="proposalConfiguratorCancel">Cancelar</button>
+        <button type="button" class="btn primary" id="proposalConfiguratorGenerateBtn">Gerar proposta</button>
+      </div>
+    </div>
+  </div>
+
   <div id="globalStatus" class="toast hidden"></div>
 
   <!-- Detail Drawer -->
@@ -813,6 +871,10 @@
     <div class="pdos-modal-panel">
       <h3 id="pdosTransitionTitle">Transição de fase</h3>
       <p id="pdosTransitionDesc" class="muted-text"></p>
+      <div id="pdosTransitionPlanWrap" class="pdos-agent-plan-wrap hidden">
+        <p class="pdos-agent-plan-heading" id="pdosTransitionPlanHeading">Tarefas previstas</p>
+        <ol id="pdosTransitionPlanList" class="pdos-agent-plan-list"></ol>
+      </div>
       <div id="pdosTransitionActions" class="pdos-transition-actions"></div>
       <button type="button" class="btn ghost mt-12" data-close-transition>Cancelar</button>
     </div>
@@ -960,6 +1022,7 @@
             <span id="pdosAgentRuntimeStatus" class="pdos-agent-runtime-badge">—</span>
           </div>
           <div class="pdos-agent-runtime-actions">
+            <button type="button" class="btn tiny ghost hidden" id="pdosAgentRuntimeReconnect">Tentar ligar</button>
             <button type="button" class="btn tiny primary hidden" id="pdosAgentRuntimeRerun">Repetir</button>
             <button type="button" class="btn tiny primary hidden" id="pdosAgentRuntimeResume">Continuar</button>
             <button type="button" class="btn tiny danger hidden" id="pdosAgentRuntimeCancel">Parar</button>
@@ -999,7 +1062,9 @@
   <div id="pdosPromptWorkbench" class="pdos-modal hidden">
     <div class="pdos-modal-backdrop"></div>
     <div class="pdos-modal-panel pdos-modal-wide">
-      <h3>Prompt Workbench</h3>
+      <h3>Execution Workbench</h3>
+      <div id="pdosExecPlanBar" class="pdos-exec-plan-bar hidden"></div>
+      <p id="pdosPromptAwaitBanner" class="pdos-prompt-await-banner hidden muted-text">Output ainda não submetido — a revisão humana só é criada quando colar JSON com alterações reais ao projecto.</p>
       <div id="pdosJobBar" class="pdos-job-bar hidden"></div>
       <p id="pdosPromptSummary" class="pdos-prompt-summary"></p>
       <input type="hidden" id="pdosPromptRunId" />
@@ -1103,14 +1168,19 @@
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>mermaid.initialize({ startOnLoad: false, theme: 'dark' });</script>
   <script src="/projects/static/phase-content-client.js?v=3"></script>
+  <script src="/projects/static/phase-sync-client.js?v=1"></script>
   <script src="/projects/static/help-ui.js?v=3"></script>
-  <script src="/projects/static/app.js?v=32"></script>
-  <script src="/projects/static/requirements-map-ui.js?v=6"></script>
-  <script src="/projects/static/requirements-ui.js?v=10"></script>
+  <script src="/projects/static/proposal-downloads-ui.js?v=2"></script>
+  <script src="/projects/static/proposal-configurator-ui.js?v=3"></script>
+  <script src="/projects/static/app.js?v=38"></script>
+  <script src="/projects/static/requirements-map-ui.js?v=11"></script>
+  <script src="/projects/static/requirements-ui.js?v=15"></script>
   <script src="/projects/static/documents-ui.js?v=4"></script>
-  <script src="/projects/static/minutes-ui.js?v=1"></script>
-  <script src="/projects/static/diagrams-ui.js?v=7"></script>
-  <script src="/projects/static/delivery-os-ui.js?v=41"></script>
+  <script src="/projects/static/minutes-ui.js?v=3"></script>
+  <script src="/projects/static/diagrams-ui.js?v=8"></script>
+  <script src="/projects/static/delivery-os-ui.js?v=52"></script>
+  <script src="/projects/static/delivery-os-platform-ui.js?v=2"></script>
+  <script src="/projects/static/client-portal-ui.js?v=2"></script>
   <script>
     (function () {
       var tabs = document.getElementById('sectionTabs');

@@ -104,18 +104,43 @@ function normalizeHierarchyLink(raw) {
   };
 }
 
+function inferParentLinkType(childType, parentIdToken) {
+  const t = normalizeRequirementType(childType) || 'functional';
+  const prefix = String(parentIdToken || '').replace(/-.*$/, '').toUpperCase();
+  if (t === 'test_case') return LINK_TYPES.verified_by;
+  if (t === 'non_functional') {
+    if (prefix === 'FR') return LINK_TYPES.constrains;
+    return LINK_TYPES.decomposes_from;
+  }
+  return LINK_TYPES.decomposes_from;
+}
+
 function hierarchyLinksFromLegacy(req) {
   const type = normalizeRequirementType(req?.type) || 'functional';
   const links = ensureArray(req?.hierarchyLinks).map(normalizeHierarchyLink).filter(Boolean);
 
   const parentStk = textOr(req?.stakeholderRequirementLink);
   const parentFr = textOr(req?.linkedFunctionalRequirement);
+  const rawParentId = textOr(req?.parentId);
+
+  const pushParent = (targetId, linkType) => {
+    const token = normalizeRequirementIdToken(targetId);
+    if (!token) return;
+    if (links.some((l) => l.role === 'parent' && l.targetId === token)) return;
+    links.push({ role: 'parent', targetId: token, linkType });
+  };
 
   if (parentStk) {
-    links.push({ role: 'parent', targetId: normalizeRequirementIdToken(parentStk), linkType: LINK_TYPES.decomposes_from });
+    pushParent(parentStk, LINK_TYPES.decomposes_from);
   }
   if (parentFr && type === 'test_case') {
-    links.push({ role: 'parent', targetId: normalizeRequirementIdToken(parentFr), linkType: LINK_TYPES.verified_by });
+    pushParent(parentFr, LINK_TYPES.verified_by);
+  }
+  if (parentFr && type === 'non_functional') {
+    pushParent(parentFr, LINK_TYPES.constrains);
+  }
+  if (rawParentId) {
+    pushParent(rawParentId, inferParentLinkType(type, rawParentId));
   }
 
   const seen = new Set();
@@ -133,6 +158,11 @@ function parentLinkForType(links, type) {
   const t = normalizeRequirementType(type) || type;
   if (t === 'test_case') {
     return links.find((l) => l.role === 'parent' && l.linkType === LINK_TYPES.verified_by)
+      || links.find((l) => l.role === 'parent');
+  }
+  if (t === 'non_functional') {
+    return links.find((l) => l.role === 'parent' && l.linkType === LINK_TYPES.constrains)
+      || links.find((l) => l.role === 'parent' && l.linkType === LINK_TYPES.decomposes_from)
       || links.find((l) => l.role === 'parent');
   }
   return links.find((l) => l.role === 'parent' && l.linkType === LINK_TYPES.decomposes_from)
@@ -171,7 +201,9 @@ function syncRequirementHierarchyFields(req, index) {
     : textOr(req?.stakeholderRequirementLink);
   const linkedFunctionalRequirement = type === 'test_case'
     ? (links.find((l) => l.role === 'parent' && l.linkType === LINK_TYPES.verified_by)?.targetId || '')
-    : textOr(req?.linkedFunctionalRequirement);
+    : type === 'non_functional'
+      ? (links.find((l) => l.role === 'parent' && l.linkType === LINK_TYPES.constrains)?.targetId || textOr(req?.linkedFunctionalRequirement))
+      : textOr(req?.linkedFunctionalRequirement);
 
   const relatedRequirementIds = [
     ...peers,
@@ -390,6 +422,8 @@ function applyHierarchyMove(requirement, patch, project) {
       targetId: resolvedParent,
       linkType: pType === 'stakeholder' ? LINK_TYPES.constrains : LINK_TYPES.decomposes_from,
     });
+  } else if (parentReq && normalizeRequirementType(parentReq.type) === 'functional' && type === 'non_functional') {
+    links.push({ role: 'parent', targetId: resolvedParent, linkType: LINK_TYPES.decomposes_from });
   }
 
   const peerLinks = ensureArray(requirement.hierarchyLinks)
@@ -557,6 +591,299 @@ function nextRequirementNumber(requirements, prefix) {
   return max + 1;
 }
 
+function requirementPrefixForType(type) {
+  const normalized = normalizeRequirementType(type);
+  const row = V_LEVELS.find((entry) => entry.id === normalized);
+  if (row) return row.prefix;
+  if (normalized === 'undefined') return 'UQ';
+  if (normalized === 'out_of_scope') return 'OOS';
+  return 'REQ';
+}
+
+function parseRequirementSerial(id, prefix) {
+  const token = normalizeRequirementIdToken(id);
+  const m = token.match(new RegExp(`^${prefix}-(\\d+)$`));
+  return m ? Number(m[1]) : null;
+}
+
+function normalizeReqTextKey(value) {
+  return String(value || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizeReqDedupeKey(req) {
+  const type = normalizeRequirementType(req?.type) || 'other';
+  const title = normalizeReqTextKey(req?.title);
+  const shall = normalizeReqTextKey(req?.shall);
+  const need = normalizeReqTextKey(req?.need);
+  const primary = title || shall || need || normalizeReqTextKey(req?.description);
+  return primary ? `${type}::${primary}` : '';
+}
+
+function replaceRequirementIdReferences(requirements, idMap) {
+  if (!idMap?.size) return requirements;
+  const remap = (id) => {
+    const token = normalizeRequirementIdToken(id);
+    return idMap.get(token) || token;
+  };
+
+  for (let i = 0; i < requirements.length; i += 1) {
+    const req = requirements[i];
+    const next = { ...req };
+    let changed = false;
+
+    const selfToken = normalizeRequirementIdToken(req.id);
+    if (idMap.has(selfToken)) {
+      next.id = idMap.get(selfToken);
+      changed = true;
+    }
+
+    if (next.stakeholderRequirementLink) {
+      const mapped = remap(next.stakeholderRequirementLink);
+      if (mapped !== next.stakeholderRequirementLink) {
+        next.stakeholderRequirementLink = mapped;
+        changed = true;
+      }
+    }
+    if (next.linkedFunctionalRequirement) {
+      const mapped = remap(next.linkedFunctionalRequirement);
+      if (mapped !== next.linkedFunctionalRequirement) {
+        next.linkedFunctionalRequirement = mapped;
+        changed = true;
+      }
+    }
+    if (next.synthesizedForRequirementId) {
+      const mapped = remap(next.synthesizedForRequirementId);
+      if (mapped !== next.synthesizedForRequirementId) {
+        next.synthesizedForRequirementId = mapped;
+        changed = true;
+      }
+    }
+    if (ensureArray(next.relatedRequirementIds).length) {
+      next.relatedRequirementIds = [...new Set(
+        next.relatedRequirementIds.map(remap).filter(Boolean)
+      )];
+      changed = true;
+    }
+    if (ensureArray(next.hierarchyLinks).length) {
+      next.hierarchyLinks = next.hierarchyLinks.map((link) => ({
+        ...link,
+        targetId: remap(link.targetId),
+      }));
+      changed = true;
+    }
+
+    if (changed) {
+      requirements[i] = syncRequirementHierarchyFields(next, buildIdIndex(requirements));
+    }
+  }
+  return requirements;
+}
+
+function renumberRequirementInProject(project, requirementId, targetSlot) {
+  const requirements = ensureArray(project?.requirements).slice();
+  const index = buildIdIndex(requirements);
+  const reqId = resolveRequirementId(requirementId, index);
+  const requirement = index.byId.get(reqId);
+  if (!requirement) throw new Error(`Requisito "${requirementId}" não encontrado.`);
+
+  const type = normalizeRequirementType(requirement.type);
+  const prefix = requirementPrefixForType(type);
+  if (!['STK', 'FR', 'RNF', 'TC'].includes(prefix)) {
+    throw new Error('Só requisitos STK, FR, RNF e TC podem ser renumerados.');
+  }
+
+  const peers = requirements
+    .filter((r) => normalizeRequirementType(r.type) === type && parseRequirementSerial(r.id, prefix) !== null)
+    .sort((a, b) => parseRequirementSerial(a.id, prefix) - parseRequirementSerial(b.id, prefix));
+
+  if (!peers.some((r) => r.id === reqId)) {
+    throw new Error(`O ID ${reqId} não segue o formato ${prefix}-NN.`);
+  }
+
+  const slot = Math.max(1, Math.min(Number(targetSlot) || 1, peers.length));
+  const ordered = peers.filter((r) => r.id !== reqId);
+  ordered.splice(slot - 1, 0, requirement);
+
+  const idMap = new Map();
+  ordered.forEach((entry, idx) => {
+    const newId = `${prefix}-${String(idx + 1).padStart(2, '0')}`;
+    const oldToken = normalizeRequirementIdToken(entry.id);
+    if (entry.id !== newId) idMap.set(oldToken, newId);
+  });
+
+  if (!idMap.size) {
+    return { requirements, idMap, changedId: reqId };
+  }
+
+  for (let i = 0; i < requirements.length; i += 1) {
+    const token = normalizeRequirementIdToken(requirements[i].id);
+    if (idMap.has(token)) {
+      requirements[i] = {
+        ...requirements[i],
+        id: idMap.get(token),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  }
+  replaceRequirementIdReferences(requirements, idMap);
+  const changedId = idMap.get(normalizeRequirementIdToken(reqId)) || reqId;
+  return { requirements, idMap, changedId };
+}
+
+function mergeRequirementsByDedupe(existingRequirements, incomingRaw, type, normalizeRecord) {
+  const normalizedType = normalizeRequirementType(type);
+  const merged = ensureArray(existingRequirements).slice();
+  const byDedupe = new Map();
+  const byId = new Map();
+
+  for (const req of merged) {
+    byId.set(String(req.id), req);
+    const key = normalizeReqDedupeKey(req);
+    if (key) byDedupe.set(key, req);
+  }
+
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+  const prefix = requirementPrefixForType(normalizedType);
+
+  for (const raw of ensureArray(incomingRaw)) {
+    const entry = typeof raw === 'string' ? { title: raw, description: raw } : (raw || {});
+    const candidate = normalizeRecord({
+      ...entry,
+      type: normalizedType,
+      id: textOr(entry.id),
+    });
+    const dedupeKey = normalizeReqDedupeKey(candidate);
+    const idToken = normalizeRequirementIdToken(candidate.id);
+    const match = (idToken && byId.get(idToken))
+      || (dedupeKey && byDedupe.get(dedupeKey))
+      || null;
+
+    if (match) {
+      Object.keys(candidate).forEach((key) => {
+        if (['id', 'createdAt', 'type'].includes(key)) return;
+        const val = candidate[key];
+        const isEmpty = val == null || val === '' || (Array.isArray(val) && val.length === 0);
+        if (!isEmpty) match[key] = val;
+      });
+      match.updatedAt = new Date().toISOString();
+      updated += 1;
+      continue;
+    }
+
+    const nextNum = nextRequirementNumber(merged, prefix);
+    candidate.id = `${prefix}-${String(nextNum).padStart(2, '0')}`;
+    candidate.createdAt = candidate.createdAt || new Date().toISOString();
+    candidate.updatedAt = new Date().toISOString();
+    merged.push(candidate);
+    byId.set(String(candidate.id), candidate);
+    if (dedupeKey) byDedupe.set(dedupeKey, candidate);
+    added += 1;
+  }
+
+  return { requirements: merged, added, updated, skipped };
+}
+
+function ensureFunctionalParentForChain(requirements, focusStakeholderId, project) {
+  const focus = normalizeRequirementIdToken(focusStakeholderId);
+  const chain = chainNodesForStakeholder({ requirements }, focus);
+  const existingFr = chain.find((n) => n.type === 'functional');
+  if (existingFr) return existingFr.id;
+
+  const stkId = focus || chain.find((n) => n.type === 'stakeholder')?.id;
+  if (!stkId) throw new Error('Crie ou seleccione um stakeholder (L0) antes de adicionar TC.');
+
+  const frId = `FR-${String(nextRequirementNumber(requirements, 'FR')).padStart(2, '0')}`;
+  let frReq = {
+    id: frId,
+    type: 'functional',
+    title: 'Requisito funcional (suporte V-cycle)',
+    need: '',
+    shall: '',
+    status: 'draft',
+    priority: 'medium',
+    phase: 'Backlog',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  frReq = applyHierarchyMove(frReq, { type: 'functional', parentId: stkId }, { ...project, requirements });
+  requirements.push(frReq);
+  return frId;
+}
+
+function unlinkRequirementFromHierarchy(requirement, project) {
+  if (normalizeRequirementType(requirement.type) === 'stakeholder') {
+    throw new Error('Stakeholders (L0) não podem ser desligados da cadeia V.');
+  }
+  const index = buildIdIndex(project?.requirements);
+  return syncRequirementHierarchyFields({
+    ...requirement,
+    hierarchyLinks: ensureArray(requirement.hierarchyLinks).filter((link) => link.role === 'peer'),
+    stakeholderRequirementLink: '',
+    linkedFunctionalRequirement: '',
+    parentId: '',
+  }, index);
+}
+
+function createRequirementInLayer(project, options = {}) {
+  const layerType = normalizeRequirementType(options.layerType);
+  if (!layerType || !['stakeholder', 'functional', 'non_functional', 'test_case'].includes(layerType)) {
+    throw new Error('Camada inválida.');
+  }
+
+  const focusStakeholderId = normalizeRequirementIdToken(options.focusStakeholderId);
+  const title = textOr(options.title, `${V_LEVELS.find((v) => v.id === layerType)?.label || layerType} novo`);
+  let requirements = ensureArray(project?.requirements).slice();
+  let parentId = '';
+
+  if (layerType === 'functional') {
+    parentId = focusStakeholderId;
+    if (!parentId) {
+      const stk = requirements.find((r) => normalizeRequirementType(r.type) === 'stakeholder');
+      if (!stk) throw new Error('Crie um STK (L0) primeiro.');
+      parentId = stk.id;
+    }
+  } else if (layerType !== 'stakeholder') {
+    if (!focusStakeholderId) throw new Error('Seleccione um STK em foco para adicionar a esta camada.');
+    parentId = layerType === 'test_case'
+      ? ensureFunctionalParentForChain(requirements, focusStakeholderId, project)
+      : (findDefaultParentForZone({ requirements }, layerType, focusStakeholderId)
+        || focusStakeholderId);
+  }
+
+  const prefix = requirementPrefixForType(layerType);
+  const newId = `${prefix}-${String(nextRequirementNumber(requirements, prefix)).padStart(2, '0')}`;
+  let newReq = {
+    id: newId,
+    type: layerType,
+    title,
+    status: 'draft',
+    priority: 'medium',
+    phase: 'Backlog',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (layerType === 'stakeholder') {
+    requirements.push(syncRequirementHierarchyFields(newReq, buildIdIndex(requirements)));
+  } else {
+    newReq = applyHierarchyMove(newReq, { type: layerType, parentId }, { ...project, requirements });
+    requirements.push(newReq);
+  }
+
+  if (options.targetSlot) {
+    const renumbered = renumberRequirementInProject({ requirements }, newReq.id, options.targetSlot);
+    requirements = renumbered.requirements;
+    newReq = requirements.find((r) => r.id === renumbered.changedId) || newReq;
+  }
+
+  return { requirements, requirement: newReq, createdId: newReq.id };
+}
+
 function chainNodesForStakeholder(project, focusStakeholderId) {
   const focus = normalizeRequirementIdToken(focusStakeholderId);
   if (!focus) return [];
@@ -662,6 +989,9 @@ function applyHierarchyDrop(project, requirementId, drop = {}) {
     createdStakeholderId = createStakeholderForOrphan(requirement, project, requirements, index);
     parentId = createdStakeholderId;
     index = buildIdIndex(requirements);
+  } else if (!parentId && zoneType === 'test_case' && focusStakeholderId) {
+    parentId = ensureFunctionalParentForChain(requirements, focusStakeholderId, project);
+    index = buildIdIndex(requirements);
   } else if (!parentId) {
     throw new Error('Não foi possível determinar o requisito pai. Arraste sobre um cartão ou escolha um STK.');
   }
@@ -697,4 +1027,13 @@ module.exports = {
   hierarchyLinksFromLegacy,
   getStakeholderAncestorId,
   nextRequirementNumber,
+  requirementPrefixForType,
+  parseRequirementSerial,
+  replaceRequirementIdReferences,
+  renumberRequirementInProject,
+  mergeRequirementsByDedupe,
+  normalizeReqDedupeKey,
+  ensureFunctionalParentForChain,
+  unlinkRequirementFromHierarchy,
+  createRequirementInLayer,
 };

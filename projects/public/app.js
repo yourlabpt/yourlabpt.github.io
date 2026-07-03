@@ -139,11 +139,8 @@ const els = {
   projectClient: document.getElementById('projectClient'),
   projectStatus: document.getElementById('projectStatus'),
   projectCode: document.getElementById('projectCode'),
-  projectRate: document.getElementById('projectRate'),
   projectCurrency: document.getElementById('projectCurrency'),
   projectLanguage: document.getElementById('projectLanguage'),
-  projectBudgetMin: document.getElementById('projectBudgetMin'),
-  projectBudgetMax: document.getElementById('projectBudgetMax'),
   projectDescription: document.getElementById('projectDescription'),
   summaryBusinessContext: document.getElementById('summaryBusinessContext'),
   summaryGoals: document.getElementById('summaryGoals'),
@@ -238,12 +235,14 @@ const els = {
   detailReqTarget: document.getElementById('detailReqTarget'),
   detailReqRelatedIds: document.getElementById('detailReqRelatedIds'),
   detailReqNotes: document.getElementById('detailReqNotes'),
-  phasesJson: document.getElementById('phasesJson'),
   integrationsJson: document.getElementById('integrationsJson'),
   risksText: document.getElementById('risksText'),
   assumptionsText: document.getElementById('assumptionsText'),
   riskAssumptionView: document.getElementById('riskAssumptionView'),
-  commercialTermsJson: document.getElementById('commercialTermsJson'),
+  commercialValidityDays: document.getElementById('commercialValidityDays'),
+  commercialWarrantyDays: document.getElementById('commercialWarrantyDays'),
+  commercialExclusions: document.getElementById('commercialExclusions'),
+  commercialNotes: document.getElementById('commercialNotes'),
   technicalApproachJson: document.getElementById('technicalApproachJson'),
   generateTechnicalBtn: document.getElementById('generateTechnicalBtn'),
   generateCommercialBtn: document.getElementById('generateCommercialBtn'),
@@ -335,15 +334,28 @@ function isSuperAdmin() {
   return state.user?.role === 'super_admin';
 }
 
-function canEdit() {
-  return isSuperAdmin();
+function isClientUser() {
+  if (isSuperAdmin()) return false;
+  if (state.user?.role === 'client') return true;
+  if (!state.selectedProject) return state.user?.role === 'client';
+  const member = (state.selectedProject.members || []).find((m) => m.userId === state.user?.id);
+  return member?.role === 'client';
 }
 
-// Clientes/parceiros são apenas visualizadores, mas podem contribuir
-// adicionando perguntas e documentos (sem apagar nem alterar o resto).
+function isPartnerEditor() {
+  if (isSuperAdmin()) return true;
+  if (!state.selectedProject || state.user?.role !== 'partner') return false;
+  const member = (state.selectedProject.members || []).find((m) => m.userId === state.user?.id);
+  return member?.role === 'partner';
+}
+
+function canEdit() {
+  return isPartnerEditor();
+}
+
+// Clientes: apenas visualização. Parceiros no projecto: edição completa.
 function canContribute() {
-  const role = state.user?.role;
-  return role === 'super_admin' || role === 'client' || role === 'partner';
+  return canEdit();
 }
 
 function canViewBudget() {
@@ -428,6 +440,132 @@ function normalizeForCompare(value) {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function findDuplicatePhaseName(phases) {
+  const seen = new Map();
+  for (const phase of phases || []) {
+    const name = String(phase?.name || '').trim();
+    if (!name) continue;
+    const token = normalizeForCompare(name);
+    if (seen.has(token)) return { name, other: seen.get(token) };
+    seen.set(token, name);
+  }
+  return null;
+}
+
+function formatPhaseLabel(index, name) {
+  const num = Number(index) + 1;
+  const label = String(name || '').trim();
+  return label ? `#${num} · ${label}` : `#${num}`;
+}
+
+let ipDragReqId = null;
+let phaseSyncInFlight = false;
+let phaseSyncPromise = null;
+
+async function ensurePhasesSynced(project) {
+  if (!project || !canEdit()) return project;
+  if (!window.PhaseSync?.needsRequirementsPhaseSync?.(project)) return project;
+  if (phaseSyncPromise) return phaseSyncPromise;
+
+  phaseSyncPromise = (async () => {
+    phaseSyncInFlight = true;
+    try {
+      const res = await apiRequest(
+        `/projects/${encodeURIComponent(project.id)}/phases/sync-requirements`,
+        { method: 'POST' }
+      );
+      state.selectedProject = res.project;
+      if (res.updated) {
+        showToast(`${res.updated} requisito(s) alinhados às fases #1, #2… do plano.`, 'ok');
+      }
+      return res.project;
+    } catch (error) {
+      showToast(error.message || 'Erro ao sincronizar fases.', 'error');
+      return project;
+    } finally {
+      phaseSyncInFlight = false;
+      phaseSyncPromise = null;
+    }
+  })();
+
+  return phaseSyncPromise;
+}
+
+async function moveRequirementToPhase(reqId, targetPhaseName) {
+  const project = state.selectedProject;
+  if (!project || !reqId || !canEdit()) return;
+  const phase = String(targetPhaseName || '').trim() || 'Backlog';
+  const req = (project.requirements || []).find((r) => r.id === reqId);
+  if (!req) return;
+  const current = String(req.phase || 'Backlog').trim() || 'Backlog';
+  if (current === phase) return;
+  try {
+    const res = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/requirements/${encodeURIComponent(reqId)}`,
+      { method: 'PATCH', body: { phase } }
+    );
+    state.selectedProject = res.project;
+    renderImplementationPlan(state.selectedProject);
+    renderRequirements(state.selectedProject);
+    showToast(`Requisito movido para ${phase}.`, 'ok');
+  } catch (error) {
+    showToast(error.message || 'Erro ao mover requisito.', 'error');
+  }
+}
+
+function wirePhaseRequirementDragDrop(root, project) {
+  if (!root || !canEdit()) return;
+
+  root.querySelectorAll('.ip-req-chip[draggable="true"]').forEach((chip) => {
+    chip.addEventListener('dragstart', (e) => {
+      ipDragReqId = chip.dataset.reqId || '';
+      chip.classList.add('ip-req-chip--dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', ipDragReqId);
+    });
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('ip-req-chip--dragging');
+      ipDragReqId = null;
+      root.querySelectorAll('.ip-req-chips.ip-drop-target').forEach((z) => z.classList.remove('ip-drop-target'));
+    });
+  });
+
+  root.querySelectorAll('.ip-req-chips[data-ip-phase]').forEach((zone) => {
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('ip-drop-target');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('ip-drop-target'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('ip-drop-target');
+      const reqId = e.dataTransfer.getData('text/plain') || ipDragReqId;
+      if (!reqId) return;
+      moveRequirementToPhase(reqId, zone.dataset.ipPhase || 'Backlog');
+    });
+  });
+
+  root.querySelectorAll('[data-open-req-chip]').forEach((chip) => {
+    chip.addEventListener('click', (e) => {
+      if (chip.classList.contains('ip-req-chip--dragging')) return;
+      e.preventDefault();
+      const reqId = chip.dataset.openReqChip;
+      if (reqId && window.RequirementsUI?.openRequirementModal) {
+        window.RequirementsUI.openRequirementModal(reqId, project);
+      }
+    });
+  });
+
+  root.querySelectorAll('[data-assign-req-phase]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const reqId = sel.dataset.assignReqPhase;
+      const phase = sel.value;
+      if (reqId && phase) moveRequirementToPhase(reqId, phase);
+      sel.value = '';
+    });
+  });
 }
 
 function normalizeModuleToken(value) {
@@ -566,7 +704,43 @@ function setReadonlyByRole() {
   els.deleteRequirementDetailsBtn.disabled = readonly;
 
   if (els.settingsUsersCard) els.settingsUsersCard.classList.toggle('hidden', !isSuperAdmin());
+  applyClientTabVisibility();
+  applyReadOnlyChrome();
 }
+
+function applyClientTabVisibility() {
+  const clientTabs = new Set(['projetos', 'deliveryos', 'requisitos', 'fases', 'atas', 'documentos']);
+  const partnerExtraTabs = new Set(['atividade', 'perguntas']);
+  document.querySelectorAll('#sectionTabs .tab-btn').forEach((btn) => {
+    const tab = btn.dataset.tab;
+    if (isClientUser()) {
+      btn.classList.toggle('hidden', !clientTabs.has(tab));
+    } else if (isPartnerEditor() && !isSuperAdmin()) {
+      btn.classList.toggle('hidden', tab === 'definicoes' || tab === 'gerar');
+    } else {
+      btn.classList.remove('hidden');
+    }
+  });
+  if (isClientUser() && state.activeTab && !clientTabs.has(state.activeTab)) {
+    switchToTab('deliveryos');
+  }
+  const settingsBtn = document.getElementById('openSettingsBtn');
+  if (settingsBtn) settingsBtn.classList.toggle('hidden', isClientUser());
+  const createProjectSection = document.querySelector('#createProjectForm')?.closest('.panel');
+  if (createProjectSection) createProjectSection.classList.toggle('hidden', isClientUser());
+}
+
+function applyReadOnlyChrome() {
+  const readOnly = isClientUser();
+  document.body.classList.toggle('is-client-readonly', readOnly);
+  document.querySelectorAll('[data-writes-only]').forEach((el) => {
+    el.classList.toggle('hidden', readOnly);
+  });
+}
+
+window.isClientUser = isClientUser;
+window.isPartnerEditor = isPartnerEditor;
+window.canEditProject = canEdit;
 
 function setMonetaryVisibilityByRole() {
   const hideMonetary = !canViewBudget();
@@ -871,6 +1045,7 @@ function renderProjectDetails() {
       p.classList.toggle('hidden', !show);
     });
     renderPhaseContextBar();
+    window.ProposalDownloads?.mountBar?.(null);
     renderProjectsPage();
     return;
   }
@@ -881,11 +1056,8 @@ function renderProjectDetails() {
   els.projectClient.value = project.clientName || '';
   els.projectStatus.value = project.status || 'active';
   els.projectCode.value = project.proposalCode || '';
-  els.projectRate.value = project.hourlyRate || 30;
   els.projectCurrency.value = project.currency || 'EUR';
   els.projectLanguage.value = project.language || 'pt-PT';
-  els.projectBudgetMin.value = project.targetBudgetMin || 5000;
-  els.projectBudgetMax.value = project.targetBudgetMax || 6000;
   els.projectDescription.value = project.description || '';
 
   els.summaryBusinessContext.value = project.summary?.businessContext || '';
@@ -900,11 +1072,13 @@ function renderProjectDetails() {
   const reqChangeEl = document.getElementById('requirementsChangeJson');
   if (reqChangeEl && !reqChangeEl.value) reqChangeEl.value = '';
 
-  els.phasesJson.value = JSON.stringify(project.phases || [], null, 2);
+  if (els.commercialValidityDays) els.commercialValidityDays.value = project.commercialTerms?.validityDays ?? 30;
+  if (els.commercialWarrantyDays) els.commercialWarrantyDays.value = project.commercialTerms?.warrantyDays ?? 30;
+  if (els.commercialExclusions) els.commercialExclusions.value = arrayToLines(project.commercialTerms?.exclusions || []);
+  if (els.commercialNotes) els.commercialNotes.value = arrayToLines(project.commercialTerms?.notes || []);
   els.integrationsJson.value = JSON.stringify(project.integrations || [], null, 2);
   els.risksText.value = arrayToLines(project.risks || []);
   els.assumptionsText.value = arrayToLines(project.assumptions || []);
-  els.commercialTermsJson.value = JSON.stringify(project.commercialTerms || {}, null, 2);
   els.technicalApproachJson.value = JSON.stringify(project.technicalApproach || {}, null, 2);
 
   renderProjectClarity(project);
@@ -917,6 +1091,7 @@ function renderProjectDetails() {
   renderImplementationPlan(project);
   renderRiskAssumptionView(project);
   renderGenerated(project);
+  window.ProposalDownloads?.mountBar?.(project);
   if (window.PdosUI) window.PdosUI.renderAll(project);
   document.querySelectorAll('.tab-panel').forEach((p) => {
     p.classList.toggle('hidden', p.dataset.panel !== state.activeTab);
@@ -1353,8 +1528,8 @@ function startEditImplementationPhases() {
   const project = state.selectedProject;
   if (!project) return;
   implPhasesDraft = (Array.isArray(project.phases) ? project.phases : []).map((p, i) => ({
-    id: String(p?.id || '').trim() || `phase_${i + 1}`,
-    name: String(p?.name || `Fase ${i + 1}`).trim(),
+    id: String(p?.id || '').trim() || `F${i + 1}`,
+    name: String(p?.name || '').trim(),
     durationWeeks: Number(p?.durationWeeks || 0) || 0,
     objective: String(p?.objective || p?.description || '').trim(),
   }));
@@ -1375,7 +1550,7 @@ function syncImplPhasesDraftFromDom() {
     const idx = Number(row.dataset.phaseIndex);
     const prev = implPhasesDraft[idx] || {};
     return {
-      id: prev.id || `phase_${idx + 1}`,
+      id: prev.id || `F${idx + 1}`,
       name: String(row.querySelector('.ip-pe-name')?.value || '').trim(),
       durationWeeks: Number(row.querySelector('.ip-pe-dur')?.value || 0) || 0,
       objective: String(row.querySelector('.ip-pe-obj')?.value || '').trim(),
@@ -1389,57 +1564,59 @@ async function saveImplementationPhases() {
   syncImplPhasesDraftFromDom();
   const phases = (implPhasesDraft || [])
     .filter((p) => p.name)
-    .map((p, i) => ({ id: p.id || `phase_${i + 1}`, name: p.name, durationWeeks: p.durationWeeks, objective: p.objective }));
+    .map((p, i) => ({ id: p.id || `F${i + 1}`, name: p.name, durationWeeks: p.durationWeeks, objective: p.objective }));
+  const duplicate = findDuplicatePhaseName(phases);
+  if (duplicate) {
+    showToast(`Nome duplicado: «${duplicate.name}». Cada fase (#1, #2…) precisa de um nome único.`, 'error');
+    return;
+  }
+  if (!phases.length) {
+    showToast('Adicione pelo menos uma fase com nome.', 'error');
+    return;
+  }
   try {
-    await apiRequest(`/projects/${encodeURIComponent(project.id)}`, {
+    const res = await apiRequest(`/projects/${encodeURIComponent(project.id)}`, {
       method: 'PATCH',
       body: { phases },
     });
     implPhasesEditing = false;
     implPhasesDraft = null;
-    showToast('Fases atualizadas.', 'ok');
-    await loadProjectById(project.id);
+    state.selectedProject = res.project;
+    renderImplementationPlan(state.selectedProject);
+    renderRequirements(state.selectedProject);
+    window.RequirementsUI?.populateAddRequirementPhase?.(state.selectedProject);
+    let msg = 'Fases atualizadas.';
+    if (res.requirementsPhaseRenamed) {
+      msg += ` ${res.requirementsPhaseRenamed} requisito(s) sincronizados com os novos nomes.`;
+    }
+    if (res.requirementsPhaseSynced) {
+      msg += ` ${res.requirementsPhaseSynced} requisito(s) alinhados por número de fase (#1, #2…).`;
+    }
+    showToast(msg, 'ok');
   } catch (error) {
     showToast(error.message || 'Erro ao guardar fases.', 'error');
   }
 }
 
-function buildImplementationPhasesEditorHtml(requirements) {
+function buildImplementationPhasesEditorHtml() {
   const draft = implPhasesDraft || [];
-  const covered = new Set();
-  draft.forEach((p) => {
-    covered.add(normalizeForCompare(p.name));
-    if (p.id) covered.add(normalizeForCompare(p.id));
-  });
-  const autoNames = [];
-  const seen = new Set();
-  requirements.forEach((req) => {
-    const token = normalizeForCompare(req?.phase);
-    if (!token || covered.has(token) || seen.has(token)) return;
-    seen.add(token);
-    autoNames.push(String(req.phase).trim());
-  });
-  autoNames.sort((a, b) => a.localeCompare(b, 'pt-PT'));
 
   const rows = draft.map((p, i) => `
     <div class="ip-pe-row" data-phase-index="${i}">
-      <input class="ip-pe-name" type="text" value="${escapeHtml(p.name)}" placeholder="Nome da fase" />
+      <span class="ip-pe-num" title="Número único da fase">#${i + 1}</span>
+      <input class="ip-pe-name" type="text" value="${escapeHtml(p.name)}" placeholder="Nome da fase (ex.: Discovery, MVP)" />
       <input class="ip-pe-dur" type="number" min="0" step="1" value="${p.durationWeeks || ''}" placeholder="sem." title="Duração em semanas" />
       <input class="ip-pe-obj" type="text" value="${escapeHtml(p.objective || '')}" placeholder="Objetivo" />
       <button type="button" class="btn tiny ghost ip-pe-remove" data-remove-phase="${i}" title="Remover fase">✕</button>
     </div>
   `).join('');
 
-  const autoChips = autoNames.map((name) =>
-    `<button type="button" class="ip-tag ip-tag--auto-add" data-add-auto-phase="${escapeHtml(name)}" title="Adicionar esta fase da classificação ao plano">+ ${escapeHtml(name)}</button>`
-  ).join('');
-
   return `
     <div class="ip-phase-editor">
-      <div class="ip-pe-head"><span>Fase</span><span>Sem.</span><span>Objetivo</span><span></span></div>
+      <p class="ip-muted ip-phase-editor-hint">O número (#1, #2…) é fixo. Requisitos com «Fase 1», F1, etc. passam automaticamente para o nome da fase correspondente ao guardar.</p>
+      <div class="ip-pe-head"><span>#</span><span>Nome</span><span>Sem.</span><span>Objetivo</span><span></span></div>
       <div class="ip-pe-rows">${rows || '<p class="ip-muted">Sem fases. Adicione a primeira.</p>'}</div>
       <button type="button" class="btn tiny ghost" data-add-phase>+ Adicionar fase</button>
-      ${autoNames.length ? `<div class="ip-pe-auto"><span class="ip-muted">Fases da classificação fora do plano:</span> ${autoChips}</div>` : ''}
       <div class="ip-pe-actions">
         <button type="button" class="btn small" data-save-phases>Guardar fases</button>
         <button type="button" class="btn small ghost" data-cancel-phases>Cancelar</button>
@@ -1456,7 +1633,8 @@ function wireImplementationPlanEvents() {
   root.querySelector('[data-save-phases]')?.addEventListener('click', () => saveImplementationPhases());
   root.querySelector('[data-add-phase]')?.addEventListener('click', () => {
     syncImplPhasesDraftFromDom();
-    implPhasesDraft = [...(implPhasesDraft || []), { id: `phase_${(implPhasesDraft || []).length + 1}_${Date.now()}`, name: '', durationWeeks: 0, objective: '' }];
+    const n = (implPhasesDraft || []).length + 1;
+    implPhasesDraft = [...(implPhasesDraft || []), { id: `F${n}_${Date.now()}`, name: '', durationWeeks: 0, objective: '' }];
     renderImplementationPlan(state.selectedProject);
   });
   root.querySelectorAll('[data-remove-phase]').forEach((btn) => {
@@ -1467,13 +1645,9 @@ function wireImplementationPlanEvents() {
       renderImplementationPlan(state.selectedProject);
     });
   });
-  root.querySelectorAll('[data-add-auto-phase]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      syncImplPhasesDraftFromDom();
-      const name = btn.dataset.addAutoPhase || '';
-      implPhasesDraft = [...(implPhasesDraft || []), { id: `phase_${(implPhasesDraft || []).length + 1}_${Date.now()}`, name, durationWeeks: 0, objective: '' }];
-      renderImplementationPlan(state.selectedProject);
-    });
+  root.querySelector('[data-sync-req-phases]')?.addEventListener('click', async () => {
+    const project = await ensurePhasesSynced(state.selectedProject);
+    if (project) renderImplementationPlan(project);
   });
   root.querySelectorAll('[data-goto-req-phase]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1482,9 +1656,16 @@ function wireImplementationPlanEvents() {
       switchToTab('requisitos');
     });
   });
+  wirePhaseRequirementDragDrop(root, state.selectedProject);
 }
 
 function renderImplementationPlan(project) {
+  if (project && canEdit() && !implPhasesEditing && window.PhaseSync?.needsRequirementsPhaseSync?.(project)) {
+    ensurePhasesSynced(project).then((synced) => {
+      if (synced) renderImplementationPlan(synced);
+    });
+  }
+
   const requirements = Array.isArray(project?.requirements) ? project.requirements : [];
   const questions = Array.isArray(project?.clarificationQuestions) ? project.clarificationQuestions : [];
   const risks = Array.isArray(project?.risks) ? project.risks : [];
@@ -1500,39 +1681,20 @@ function renderImplementationPlan(project) {
   const pendingRequirements = requirements.filter((entry) => !doneStatuses.has(String(entry.status || '').toLowerCase()));
   const blockedRequirements = requirements.filter((entry) => blockedStatuses.has(String(entry.status || '').toLowerCase()));
 
-  // As fases mostradas derivam da união entre o plano curado (project.phases,
-  // que fornece duração/objetivo) e as fases reais da classificação dos
-  // requisitos (req.phase). Assim a tabela fica coerente com o quadro de
-  // requisitos: qualquer fase usada na classificação aparece aqui.
+  // Apenas fases do plano (#1, #2…). Requisitos mapeiam por número (Fase 1, F1…)
+  // ou por nome exacto — sincronizados automaticamente ao guardar / abrir Fases.
   const phaseDefs = phases.map((phase, index) => ({
     id: String(phase?.id || '').trim(),
     name: String(phase?.name || `Fase ${index + 1}`).trim(),
     durationWeeks: Number(phase?.durationWeeks || 0),
     objective: String(phase?.objective || phase?.description || '').trim(),
-    fromPlan: true,
+    orderNum: index + 1,
   }));
-  const coveredTokens = new Set();
-  phaseDefs.forEach((p) => {
-    coveredTokens.add(normalizeForCompare(p.name));
-    if (p.id) coveredTokens.add(normalizeForCompare(p.id));
-  });
-  const extraNames = [];
-  const seenExtra = new Set();
-  requirements.forEach((req) => {
-    const token = normalizeForCompare(req?.phase);
-    if (!token || coveredTokens.has(token) || seenExtra.has(token)) return;
-    seenExtra.add(token);
-    extraNames.push(String(req.phase).trim());
-  });
-  extraNames.sort((a, b) => a.localeCompare(b, 'pt-PT'));
-  extraNames.forEach((name) => {
-    phaseDefs.push({ id: '', name, durationWeeks: 0, objective: '', fromPlan: false });
-  });
 
   const matchPhaseDef = (req) => {
-    const token = normalizeForCompare(req?.phase);
-    if (!token) return null;
-    return phaseDefs.find((p) => token === normalizeForCompare(p.name) || (p.id && token === normalizeForCompare(p.id))) || null;
+    const resolved = window.PhaseSync?.resolveRequirementPhase?.(req, phases);
+    if (!resolved) return null;
+    return phaseDefs.find((p) => normalizeForCompare(p.name) === normalizeForCompare(resolved)) || null;
   };
 
   const outOfPlan = requirements.filter((req) => !matchPhaseDef(req));
@@ -1547,7 +1709,6 @@ function renderImplementationPlan(project) {
     const durationWeeks = Number(phase?.durationWeeks || 0);
     const durationLabel = Number.isFinite(durationWeeks) && durationWeeks > 0 ? `${durationWeeks}sem` : '—';
     const objective = escapeHtml(shortText(String(phase?.objective || '').trim() || '—', 100));
-    const planTag = phase.fromPlan ? '' : ' <span class="ip-tag ip-tag--auto" title="Fase vinda da classificação dos requisitos">auto</span>';
     const highPri = phaseReqs
       .filter((e) => e.priority === 'high' && !doneStatuses.has(String(e.status || '').toLowerCase()))
       .slice(0, 3)
@@ -1556,7 +1717,7 @@ function renderImplementationPlan(project) {
 
     return `
       <tr class="ip-phase-row">
-        <td class="ip-phase-name">${index + 1}. ${escapeHtml(phaseName)}${planTag}</td>
+        <td class="ip-phase-name">${escapeHtml(formatPhaseLabel(index, phaseName))}</td>
         <td class="ip-phase-dur">${durationLabel}</td>
         <td class="ip-phase-reqs">${phaseReqs.length}</td>
         <td class="ip-phase-done"><span class="ip-pill ip-pill--ok">${approved} ok</span> <span class="ip-pill ip-pill--pend">${pending} pend.</span></td>
@@ -1568,21 +1729,46 @@ function renderImplementationPlan(project) {
 
   // Requisitos por fase — mesma fonte de verdade (req.phase) que a página de
   // requisitos, centralizada aqui para gerir as fases.
+  const ipEditable = canEdit() && !implPhasesEditing;
+  const planPhaseOptions = phaseDefs
+    .map((p, idx) => `<option value="${escapeHtml(p.name)}">${escapeHtml(formatPhaseLabel(idx, p.name))}</option>`)
+    .join('');
+
+  function renderIpReqChip(req, { warn = false, showAssign = false } = {}) {
+    const drag = ipEditable ? ' draggable="true"' : '';
+    const assign = showAssign && ipEditable ? `
+      <select class="ip-req-assign" data-assign-req-phase="${escapeHtml(req.id)}" aria-label="Atribuir fase">
+        <option value="">→ fase</option>
+        ${planPhaseOptions}
+      </select>` : '';
+    return `
+      <span class="ip-req-chip-wrap">
+        <button type="button" class="ip-req-chip${warn ? ' ip-req-chip--warn' : ''}${ipEditable ? ' ip-req-chip--draggable' : ''}"${drag}
+          data-req-id="${escapeHtml(req.id)}" data-open-req-chip="${escapeHtml(req.id)}"
+          title="${escapeHtml(req.title || '')}">
+          <span class="ip-req-chip-id">${escapeHtml(req.id)}</span>
+          ${escapeHtml(shortText(req.title || req.shall || '', 48))}
+        </button>${assign}
+      </span>`;
+  }
+
   const phaseBreakdown = phaseDefs.map((phase, index) => {
     const phaseReqs = requirements
       .filter((req) => matchPhaseDef(req) === phase)
       .slice()
       .sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), 'pt-PT'));
     const chips = phaseReqs.length
-      ? phaseReqs.map((req) => `<button type="button" class="ip-req-chip" data-goto-req-phase="${escapeHtml(phase.name)}" title="${escapeHtml(req.title || '')}"><span class="ip-req-chip-id">${escapeHtml(req.id)}</span> ${escapeHtml(shortText(req.title || req.shall || '', 48))}</button>`).join('')
-      : '<span class="ip-muted">Sem requisitos nesta fase.</span>';
+      ? phaseReqs.map((req) => renderIpReqChip(req)).join('')
+      : `<span class="ip-muted">${ipEditable ? 'Arraste requisitos para aqui.' : 'Sem requisitos nesta fase.'}</span>`;
+    const objSnippet = phase.objective ? `<span class="ip-muted ip-phase-obj-snippet">${escapeHtml(shortText(phase.objective, 80))}</span>` : '';
     return `
-      <div class="ip-phase-group">
+      <div class="ip-phase-group" data-ip-phase-group="${escapeHtml(phase.name)}">
         <div class="ip-phase-group-head">
-          <strong>${index + 1}. ${escapeHtml(phase.name)}</strong>
+          <strong>${escapeHtml(formatPhaseLabel(index, phase.name))}</strong>
           <span class="ip-muted">${phaseReqs.length} req.</span>
         </div>
-        <div class="ip-req-chips">${chips}</div>
+        ${objSnippet}
+        <div class="ip-req-chips ip-phase-dropzone" data-ip-phase="${escapeHtml(phase.name)}">${chips}</div>
       </div>
     `;
   }).join('');
@@ -1590,7 +1776,7 @@ function renderImplementationPlan(project) {
     ? outOfPlan
       .slice()
       .sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), 'pt-PT'))
-      .map((req) => `<button type="button" class="ip-req-chip ip-req-chip--warn" title="${escapeHtml(req.title || '')}"><span class="ip-req-chip-id">${escapeHtml(req.id)}</span> ${escapeHtml(shortText(req.title || req.shall || '', 48))}</button>`)
+      .map((req) => renderIpReqChip(req, { warn: true, showAssign: true }))
       .join('')
     : '';
 
@@ -1637,10 +1823,13 @@ function renderImplementationPlan(project) {
       <div class="ip-section-actions">
         ${implPhasesEditing
           ? ''
-          : (canEdit() ? '<button type="button" class="btn tiny ghost" data-edit-phases>Editar fases</button>' : '')}
+          : (canEdit() ? `
+            <button type="button" class="btn tiny ghost" data-sync-req-phases title="Alinhar requisitos Fase 1/F1… ao plano">Sincronizar requisitos</button>
+            <button type="button" class="btn tiny ghost" data-edit-phases>Editar fases</button>
+          ` : '')}
       </div>
       ${implPhasesEditing
-        ? buildImplementationPhasesEditorHtml(requirements)
+        ? buildImplementationPhasesEditorHtml()
         : (phaseDefs.length ? `
         <div class="ip-table-wrap">
           <table class="ip-table">
@@ -1654,8 +1843,9 @@ function renderImplementationPlan(project) {
     ${implPhasesEditing ? '' : `
     <details class="ip-section" open>
       <summary>Requisitos por fase</summary>
+      ${ipEditable ? '<p class="ip-muted ip-dnd-hint">Arraste requisitos entre fases para reclassificar. Clique num requisito para editar.</p>' : ''}
       <div class="ip-phase-breakdown">${phaseBreakdown || '<p class="ip-empty">Sem fases.</p>'}</div>
-      ${unassignedChips ? `<div class="ip-phase-group ip-phase-group--warn">
+      ${unassignedChips ? `<div class="ip-phase-group ip-phase-group--warn" data-ip-phase-group="unassigned">
         <div class="ip-phase-group-head"><strong>Sem fase atribuída</strong><span class="ip-muted">${outOfPlan.length} req.</span></div>
         <div class="ip-req-chips">${unassignedChips}</div>
       </div>` : ''}
@@ -1697,6 +1887,13 @@ function renderImplementationPlan(project) {
 }
 
 function renderRequirements(project) {
+  if (project && canEdit() && window.PhaseSync?.needsRequirementsPhaseSync?.(project)) {
+    ensurePhasesSynced(project).then((synced) => {
+      if (synced && window.RequirementsUI?.renderGroupedRequirements) {
+        window.RequirementsUI.renderGroupedRequirements(synced);
+      }
+    });
+  }
   if (window.RequirementsUI?.renderGroupedRequirements) {
     window.RequirementsUI.renderGroupedRequirements(project);
     return;
@@ -1767,6 +1964,12 @@ function renderRequirements(project) {
 }
 
 function renderGenerated(project) {
+  if (!els.generatedLinks) return;
+  if (window.ProposalDownloads?.renderGeneratedList) {
+    els.generatedLinks.innerHTML = window.ProposalDownloads.renderGeneratedList(project);
+    return;
+  }
+
   const generated = Array.isArray(project.generated) ? project.generated : [];
   if (!generated.length) {
     els.generatedLinks.innerHTML = '<div class="simple-item"><small>Nenhum pacote gerado ainda.</small></div>';
@@ -1931,12 +2134,19 @@ async function loadProjectById(projectId, options = {}) {
   if (!getSelectedRequirement(state.selectedProject)) {
     state.selectedRequirementId = state.selectedProject?.requirements?.[0]?.id || null;
   }
+  const deepLink = window.DeliveryOsPlatform?.readUrlDeepLink?.() || {};
+  if (deepLink.stage) {
+    state.deliverySelectedStageId = deepLink.stage;
+  }
   renderProjects();
   renderProjectDetails();
   if (options.switchTab !== false) {
-    switchToTab('deliveryos');
+    const tab = deepLink.tab || 'deliveryos';
+    switchToTab(tab);
   }
   await loadActivity();
+  window.DeliveryOsPlatform?.refreshPlatformUi?.(state.selectedProject);
+  window.ClientPortalUI?.refresh?.(state.selectedProject);
 }
 
 function stageLabel(stageId) {
@@ -2063,6 +2273,8 @@ function switchToTab(tabId) {
   renderNavRail();
   renderSettingsAvailability();
   renderPhaseContextBar();
+  applyClientTabVisibility();
+  applyReadOnlyChrome();
 
   if (activeId === 'definicoes') {
     renderUsersPanel();
@@ -2083,6 +2295,9 @@ function switchToTab(tabId) {
   if (state.selectedProject && activeId === 'perguntas') {
     renderClarificationQuestions(state.selectedProject);
   }
+  if (state.selectedProject && activeId === 'atividade') {
+    loadActivity().catch(() => {});
+  }
 }
 
 window.switchToTab = switchToTab;
@@ -2099,22 +2314,56 @@ async function loadActivity() {
 
   const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/activity`);
   const activity = payload.activity || [];
+  const auditLog = payload.auditLog || [];
+  const canRevert = canEdit();
 
-  if (!activity.length) {
+  if (!activity.length && !auditLog.length) {
     els.activityList.innerHTML = '<div class="simple-item"><small>Sem atividade registada.</small></div>';
     return;
   }
 
-  els.activityList.innerHTML = activity.slice(0, 100).map((entry) => {
+  const auditHtml = auditLog.length ? `
+    <section class="audit-log-section mb-12">
+      <h4 class="panel-subheading">Registo auditável (reversível)</h4>
+      ${auditLog.slice(0, 50).map((entry) => `
+        <div class="simple-item audit-log-item">
+          <strong>${escapeHtml(entry.summary || entry.action)}</strong>
+          <small>${new Date(entry.at).toLocaleString('pt-PT')} • ${escapeHtml(entry.actorName || entry.actorUserId || '')}</small>
+          ${entry.revertedAt ? '<span class="chip">revertido</span>' : ''}
+          ${canRevert && entry.canRevert ? `<button type="button" class="btn tiny" data-revert-audit="${escapeHtml(entry.id)}">Reverter</button>` : ''}
+        </div>
+      `).join('')}
+    </section>
+  ` : '';
+
+  const activityHtml = activity.length ? activity.slice(0, 80).map((entry) => {
     const details = entry.details ? JSON.stringify(entry.details) : '';
     return `
       <div class="simple-item">
         <strong>${escapeHtml(entry.action)}</strong>
-        <small>${new Date(entry.at).toLocaleString('pt-PT')} • ${escapeHtml(entry.actorUserId || '')}</small>
+        <small>${new Date(entry.at).toLocaleString('pt-PT')} • ${escapeHtml(entry.actorName || entry.actorUserId || '')}</small>
         ${details ? `<small>${escapeHtml(details)}</small>` : ''}
       </div>
     `;
-  }).join('');
+  }).join('') : '';
+
+  els.activityList.innerHTML = auditHtml + activityHtml;
+
+  els.activityList.querySelectorAll('[data-revert-audit]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Reverter esta acção? O projecto volta ao estado anterior.')) return;
+      try {
+        const res = await apiRequest(`/projects/${project.id}/audit-log/${btn.dataset.revertAudit}/revert`, { method: 'POST', body: {} });
+        state.selectedProject = res.project;
+        showToast('Acção revertida');
+        renderProjectDetails();
+        window.PdosUI?.renderAll?.(res.project);
+        await loadActivity();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  });
 }
 
 function readProjectPatchFromForm() {
@@ -2123,11 +2372,8 @@ function readProjectPatchFromForm() {
     clientName: els.projectClient.value.trim(),
     status: els.projectStatus.value,
     proposalCode: els.projectCode.value.trim(),
-    hourlyRate: Number(els.projectRate.value || 30),
     currency: els.projectCurrency.value.trim() || 'EUR',
     language: els.projectLanguage.value.trim() || 'pt-PT',
-    targetBudgetMin: Number(els.projectBudgetMin.value || 5000),
-    targetBudgetMax: Number(els.projectBudgetMax.value || 6000),
     description: els.projectDescription.value,
     summary: {
       businessContext: els.summaryBusinessContext.value,
@@ -2140,11 +2386,15 @@ function readProjectPatchFromForm() {
 
 function readAdvancedPatch() {
   return {
-    phases: safeParseJson(els.phasesJson.value, 'Fases JSON inválido'),
     integrations: safeParseJson(els.integrationsJson.value, 'Integrações JSON inválido'),
     risks: linesToArray(els.risksText.value),
     assumptions: linesToArray(els.assumptionsText.value),
-    commercialTerms: safeParseJson(els.commercialTermsJson.value, 'Termos comerciais JSON inválido'),
+    commercialTerms: {
+      validityDays: Number(els.commercialValidityDays?.value || 30),
+      warrantyDays: Number(els.commercialWarrantyDays?.value || 30),
+      exclusions: linesToArray(els.commercialExclusions?.value),
+      notes: linesToArray(els.commercialNotes?.value),
+    },
     technicalApproach: safeParseJson(els.technicalApproachJson.value, 'Abordagem técnica JSON inválido'),
   };
 }
@@ -2192,6 +2442,8 @@ async function bootstrapAppAfterLogin() {
   setReadonlyByRole();
   setMonetaryVisibilityByRole();
   syncBudgetAccessControl();
+  applyClientTabVisibility();
+  applyReadOnlyChrome();
   renderUsersPanel();
   window.PdosUI?.wirePdosEvents();
   window.PdosUI?.wireTraceEvents();
@@ -2232,7 +2484,6 @@ async function handleCreateProject(event) {
       body: {
         name: document.getElementById('newProjectName').value.trim(),
         clientName: document.getElementById('newProjectClient').value.trim(),
-        hourlyRate: Number(document.getElementById('newProjectRate').value || 30),
         currency: document.getElementById('newProjectCurrency').value.trim() || 'EUR',
       },
     });
@@ -2554,7 +2805,7 @@ async function handleAddRequirement(event) {
         title: els.reqTitle.value,
         status: els.reqStatus.value || 'draft',
         priority: els.reqPriority.value,
-        phase: els.reqPhase.value,
+        phase: window.RequirementsUI?.readPhaseSelectValue?.(document.getElementById('reqPhase')) || document.getElementById('reqPhase')?.value || 'Backlog',
         module: normalizeModuleName(els.reqModule.value),
         submodule: normalizeSubmoduleName(els.reqSubmodule.value),
         relatedRequirementIds: splitRequirementIds(els.reqRelatedIds.value),
@@ -2699,6 +2950,19 @@ function getSelectedModulesForGeneration() {
   return selected;
 }
 
+async function handleOpenCommercialProposal() {
+  if (!state.selectedProject) return;
+  if (window.ProposalConfigurator?.open) {
+    await window.ProposalConfigurator.open(state.selectedProject.id, {
+      onGenerated: async () => {
+        await loadProjectById(state.selectedProject.id);
+      },
+    });
+    return;
+  }
+  showToast('Configurador de proposta indisponível.', 'error');
+}
+
 async function handleGenerate(mode) {
   if (!state.selectedProject) return;
 
@@ -2715,13 +2979,15 @@ async function handleGenerate(mode) {
 
     showToast('Bundle gerado com sucesso.', 'ok');
 
-    const outputs = payload.outputs || {};
-    const list = Object.entries(outputs)
-      .filter(([, value]) => value)
-      .map(([key, value]) => `<a href="${escapeHtml(value)}" target="_blank" rel="noopener">${escapeHtml(key)}</a>`)
-      .join(' • ');
+    if (mode === 'technical') {
+      const outputs = payload.outputs || {};
+      const list = Object.entries(outputs)
+        .filter(([, value]) => value)
+        .map(([key, value]) => `<a href="${escapeHtml(value)}" target="_blank" rel="noopener">${escapeHtml(key)}</a>`)
+        .join(' • ');
+      els.generatedLinks.innerHTML = `<div class="simple-item"><strong>Resultado</strong><div>${list || 'Sem links.'}</div></div>`;
+    }
 
-    els.generatedLinks.innerHTML = `<div class="simple-item"><strong>Resultado</strong><div>${list || 'Sem links.'}</div></div>`;
     await loadProjectById(state.selectedProject.id);
   } catch (error) {
     showToast(error.message, 'error');
@@ -2876,7 +3142,7 @@ function wireEvents() {
   els.clearAllRequirementsBtn?.addEventListener('click', handleClearAllRequirements);
   els.assignMemberForm.addEventListener('submit', handleAssignMember);
   els.generateTechnicalBtn.addEventListener('click', () => handleGenerate('technical'));
-  els.generateCommercialBtn.addEventListener('click', () => handleGenerate('commercial'));
+  els.generateCommercialBtn.addEventListener('click', handleOpenCommercialProposal);
   els.refreshActivityBtn.addEventListener('click', () => loadActivity().catch((e) => showToast(e.message, 'error')));
   els.saveRequirementDetailsBtn.addEventListener('click', handleSaveRequirementDetails);
   els.deleteRequirementDetailsBtn.addEventListener('click', handleDeleteRequirementDetails);

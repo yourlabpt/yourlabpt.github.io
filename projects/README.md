@@ -14,6 +14,19 @@ Plataforma unificada para gestão de projectos com systems engineering, agentes 
 - Acesso por perfil (super admin, client, partner)
 - Gerar documentação técnica e proposta comercial
 
+## Proposta comercial (configurador)
+
+O orçamento **não fica guardado no projecto**. Ao clicar **Gerar Proposta Comercial**:
+
+1. `GET /api/projects/projects/:id/proposal-config` — pré-preenche fases (semanas, objectivos) a partir do plano.
+2. Modal permite definir **valor por fase**, percentuais inicial/final e termos.
+3. `POST /api/projects/projects/:id/generate` com `{ mode: 'commercial', proposalConfig }` gera MD + HTML.
+4. Snapshot em `generated_proposals/.../proposal_config.json` (única persistência de valores).
+
+O **Pacote Técnico** (`mode: 'technical'`) mantém o fluxo anterior, sem configurador nem secções de preço.
+
+**Armazenamento:** propostas comerciais guardam apenas o ficheiro `.md` em disco; o HTML é gerado sob pedido via `GET .../generated/:genId/html`. Descarregamentos disponíveis em qualquer separador do projecto (barra superior) e na aba Gerar.
+
 ## Path no website
 
 Depois de iniciar o `server.js`, o acesso é:

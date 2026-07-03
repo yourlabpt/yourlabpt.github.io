@@ -55,7 +55,43 @@
     activeJob: null,
     activeJobStep: '',
     activeRuntimeRun: null,
+    activePlan: null,
+    activePlanTaskId: '',
+    promptLoadToken: 0,
+    lastRuntimeOptions: null,
   };
+
+  function nextPromptLoadToken() {
+    pdosState.promptLoadToken += 1;
+    return pdosState.promptLoadToken;
+  }
+
+  function isPromptLoadCurrent(token) {
+    return token === pdosState.promptLoadToken;
+  }
+
+  function resetPromptWorkbenchUI({ summary = '', loading = false } = {}) {
+    const raw = $('pdosPromptRaw');
+    const output = $('pdosPromptOutput');
+    const runId = $('pdosPromptRunId');
+    const summaryEl = $('pdosPromptSummary');
+    if (raw) {
+      if (loading) raw.value = 'A carregar prompt…';
+      raw.dataset.loading = loading ? '1' : '';
+    }
+    if (output) output.value = '';
+    if (runId && loading) runId.value = '';
+    if (summaryEl && summary) summaryEl.textContent = summary;
+  }
+
+  function actionableReviews(project) {
+    return (project?.humanReviews || []).filter((r) => {
+      if (r.status !== 'pending') return false;
+      if (['information_classification', 'phase_link_sync'].includes(r.type)) return false;
+      const sections = ensureArray(r.suggestedChanges?.sections);
+      return (r.decisionsCount || 0) > 0 || sections.length > 0;
+    });
+  }
 
   const AGENT_TYPE_LABELS = {
     requirement_grouping: 'Agrupar requisitos',
@@ -109,6 +145,30 @@
     if (!isAgentRuntimeEnabled()) return false;
     const supported = window.state?.config?.agentRuntime?.supportedAgentTypes || Object.keys(YAR_AGENT_BY_PLATFORM_TYPE);
     return supported.includes(agentType) && Boolean(YAR_AGENT_BY_PLATFORM_TYPE[agentType]);
+  }
+
+  function resolveRuntimeAgentForPlan(plan) {
+    if (!plan) return null;
+    if (canRunViaAgentRuntime(plan.agentType)) return plan.agentType;
+    if (
+      plan.agentType === 'stage_transition'
+      && plan.fromStageId === 'requirements'
+      && plan.toStageId === 'architecture'
+      && String(plan.direction || 'forward') === 'forward'
+      && canRunViaAgentRuntime('requirements_to_architecture')
+    ) {
+      return 'requirements_to_architecture';
+    }
+    return null;
+  }
+
+  function planTransitionLabel(plan) {
+    if (plan?.agentType !== 'stage_transition') return '';
+    const dir = plan.direction === 'backward' ? 'retroceder' : 'avançar';
+    if (plan.direction === 'backward') {
+      return `${plan.toStageId} → ${plan.fromStageId} (${dir})`;
+    }
+    return `${plan.fromStageId} → ${plan.toStageId} (${dir})`;
   }
 
   function runtimeStatusLabel(status) {
@@ -179,6 +239,33 @@
       $('pdosAgentCfgWebSearch').checked = options.enableWebSearch !== false;
       renderAgentConfigPlan(prepare, Number($('pdosAgentCfgMaxSubtasks').value));
 
+      if (pdosState.activePlan?.tasks?.length && (
+        pdosState.activePlan.agentType === agentType
+        || resolveRuntimeAgentForPlan(pdosState.activePlan) === agentType
+      )) {
+        const epTasks = pdosState.activePlan.tasks;
+        if (!pdosState.pendingAgentConfig.prepare?.taskPlan?.tasks?.length) {
+          pdosState.pendingAgentConfig.prepare = {
+            ...(pdosState.pendingAgentConfig.prepare || {}),
+            taskPlan: {
+              masterPlanMarkdown: pdosState.activePlan.masterPlanMarkdown,
+              tasks: epTasks.map((t) => ({
+                id: t.id,
+                title: t.title,
+                instruction: t.instruction,
+                diagramType: t.diagramType,
+                role: t.role,
+                requirementIds: t.requirementIds,
+                dependsOn: t.dependsOn,
+              })),
+              totalRequirements: ensureArray(project.requirements).length,
+              diagramTaskCount: epTasks.filter((t) => t.diagramType || t.role === 'diagram').length,
+            },
+          };
+        }
+        renderAgentConfigPlan(pdosState.pendingAgentConfig.prepare, Number($('pdosAgentCfgMaxSubtasks').value));
+      }
+
       $('pdosAgentCfgMaxSubtasks')?.addEventListener('change', () => {
         renderAgentConfigPlan(pdosState.pendingAgentConfig?.prepare, Number($('pdosAgentCfgMaxSubtasks').value));
       });
@@ -244,8 +331,20 @@
         ? 'Adiada (orçamento)'
         : task.role === 'merge'
           ? 'Consolidação'
-          : task.diagramType || 'diagrama';
-      const meta = `${task.requirementIds?.length || 0} requisito(s)${task.dependsOn?.length ? ` · após ${task.dependsOn.length} tarefa(s)` : ''}`;
+          : task.reqKind === 'stakeholder'
+            ? 'STK'
+            : task.reqKind === 'functional'
+              ? 'FR'
+              : task.reqKind === 'non_functional'
+                ? 'RNF'
+                : task.reqKind === 'test_case'
+                  ? 'TC'
+                  : task.diagramType || 'diagrama';
+      const meta = [
+        task.phaseName ? escapeHtml(task.phaseName) : '',
+        `${task.requirementIds?.length || 0} requisito(s)`,
+        task.dependsOn?.length ? `após ${task.dependsOn.length} tarefa(s)` : '',
+      ].filter(Boolean).join(' · ');
       return `
         <li class="pdos-agent-plan-node ${stateClass}">
           <span class="pdos-agent-plan-step">${index + 1}</span>
@@ -324,6 +423,12 @@
         list.querySelectorAll('[data-manual-task-prompt]').forEach((btn) => {
           btn.addEventListener('click', async () => {
             const task = pdosState.manualTaskPrompts[Number(btn.dataset.manualTaskPrompt)];
+            const loadToken = nextPromptLoadToken();
+            closeManualTasksModal();
+            openPromptWorkbench({
+              prompt: task.instruction || '',
+              promptRun: { summaryMarkdown: `Tarefa manual: ${task.title}` },
+            }, { bumpToken: false });
             try {
               const res = await apiRequest(`/projects/${cfg.project.id}/prompt-runs`, {
                 method: 'POST',
@@ -334,14 +439,11 @@
                   moduleTag: cfg.options.moduleTag,
                 },
               });
+              if (!isPromptLoadCurrent(loadToken)) return;
               pdosState.pendingPromptRun = res.promptRun;
-              openPromptWorkbench({
-                ...res,
-                prompt: task.instruction,
-                promptRun: { ...res.promptRun, summaryMarkdown: `Tarefa manual: ${task.title}` },
-              });
-              closeManualTasksModal();
+              $('pdosPromptRunId').value = res.promptRun?.id || '';
             } catch (err) {
+              if (!isPromptLoadCurrent(loadToken)) return;
               showToast(err.message, 'error');
             }
           });
@@ -350,6 +452,7 @@
       return;
     }
 
+    const loadToken = nextPromptLoadToken();
     try {
       const res = await apiRequest(`/projects/${cfg.project.id}/prompt-runs`, {
         method: 'POST',
@@ -360,10 +463,12 @@
           moduleTag: cfg.options.moduleTag,
         },
       });
+      if (!isPromptLoadCurrent(loadToken)) return;
       pdosState.pendingPromptRun = res.promptRun;
-      openPromptWorkbench(res);
+      openPromptWorkbench(res, { bumpToken: false });
       showToast('Prompt gerado — modo manual (copiar/colar no workbench)');
     } catch (err) {
+      if (!isPromptLoadCurrent(loadToken)) return;
       showToast(err.message, 'error');
     }
   }
@@ -374,6 +479,7 @@
     if (!cfg) return;
     const prepare = pdosState.pendingAgentConfig?.prepare;
     const taskPlan = buildRuntimeTaskPlanForSubmit(prepare, cfg.budget.maxSubtasks);
+    pdosState.lastRuntimeOptions = { ...cfg.options, taskPlan, maxSubtasks: cfg.budget.maxSubtasks };
     closeAgentConfigModal();
     await runYourlabAgent(cfg.agentType, cfg.project, {
       options: {
@@ -531,6 +637,10 @@
     if (!el || !project) return;
     const desc = projectDescription(project);
     const goals = (project.summary?.goals || []).slice(0, 2);
+    const latestCommercial = window.ProposalDownloads?.findLatestCommercial?.(project);
+    const downloadActions = latestCommercial && window.ProposalDownloads?.renderActions
+      ? window.ProposalDownloads.renderActions(project.id, latestCommercial, { compact: true })
+      : '';
     el.innerHTML = `
       <div class="pdos-header-grid pdos-header-compact">
         <div class="pdos-header-main">
@@ -546,6 +656,7 @@
             <button class="btn pdos-header-btn" id="pdosRelinkBtn" type="button" title="Reaplica ligações entre fases e gera log para revisão">Reaplicar ligações</button>
             <button class="btn primary pdos-header-btn" id="pdosGenProposalBtn" type="button" title="Gera proposta comercial a partir do projecto actual">Gerar proposta</button>
           </div>
+          ${downloadActions ? `<div class="pdos-header-downloads">${downloadActions}</div>` : ''}
         </div>
       </div>
     `;
@@ -626,6 +737,8 @@
         renderTracePanel(project);
         window.DiagramsUI?.renderShell?.(project);
         window.renderPhaseContextBar?.();
+        window.DeliveryOsPlatform?.syncUrlDeepLink?.(btn.dataset.deliveryStage, 'deliveryos');
+        window.DeliveryOsPlatform?.refreshPlatformUi?.(project);
       });
     });
 
@@ -664,7 +777,7 @@
     if (el) el.innerHTML = '';
   }
 
-  function agentFriendlyLabel(agentType) {
+  function agentFriendlyLabel(agentType, plan = null) {
     const map = {
       reverse_idea: 'Visão da ideia',
       discovery_research: 'Descoberta',
@@ -680,13 +793,18 @@
       stage_transition: 'Transição de fase',
       meeting_classification: 'Classificação de ata',
     };
+    const activePlan = plan || (agentType === 'stage_transition' ? pdosState.activePlan : null);
+    if (agentType === 'stage_transition' && activePlan) {
+      const hint = planTransitionLabel(activePlan);
+      if (hint) return `Transição ${hint}`;
+    }
     return map[agentType] || agentType || 'Agente IA';
   }
 
   function renderHumanReviewsSection(project) {
     const el = $('pdosHumanReviews');
     if (!el) return;
-    const pending = (project.humanReviews || []).filter((r) => r.status === 'pending');
+    const pending = actionableReviews(project);
     if (!pending.length) {
       el.innerHTML = '';
       el.classList.add('hidden');
@@ -698,7 +816,7 @@
         <header class="pdos-reviews-head">
           <div>
             <span class="pdos-section-label">Revisão humana</span>
-            <p class="pdos-reviews-sub">Confirme ou rejeite as alterações propostas pela IA antes de aplicar ao projecto.</p>
+            <p class="pdos-reviews-sub">Alterações reais propostas pela IA — aprove, rejeite, reprompt ou reverta antes de aplicar.</p>
           </div>
           <span class="pdos-reviews-count">${pending.length} pendente(s)</span>
         </header>
@@ -718,7 +836,6 @@
                 ${agent ? `<span class="hr-card-agent">${escapeHtml(agent)}</span>` : ''}
                 <div class="hr-card-actions">
                   <button type="button" class="btn tiny primary" data-view-review="${escapeHtml(r.id)}">Abrir revisão</button>
-                  <button type="button" class="btn tiny" data-approve-review="${escapeHtml(r.id)}">Aprovar</button>
                 </div>
               </article>`;
           }).join('')}
@@ -727,9 +844,6 @@
 
     el.querySelectorAll('[data-view-review]').forEach((btn) => {
       btn.addEventListener('click', () => openReviewDrawer(project, btn.dataset.viewReview));
-    });
-    el.querySelectorAll('[data-approve-review]').forEach((btn) => {
-      btn.addEventListener('click', () => resolveReview(btn.dataset.approveReview, 'approved'));
     });
   }
 
@@ -752,7 +866,40 @@
       </button>
     `;
     modal.classList.remove('hidden');
+
+    const loadTransitionPreview = async (direction) => {
+      const fwdFrom = direction === 'forward' ? fromStageId : toStageId;
+      const fwdTo = direction === 'forward' ? toStageId : fromStageId;
+      try {
+        const res = await apiRequest(`/projects/${project.id}/execution-plans`, {
+          method: 'POST',
+          body: {
+            agentType: 'stage_transition',
+            fromStageId: fwdFrom,
+            toStageId: fwdTo,
+            direction,
+            stageId: fwdTo,
+            preview: true,
+          },
+        });
+        renderAgentPlanList(res.plan?.tasks || [], {
+          listId: 'pdosTransitionPlanList',
+          wrapId: 'pdosTransitionPlanWrap',
+        });
+        const heading = $('pdosTransitionPlanHeading');
+        if (heading) {
+          heading.textContent = `${res.plan?.tasks?.length || 0} tarefa(s) — ${direction === 'forward' ? 'avançar' : 'retroceder'}`;
+        }
+      } catch {
+        $('pdosTransitionPlanWrap')?.classList.add('hidden');
+      }
+    };
+
+    loadTransitionPreview('forward');
+
     modal.querySelectorAll('.pdos-transition-btn').forEach((btn) => {
+      btn.addEventListener('mouseenter', () => loadTransitionPreview(btn.dataset.dir));
+      btn.addEventListener('focus', () => loadTransitionPreview(btn.dataset.dir));
       btn.addEventListener('click', () => {
         const direction = btn.dataset.dir;
         if (direction === 'forward') {
@@ -770,27 +917,14 @@
   }
 
   async function runStageTransition(fromStageId, toStageId, direction, project) {
-    if (direction === 'forward' && fromStageId === 'requirements' && toStageId === 'architecture') {
-      closeTransitionModal();
-      return runArchitecturePackGeneration(project);
-    }
-    try {
-      const res = await apiRequest(`/projects/${project.id}/prompt-runs`, {
-        method: 'POST',
-        body: {
-          agentType: 'stage_transition',
-          fromStageId,
-          toStageId,
-          direction,
-          stageId: toStageId,
-        },
-      });
-      pdosState.pendingPromptRun = res.promptRun;
-      openPromptWorkbench(res);
-      showToast(`Agente de transição ${direction === 'forward' ? '→' : '←'} ${toStageId}`);
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
+    closeTransitionModal();
+    pdosState.pendingPromptRun = null;
+    return openExecutionPlan('stage_transition', project, {
+      fromStageId,
+      toStageId,
+      direction,
+      stageId: direction === 'forward' ? toStageId : fromStageId,
+    });
   }
 
   function formatRequirementLinks(ids) {
@@ -964,63 +1098,26 @@
     let html = renderPhaseContentBlock(project, stageId);
 
     if (stageId === 'requirements') {
+      const reqCount = (project.requirements || []).length;
+      const openQ = openQuestions.length;
       html += `
-        <article class="pdos-card pdos-card-summary">
-          <h4>Organização</h4>
+        <article class="pdos-card pdos-card-req-bridge">
+          <h4>Requisitos</h4>
+          <p class="muted-text">A árvore STK → FR → RNF → TC, mapa V e edição em massa estão na página <strong>Requisitos</strong> — evite duplicar trabalho aqui.</p>
           <div class="pdos-summary-grid pdos-summary-grid-static">
+            <div><strong>${reqCount}</strong><span>requisitos</span></div>
+            <div><strong>${openQ}</strong><span>dúvidas abertas</span></div>
             <div><strong>${caps.length}</strong><span>funcionalidades</span></div>
-            <div><strong>${(project.requirementClusters || []).length}</strong><span>grupos</span></div>
-            <div><strong>${openQuestions.length}</strong><span>dúvidas abertas</span></div>
-            <div><strong>${risks.length}</strong><span>riscos</span></div>
           </div>
           <div class="pdos-card-actions">
-            <button type="button" class="btn tiny primary" data-agent="requirement_grouping" title="Agrupa requisitos soltos em funcionalidades e grupos">Agrupar com IA</button>
-            <button type="button" class="btn tiny" data-agent="reverse_idea">Resumo da ideia</button>
-            <button type="button" class="btn tiny" data-unlinked-reqs>Sem funcionalidade</button>
-            <button type="button" class="btn tiny ghost" data-open-req-map="implmap">Mapa implementação</button>
-          </div>
-        </article>
-        <article class="pdos-card pdos-card-vchain" id="pdosVChainCard">
-          <h4>Cadeia V (STK → FR → RNF → TC)</h4>
-          <div class="pdos-summary-grid pdos-summary-grid-static" id="pdosVChainStats">
-            <div><strong>…</strong><span>STK (L0)</span></div>
-            <div><strong>…</strong><span>órfãos</span></div>
-            <div><strong>…</strong><span>cobertura V</span></div>
-          </div>
-          <p class="muted-text pdos-vchain-hint">Atribua requisitos arrastando no <strong>mapa V</strong>. Use IA ou lote só para reorganizar muitos de uma vez.</p>
-          <div class="pdos-card-actions">
-            <button type="button" class="btn tiny primary" data-agent="requirement_hierarchy" title="Gera proposta de ligações STK→FR→RNF→TC para revisão">Reorganizar cadeia V com IA</button>
-            <button type="button" class="btn tiny ghost" data-pdos-hierarchy-batch hidden>Atribuir órfãos em lote</button>
-            <button type="button" class="btn tiny ghost" data-pdos-hierarchy-revert hidden>Reverter STK automáticos</button>
-            <button type="button" class="btn tiny ghost" data-open-req-map="vmap">Abrir mapa V</button>
+            <button type="button" class="btn tiny primary" data-goto-tab="requisitos">Abrir página Requisitos</button>
+            <button type="button" class="btn tiny ghost" data-goto-tab="perguntas">Perguntas em aberto</button>
+            ${window.canEditProject?.() ? `
+              <button type="button" class="btn tiny" data-agent="requirement_hierarchy" title="Proposta IA para reorganizar cadeia V">IA: reorganizar V</button>
+            ` : ''}
           </div>
         </article>
       `;
-
-      html += renderAgentJobsHtml(project);
-
-      if (caps.length) {
-        caps.forEach((cap) => {
-          const stats = countByStatus(project.requirements, cap.requirementIds);
-          const capReqs = (cap.requirementIds || []).map((id) => project.requirements.find((r) => r.id === id)).filter(Boolean);
-          const modules = [...new Set(capReqs.flatMap((r) => r.moduleTags || [r.module]).filter(Boolean))];
-          html += `
-            <article class="pdos-card pdos-card-capability" data-capability-id="${escapeHtml(cap.id)}">
-              <div class="pdos-card-top"><span class="delivery-card-kind">Funcionalidade</span><span>${stats.total} requisitos</span></div>
-              <h4>${escapeHtml(cap.name)}</h4>
-              <p class="pdos-card-summary-text">${escapeHtml(shortText(cap.summaryMarkdown || '', 160))}</p>
-              <div class="pdos-module-badges">${modules.map((m) => `<span class="module-badge">${escapeHtml(m)}</span>`).join('')}</div>
-              <div class="pdos-card-meta">${stats.approved} aprovados · ${stats.pending} pendentes · ${(cap.risks || []).length} riscos</div>
-              <div class="pdos-card-actions">
-                <button type="button" class="btn tiny primary" data-open-capability="${escapeHtml(cap.id)}">Ver grupos e requisitos</button>
-                <button type="button" class="btn tiny" data-impact-cap="${escapeHtml(cap.id)}">Ver impacto</button>
-              </div>
-            </article>
-          `;
-        });
-      } else {
-        html += `<article class="pdos-card pdos-card-empty"><p>Sem funcionalidades — <strong>Agrupar com IA</strong>.</p></article>`;
-      }
     } else if (stageId === 'idea') {
       html += renderIdeaStage(project);
     } else if (stageId === 'discovery') {
@@ -2444,18 +2541,12 @@
   }
 
   async function submitDiagramToRequirementsPrompt(project, diagramArtifactId, bodyMarkdown) {
-    const res = await apiRequest(`/projects/${project.id}/prompt-runs`, {
-      method: 'POST',
-      body: {
-        agentType: 'diagram_to_requirements',
-        stageId: 'architecture',
-        diagramArtifactId: diagramArtifactId || undefined,
-        bodyMarkdown: diagramArtifactId ? undefined : bodyMarkdown,
-      },
+    await openExecutionPlan('diagram_to_requirements', project, {
+      diagramArtifactId: diagramArtifactId || undefined,
+      bodyMarkdown: diagramArtifactId ? undefined : bodyMarkdown,
+      stageId: 'architecture',
     });
-    pdosState.pendingPromptRun = res.promptRun;
-    openPromptWorkbench(res);
-    showToast('Prompt Diagrama → Requisitos gerado');
+    showToast('Plano Diagrama → Requisitos aberto no workbench');
   }
 
   function openDiagramToReqModal(project, diagrams, modalOptions = {}) {
@@ -2662,6 +2753,8 @@
       'hidden',
       !(RUNTIME_ERROR_STATUSES.has(status) || RUNTIME_DONE_STATUSES.has(status))
     );
+    const showReconnect = Boolean(yarError) || (status === 'dispatching' && pdosState.activeRuntimeRun?.pollErrors >= 2);
+    $('pdosAgentRuntimeReconnect')?.classList.toggle('hidden', !showReconnect);
     $('pdosAgentRuntimeDismiss')?.classList.toggle('hidden', !runId);
 
     if (payload?.events?.length) {
@@ -2769,6 +2862,7 @@
     }
     const budget = runConfig.budget;
     pdosState.activeTaskPlan = runConfig.taskPlan || options.taskPlan || null;
+    pdosState.lastRuntimeOptions = { ...options, taskPlan: pdosState.activeTaskPlan };
     try {
       stopAgentRuntimeMonitor();
       const body = {
@@ -2894,15 +2988,44 @@
     }
   }
 
+  async function reconnectAgentRuntime(project) {
+    try {
+      const health = await apiRequest('/agent-runs/health');
+      if (health.runtimeReachable) {
+        showToast('Agent Runtime ligado', 'ok');
+        const active = getActiveRuntimeJob(project);
+        if (active?.promptRunId) startAgentRuntimeMonitor(active.promptRunId, project.id);
+        return true;
+      }
+      showToast(health.error || 'Agent Runtime indisponível', 'error');
+      return false;
+    } catch (err) {
+      showToast(err.message, 'error');
+      return false;
+    }
+  }
+
   async function rerunAgentRuntime(agentType, project) {
     const runId = pdosState.activeRuntimeRun?.runId;
+    const opts = pdosState.pendingAgentConfig?.options || pdosState.lastRuntimeOptions;
     if (runId) {
       try {
-        await apiRequest(`/agent-runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
-      } catch { /* ignore */ }
+        const res = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/retry`, {
+          method: 'POST',
+          body: { options: opts || {} },
+        });
+        showToast('Execução reiniciada', 'ok');
+        startAgentRuntimeMonitor(res.promptRunId || runId, project.id, { openPanel: true });
+        await reloadProject(project.id);
+        return res;
+      } catch {
+        try {
+          await apiRequest(`/agent-runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
+        } catch { /* ignore */ }
+      }
     }
     stopAgentRuntimeMonitor();
-    return openAgentConfigModal(agentType, project);
+    return openAgentConfigModal(agentType, project, opts || {});
   }
 
   function renderAgentRuntimeBar(project, pollPayload) {
@@ -3008,6 +3131,214 @@
     }
   }
 
+  async function openExecutionPlan(agentType, project, extra = {}) {
+    const loadToken = nextPromptLoadToken();
+    pdosState.pendingPromptRun = null;
+    pdosState.activePlan = null;
+    pdosState.activePlanTaskId = '';
+    pdosState.activeJob = null;
+    setWorkbenchJobMode(false);
+    $('pdosExecPlanBar')?.classList.add('hidden');
+    $('pdosPromptWorkbench')?.classList.remove('hidden');
+    $('pdosPromptAwaitBanner')?.classList.remove('hidden');
+    resetPromptWorkbenchUI({ summary: 'A preparar plano…', loading: true });
+
+    const body = {
+      agentType,
+      stageId: window.state?.deliverySelectedStageId,
+      ...extra,
+    };
+    if (agentType === 'commercial_proposal') {
+      const ta = $('pdosCardFeed')?.querySelector('[data-proposal-instructions]');
+      if (ta && ta.value.trim()) body.instructions = ta.value.trim();
+    }
+    const res = await apiRequest(`/projects/${project.id}/execution-plans`, { method: 'POST', body });
+    if (!isPromptLoadCurrent(loadToken)) return null;
+    pdosState.activePlan = res.plan;
+    await openExecutionWorkbench(res.plan, project, { loadToken });
+    return res.plan;
+  }
+
+  function workbenchSessionMatches(plan, taskId) {
+    if (!plan?.id || pdosState.activePlan?.id !== plan.id) return false;
+    if (taskId && pdosState.activePlanTaskId && pdosState.activePlanTaskId !== taskId) return false;
+    return true;
+  }
+
+  function applyPromptToWorkbench({ prompt, promptRun, plan, taskId }) {
+    if (!workbenchSessionMatches(plan, taskId)) return;
+    const task = (plan?.tasks || []).find((t) => t.id === taskId);
+    $('pdosPromptRunId').value = promptRun?.id || '';
+    $('pdosPromptRaw').value = prompt || promptRun?.fullPrompt || task?.instruction || '';
+    $('pdosPromptRaw').dataset.loading = '';
+    $('pdosPromptOutput').value = '';
+    $('pdosPromptSummary').textContent = task?.title
+      ? `${planTransitionLabel(plan) || agentFriendlyLabel(plan?.agentType, plan)} — ${task.title}`
+      : (plan?.masterPlanMarkdown || plan?.agentType || 'Plano de execução');
+  }
+
+  async function loadExecutionPlanTask(project, plan, taskId, options = {}) {
+    const task = (plan.tasks || []).find((t) => t.id === taskId);
+    const loadToken = options.loadToken ?? pdosState.promptLoadToken;
+
+    pdosState.activePlan = plan;
+    pdosState.activePlanTaskId = taskId;
+
+    if (!options.skipInitialApply) {
+      applyPromptToWorkbench({
+        prompt: task?.instruction || '',
+        promptRun: null,
+        plan,
+        taskId,
+      });
+    }
+
+    if (options.localOnly) return null;
+
+    try {
+      const res = await apiRequest(
+        `/projects/${project.id}/execution-plans/${encodeURIComponent(plan.id)}/tasks/${encodeURIComponent(taskId)}/prompt-run`,
+        { method: 'POST', body: {} }
+      );
+      if (loadToken !== pdosState.promptLoadToken) return res;
+      if (!workbenchSessionMatches(plan, taskId)) return res;
+      pdosState.pendingPromptRun = null;
+      applyPromptToWorkbench({
+        prompt: res.prompt || task?.instruction || '',
+        promptRun: res.promptRun,
+        plan,
+        taskId,
+      });
+      return res;
+    } catch (err) {
+      if (loadToken !== pdosState.promptLoadToken) throw err;
+      if (!workbenchSessionMatches(plan, taskId)) throw err;
+      if (!task?.instruction) {
+        $('pdosPromptRaw').value = '';
+        $('pdosPromptRaw').dataset.loading = '';
+      }
+      if (!options.silent) showToast(err.message || 'Erro ao registar execução do prompt', 'error');
+      throw err;
+    }
+  }
+
+  function renderExecutionPlanBar(plan) {
+    const bar = $('pdosExecPlanBar');
+    if (!bar || !plan?.tasks?.length) {
+      bar?.classList.add('hidden');
+      return;
+    }
+    const runtimeAgent = resolveRuntimeAgentForPlan(plan);
+    bar.classList.remove('hidden');
+    bar.innerHTML = `
+      <div class="pdos-exec-plan-head">
+        <strong>Plano: ${escapeHtml(agentFriendlyLabel(plan.agentType, plan))}</strong>
+        <span class="muted-text">${escapeHtml(shortText(plan.masterPlanMarkdown || '', 120))}</span>
+      </div>
+      <ol class="pdos-exec-plan-tasks">
+        ${plan.tasks.map((task) => {
+          const active = task.id === pdosState.activePlanTaskId;
+          const done = task.status === 'done';
+          return `
+            <li class="pdos-exec-plan-task ${active ? 'is-active' : ''} ${done ? 'is-done' : ''}">
+              <button type="button" class="btn tiny ghost" data-exec-task="${escapeHtml(task.id)}">
+                ${done ? '✓' : '○'} ${escapeHtml(task.title)}
+              </button>
+            </li>`;
+        }).join('')}
+      </ol>
+      <div class="pdos-exec-plan-actions">
+        ${runtimeAgent ? `
+          <button type="button" class="btn tiny primary" id="pdosExecRunAgent">Executar com YourLab Agent</button>
+        ` : ''}
+      </div>`;
+    bar.querySelectorAll('[data-exec-task]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const project = window.state?.selectedProject;
+        if (!project || !pdosState.activePlan) return;
+        const taskId = btn.dataset.execTask;
+        pdosState.activePlanTaskId = taskId;
+        const task = (pdosState.activePlan.tasks || []).find((t) => t.id === taskId);
+        if (task?.instruction) {
+          applyPromptToWorkbench({
+            prompt: task.instruction,
+            promptRun: null,
+            plan: pdosState.activePlan,
+            taskId,
+          });
+        }
+        try {
+          await loadExecutionPlanTask(project, pdosState.activePlan, taskId, { silent: true });
+          renderExecutionPlanBar(pdosState.activePlan);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    });
+    $('pdosExecRunAgent')?.addEventListener('click', () => {
+      if (!pdosState.activePlan) return;
+      const runtimeAgent = resolveRuntimeAgentForPlan(pdosState.activePlan);
+      if (!runtimeAgent) return;
+      openAgentConfigModal(runtimeAgent, window.state?.selectedProject, {
+        ...(pdosState.activePlan.config || {}),
+        fromStageId: pdosState.activePlan.fromStageId,
+        toStageId: pdosState.activePlan.toStageId,
+        direction: pdosState.activePlan.direction,
+      });
+    });
+  }
+
+  async function openExecutionWorkbench(plan, project, options = {}) {
+    const loadToken = options.loadToken ?? nextPromptLoadToken();
+    pdosState.activePlan = plan;
+    pdosState.pendingPromptRun = null;
+    const firstTask = (plan.tasks || []).find((t) => t.status !== 'done') || plan.tasks?.[0];
+    pdosState.activePlanTaskId = firstTask?.id || '';
+    const modal = $('pdosPromptWorkbench');
+    if (!modal) return;
+    pdosState.activeJob = null;
+    setWorkbenchJobMode(false);
+    modal.classList.remove('hidden');
+    $('pdosPromptAwaitBanner')?.classList.remove('hidden');
+    const transitionHint = planTransitionLabel(plan);
+    const summary = transitionHint
+      ? `Transição ${transitionHint}${firstTask?.title ? ` — ${firstTask.title}` : ''}`
+      : (plan.masterPlanMarkdown || plan.agentType || 'Plano de execução');
+    $('pdosPromptSummary').textContent = summary;
+
+    if (!firstTask) {
+      $('pdosPromptRaw').value = '';
+      $('pdosPromptRaw').dataset.loading = '';
+      showToast('Este plano não tem tarefas — verifique a transição de fase.', 'error');
+      return;
+    }
+
+    try {
+      renderExecutionPlanBar(plan);
+    } catch (err) {
+      showToast(err.message || 'Erro ao renderizar plano', 'error');
+    }
+
+    applyPromptToWorkbench({
+      prompt: firstTask.instruction || '',
+      promptRun: null,
+      plan,
+      taskId: firstTask.id,
+    });
+
+    if (!firstTask.instruction) {
+      showToast('Prompt desta tarefa vazio — a regenerar no servidor…', 'error');
+    }
+
+    if (firstTask && project) {
+      loadExecutionPlanTask(project, plan, firstTask.id, {
+        loadToken,
+        skipInitialApply: true,
+        silent: true,
+      }).catch(() => {});
+    }
+  }
+
   async function runAgent(agentType, project) {
     if (agentType === 'requirements_to_architecture') {
       return runArchitecturePackGeneration(project);
@@ -3017,20 +3348,24 @@
     }
     if (BATCHABLE_AGENT_TYPES.includes(agentType)
       && ensureArray(project.requirements).length > AGENT_JOB_THRESHOLD) {
-      return startAgentJob(agentType, project);
+      try {
+        return await openExecutionPlan(agentType, project);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+      return undefined;
     }
     if (canRunViaAgentRuntime(agentType)) {
-      return openAgentConfigModal(agentType, project);
+      try {
+        await openExecutionPlan(agentType, project);
+      } catch (err) {
+        showToast(err.message, 'error');
+        return openAgentConfigModal(agentType, project);
+      }
+      return undefined;
     }
     try {
-      const body = { agentType, stageId: window.state?.deliverySelectedStageId };
-      if (agentType === 'commercial_proposal') {
-        const ta = $('pdosCardFeed')?.querySelector('[data-proposal-instructions]');
-        if (ta && ta.value.trim()) body.instructions = ta.value.trim();
-      }
-      const res = await apiRequest(`/projects/${project.id}/prompt-runs`, { method: 'POST', body });
-      pdosState.pendingPromptRun = res.promptRun;
-      openPromptWorkbench(res);
+      await openExecutionPlan(agentType, project);
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -3043,23 +3378,37 @@
     if (!on) $('pdosJobAuto')?.classList.add('hidden');
   }
 
-  function openPromptWorkbench(res) {
+  function openPromptWorkbench(res, options = {}) {
+    if (options.bumpToken !== false) nextPromptLoadToken();
     const modal = $('pdosPromptWorkbench');
     if (!modal) return;
     pdosState.activeJob = null;
+    pdosState.activePlan = null;
+    pdosState.activePlanTaskId = '';
+    pdosState.pendingPromptRun = res.promptRun || null;
+    $('pdosExecPlanBar')?.classList.add('hidden');
     setWorkbenchJobMode(false);
     modal.classList.remove('hidden');
+    $('pdosPromptAwaitBanner')?.classList.remove('hidden');
     $('pdosPromptSummary').textContent = res.promptRun?.summaryMarkdown || 'Prompt gerado.';
-    $('pdosPromptRaw').value = res.prompt || '';
+    $('pdosPromptRaw').value = res.prompt || res.promptRun?.fullPrompt || '';
+    $('pdosPromptRaw').dataset.loading = '';
     $('pdosPromptOutput').value = res.promptRun?.rawOutput || '';
     $('pdosPromptRunId').value = res.promptRun?.id || '';
   }
 
   function closePromptWorkbench() {
+    nextPromptLoadToken();
     $('pdosPromptWorkbench')?.classList.add('hidden');
+    $('pdosPromptAwaitBanner')?.classList.add('hidden');
+    $('pdosExecPlanBar')?.classList.add('hidden');
     setWorkbenchJobMode(false);
     pdosState.activeJob = null;
     pdosState.activeJobStep = '';
+    pdosState.activePlan = null;
+    pdosState.activePlanTaskId = '';
+    pdosState.pendingPromptRun = null;
+    resetPromptWorkbenchUI({ summary: '', loading: false });
   }
 
   async function startAgentJob(agentType, project) {
@@ -3256,17 +3605,49 @@
       showToast('JSON inválido — use aspas rectas (" ") no output', 'error');
       return;
     }
+
+    const plan = pdosState.activePlan;
+    const taskId = pdosState.activePlanTaskId;
+
     try {
-      const res = await apiRequest(`/projects/${project.id}/prompt-runs/${runId}/apply`, {
-        method: 'POST',
-        body: { rawOutput: normalized, parsedOutput: parsed, deferApply: true },
-      });
-      showToast(res.deferred
-        ? 'Submetido para revisão humana — aprove nos detalhes para aplicar'
-        : 'Output aplicado');
-      closePromptWorkbench();
+      let res;
+      if (plan?.id && taskId) {
+        res = await apiRequest(
+          `/projects/${project.id}/execution-plans/${encodeURIComponent(plan.id)}/tasks/${encodeURIComponent(taskId)}/submit`,
+          { method: 'POST', body: { rawOutput: normalized, parsedOutput: parsed, deferApply: true } }
+        );
+      } else {
+        res = await apiRequest(`/projects/${project.id}/prompt-runs/${runId}/apply`, {
+          method: 'POST',
+          body: { rawOutput: normalized, parsedOutput: parsed, deferApply: true },
+        });
+      }
+
+      if (res.noChanges) {
+        showToast('Nenhuma alteração detectada — revisão humana não criada.', 'ok');
+      } else if (res.review?.id) {
+        showToast('Submetido para revisão humana', 'ok');
+        closePromptWorkbench();
+        await reloadProject(project.id);
+        openReviewDrawer(window.state.selectedProject, res.review.id);
+        return;
+      } else {
+        showToast('Output registado — continue as tarefas do plano.', 'ok');
+      }
+
+      if (plan?.id) {
+        const prevFrCount = (pdosState.activePlan?.tasks || []).filter((t) => t.reqKind === 'functional').length;
+        const planRes = await apiRequest(`/projects/${project.id}/execution-plans/${encodeURIComponent(plan.id)}`);
+        pdosState.activePlan = planRes.plan;
+        renderExecutionPlanBar(planRes.plan);
+        const newFrCount = (planRes.plan.tasks || []).filter((t) => t.reqKind === 'functional').length;
+        if (newFrCount > prevFrCount) {
+          showToast(`Plano actualizado: ${newFrCount} tarefas FR (uma por fase de implementação)`, 'ok');
+        }
+        const next = (planRes.plan.tasks || []).find((t) => t.status !== 'done' && t.status !== 'skipped');
+        if (next) await loadExecutionPlanTask(window.state.selectedProject, planRes.plan, next.id);
+      }
       await reloadProject(project.id);
-      if (res.review?.id) openReviewDrawer(window.state.selectedProject, res.review.id);
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -3289,15 +3670,26 @@
     }
   }
 
-  async function resolveReview(reviewId, status) {
+  async function resolveReview(reviewId, status, extra = {}) {
     const project = window.state?.selectedProject;
     if (!project) return;
     try {
-      await apiRequest(`/projects/${project.id}/human-reviews/${reviewId}/resolve`, {
+      const res = await apiRequest(`/projects/${project.id}/human-reviews/${reviewId}/resolve`, {
         method: 'POST',
-        body: { status, applyChanges: status === 'approved' },
+        body: {
+          status,
+          action: extra.action || status,
+          resolutionNotes: extra.notes || '',
+          applyChanges: status === 'approved' && extra.action !== 'rollback',
+        },
       });
-      showToast(status === 'approved' ? 'Revisão aprovada e alterações aplicadas' : 'Revisão actualizada');
+      if (res.rollback) showToast('Projecto revertido para snapshot anterior', 'ok');
+      else if (extra.action === 'reprompt' && res.repromptRun) {
+        showToast('Reprompt — cole novo output no workbench', 'ok');
+        openPromptWorkbench({ promptRun: res.repromptRun, prompt: res.repromptRun.fullPrompt });
+      } else if (status === 'approved') showToast('Revisão aprovada e alterações aplicadas', 'ok');
+      else if (extra.action === 'cancel') showToast('Revisão cancelada', 'ok');
+      else showToast('Revisão actualizada', 'ok');
       closeDrawer();
       await reloadProject(project.id);
     } catch (err) {
@@ -3383,9 +3775,15 @@
         ${review.bodyMarkdown ? `<section class="hr-drawer-section"><span class="rm-label">Detalhe narrativo</span><div id="pdosReviewMarkdown" class="markdown-preview idea-md"></div></section>` : ''}
       </div>
       <footer class="hr-drawer-footer">
-        ${review.status === 'pending' ? `
+        ${review.status === 'pending' && window.canEditProject?.() ? `
           <button type="button" class="btn primary" data-approve-review="${escapeHtml(review.id)}">Aprovar e aplicar</button>
-          <button type="button" class="btn" data-reject-review="${escapeHtml(review.id)}">Pedir alterações</button>
+          <button type="button" class="btn" data-reject-review="${escapeHtml(review.id)}">Rejeitar</button>
+          <button type="button" class="btn" data-changes-review="${escapeHtml(review.id)}">Pedir alterações</button>
+          <button type="button" class="btn" data-clarify-review="${escapeHtml(review.id)}">Necessita esclarecimento</button>
+          <button type="button" class="btn" data-defer-review="${escapeHtml(review.id)}">Adiar</button>
+          <button type="button" class="btn" data-reprompt-review="${escapeHtml(review.id)}">Reprompt</button>
+          ${review.preApplySnapshotId ? `<button type="button" class="btn" data-rollback-review="${escapeHtml(review.id)}">Reverter</button>` : ''}
+          <button type="button" class="btn ghost" data-cancel-review="${escapeHtml(review.id)}">Cancelar revisão</button>
         ` : `<span class="chip">${escapeHtml(review.status)}</span>`}
         <button type="button" class="btn ghost pdos-drawer-close-footer">Fechar</button>
       </footer>
@@ -3399,7 +3797,30 @@
       btn.addEventListener('click', closeDrawer);
     });
     content.querySelector('[data-approve-review]')?.addEventListener('click', () => resolveReview(reviewId, 'approved'));
-    content.querySelector('[data-reject-review]')?.addEventListener('click', () => resolveReview(reviewId, 'changes_requested'));
+    content.querySelector('[data-reject-review]')?.addEventListener('click', () => resolveReview(reviewId, 'rejected'));
+    content.querySelector('[data-changes-review]')?.addEventListener('click', () => {
+      const notes = window.prompt('Notas para o reprompt ou alterações manuais:') || '';
+      resolveReview(reviewId, 'changes_requested', { notes, action: 'changes_requested' });
+    });
+    content.querySelector('[data-reprompt-review]')?.addEventListener('click', () => {
+      const notes = window.prompt('Instruções adicionais para o reprompt:') || '';
+      resolveReview(reviewId, 'changes_requested', { notes, action: 'reprompt' });
+    });
+    content.querySelector('[data-clarify-review]')?.addEventListener('click', () => {
+      const notes = window.prompt('O que precisa de ser esclarecido?') || '';
+      resolveReview(reviewId, 'needs_clarification', { notes, action: 'needs_clarification' });
+    });
+    content.querySelector('[data-defer-review]')?.addEventListener('click', () => {
+      const notes = window.prompt('Motivo para adiar (opcional):') || '';
+      resolveReview(reviewId, 'deferred', { notes, action: 'deferred' });
+    });
+    content.querySelector('[data-rollback-review]')?.addEventListener('click', () => {
+      if (!window.confirm('Reverter o projecto para o estado antes desta revisão?')) return;
+      resolveReview(reviewId, 'rejected', { action: 'rollback' });
+    });
+    content.querySelector('[data-cancel-review]')?.addEventListener('click', () => {
+      resolveReview(reviewId, 'cancelled', { action: 'cancel' });
+    });
   }
 
   async function relinkPhases() {
@@ -3411,7 +3832,6 @@
       const res = await apiRequest(`/projects/${project.id}/relink-phases`, { method: 'POST' });
       showToast(res.report?.summary || 'Ligações reaplicadas');
       await reloadProject(project.id);
-      if (res.reviewId) openReviewDrawer(window.state.selectedProject, res.reviewId);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -3434,23 +3854,13 @@
   async function generateCommercialProposal() {
     const project = window.state?.selectedProject;
     if (!project) return;
-    const btn = $('pdosGenProposalBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'A gerar…'; }
-    try {
-      const res = await apiRequest(`/projects/${project.id}/generate`, {
-        method: 'POST',
-        body: { mode: 'commercial' },
+    if (window.ProposalConfigurator?.open) {
+      await window.ProposalConfigurator.open(project.id, {
+        onGenerated: async () => reloadProject(project.id),
       });
-      const outputs = res.generated?.outputs || res.outputs || {};
-      const link = outputs.fullDocumentHtml || outputs.fullDocumentPdf || outputs.fullDocumentMarkdown;
-      showToast('Proposta comercial gerada a partir da informação atual do projeto');
-      await reloadProject(project.id);
-      if (link) window.open(link, '_blank', 'noopener');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Gerar proposta comercial'; }
+      return;
     }
+    showToast('Configurador de proposta indisponível.', 'error');
   }
 
   async function reloadProject(projectId) {
@@ -3474,6 +3884,12 @@
     renderAgentRuntimeBar(project);
     renderCardFeed(project);
     window.DiagramsUI?.renderShell?.(project);
+    window.DeliveryOsPlatform?.refreshPlatformUi?.(project);
+    window.ClientPortalUI?.refresh?.(project);
+    const flowEl = document.getElementById('pdosFlowHealth');
+    if (flowEl && !window.DeliveryOsPlatform?.isClientRole?.()) {
+      flowEl.classList.remove('hidden');
+    }
   }
 
   function renderSnapshotsList(project) {
@@ -3602,9 +4018,10 @@
     if ($('artifactStageId')) $('artifactStageId').innerHTML = stageFlow.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`).join('');
     if ($('traceRelationshipType')) $('traceRelationshipType').innerHTML = traceTypes.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
 
-    $('artifactsList') && ($('artifactsList').innerHTML = (project.artifacts || []).slice(0, 20).map((a) =>
-      `<div class="simple-item"><strong>${escapeHtml(a.name)}</strong><small>${escapeHtml(a.type)} · ${escapeHtml(a.status)}</small></div>`
-    ).join('') || '<span class="muted-text">Sem artefactos.</span>');
+    $('artifactsList') && ($('artifactsList').innerHTML = (project.artifacts || []).slice(0, 20).map((a) => {
+      const provBadge = window.DeliveryOsPlatform?.renderProvenanceBadge?.(a) || '';
+      return `<div class="simple-item"><strong>${escapeHtml(a.name)}</strong> ${provBadge}<small>${escapeHtml(a.type)} · ${escapeHtml(a.status)}</small></div>`;
+    }).join('') || '<span class="muted-text">Sem artefactos.</span>');
 
     $('traceLinksList') && ($('traceLinksList').innerHTML = (project.traceLinks || []).slice(0, 20).map((l) =>
       `<div class="simple-item"><small>${escapeHtml(l.sourceType)}:${escapeHtml(l.sourceId)} → ${escapeHtml(l.relationshipType)} → ${escapeHtml(l.targetType)}:${escapeHtml(l.targetId)}</small></div>`
@@ -3866,6 +4283,10 @@
       const agentType = pdosState.activeRuntimeRun?.agentType || pdosState.pendingPromptRun?.agentType;
       if (project && agentType) rerunAgentRuntime(agentType, project);
     });
+    $('pdosAgentRuntimeReconnect')?.addEventListener('click', () => {
+      const project = window.state?.selectedProject;
+      if (project) reconnectAgentRuntime(project);
+    });
     $('pdosPromptApply')?.addEventListener('click', applyPromptOutput);
     $('pdosJobSubmit')?.addEventListener('click', submitJobStep);
     $('pdosJobAuto')?.addEventListener('click', submitJobAuto);
@@ -3902,6 +4323,8 @@
     runYourlabAgent,
     openYourlabAgentPanel,
     openAgentConfigModal,
+    openExecutionWorkbench,
+    openExecutionPlan,
     pdosState,
   };
   window.refreshTraceMap = () => loadTraceMap(window.state?.selectedProject?.id);

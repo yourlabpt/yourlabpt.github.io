@@ -7,7 +7,83 @@
     dragReqId: null,
     groupMode: 'module',
     groupingIndex: new Map(),
+    selectedReqIds: new Set(),
   };
+
+  const RENUMBERABLE_TYPES = new Set(['stakeholder', 'functional', 'non_functional', 'test_case']);
+
+  function parseReqIdParts(id) {
+    const m = String(id || '').match(/^(STK|SR|FR|RNF|TC)-(\d+)$/i);
+    if (!m) return null;
+    const prefix = m[1].toUpperCase() === 'SR' ? 'STK' : m[1].toUpperCase();
+    return { prefix, serial: Number(m[2]), fullPrefix: `${prefix}-` };
+  }
+
+  async function applyRequirementRenumber(project, reqId, target, inputEl) {
+    const parts = parseReqIdParts(reqId);
+    if (!parts || !Number.isFinite(target) || target < 1 || parts.serial === target) return null;
+    if (inputEl) inputEl.disabled = true;
+    try {
+      const res = await apiRequest(
+        `/projects/${encodeURIComponent(project.id)}/requirements/${encodeURIComponent(reqId)}/renumber`,
+        { method: 'POST', body: { number: target } }
+      );
+      state.selectedProject = res.project;
+      const changedId = res.changedId || reqId;
+      if (reqUiState.modalReqId === reqId) reqUiState.modalReqId = changedId;
+      if (state.selectedRequirementId === reqId) state.selectedRequirementId = changedId;
+      renderGroupedRequirements(state.selectedProject);
+      if (window.RequirementsMapUI?.renderRequirementsMap && reqUiState.groupMode === 'vmap') {
+        await window.RequirementsMapUI.renderRequirementsMap(state.selectedProject, 'vmap');
+      }
+      if (typeof refreshHierarchyKpis === 'function') refreshHierarchyKpis(state.selectedProject);
+      if (typeof renderImplementationPlan === 'function') renderImplementationPlan(state.selectedProject);
+      const serialInput = $('modalReqSerial');
+      if (serialInput && reqUiState.modalReqId) {
+        const newParts = parseReqIdParts(changedId);
+        if (newParts) {
+          serialInput.dataset.renumberReq = changedId;
+          serialInput.value = newParts.serial;
+        }
+      }
+      return res;
+    } catch (error) {
+      if (inputEl) inputEl.value = parts.serial;
+      showToast(error.message || 'Erro ao renumerar.', 'error');
+      return null;
+    } finally {
+      if (inputEl) inputEl.disabled = false;
+    }
+  }
+
+  function wireModalRenumberInput(form, project) {
+    if (!canEdit() || !form) return;
+    form.querySelectorAll('.req-modal-serial-input').forEach((input) => {
+      const apply = async () => {
+        const reqId = input.dataset.renumberReq;
+        const target = Number(input.value);
+        if (!reqId) return;
+        await applyRequirementRenumber(state.selectedProject || project, reqId, target, input);
+        if (reqUiState.modalReqId && $('reqModalTitle')) {
+          const req = (state.selectedProject?.requirements || []).find((r) => r.id === reqUiState.modalReqId);
+          if (req) $('reqModalTitle').textContent = `${req.id} — Editar requisito`;
+        }
+      };
+      input.addEventListener('click', (e) => e.stopPropagation());
+      input.addEventListener('mousedown', (e) => e.stopPropagation());
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          input.blur();
+        }
+      });
+      input.addEventListener('change', (e) => {
+        e.stopPropagation();
+        apply();
+      });
+    });
+  }
 
   // Liga cada requisito a funcionalidade/grupo a partir de project.capabilities
   // e project.requirementClusters (o resultado do agrupamento com IA).
@@ -101,11 +177,98 @@
     return MODULE_PRIORITY.find((m) => tags.includes(m)) || tags[0];
   }
 
-  function groupRequirements(items) {
+  function collectPhases(project) {
+    if (window.PhaseSync?.planPhaseNames) return window.PhaseSync.planPhaseNames(project);
+    const phases = Array.isArray(project?.phases) ? project.phases : [];
+    const names = phases.map((p) => String(p?.name || '').trim()).filter(Boolean);
+    return names.length ? names : ['Backlog'];
+  }
+
+  function effectiveReqPhase(req, project) {
+    if (window.PhaseSync?.effectiveRequirementPhase) {
+      return window.PhaseSync.effectiveRequirementPhase(req, project);
+    }
+    return String(req?.phase || 'Backlog').trim() || 'Backlog';
+  }
+
+  function phaseOrderMap(project) {
+    const map = new Map();
+    collectPhases(project).forEach((name, index) => map.set(normalizeForCompare(name), index));
+    return map;
+  }
+
+  function sortPhaseNames(names, project) {
+    const order = phaseOrderMap(project);
+    return [...names].sort((a, b) => {
+      const ai = order.get(normalizeForCompare(a));
+      const bi = order.get(normalizeForCompare(b));
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return a.localeCompare(b, 'pt');
+    });
+  }
+
+  function buildPhaseSelectHtml(project, currentValue, { id = '', includeCustom = false } = {}) {
+    const phases = collectPhases(project);
+    const resolved = window.PhaseSync?.resolveRequirementPhase?.(
+      { phase: currentValue },
+      project?.phases
+    );
+    const current = String(resolved || currentValue || phases[0] || 'Backlog').trim() || 'Backlog';
+    const hasCurrent = phases.some((p) => normalizeForCompare(p) === normalizeForCompare(current));
+    const idAttr = id ? ` id="${escapeHtml(id)}"` : '';
+    let html = `<select${idAttr} class="req-phase-select">`;
+    for (const phase of phases) {
+      html += `<option value="${escapeHtml(phase)}" ${normalizeForCompare(phase) === normalizeForCompare(current) ? 'selected' : ''}>${escapeHtml(phase)}</option>`;
+    }
+    if (includeCustom && !hasCurrent && current) {
+      html += `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)} (actual)</option>`;
+    }
+    if (includeCustom) {
+      html += `<option value="__custom__" ${!hasCurrent && current ? '' : ''}>Outra fase…</option>`;
+    }
+    html += '</select>';
+    return html;
+  }
+
+  function readPhaseSelectValue(selectEl) {
+    if (!selectEl) return 'Backlog';
+    if (selectEl.value === '__custom__') {
+      const custom = selectEl.parentElement?.querySelector('.req-phase-custom');
+      return String(custom?.value || '').trim() || 'Backlog';
+    }
+    return selectEl.value || 'Backlog';
+  }
+
+  function wirePhaseSelect(selectEl) {
+    if (!selectEl || selectEl.dataset.phaseSelectWired) return;
+    selectEl.dataset.phaseSelectWired = '1';
+    const syncCustom = () => {
+      let custom = selectEl.parentElement?.querySelector('.req-phase-custom');
+      if (selectEl.value === '__custom__') {
+        if (!custom) {
+          custom = document.createElement('input');
+          custom.type = 'text';
+          custom.className = 'req-phase-custom';
+          custom.placeholder = 'Nome da fase';
+          selectEl.insertAdjacentElement('afterend', custom);
+          custom.addEventListener('input', () => selectEl.dispatchEvent(new Event('change', { bubbles: true })));
+        }
+        custom.classList.remove('hidden');
+      } else if (custom) {
+        custom.classList.add('hidden');
+      }
+    };
+    selectEl.addEventListener('change', syncCustom);
+    syncCustom();
+  }
+
+  function groupRequirements(items, project) {
     const tree = new Map();
     for (const req of items) {
       const mod = primaryModuleOf(req);
-      const phase = String(req.phase || 'Backlog').trim() || 'Backlog';
+      const phase = effectiveReqPhase(req, project);
       if (!tree.has(mod)) tree.set(mod, new Map());
       const phases = tree.get(mod);
       if (!phases.has(phase)) phases.set(phase, []);
@@ -114,15 +277,11 @@
     const modules = [...tree.keys()].sort((a, b) => a.localeCompare(b, 'pt'));
     return modules.map((mod) => ({
       module: mod,
-      phases: [...tree.get(mod).keys()].sort((a, b) => a.localeCompare(b, 'pt')).map((phase) => ({
+      phases: sortPhaseNames([...tree.get(mod).keys()], project).map((phase) => ({
         phase,
         requirements: tree.get(mod).get(phase),
       })),
     }));
-  }
-
-  function collectPhases(items) {
-    return [...new Set(items.map((r) => String(r.phase || 'Backlog').trim() || 'Backlog'))].sort((a, b) => a.localeCompare(b, 'pt'));
   }
 
   function getFilteredForUi(project) {
@@ -131,7 +290,7 @@
 
     const phaseFilter = String(state.filters.phase || '').trim();
     if (phaseFilter) {
-      filtered = filtered.filter((r) => (String(r.phase || 'Backlog').trim() || 'Backlog') === phaseFilter);
+      filtered = filtered.filter((r) => effectiveReqPhase(r, project) === phaseFilter);
     }
 
     const priorityFilter = String(state.filters.priority || '').trim();
@@ -233,7 +392,9 @@
     container.classList.remove('req-map-container');
     const grouped = reqUiState.groupMode === 'capability'
       ? groupRequirementsByCapability(filtered)
-      : groupRequirements(filtered);
+      : groupRequirements(filtered, project);
+
+    renderBatchToolbar(project, filtered);
 
     if (legacyTable) legacyTable.classList.add('hidden');
     $('requirementDetailPanel')?.classList.add('hidden');
@@ -263,6 +424,9 @@
                   <summary class="req-phase-summary">
                     <span>${escapeHtml(phase)}</span>
                     <span class="req-count-badge">${requirements.length}</span>
+                    ${canEdit() && reqUiState.groupMode === 'module' ? `
+                      <button type="button" class="btn tiny ghost req-phase-move-all" data-move-phase-all="${escapeHtml(phase)}" title="Mover todos desta fase">Mover fase</button>
+                    ` : ''}
                   </summary>
                   <div class="req-phase-dropzone" data-module="${escapeHtml(module)}" data-phase="${escapeHtml(phase)}">
                     ${requirements.map((req) => renderReqCard(req, project)).join('')}
@@ -276,8 +440,10 @@
     }).join('');
 
     wireGroupedEvents(project);
+    wireBatchToolbarEvents(project, filtered);
     updateMeta(project, filtered);
     populatePhaseFilter(project);
+    populateAddRequirementPhase(project);
   }
 
   function renderReqCard(req, project) {
@@ -305,9 +471,17 @@
       : (req.type !== 'stakeholder' && req.type !== 'out_of_scope'
         ? '<span class="req-card-stk is-missing" title="Sem stakeholder ligado">Sem STK</span>'
         : '');
+    const showSelect = canEdit() && reqUiState.groupMode === 'module';
+    const checked = reqUiState.selectedReqIds.has(req.id);
+    const chrome = (showSelect || draggable)
+      ? `<div class="req-card-controls">
+          ${showSelect ? `<input type="checkbox" class="req-select-cb" data-select-req="${escapeHtml(req.id)}" aria-label="Seleccionar ${escapeHtml(req.id)}" ${checked ? 'checked' : ''} />` : ''}
+          ${draggable ? '<span class="req-drag-handle" title="Arrastar para outro módulo/fase" aria-hidden="true">⠿</span>' : ''}
+        </div>`
+      : '';
     return `
-      <article class="req-card ${locked ? 'req-card-locked' : ''}" draggable="${draggable ? 'true' : 'false'}" data-req-id="${escapeHtml(req.id)}">
-        <span class="req-drag-handle" title="Arrastar para outro módulo/fase" aria-hidden="true">⠿</span>
+      <article class="req-card ${locked ? 'req-card-locked' : ''} ${checked ? 'req-card-selected' : ''}" draggable="${draggable ? 'true' : 'false'}" data-req-id="${escapeHtml(req.id)}">
+        ${chrome}
         <button type="button" class="req-card-main" data-open-req="${escapeHtml(req.id)}">
           <span class="req-card-id">${escapeHtml(req.id)}</span>
           <span class="req-card-type">${escapeHtml(req.type)}</span>
@@ -331,14 +505,116 @@
     el.textContent = `${filtered.length} requisitos no filtro (${items.length} totais) · ${moduleCount} módulos · Lacunas SMART: ${smartMissing}`;
   }
 
+  function renderBatchToolbar(project, filtered) {
+    const bar = $('reqBatchBar');
+    if (!bar) return;
+    const canBatch = canEdit() && reqUiState.groupMode === 'module';
+    if (!canBatch) {
+      bar.classList.add('hidden');
+      bar.innerHTML = '';
+      return;
+    }
+    const count = reqUiState.selectedReqIds.size;
+    bar.classList.remove('hidden');
+    bar.innerHTML = `
+      <div class="req-batch-inner">
+        <span class="req-batch-count"><strong>${count}</strong> seleccionado(s)</span>
+        <div class="req-batch-field">
+          <span class="req-batch-label">Fase</span>
+          ${buildPhaseSelectHtml(project, collectPhases(project)[0] || 'Backlog', { id: 'reqBatchPhase' })}
+        </div>
+        <div class="req-batch-field">
+          <span class="req-batch-label">Módulo</span>
+          <select id="reqBatchModule">
+            <option value="">— manter —</option>
+            <option value="Frontend">Frontend</option>
+            <option value="Backend">Backend</option>
+            <option value="Database">Database</option>
+          </select>
+        </div>
+        <div class="req-batch-actions">
+          <button type="button" class="btn small" id="reqBatchApply" ${count ? '' : 'disabled'}>Aplicar a seleccionados</button>
+          <button type="button" class="btn small ghost" id="reqBatchSelectVisible">Seleccionar visíveis (${filtered.length})</button>
+          <button type="button" class="btn small ghost" id="reqBatchClear" ${count ? '' : 'disabled'}>Limpar</button>
+        </div>
+      </div>
+    `;
+    wirePhaseSelect($('reqBatchPhase'));
+  }
+
+  function updateBatchToolbarState() {
+    const count = reqUiState.selectedReqIds.size;
+    const applyBtn = $('reqBatchApply');
+    const clearBtn = $('reqBatchClear');
+    const countEl = document.querySelector('.req-batch-count strong');
+    if (countEl) countEl.textContent = String(count);
+    if (applyBtn) applyBtn.disabled = !count;
+    if (clearBtn) clearBtn.disabled = !count;
+    document.querySelectorAll('.req-card').forEach((card) => {
+      const id = card.dataset.reqId;
+      card.classList.toggle('req-card-selected', reqUiState.selectedReqIds.has(id));
+      const cb = card.querySelector('.req-select-cb');
+      if (cb) cb.checked = reqUiState.selectedReqIds.has(id);
+    });
+  }
+
   function populatePhaseFilter(project) {
     const sel = $('reqFilterPhase');
     if (!sel) return;
     const current = state.filters.phase || '';
-    const phases = collectPhases(project.requirements || []);
+    const phases = collectPhases(project);
     sel.innerHTML = `<option value="">Todas as fases</option>${phases.map((p) =>
       `<option value="${escapeHtml(p)}" ${p === current ? 'selected' : ''}>${escapeHtml(p)}</option>`
     ).join('')}`;
+  }
+
+  function populateAddRequirementPhase(project) {
+    const wrap = $('reqPhaseWrap');
+    if (!wrap || !project) return;
+    const current = collectPhases(project)[0] || 'Backlog';
+    wrap.innerHTML = buildPhaseSelectHtml(project, current, { id: 'reqPhase' });
+    wirePhaseSelect($('reqPhase'));
+  }
+
+  async function batchUpdateRequirements(project, requirementIds, changes) {
+    const ids = [...new Set(requirementIds)].filter(Boolean);
+    if (!ids.length) return;
+    const res = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/requirements/batch`,
+      { method: 'PATCH', body: { requirementIds: ids, changes } }
+    );
+    state.selectedProject = res.project;
+    reqUiState.selectedReqIds.clear();
+    renderGroupedRequirements(state.selectedProject);
+    if (typeof renderImplementationPlan === 'function') renderImplementationPlan(state.selectedProject);
+    showToast(`${res.updated || ids.length} requisito(s) actualizado(s).`, 'ok');
+  }
+
+  function wireBatchToolbarEvents(project, filtered) {
+    $('reqBatchApply')?.addEventListener('click', async () => {
+      const ids = [...reqUiState.selectedReqIds];
+      if (!ids.length) return;
+      const phase = readPhaseSelectValue($('reqBatchPhase'));
+      const module = $('reqBatchModule')?.value || '';
+      const changes = { phase };
+      if (module) {
+        changes.module = module;
+        changes.moduleTags = [module];
+      }
+      try {
+        await batchUpdateRequirements(project, ids, changes);
+      } catch (error) {
+        showToast(error.message || 'Erro na actualização em lote.', 'error');
+      }
+    });
+    $('reqBatchSelectVisible')?.addEventListener('click', () => {
+      filtered.forEach((r) => reqUiState.selectedReqIds.add(r.id));
+      updateBatchToolbarState();
+    });
+    $('reqBatchClear')?.addEventListener('click', () => {
+      reqUiState.selectedReqIds.clear();
+      updateBatchToolbarState();
+    });
   }
 
   function wireGroupedEvents(project) {
@@ -365,6 +641,34 @@
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         openRequirementModal(btn.dataset.openReq, project);
+      });
+    });
+
+    container.querySelectorAll('.req-select-cb').forEach((cb) => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        const id = cb.dataset.selectReq;
+        if (cb.checked) reqUiState.selectedReqIds.add(id);
+        else reqUiState.selectedReqIds.delete(id);
+        updateBatchToolbarState();
+      });
+    });
+
+    container.querySelectorAll('.req-phase-move-all').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const fromPhase = btn.dataset.movePhaseAll || '';
+        reqUiState.selectedReqIds.clear();
+        (project.requirements || []).forEach((r) => {
+          const phase = String(r.phase || 'Backlog').trim() || 'Backlog';
+          if (phase === fromPhase) reqUiState.selectedReqIds.add(r.id);
+        });
+        renderBatchToolbar(project, getFilteredForUi(project));
+        wireBatchToolbarEvents(project, getFilteredForUi(project));
+        updateBatchToolbarState();
+        $('reqBatchBar')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        showToast(`${reqUiState.selectedReqIds.size} requisito(s) de «${fromPhase}» seleccionados. Escolha destino e aplique.`, 'ok');
       });
     });
 
@@ -450,9 +754,22 @@
     $('reqModalDirty')?.classList.add('hidden');
     $('reqModalTitle').textContent = `${req.id} — Editar requisito`;
 
+    const readonly = !canEdit();
+    const parts = parseReqIdParts(req.id);
+    const canRenumberId = !readonly && RENUMBERABLE_TYPES.has(req.type) && parts;
+    const idField = canRenumberId
+      ? `<label>${helperLabel('ID', 'id')}
+          <span class="req-id-inline">
+            <span class="req-id-prefix">${escapeHtml(parts.fullPrefix)}</span>
+            <input id="modalReqSerial" type="number" min="1" class="req-modal-serial-input"
+              data-renumber-req="${escapeHtml(req.id)}" value="${parts.serial}" />
+          </span>
+        </label>`
+      : `<label>${helperLabel('ID', 'id')}<input id="modalReqId" readonly value="${escapeHtml(req.id)}" /></label>`;
+
     const form = $('requirementModalForm');
     form.innerHTML = `
-      <label>${helperLabel('ID', 'id')}<input id="modalReqId" readonly value="${escapeHtml(req.id)}" /></label>
+      ${idField}
       <label>${helperLabel('Tipo', 'type')}<input id="modalReqType" readonly value="${escapeHtml(req.type)}" /></label>
       <label>${helperLabel('Status', 'status')}<select id="modalReqStatus">${statusOptions()}</select></label>
       <label>${helperLabel('Prioridade', 'priority')}
@@ -465,7 +782,9 @@
           <option value="Frontend">Frontend</option><option value="Backend">Backend</option><option value="Database">Database</option>
         </select>
       </label>
-      <label>${helperLabel('Fase de implementação', 'phase')}<input id="modalReqPhase" /></label>
+      <label>${helperLabel('Fase de implementação', 'phase')}
+        <span class="req-phase-field">${buildPhaseSelectHtml(project, req.phase || 'Backlog', { id: 'modalReqPhase' })}</span>
+      </label>
       <label>${helperLabel('Submódulo', 'submodule')}<input id="modalReqSubmodule" list="submoduleSuggestions" /></label>
       <label class="full">${helperLabel('Título', 'title')}<input id="modalReqTitle" /></label>
       <label class="full">${helperLabel('Need', 'need')}<textarea id="modalReqNeed" rows="2"></textarea></label>
@@ -479,7 +798,7 @@
     $('modalReqStatus').value = req.status || 'draft';
     $('modalReqPriority').value = req.priority || 'medium';
     $('modalReqModule').value = normalizeModuleName(req.module);
-    $('modalReqPhase').value = req.phase || 'Backlog';
+    wirePhaseSelect($('modalReqPhase'));
     $('modalReqSubmodule').value = normalizeSubmoduleName(req.submodule);
     $('modalReqTitle').value = req.title || '';
     $('modalReqNeed').value = req.need || '';
@@ -488,13 +807,14 @@
     $('modalReqRelatedIds').value = joinRequirementIds(req.relatedRequirementIds);
     $('modalReqNotes').value = req.notes || '';
 
-    const readonly = !canEdit();
     form.querySelectorAll('input, textarea, select').forEach((node) => {
       if (node.id === 'modalReqId' || node.id === 'modalReqType') return;
       node.disabled = readonly;
+      if (node.id === 'modalReqSerial') return;
       node.addEventListener('input', markModalDirty);
       node.addEventListener('change', markModalDirty);
     });
+    wireModalRenumberInput(form, project);
     $('reqModalSave').disabled = readonly;
     $('reqModalDelete').classList.toggle('hidden', readonly);
 
@@ -524,7 +844,7 @@
       status: $('modalReqStatus')?.value,
       priority: $('modalReqPriority')?.value,
       module: newModule,
-      phase: $('modalReqPhase')?.value,
+      phase: readPhaseSelectValue($('modalReqPhase')),
       submodule: $('modalReqSubmodule')?.value,
       title: $('modalReqTitle')?.value,
       need: $('modalReqNeed')?.value,
@@ -584,7 +904,7 @@
   }
 
   function exportRequirementsMarkdown(project) {
-    const grouped = groupRequirements(project.requirements || []);
+    const grouped = groupRequirements(project.requirements || [], project);
     let md = '# Requisitos do Projeto\n\n';
     for (const { module, phases } of grouped) {
       md += `## ${module}\n\n`;
@@ -607,7 +927,7 @@
   }
 
   function exportRequirementsJson(project) {
-    const grouped = groupRequirements(project.requirements || []);
+    const grouped = groupRequirements(project.requirements || [], project);
     return {
       modules: grouped.map(({ module, phases }) => ({
         name: module,
@@ -700,6 +1020,7 @@
     });
     $('reqGroupBy')?.addEventListener('change', (e) => {
       reqUiState.groupMode = e.target.value || 'module';
+      reqUiState.selectedReqIds.clear();
       syncReqViewTabs();
       if (state.selectedProject) renderGroupedRequirements(state.selectedProject);
     });
@@ -707,6 +1028,7 @@
       const btn = e.target.closest('[data-req-view]');
       if (!btn) return;
       reqUiState.groupMode = btn.dataset.reqView || 'module';
+      reqUiState.selectedReqIds.clear();
       const sel = $('reqGroupBy');
       if (sel) sel.value = reqUiState.groupMode;
       syncReqViewTabs();
@@ -736,6 +1058,9 @@
     openDocumentViewer,
     initRequirementsUi,
     groupRequirements,
+    collectPhases,
+    populateAddRequirementPhase,
+    readPhaseSelectValue,
     exportRequirementsMarkdown,
     exportRequirementsJson,
     getFilteredForUi,

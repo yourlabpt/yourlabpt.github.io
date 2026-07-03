@@ -204,7 +204,7 @@ function registerAgentRuntimeRoutes(app, deps) {
           run.parsedOutput = parsed;
           run.status = deferApply ? 'pending_review' : 'applied';
 
-          deliveryOs.syncHumanReviewFromPromptRun(project, run, parsed, rawOutput);
+          const upsert = deliveryOs.upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput);
 
           const agentJob = ensureArray(project.agentJobs).find((j) => j.promptRunId === runId);
           if (agentJob) {
@@ -224,15 +224,19 @@ function registerAgentRuntimeRoutes(app, deps) {
 
         const store = await readStore();
         const updated = store.projects.find((e) => e.id === projectId);
-        const review = ensureArray(updated?.humanReviews).find(
+        const reviewRaw = ensureArray(updated?.humanReviews).find(
           (r) => r.promptRunId === runId || r.sourceId === runId
         );
+        const review = reviewRaw && deliveryOs.isActionableReviewForPanel(normalizeHumanReview(reviewRaw))
+          ? normalizeHumanReview(reviewRaw)
+          : null;
 
         return res.json({
           projectId,
           promptRunId: runId,
-          review: review ? normalizeHumanReview(review) : null,
+          review,
           deferred: deferApply,
+          noChanges: Boolean(parsed && !review),
         });
       } catch (error) {
         return res.status(400).json({ message: error.message });
@@ -289,13 +293,38 @@ function registerAgentRuntimeRoutes(app, deps) {
 
       const maxSubtasks = Number(options.maxSubtasks || budget.maxSubtasks || 8);
       let taskPlan = null;
-      if (platformAgentType === 'requirements_to_architecture') {
-        taskPlan = deliveryOs.buildArchitectureTaskPlanForRuntime(
-          project,
-          options.capabilityId,
-          options.moduleTag,
-          { maxSubtasks, requirementsPerDiagram: options.requirementsPerDiagram }
-        );
+      try {
+        const executionPlans = require('./execution-plans');
+        const ep = executionPlans.buildExecutionPlan(platformAgentType, project, {
+          ...options,
+          stageId: options.stageId,
+          maxSubtasks,
+        }, { deliveryOs });
+        if (ep?.tasks?.length) {
+          taskPlan = {
+            masterPlanMarkdown: ep.masterPlanMarkdown,
+            tasks: ep.tasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              instruction: t.instruction,
+              diagramType: t.diagramType,
+              role: t.role,
+              requirementIds: t.requirementIds,
+              dependsOn: t.dependsOn,
+            })),
+            totalRequirements: ensureArray(project.requirements).length,
+            diagramTaskCount: ep.tasks.filter((t) => t.diagramType || t.role === 'diagram').length,
+          };
+        }
+      } catch {
+        if (platformAgentType === 'requirements_to_architecture') {
+          taskPlan = deliveryOs.buildArchitectureTaskPlanForRuntime(
+            project,
+            options.capabilityId,
+            options.moduleTag,
+            { maxSubtasks, requirementsPerDiagram: options.requirementsPerDiagram }
+          );
+        }
       }
 
       return res.json({
@@ -359,17 +388,6 @@ function registerAgentRuntimeRoutes(app, deps) {
         status: 'running',
       });
 
-      const review = normalizeHumanReview({
-        type: 'agent_output',
-        title: `YourLab Agent: ${agentFriendlyName(platformAgentType)}`,
-        summaryMarkdown: `Execução automática via **YourLab Agent** (${agentId}). Acompanhe o progresso no painel de execução.`,
-        bodyMarkdown: buildHumanReviewPayload(project, run, null, '').bodyMarkdown,
-        promptRunId: run.id,
-        sourceType: 'prompt_run',
-        sourceId: run.id,
-        status: 'pending',
-      });
-
       const agentJob = {
         id: `aj_${crypto.randomUUID()}`,
         mode: 'runtime',
@@ -380,6 +398,8 @@ function registerAgentRuntimeRoutes(app, deps) {
         projectId,
         yarJobId: null,
         status: 'dispatching',
+        runtimeOptions: options,
+        budget,
         createdAt: nowIso(),
         updatedAt: nowIso(),
         createdBy: req.auth.user.id,
@@ -403,8 +423,6 @@ function registerAgentRuntimeRoutes(app, deps) {
         mutableProject.promptRuns = ensureArray(mutableProject.promptRuns);
         mutableProject.promptRuns.unshift(run);
         mutableProject.promptRuns = mutableProject.promptRuns.slice(0, 100);
-        mutableProject.humanReviews = ensureArray(mutableProject.humanReviews);
-        mutableProject.humanReviews.unshift(review);
         mutableProject.agentJobs = ensureArray(mutableProject.agentJobs);
         mutableProject.agentJobs.unshift(agentJob);
         mutableProject.agentJobs = mutableProject.agentJobs.slice(0, 50);
@@ -722,6 +740,78 @@ function registerAgentRuntimeRoutes(app, deps) {
       });
 
       return res.json({ dismissed: true, promptRunId: agentJob.promptRunId });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/projects/agent-runs/health', authMiddleware, requireRole('super_admin'), async (req, res) => {
+    try {
+      const health = await runtime.health();
+      return res.json({ runtimeReachable: true, health });
+    } catch (error) {
+      return res.json({ runtimeReachable: false, error: error.message });
+    }
+  });
+
+  app.post('/api/projects/agent-runs/:runId/retry', authMiddleware, requireRole('super_admin'), async (req, res) => {
+    try {
+      const runId = req.params.runId;
+      const store = await readStore();
+      let agentJob = null;
+      let project = null;
+      for (const entry of store.projects) {
+        const found = ensureArray(entry.agentJobs).find((job) => job.promptRunId === runId || job.id === runId);
+        if (found) {
+          agentJob = found;
+          project = entry;
+          break;
+        }
+      }
+      if (!agentJob || !project) {
+        return res.status(404).json({ message: 'Agent run nao encontrado.' });
+      }
+
+      const options = req.body?.options || agentJob.runtimeOptions || {};
+      const budget = req.body?.budget || agentJob.budget || {
+        maxTokens: 120000,
+        maxWallClockMinutes: 45,
+        maxSubtasks: 8,
+      };
+
+      let yarResponse;
+      try {
+        yarResponse = await runtime.createJob({
+          agentId: agentJob.agentId || runtime.mapPlatformType(agentJob.agentType || agentJob.platformAgentType),
+          projectId: project.id,
+          platformRunId: agentJob.promptRunId || runId,
+          budget,
+          options,
+        });
+      } catch (error) {
+        return res.status(502).json({ message: `Agent runtime indisponivel: ${error.message}` });
+      }
+
+      await updateStore(async (mutableStore) => {
+        const mutableProject = mutableStore.projects.find((e) => e.id === project.id);
+        const job = ensureArray(mutableProject?.agentJobs).find((e) => e.id === agentJob.id);
+        if (job) {
+          job.yarJobId = yarResponse?.job?.id || job.yarJobId;
+          job.status = yarResponse?.job?.status || 'queued';
+          job.error = '';
+          job.runtimeOptions = options;
+          job.budget = budget;
+          job.updatedAt = nowIso();
+        }
+        mutableProject.updatedAt = nowIso();
+      });
+
+      return res.json({
+        agentJob: normalizeAgentJob(agentJob),
+        yarJobId: yarResponse?.job?.id,
+        projectId: project.id,
+        promptRunId: agentJob.promptRunId,
+      });
     } catch (error) {
       return res.status(500).json({ message: error.message });
     }
