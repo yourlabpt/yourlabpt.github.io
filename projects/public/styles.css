@@ -6367,6 +6367,11 @@ body.help-drawer-open {
   margin: 0 0 8px;
 }
 
+.list-chunk-actions {
+  margin: 12px 0 4px;
+  text-align: center;
+}
+
 @media (max-width: 640px) {
   .rm-phase {
     gap: 12px;

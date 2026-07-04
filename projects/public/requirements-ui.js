@@ -377,6 +377,9 @@
     if (groupBySel) groupBySel.value = reqUiState.groupMode;
     syncReqViewTabs();
     const filtered = getFilteredForUi(project);
+    const listChunk = window.state?.listLimits?.requirements || 50;
+    const displayFiltered = filtered.length > listChunk ? filtered.slice(0, listChunk) : filtered;
+    const hasMoreReqs = filtered.length > displayFiltered.length;
 
     if (reqUiState.groupMode === 'vmap' || reqUiState.groupMode === 'implmap') {
       if (legacyTable) legacyTable.classList.add('hidden');
@@ -390,21 +393,22 @@
     }
 
     container.classList.remove('req-map-container');
-    const grouped = reqUiState.groupMode === 'capability'
-      ? groupRequirementsByCapability(filtered)
-      : groupRequirements(filtered, project);
 
     renderBatchToolbar(project, filtered);
 
     if (legacyTable) legacyTable.classList.add('hidden');
     $('requirementDetailPanel')?.classList.add('hidden');
 
-    if (!filtered.length) {
+    if (!displayFiltered.length) {
       const total = (project.requirements || []).length;
       container.innerHTML = `<p class="muted-text">${total ? 'Nenhum requisito corresponde ao filtro.' : 'Sem requisitos ainda.'}</p>`;
       updateMeta(project, filtered);
       return;
     }
+
+    const grouped = reqUiState.groupMode === 'capability'
+      ? groupRequirementsByCapability(displayFiltered)
+      : groupRequirements(displayFiltered, project);
 
     container.innerHTML = grouped.map(({ module, phases }) => {
       const modCollapsed = reqUiState.collapsedModules.has(module);
@@ -438,6 +442,19 @@
         </details>
       `;
     }).join('');
+
+    if (hasMoreReqs) {
+      container.innerHTML += `
+        <div class="list-chunk-actions">
+          <button type="button" class="btn tiny ghost" data-req-load-more>
+            Mostrar mais (${filtered.length - displayFiltered.length})
+          </button>
+        </div>`;
+      container.querySelector('[data-req-load-more]')?.addEventListener('click', () => {
+        if (window.state?.listLimits) window.state.listLimits.requirements += 50;
+        renderGroupedRequirements(project);
+      });
+    }
 
     wireGroupedEvents(project);
     wireBatchToolbarEvents(project, filtered);
@@ -961,16 +978,51 @@
     showToast(`Exportação ${format.toUpperCase()} concluída.`, 'ok');
   }
 
-  function openDocumentViewer(doc, project) {
+  async function fetchDocumentContent(doc, project) {
+    if (doc.contentMarkdown || doc.extractedText) return doc;
+    if (!doc.hasContent && !doc.hasExtractedText) return doc;
+    const res = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/documents/${encodeURIComponent(doc.id)}`
+    );
+    const full = res.document || doc;
+    const list = Array.isArray(project.documents) ? project.documents : [];
+    const idx = list.findIndex((d) => d.id === doc.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], ...full };
+    }
+    return full;
+  }
+
+  async function openDocumentViewer(doc, project) {
     const modal = $('documentViewerModal');
     const body = $('documentViewerBody');
     const title = $('documentViewerTitle');
     if (!modal || !body) return;
 
-    const name = doc.title || doc.originalName || 'Documento';
+    body.innerHTML = '<p class="muted-text">A carregar documento…</p>';
+    modal.classList.remove('hidden');
+
+    let fullDoc = doc;
+    try {
+      fullDoc = await fetchDocumentContent(doc, project);
+    } catch (err) {
+      body.innerHTML = `<p class="muted-text">Erro ao carregar: ${escapeHtml(err.message)}</p>`;
+      return;
+    }
+
+    const name = fullDoc.title || fullDoc.originalName || 'Documento';
     title.textContent = name;
-    const content = doc.contentMarkdown || doc.extractedText || '';
-    const format = doc.diagramFormat || (doc.docType === 'diagram' ? 'mermaid' : '');
+    const content = fullDoc.contentMarkdown || fullDoc.extractedText || '';
+    const format = fullDoc.diagramFormat || (fullDoc.docType === 'diagram' ? 'mermaid' : '');
+
+    if (format === 'mermaid' && content) {
+      try {
+        await window.ensureMermaidLoaded?.();
+      } catch {
+        body.innerHTML = `<pre class="minute-raw">${escapeHtml(content)}</pre>`;
+        return;
+      }
+    }
 
     if (format === 'mermaid' && content && window.mermaid) {
       body.innerHTML = `<div class="doc-mermaid-wrap" id="docMermaidPreview"></div><pre class="minute-raw doc-source-copy">${escapeHtml(content)}</pre>`;
@@ -981,7 +1033,7 @@
       }).catch(() => {
         wrap.innerHTML = `<p class="muted-text">Pré-visualização indisponível. Copie o código Mermaid abaixo.</p>`;
       });
-    } else if (format === 'json' || doc.contentType?.includes('json')) {
+    } else if (format === 'json' || fullDoc.contentType?.includes('json')) {
       try {
         body.innerHTML = `<pre class="minute-raw">${escapeHtml(JSON.stringify(JSON.parse(content), null, 2))}</pre>`;
       } catch {
@@ -990,7 +1042,7 @@
     } else if (content) {
       body.innerHTML = `<pre class="minute-raw">${escapeHtml(content)}</pre>`;
     } else {
-      body.innerHTML = `<p class="muted-text">Sem conteúdo inline. <a href="/api/projects/projects/${encodeURIComponent(project.id)}/documents/${encodeURIComponent(doc.id)}/download" target="_blank" rel="noopener">Descarregar ficheiro</a></p>`;
+      body.innerHTML = `<p class="muted-text">Sem conteúdo inline. <a href="/api/projects/projects/${encodeURIComponent(project.id)}/documents/${encodeURIComponent(fullDoc.id)}/download" target="_blank" rel="noopener">Descarregar ficheiro</a></p>`;
     }
 
     $('documentViewerCopy')?.replaceWith($('documentViewerCopy').cloneNode(true));

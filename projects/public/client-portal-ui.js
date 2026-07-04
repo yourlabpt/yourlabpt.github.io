@@ -127,10 +127,25 @@
     });
   }
 
-  async function refresh(project) {
+  let clientPortalInflight = null;
+  let lastClientPortalKey = '';
+
+  async function refresh(project, options = {}) {
     if (!project?.id) return;
-    const portal = await loadClientPortal(project.id);
-    renderClientPortal(project, portal);
+    const key = `${project.id}:${project.updatedAt || ''}`;
+    if (!options.force && lastClientPortalKey === key && clientPortalInflight) {
+      return clientPortalInflight;
+    }
+    clientPortalInflight = (async () => {
+      const portal = await loadClientPortal(project.id);
+      renderClientPortal(project, portal);
+      lastClientPortalKey = key;
+    })();
+    try {
+      await clientPortalInflight;
+    } finally {
+      clientPortalInflight = null;
+    }
   }
 
   window.ClientPortalUI = {

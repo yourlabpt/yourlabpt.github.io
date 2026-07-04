@@ -104,7 +104,18 @@ function slimExecutionPlan(plan) {
 function slimAgentJob(job) {
   if (!job) return job;
   return {
-    ...job,
+    id: job.id,
+    agentType: job.agentType,
+    mode: job.mode,
+    status: job.status,
+    stageId: job.stageId,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    createdBy: job.createdBy,
+    yarJobId: job.yarJobId,
+    promptRunId: job.promptRunId,
+    chunkCount: ensureArray(job.chunks).length,
+    hasParsedOutput: ensureArray(job.chunks).some((c) => Boolean(c.parsedOutput)),
     chunks: ensureArray(job.chunks).map((c) => ({
       index: c.index,
       key: c.key,
@@ -114,6 +125,28 @@ function slimAgentJob(job) {
       hasPrompt: Boolean(c.prompt),
       hasParsedOutput: Boolean(c.parsedOutput),
     })),
+  };
+}
+
+function slimDocument(doc) {
+  if (!doc) return doc;
+  const hasContent = Boolean(doc.contentMarkdown || doc.extractedText);
+  return {
+    id: doc.id,
+    title: doc.title,
+    originalName: doc.originalName,
+    storedName: doc.storedName,
+    uploadedAt: doc.uploadedAt,
+    uploadedBy: doc.uploadedBy,
+    updatedAt: doc.updatedAt,
+    contentType: doc.contentType,
+    size: doc.size,
+    hasExtractedText: Boolean(doc.extractedText),
+    hasContent,
+    deliveryStageId: doc.deliveryStageId,
+    docType: doc.docType,
+    origin: doc.origin,
+    diagramFormat: doc.diagramFormat,
   };
 }
 
@@ -131,6 +164,7 @@ function slimProjectForTransport(project, options = {}) {
   slim.versionSnapshots = ensureArray(project.versionSnapshots).slice(0, snapshotLimit).map(slimVersionSnapshot);
   slim.executionPlans = ensureArray(project.executionPlans).slice(0, planLimit).map(slimExecutionPlan);
   slim.agentJobs = ensureArray(project.agentJobs).map(slimAgentJob);
+  slim.documents = ensureArray(project.documents).map(slimDocument);
   slim.alternativeResponses = ensureArray(project.alternativeResponses).slice(0, 10).map((a) => ({
     ...a,
     rawOutput: a.rawOutput ? `[${String(a.rawOutput).length} chars]` : '',

@@ -427,7 +427,7 @@
     $('aiArtifactModalCancel')?.classList.toggle('hidden', !editing);
   }
 
-  function openAiArtifactModal(item, project) {
+  async function openAiArtifactModal(item, project) {
     const modal = $('aiArtifactModal');
     if (!modal || !item) return;
 
@@ -445,7 +445,20 @@
       $('aiArtifactTitleInput').disabled = readonly;
     }
 
-    $('aiArtifactContentInput').value = item.contentMarkdown || '';
+    let contentMarkdown = item.contentMarkdown || '';
+    if (item.kind === 'document' && !contentMarkdown && (item.hasContent || item.hasExtractedText)) {
+      try {
+        const res = await apiRequest(
+          `/projects/${encodeURIComponent(project.id)}/documents/${encodeURIComponent(item.id)}`
+        );
+        contentMarkdown = res.document?.contentMarkdown || res.document?.extractedText || '';
+        item.contentMarkdown = contentMarkdown;
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    $('aiArtifactContentInput').value = contentMarkdown;
     $('aiArtifactContentInput').disabled = readonly;
 
     const promptBlock = $('aiArtifactPromptBlock');
@@ -464,7 +477,7 @@
       <span>Tipo: <strong>${escapeHtml(friendlyLabel(item))}</strong></span>
     `;
 
-    renderReadPane(item.contentMarkdown);
+    renderReadPane(contentMarkdown);
     setAiModalMode('read');
     $('aiArtifactEditToggle')?.classList.toggle('hidden', readonly || !item.editable);
     $('aiArtifactModalSave').disabled = readonly || !item.editable;

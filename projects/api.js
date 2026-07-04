@@ -9,7 +9,10 @@ const projectAccess = require('./lib/project-access');
 const projectAudit = require('./lib/project-audit');
 const { createSplitStoreLayer } = require('./lib/split-store');
 const projectPayload = require('./lib/project-payload');
+const snapshotStorage = require('./lib/snapshot-storage');
 const zlib = require('zlib');
+const { promisify } = require('util');
+const gzipAsync = promisify(zlib.gzip);
 const { registerAgentRuntimeRoutes } = require('./lib/agent-runtime-routes');
 const phaseContent = require('./lib/phase-content');
 const reqHierarchy = require('./lib/requirement-hierarchy');
@@ -275,7 +278,13 @@ function registerRequirementsPlatform(app, options) {
 
   async function ensureProjectLoaded(projectId) {
     const project = await storeLayer.ensureProjectLoaded(projectId);
-    if (project) Object.assign(project, normalizeOneProject(project));
+    if (project) {
+      Object.assign(project, normalizeOneProject(project));
+      const externalized = await snapshotStorage.compactProjectSnapshotsOnRead(project, dataDir, writeJson);
+      if (externalized) {
+        await storeLayer.writeProjectBlob(project);
+      }
+    }
     return project;
   }
 
@@ -436,11 +445,13 @@ function registerRequirementsPlatform(app, options) {
         contentType: doc.contentType,
         size: doc.size,
         hasExtractedText: Boolean(doc.extractedText || doc.contentMarkdown),
+        hasContent: Boolean(doc.hasContent ?? doc.contentMarkdown ?? doc.extractedText),
         deliveryStageId: doc.deliveryStageId,
         docType: doc.docType,
         origin: doc.origin,
         diagramFormat: doc.diagramFormat,
-        contentMarkdown: doc.contentMarkdown,
+        ...(doc.contentMarkdown !== undefined ? { contentMarkdown: doc.contentMarkdown } : {}),
+        ...(doc.extractedText !== undefined ? { extractedText: doc.extractedText } : {}),
       })),
       generated: viewer?.role === 'super_admin'
         ? ensureArray(project.generated).map((entry) => ({
@@ -472,15 +483,19 @@ function registerRequirementsPlatform(app, options) {
   function compressJsonMiddleware(req, res, next) {
     const origJson = res.json.bind(res);
     res.json = function jsonWithOptionalGzip(body) {
-      try {
-        const payload = JSON.stringify(body);
-        if (payload.length > 32768 && req.headers['accept-encoding']?.includes('gzip')) {
-          res.setHeader('Content-Encoding', 'gzip');
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          return res.send(zlib.gzipSync(payload));
-        }
-      } catch {
-        // fall through
+      const payload = JSON.stringify(body);
+      if (payload.length > 32768 && req.headers['accept-encoding']?.includes('gzip')) {
+        gzipAsync(payload)
+          .then((buf) => {
+            if (res.headersSent) return;
+            res.setHeader('Content-Encoding', 'gzip');
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.send(buf);
+          })
+          .catch(() => {
+            if (!res.headersSent) origJson(body);
+          });
+        return res;
       }
       return origJson(body);
     };
@@ -810,8 +825,14 @@ function registerRequirementsPlatform(app, options) {
   });
 
   app.get('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, async (req, res) => {
+    const project = req.loadedProject;
+    const etag = `"${project.id}:${project.updatedAt || ''}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+    res.setHeader('ETag', etag);
     const full = req.query.full === '1' || req.query.full === 'true';
-    return res.json({ project: sanitizeProject(req.loadedProject, req.auth.user, { full }) });
+    return res.json({ project: sanitizeProject(project, req.auth.user, { full }) });
   });
 
   app.patch('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
@@ -1680,6 +1701,35 @@ function registerRequirementsPlatform(app, options) {
     }));
 
     return res.json({ documents: docs });
+  });
+
+  app.get('/api/projects/projects/:projectId/documents/:documentId', authMiddleware, loadProjectForUser, async (req, res) => {
+    const document = ensureArray(req.loadedProject.documents).find((entry) => entry.id === req.params.documentId);
+    if (!document) {
+      return res.status(404).json({ message: 'Documento nao encontrado.' });
+    }
+    const normalized = phaseContent.normalizeProjectDocument(document);
+    return res.json({
+      document: {
+        id: normalized.id,
+        title: normalized.title,
+        originalName: normalized.originalName,
+        storedName: normalized.storedName,
+        uploadedAt: normalized.uploadedAt,
+        uploadedBy: normalized.uploadedBy,
+        updatedAt: normalized.updatedAt,
+        contentType: normalized.contentType,
+        size: normalized.size,
+        hasExtractedText: Boolean(normalized.extractedText || normalized.contentMarkdown),
+        hasContent: Boolean(normalized.contentMarkdown || normalized.extractedText),
+        deliveryStageId: normalized.deliveryStageId,
+        docType: normalized.docType,
+        origin: normalized.origin,
+        diagramFormat: normalized.diagramFormat,
+        contentMarkdown: normalized.contentMarkdown || '',
+        extractedText: normalized.extractedText || '',
+      },
+    });
   });
 
   app.get('/api/projects/projects/:projectId/documents/:documentId/download', authMiddleware, loadProjectForUser, async (req, res) => {
@@ -3074,6 +3124,8 @@ function registerRequirementsPlatform(app, options) {
     numberOr,
     projectAudit,
     getUserName,
+    dataDir,
+    resolveSnapshotData: (project, snapshotId) => snapshotStorage.resolveSnapshotData(project, snapshotId, dataDir),
   });
 
   deliveryOsPlatform.registerDeliveryOsPlatformRoutes(app, {

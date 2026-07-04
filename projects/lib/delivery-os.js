@@ -3684,6 +3684,8 @@ function registerDeliveryOsRoutes(app, deps) {
     numberOr: numOr,
     projectAudit,
     getUserName,
+    dataDir,
+    resolveSnapshotData,
   } = deps;
   const phaseContent = getPhaseContent();
 
@@ -4059,8 +4061,10 @@ function registerDeliveryOsRoutes(app, deps) {
         const project = store.projects.find((e) => e.id === projectId);
         if (!project) throw new Error('Projeto nao encontrado.');
         const snap = ensureArray(project.versionSnapshots).find((s) => s.id === snapshotId);
-        if (!snap?.snapshotData) throw new Error('Snapshot nao encontrado.');
-        const data = snap.snapshotData;
+        const data = resolveSnapshotData
+          ? await resolveSnapshotData(project, snapshotId)
+          : snap?.snapshotData;
+        if (!data || !Object.keys(data).length) throw new Error('Snapshot nao encontrado.');
         if (data.requirements) project.requirements = data.requirements;
         if (data.capabilities) project.capabilities = data.capabilities;
         if (data.requirementClusters) project.requirementClusters = data.requirementClusters;

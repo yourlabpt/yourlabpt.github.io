@@ -372,18 +372,33 @@
     $('pdosClientPortal')?.classList.remove('hidden');
   }
 
-  async function refreshPlatformUi(project) {
+  let platformRefreshInflight = null;
+  let lastPlatformRefreshKey = '';
+
+  async function refreshPlatformUi(project, options = {}) {
     if (!project?.id) return;
     hideAgentUiForClient();
-    const [actions, sinceVisit, health] = await Promise.all([
-      loadProjectActions(project.id),
-      loadSinceLastVisit(project.id),
-      isClientRole() ? null : loadFlowHealth(project.id),
-    ]);
-    renderNextActionBar(project, actions, sinceVisit);
-    renderPhaseWorkspacePanel(project);
-    renderFlowHealthDashboard(project, health);
-    recordVisit(project.id);
+    const key = `${project.id}:${project.updatedAt || ''}`;
+    if (!options.force && lastPlatformRefreshKey === key && platformRefreshInflight) {
+      return platformRefreshInflight;
+    }
+    platformRefreshInflight = (async () => {
+      const [actions, sinceVisit, health] = await Promise.all([
+        loadProjectActions(project.id),
+        loadSinceLastVisit(project.id),
+        isClientRole() ? null : loadFlowHealth(project.id),
+      ]);
+      renderNextActionBar(project, actions, sinceVisit);
+      renderPhaseWorkspacePanel(project);
+      renderFlowHealthDashboard(project, health);
+      recordVisit(project.id);
+      lastPlatformRefreshKey = key;
+    })();
+    try {
+      await platformRefreshInflight;
+    } finally {
+      platformRefreshInflight = null;
+    }
   }
 
   function wireStageUrlSync() {

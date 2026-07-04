@@ -1275,7 +1275,8 @@
     const revertBtn = document.querySelector('[data-pdos-hierarchy-revert]');
     if (!statsEl || !project?.id) return;
     try {
-      const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
+      const hierarchy = await window.fetchRequirementsHierarchy?.(project)
+        ?? await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
       const stkCount = (hierarchy?.byLevel?.stakeholder || []).length;
       const orphans = hierarchy?.stats?.orphans ?? (hierarchy?.orphans || []).length;
       const coverage = hierarchy?.stats?.coveragePct ?? 0;
@@ -2470,7 +2471,12 @@
   async function renderMermaidInFeed() {
     const project = window.state?.selectedProject;
     const wraps = $('pdosCardFeed')?.querySelectorAll('.pdos-mermaid-wrap[data-render-mermaid]');
-    if (!wraps?.length || !window.mermaid || !project) return;
+    if (!wraps?.length || !project) return;
+    try {
+      await window.ensureMermaidLoaded?.();
+    } catch {
+      return;
+    }
     const pack = (project.artifacts || []).find((a) => a.type === 'architecture');
     const src = project.technicalApproach?.architectureMermaid || pack?.metadata?.architectureMermaid || '';
     if (!src) return;
@@ -4442,6 +4448,14 @@
   }
 
   async function reloadProject(projectId) {
+    if (window.refreshSelectedProject) {
+      return window.refreshSelectedProject({
+        projectId,
+        tab: 'deliveryos',
+        renderDelivery: true,
+        renderTab: false,
+      });
+    }
     const res = await apiRequest(`/projects/${projectId}`);
     window.state.selectedProject = res.project;
     renderPdosShell(res.project);
@@ -4463,8 +4477,6 @@
     renderAgentOverviewCockpit(project);
     renderCardFeed(project);
     window.DiagramsUI?.renderShell?.(project);
-    window.DeliveryOsPlatform?.refreshPlatformUi?.(project);
-    window.ClientPortalUI?.refresh?.(project);
     const flowEl = document.getElementById('pdosFlowHealth');
     if (flowEl && !window.DeliveryOsPlatform?.isClientRole?.()) {
       flowEl.classList.remove('hidden');
@@ -4812,11 +4824,21 @@
 
   async function renderAll(project) {
     if (!project) return;
-    await loadTraceMap(project.id);
     renderPdosShell(project);
     renderTracePanel(project);
     watchActiveAgentRuns(project);
-    renderAgentOverviewCockpit(project);
+    ensureAdvancedTraceLazyLoad(project);
+  }
+
+  function ensureAdvancedTraceLazyLoad(project) {
+    const details = document.getElementById('pdosAdvancedTrace');
+    if (!details || details.dataset.traceLazyWired) return;
+    details.dataset.traceLazyWired = '1';
+    details.addEventListener('toggle', async () => {
+      if (!details.open || !project?.id) return;
+      await loadTraceMap(project.id);
+      renderTracePanel(window.state?.selectedProject || project);
+    });
   }
 
   function wirePdosEvents() {

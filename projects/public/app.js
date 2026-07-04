@@ -92,6 +92,12 @@ const state = {
     priority: '',
     onlySmartIssues: false,
   },
+  requirementsHierarchy: null,
+  listLimits: {
+    requirements: 50,
+    questions: 50,
+    implPlanReqsPerPhase: 30,
+  },
 };
 
 const els = {
@@ -311,6 +317,100 @@ async function apiRequest(path, { method = 'GET', body, isForm = false } = {}) {
 
   return payload;
 }
+
+function projectCacheStorageKey(projectId) {
+  return `yl_project_cache_${projectId}`;
+}
+
+function readProjectCache(projectId) {
+  try {
+    return JSON.parse(sessionStorage.getItem(projectCacheStorageKey(projectId)) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function writeProjectCache(projectId, etag, project) {
+  try {
+    sessionStorage.setItem(projectCacheStorageKey(projectId), JSON.stringify({ etag, project }));
+  } catch {
+    // quota exceeded — ignore
+  }
+}
+
+function clearProjectCache(projectId) {
+  if (!projectId) return;
+  try {
+    sessionStorage.removeItem(projectCacheStorageKey(projectId));
+  } catch {
+    // ignore
+  }
+}
+
+async function fetchProjectById(projectId) {
+  const cached = readProjectCache(projectId);
+  const headers = {};
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  if (cached?.etag) headers['If-None-Match'] = cached.etag;
+
+  const response = await fetch(`${API}/projects/${encodeURIComponent(projectId)}`, { headers });
+  if (response.status === 304 && cached?.project) {
+    return { project: cached.project, fromCache: true };
+  }
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { message: text || 'Resposta inválida do servidor.' };
+  }
+
+  if (!response.ok) {
+    const message = payload?.message || `Erro HTTP ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+
+  const etag = response.headers.get('ETag');
+  if (etag && payload?.project) {
+    writeProjectCache(projectId, etag, payload.project);
+  }
+  return payload;
+}
+
+function applyProjectPatch(project, options = {}) {
+  if (!project) return;
+  state.selectedProject = project;
+  state.selectedProjectId = project.id;
+  state.requirementsHierarchy = null;
+  clearProjectCache(project.id);
+  if (options.renderList !== false) renderProjects();
+  const tab = options.tab || state.activeTab;
+  if (options.refreshChrome) {
+    renderProjectDetails(options.skipTab ? { skipTab: true } : {});
+  } else if (options.renderTab !== false) {
+    renderActiveTab(project, tab);
+  }
+  if ((tab === 'deliveryos' || state.activeTab === 'deliveryos') && options.renderDelivery !== false) {
+    window.PdosUI?.renderAll?.(project);
+  }
+}
+
+async function refreshSelectedProject(options = {}) {
+  const id = options.projectId || state.selectedProjectId || state.selectedProject?.id;
+  if (!id) return null;
+  const payload = await fetchProjectById(id);
+  applyProjectPatch(payload.project, options);
+  return payload.project;
+}
+
+window.applyProjectPatch = applyProjectPatch;
+window.refreshSelectedProject = refreshSelectedProject;
+window.fetchProjectById = fetchProjectById;
+window.clearProjectCache = clearProjectCache;
 
 function showToast(message, type = 'ok') {
   const el = els.globalStatus;
@@ -1026,7 +1126,52 @@ function initNavRail() {
   window.addEventListener('resize', () => applyNavRailLayout());
 }
 
-function renderProjectDetails() {
+function renderActiveTab(project, tabId) {
+  if (!project) return;
+  const tab = tabId || state.activeTab;
+  window.ProposalDownloads?.mountBar?.();
+
+  switch (tab) {
+    case 'projeto':
+      renderProjectClarity(project);
+      renderMembers(project);
+      renderRiskAssumptionView(project);
+      break;
+    case 'documentos':
+      renderDocuments(project);
+      break;
+    case 'atas':
+      renderMeetingMinutes(project);
+      break;
+    case 'perguntas':
+      renderClarificationQuestions(project);
+      break;
+    case 'requisitos':
+      renderRequirementModuleControls(project);
+      renderRequirements(project);
+      break;
+    case 'fases':
+      renderImplementationPlan(project);
+      break;
+    case 'gerar':
+      renderGenerated(project);
+      break;
+    case 'deliveryos':
+      window.PdosUI?.renderAll?.(project);
+      break;
+    case 'atividade':
+      loadActivity().catch(() => {});
+      break;
+    case 'definicoes':
+      renderUsersPanel();
+      setReadonlyByRole();
+      break;
+    default:
+      break;
+  }
+}
+
+function renderProjectDetails(options = {}) {
   renderSettingsAvailability();
   renderNavRail();
   renderTopbarProject();
@@ -1081,23 +1226,13 @@ function renderProjectDetails() {
   els.assumptionsText.value = arrayToLines(project.assumptions || []);
   els.technicalApproachJson.value = JSON.stringify(project.technicalApproach || {}, null, 2);
 
-  renderProjectClarity(project);
-  renderMembers(project);
-  renderDocuments(project);
-  renderMeetingMinutes(project);
-  renderClarificationQuestions(project);
-  renderRequirementModuleControls(project);
-  renderRequirements(project);
-  renderImplementationPlan(project);
-  renderRiskAssumptionView(project);
-  renderGenerated(project);
-  window.ProposalDownloads?.mountBar?.();
-  window.PdosUI?.renderAgentOverviewCockpit?.(project);
-  if (window.PdosUI) window.PdosUI.renderAll(project);
   document.querySelectorAll('.tab-panel').forEach((p) => {
     p.classList.toggle('hidden', p.dataset.panel !== state.activeTab);
   });
   renderPhaseContextBar();
+  if (!options.skipTab) {
+    renderActiveTab(project, state.activeTab);
+  }
   requestAnimationFrame(() => refreshAutoResize(els.projectWorkspace));
 }
 
@@ -1199,12 +1334,32 @@ function renderProjectClarity(project) {
   refreshHierarchyKpis(project);
 }
 
+async function fetchRequirementsHierarchy(project, options = {}) {
+  if (!project?.id) return null;
+  const cache = state.requirementsHierarchy;
+  if (!options.force
+    && cache?.projectId === project.id
+    && cache?.updatedAt === project.updatedAt
+    && cache?.data) {
+    return cache.data;
+  }
+  const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
+  state.requirementsHierarchy = {
+    projectId: project.id,
+    updatedAt: project.updatedAt,
+    data: hierarchy,
+  };
+  return hierarchy;
+}
+
+window.fetchRequirementsHierarchy = fetchRequirementsHierarchy;
+
 async function refreshHierarchyKpis(project) {
   const covEl = document.getElementById('hierarchyCoverageKpi');
   const orphEl = document.getElementById('hierarchyOrphansKpi');
   if (!project?.id || !covEl) return;
   try {
-    const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
+    const hierarchy = await fetchRequirementsHierarchy(project);
     const stats = hierarchy?.stats || {};
     covEl.innerHTML = `<strong>${stats.coveragePct ?? 0}%</strong><small>Cobertura V (STK)</small>`;
     if (orphEl) {
@@ -1272,7 +1427,7 @@ async function handleMemberRoleChange(userId, role) {
       body: { userId, role },
     });
     showToast('Perfil do membro atualizado.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -1380,13 +1535,17 @@ function renderClarificationQuestions(project) {
     return;
   }
 
+  const questionLimit = state.listLimits?.questions || 50;
+  const displayQuestions = filtered.length > questionLimit ? filtered.slice(0, questionLimit) : filtered;
+  const hasMoreQuestions = filtered.length > displayQuestions.length;
+
   const canWrite = canEdit();
   const disabled = canWrite ? '' : 'disabled';
   const statusOptionsHtml = questionStatusOptions();
   const targetOptionsHtml = questionTargetOptions();
   const categoryOptionsHtml = questionCategoryOptions();
 
-  tbody.innerHTML = filtered.map((entry) => {
+  tbody.innerHTML = displayQuestions.map((entry) => {
     const linked = joinRequirementIds(entry.linkedRequirementIds);
     const dueDate = String(entry.dueDate || '').slice(0, 10);
     const contextText = entry.context ? `<div class="muted">Contexto: ${escapeHtml(shortText(entry.context, 150))}</div>` : '';
@@ -1472,6 +1631,23 @@ function renderClarificationQuestions(project) {
       if (statusNode) statusNode.value = entry.status || 'open';
       if (categoryNode) categoryNode.value = entry.category || 'other';
     });
+  }
+
+  if (hasMoreQuestions && els.questionsTable) {
+    const foot = els.questionsTable.querySelector('tfoot') || document.createElement('tfoot');
+    foot.innerHTML = `
+      <tr><td colspan="10" class="list-chunk-actions">
+        <button type="button" class="btn tiny ghost" data-questions-load-more>
+          Mostrar mais (${filtered.length - displayQuestions.length})
+        </button>
+      </td></tr>`;
+    if (!els.questionsTable.querySelector('tfoot')) els.questionsTable.appendChild(foot);
+    foot.querySelector('[data-questions-load-more]')?.addEventListener('click', () => {
+      state.listLimits.questions += 50;
+      renderClarificationQuestions(project);
+    });
+  } else {
+    els.questionsTable?.querySelector('tfoot')?.remove();
   }
 }
 
@@ -1582,9 +1758,8 @@ async function saveImplementationPhases() {
     });
     implPhasesEditing = false;
     implPhasesDraft = null;
-    state.selectedProject = res.project;
-    renderImplementationPlan(state.selectedProject);
-    renderRequirements(state.selectedProject);
+    clearProjectCache(project.id);
+    applyProjectPatch(res.project, { tab: 'fases', renderDelivery: state.activeTab === 'deliveryos' });
     window.RequirementsUI?.populateAddRequirementPhase?.(state.selectedProject);
     let msg = 'Fases atualizadas.';
     if (res.requirementsPhaseRenamed) {
@@ -1658,6 +1833,12 @@ function wireImplementationPlanEvents() {
       state.filters = state.filters || {};
       state.filters.phase = btn.dataset.gotoReqPhase || '';
       switchToTab('requisitos');
+    });
+  });
+  root.querySelectorAll('[data-ip-load-more]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.listLimits.implPlanReqsPerPhase = (state.listLimits.implPlanReqsPerPhase || 30) + 30;
+      renderImplementationPlan(state.selectedProject);
     });
   });
   wirePhaseRequirementDragDrop(root, state.selectedProject);
@@ -1757,22 +1938,28 @@ function renderImplementationPlan(project) {
   }
 
   const phaseBreakdown = phaseDefs.map((phase, index) => {
-    const phaseReqs = requirements
+    const phaseReqsAll = requirements
       .filter((req) => matchPhaseDef(req) === phase)
       .slice()
       .sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), 'pt-PT'));
+    const perPhaseLimit = state.listLimits?.implPlanReqsPerPhase || 30;
+    const phaseReqs = phaseReqsAll.length > perPhaseLimit ? phaseReqsAll.slice(0, perPhaseLimit) : phaseReqsAll;
+    const hiddenCount = phaseReqsAll.length - phaseReqs.length;
     const chips = phaseReqs.length
       ? phaseReqs.map((req) => renderIpReqChip(req)).join('')
       : `<span class="ip-muted">${ipEditable ? 'Arraste requisitos para aqui.' : 'Sem requisitos nesta fase.'}</span>`;
+    const moreBtn = hiddenCount > 0
+      ? `<button type="button" class="btn tiny ghost" data-ip-load-more="${escapeHtml(phase.name)}">+${hiddenCount} mais</button>`
+      : '';
     const objSnippet = phase.objective ? `<span class="ip-muted ip-phase-obj-snippet">${escapeHtml(shortText(phase.objective, 80))}</span>` : '';
     return `
       <div class="ip-phase-group" data-ip-phase-group="${escapeHtml(phase.name)}">
         <div class="ip-phase-group-head">
           <strong>${escapeHtml(formatPhaseLabel(index, phase.name))}</strong>
-          <span class="ip-muted">${phaseReqs.length} req.</span>
+          <span class="ip-muted">${phaseReqsAll.length} req.</span>
         </div>
         ${objSnippet}
-        <div class="ip-req-chips ip-phase-dropzone" data-ip-phase="${escapeHtml(phase.name)}">${chips}</div>
+        <div class="ip-req-chips ip-phase-dropzone" data-ip-phase="${escapeHtml(phase.name)}">${chips}${moreBtn}</div>
       </div>
     `;
   }).join('');
@@ -2148,7 +2335,7 @@ async function loadProjects(selectId) {
 
 async function loadProjectById(projectId, options = {}) {
   state.selectedProjectId = projectId;
-  const payload = await apiRequest(`/projects/${encodeURIComponent(projectId)}`);
+  const payload = await fetchProjectById(projectId);
   state.selectedProject = payload.project;
   if (!getSelectedRequirement(state.selectedProject)) {
     state.selectedRequirementId = state.selectedProject?.requirements?.[0]?.id || null;
@@ -2158,12 +2345,16 @@ async function loadProjectById(projectId, options = {}) {
     state.deliverySelectedStageId = deepLink.stage;
   }
   renderProjects();
-  renderProjectDetails();
+  renderProjectDetails({ skipTab: true });
   if (options.switchTab !== false) {
     const tab = deepLink.tab || 'deliveryos';
     switchToTab(tab);
+  } else {
+    renderActiveTab(state.selectedProject, state.activeTab);
   }
-  await loadActivity();
+  if (state.activeTab === 'atividade') {
+    await loadActivity();
+  }
   window.DeliveryOsPlatform?.refreshPlatformUi?.(state.selectedProject);
   window.ClientPortalUI?.refresh?.(state.selectedProject);
 }
@@ -2295,31 +2486,15 @@ function switchToTab(tabId) {
   applyClientTabVisibility();
   applyReadOnlyChrome();
 
-  if (activeId === 'definicoes') {
-    renderUsersPanel();
-    setReadonlyByRole();
-  }
   if (activeId === 'projetos') {
     renderProjectsPage();
-  }
-  if (state.selectedProject && activeId === 'requisitos') {
-    renderRequirements(state.selectedProject);
-  }
-  if (state.selectedProject && activeId === 'documentos') {
-    renderDocuments(state.selectedProject);
-  }
-  if (state.selectedProject && activeId === 'atas') {
-    renderMeetingMinutes(state.selectedProject);
-  }
-  if (state.selectedProject && activeId === 'perguntas') {
-    renderClarificationQuestions(state.selectedProject);
-  }
-  if (state.selectedProject && activeId === 'atividade') {
-    loadActivity().catch(() => {});
+  } else if (state.selectedProject) {
+    renderActiveTab(state.selectedProject, activeId);
   }
 }
 
 window.switchToTab = switchToTab;
+window.renderActiveTab = renderActiveTab;
 window.navigateToRequirement = navigateToRequirement;
 window.navigateToFilteredTab = navigateToFilteredTab;
 window.renderPhaseContextBar = renderPhaseContextBar;
@@ -2375,9 +2550,8 @@ async function loadActivity() {
         const res = await apiRequest(`/projects/${project.id}/audit-log/${btn.dataset.revertAudit}/revert`, { method: 'POST', body: {} });
         state.selectedProject = res.project;
         showToast('Acção revertida');
-        renderProjectDetails();
-        window.PdosUI?.renderAll?.(res.project);
-        await loadActivity();
+        applyProjectPatch(res.project, { tab: state.activeTab, renderDelivery: state.activeTab === 'deliveryos' });
+        if (state.activeTab === 'atividade') await loadActivity();
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -2564,7 +2738,7 @@ async function handleSaveAdvanced() {
     });
 
     showToast('Dados avançados guardados.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2578,7 +2752,7 @@ async function handleSaveSourceText() {
       body: { sourceText: document.getElementById('sourceText')?.value || '' },
     });
     showToast('Texto base guardado.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2610,7 +2784,7 @@ async function handleImportAi() {
     });
 
     showToast('Estrutura AI importada com sucesso.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2637,7 +2811,7 @@ async function handleUploadDocument(event) {
 
     showToast('Documento carregado.', 'ok');
     event.target.reset();
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2658,7 +2832,7 @@ async function handleAddMeetingMinute(event) {
       },
     });
     showToast('Ata guardada.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2708,7 +2882,7 @@ async function handleImportRequirementChanges() {
     showToast(`Alterações aplicadas: +${result.added || 0}, atualizados ${result.updated || 0}.`, 'ok');
     const jsonEl = document.getElementById('requirementsChangeJson');
     if (jsonEl) jsonEl.value = '';
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2743,7 +2917,7 @@ async function handleAddQuestion(event) {
     event.target.reset();
     els.questionStatus.value = 'open';
     els.questionTargetRole.value = 'client';
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2780,7 +2954,7 @@ async function handleQuestionsTableClick(event) {
         method: 'DELETE',
       });
       showToast('Pergunta removida.', 'ok');
-      await loadProjectById(state.selectedProject.id);
+      await refreshSelectedProject();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -2794,7 +2968,7 @@ async function handleQuestionsTableClick(event) {
         body: readQuestionPatchFromRow(row),
       });
       showToast('Pergunta atualizada.', 'ok');
-      await loadProjectById(state.selectedProject.id);
+      await refreshSelectedProject();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -2834,7 +3008,7 @@ async function handleAddRequirement(event) {
 
     showToast('Requisito adicionado.', 'ok');
     event.target.reset();
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2852,7 +3026,7 @@ async function handleClearAllRequirements() {
   try {
     await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/requirements`, { method: 'DELETE' });
     showToast('Todos os requisitos foram apagados.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2895,7 +3069,7 @@ async function handleRequirementsTableClick(event) {
       });
 
       showToast('Requisito removido.', 'ok');
-      await loadProjectById(state.selectedProject.id);
+      await refreshSelectedProject();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -2915,7 +3089,7 @@ async function handleRequirementsTableClick(event) {
       });
 
       showToast('Requisito atualizado.', 'ok');
-      await loadProjectById(state.selectedProject.id);
+      await refreshSelectedProject();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -2936,7 +3110,7 @@ async function handleAssignMember(event) {
     });
 
     showToast('Membro associado.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2953,7 +3127,7 @@ async function handleRemoveMemberClick(event) {
     });
 
     showToast('Membro removido.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2974,7 +3148,7 @@ async function handleOpenCommercialProposal() {
   if (window.ProposalConfigurator?.open) {
     await window.ProposalConfigurator.open(state.selectedProject.id, {
       onGenerated: async () => {
-        await loadProjectById(state.selectedProject.id);
+        await refreshSelectedProject();
       },
     });
     return;
@@ -3007,7 +3181,7 @@ async function handleGenerate(mode) {
       els.generatedLinks.innerHTML = `<div class="simple-item"><strong>Resultado</strong><div>${list || 'Sem links.'}</div></div>`;
     }
 
-    await loadProjectById(state.selectedProject.id);
+    await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -3043,13 +3217,13 @@ async function handleSaveRequirementDetails() {
   if (!state.selectedProject || !state.selectedRequirementId || !canEdit()) return;
 
   try {
-    await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/requirements/${encodeURIComponent(state.selectedRequirementId)}`, {
+    const res = await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/requirements/${encodeURIComponent(state.selectedRequirementId)}`, {
       method: 'PATCH',
       body: readRequirementDetailPatch(),
     });
 
     showToast('Requisito atualizado com framework completo.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    applyProjectPatch(res.project, { tab: 'requisitos' });
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -3060,12 +3234,12 @@ async function handleDeleteRequirementDetails() {
   if (!confirm(`Apagar requisito ${state.selectedRequirementId}?`)) return;
 
   try {
-    await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/requirements/${encodeURIComponent(state.selectedRequirementId)}`, {
+    const res = await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}/requirements/${encodeURIComponent(state.selectedRequirementId)}`, {
       method: 'DELETE',
     });
     state.selectedRequirementId = null;
     showToast('Requisito removido.', 'ok');
-    await loadProjectById(state.selectedProject.id);
+    applyProjectPatch(res.project, { tab: 'requisitos' });
   } catch (error) {
     showToast(error.message, 'error');
   }
