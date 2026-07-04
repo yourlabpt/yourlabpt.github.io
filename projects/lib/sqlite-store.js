@@ -5,6 +5,10 @@
 const fs = require('fs');
 const path = require('path');
 
+function ensureArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 const SCHEMA_VERSION = 1;
 
 function createSqliteStore({ dataDir }) {
@@ -68,16 +72,38 @@ function createSqliteStore({ dataDir }) {
     }
   }
 
-  function isEnabled() {
+  function canUseSqlite() {
     try {
-      if (fs.existsSync(dbPath)) {
-        getDb();
-        return true;
-      }
+      getDb();
+      getDb().prepare('SELECT 1').get();
+      return true;
     } catch {
       return false;
     }
-    return enabled;
+  }
+
+  function isEnabled() {
+    return isReady();
+  }
+
+  function isReady() {
+    try {
+      if (!fs.existsSync(dbPath)) return false;
+      return canUseSqlite();
+    } catch {
+      return false;
+    }
+  }
+
+  function verifyRequirementsSaved(projectId, requirements) {
+    const list = ensureArray(requirements);
+    if (!list.length) return true;
+    const expectedIds = new Set();
+    for (const req of list) {
+      if (req?.id) expectedIds.add(req.id);
+    }
+    const loaded = loadRequirements(projectId).length;
+    return loaded === expectedIds.size;
   }
 
   function isHybridLayout() {
@@ -227,6 +253,9 @@ function createSqliteStore({ dataDir }) {
     dbPath,
     getDb,
     isEnabled,
+    isReady,
+    canUseSqlite,
+    verifyRequirementsSaved,
     isHybridLayout,
     markHybridLayout,
     getUsers,

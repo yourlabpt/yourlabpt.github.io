@@ -3,6 +3,7 @@
  */
 const fs = require('fs').promises;
 const path = require('path');
+const { projectFileName } = require('./split-store');
 
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
@@ -36,6 +37,11 @@ async function migrateToHybridStorage({
   if (index.meta?.storageLayout === 'hybrid-v2') {
     return { migrated: false, reason: 'already_hybrid' };
   }
+
+  if (typeof sqliteStore.canUseSqlite === 'function' && !sqliteStore.canUseSqlite()) {
+    return { migrated: false, reason: 'sqlite_unavailable' };
+  }
+
   const users = ensureArray(index.users);
   const activity = ensureArray(index.activity);
   const projectEntries = ensureArray(index.projects);
@@ -74,6 +80,15 @@ async function migrateToHybridStorage({
     const reqs = ensureArray(project.requirements);
     if (reqs.length) {
       sqliteStore.saveRequirements(projectId, reqs);
+      if (!sqliteStore.verifyRequirementsSaved(projectId, reqs)) {
+        throw new Error(`SQLite nao guardou requisitos do projeto ${projectId}`);
+      }
+    }
+
+    const inlineBackupPath = path.join(dataDir, 'projects', `${projectFileName(projectId)}.pre-hybrid.bak`);
+    const projectFilePath = path.join(dataDir, 'projects', projectFileName(projectId));
+    if (reqs.length && !(await fileExists(inlineBackupPath)) && (await fileExists(projectFilePath))) {
+      await fs.copyFile(projectFilePath, inlineBackupPath);
     }
 
     const changed = await blobStore.externalizeProjectBlobs(project, dataDir, writeJson);

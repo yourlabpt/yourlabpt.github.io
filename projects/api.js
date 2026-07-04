@@ -12,6 +12,7 @@ const projectPayload = require('./lib/project-payload');
 const blobStore = require('./lib/blob-store');
 const { createSqliteStore } = require('./lib/sqlite-store');
 const { migrateToHybridStorage } = require('./lib/hybrid-migrate');
+const { repairProjectRequirements } = require('./lib/hybrid-repair');
 const zlib = require('zlib');
 const { promisify } = require('util');
 const gzipAsync = promisify(zlib.gzip);
@@ -126,6 +127,10 @@ function registerRequirementsPlatform(app, options) {
       replaceActivity: () => {},
       loadRequirements: () => [],
       saveRequirements: () => {},
+      canUseSqlite: () => false,
+      isReady: () => false,
+      isEnabled: () => false,
+      verifyRequirementsSaved: () => false,
       deleteProjectData: () => {},
     };
   }
@@ -273,6 +278,7 @@ function registerRequirementsPlatform(app, options) {
         } catch (error) {
           console.error('Migracao hybrid ignorada:', error.message);
         }
+        await repairHybridProjectsOnStartup();
         storeInitialized = true;
         return;
       }
@@ -309,6 +315,8 @@ function registerRequirementsPlatform(app, options) {
         console.error('Migracao hybrid ignorada:', error.message);
       }
 
+      await repairHybridProjectsOnStartup();
+
       storeInitialized = true;
     });
   }
@@ -339,14 +347,66 @@ function registerRequirementsPlatform(app, options) {
 
   const originalWriteProjectBlob = storeLayer.writeProjectBlob.bind(storeLayer);
 
+  async function repairHybridProjectsOnStartup() {
+    try {
+      const idx = await storeLayer.loadIndex();
+      if (idx?.meta?.storageLayout !== 'hybrid-v2') return;
+
+      for (const entry of ensureArray(idx.projects)) {
+        let dbCount = 0;
+        try {
+          dbCount = sqliteStore.loadRequirements(entry.id).length;
+        } catch {
+          dbCount = 0;
+        }
+        if (dbCount > 0) continue;
+
+        const project = await storeLayer.readProjectBlob(entry.id);
+        if (!project) continue;
+        if (ensureArray(project.requirements).length > 0) continue;
+        if (!project.requirementsInDb && !project.storageHybrid && !(entry.requirementCount > 0)) continue;
+
+        const repair = await repairProjectRequirements({
+          project,
+          indexEntry: entry,
+          dataDir,
+          storePath,
+          sqliteStore,
+          readJson,
+          writeJson,
+          storeLayer,
+          blobStore,
+        });
+        if (repair.repaired) {
+          console.log(`Requisitos reparados (${entry.id}): ${repair.reason} (${repair.count})`);
+        } else if ((entry.requirementCount || 0) > 0) {
+          console.error(`Requisitos em falta (${entry.id}): ${repair.reason}`);
+        }
+      }
+    } catch (error) {
+      console.error('Reparacao hybrid no arranque:', error.message);
+    }
+  }
+
   async function persistProjectHybrid(project, { storeHybrid = false } = {}) {
     if (!project?.id) return;
     const full = storeLayer.loadedProjects.get(project.id) || project;
     const requirements = ensureArray(full.requirements);
     const useDb = isProjectHybrid(full) || storeHybrid;
 
-    if (useDb) {
+    if (useDb && requirements.length === 0) {
+      const idx = await storeLayer.loadIndex();
+      const entry = ensureArray(idx?.projects).find((item) => item.id === project.id);
+      if ((entry?.requirementCount || 0) > 0) {
+        throw new Error(`Refusing to persist projeto ${project.id} sem requisitos (esperados ${entry.requirementCount}).`);
+      }
+    }
+
+    if (useDb && requirements.length) {
       sqliteStore.saveRequirements(project.id, requirements);
+      if (!sqliteStore.verifyRequirementsSaved(project.id, requirements)) {
+        throw new Error(`SQLite nao confirmou requisitos do projeto ${project.id}`);
+      }
     }
 
     await blobStore.externalizeProjectBlobs(full, dataDir, writeJson);
@@ -380,14 +440,72 @@ function registerRequirementsPlatform(app, options) {
 
   async function hydrateProjectFromHybrid(project) {
     if (!project?.id) return project;
-    if (isProjectHybrid(project)) {
-      const reqs = sqliteStore.loadRequirements(project.id);
-      if (reqs.length) {
-        project.requirements = reqs;
-      }
-      project.storageHybrid = true;
-      project.requirementsInDb = true;
+
+    const sqliteReady = typeof sqliteStore.isReady === 'function'
+      ? sqliteStore.isReady()
+      : sqliteStore.isEnabled();
+
+    if (!isProjectHybrid(project)) {
+      return project;
     }
+
+    if (!sqliteReady) {
+      if (ensureArray(project.requirements).length) {
+        project.requirementsInDb = false;
+        project.storageHybrid = false;
+        return project;
+      }
+      const idx = await storeLayer.loadIndex();
+      const entry = ensureArray(idx?.projects).find((item) => item.id === project.id);
+      const repair = await repairProjectRequirements({
+        project,
+        indexEntry: entry,
+        dataDir,
+        storePath,
+        sqliteStore,
+        readJson,
+        writeJson,
+        storeLayer,
+        blobStore,
+      });
+      if (repair.repaired) {
+        console.log(`Requisitos recuperados para ${project.id}: ${repair.reason} (${repair.count})`);
+      } else if ((entry?.requirementCount || 0) > 0) {
+        console.error(`Requisitos em falta para ${project.id}: ${repair.reason}`);
+      }
+      return project;
+    }
+
+    let reqs = sqliteStore.loadRequirements(project.id);
+    if (!reqs.length && ensureArray(project.requirements).length) {
+      sqliteStore.saveRequirements(project.id, project.requirements);
+      reqs = sqliteStore.loadRequirements(project.id);
+    }
+
+    if (!reqs.length) {
+      const idx = await storeLayer.loadIndex();
+      const entry = ensureArray(idx?.projects).find((item) => item.id === project.id);
+      const repair = await repairProjectRequirements({
+        project,
+        indexEntry: entry,
+        dataDir,
+        storePath,
+        sqliteStore,
+        readJson,
+        writeJson,
+        storeLayer,
+        blobStore,
+      });
+      if (repair.repaired) {
+        reqs = ensureArray(project.requirements);
+        console.log(`Requisitos recuperados para ${project.id}: ${repair.reason} (${repair.count})`);
+      }
+    } else {
+      project.requirements = reqs;
+    }
+
+    project.storageHybrid = true;
+    project.requirementsInDb = true;
     return project;
   }
 
