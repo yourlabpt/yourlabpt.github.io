@@ -1275,12 +1275,12 @@
     const revertBtn = document.querySelector('[data-pdos-hierarchy-revert]');
     if (!statsEl || !project?.id) return;
     try {
-      const hierarchy = await window.fetchRequirementsHierarchy?.(project)
-        ?? await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
-      const stkCount = (hierarchy?.byLevel?.stakeholder || []).length;
-      const orphans = hierarchy?.stats?.orphans ?? (hierarchy?.orphans || []).length;
+      const hierarchy = await window.fetchRequirementsHierarchy?.(project, { summary: true })
+        ?? await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy?summary=1&includeRevert=1`);
+      const stkCount = hierarchy?.stakeholderCount ?? (hierarchy?.byLevel?.stakeholder || []).length;
+      const orphans = hierarchy?.stats?.orphans ?? hierarchy?.orphanCount ?? (hierarchy?.orphans || []).length;
       const coverage = hierarchy?.stats?.coveragePct ?? 0;
-      const suggestCount = (hierarchy?.suggestedStakeholders || []).length;
+      const suggestCount = hierarchy?.suggestedCount ?? (hierarchy?.suggestedStakeholders || []).length;
       const revertable = hierarchy?.revertableRepairs || {};
       statsEl.innerHTML = `
         <div><strong>${stkCount}</strong><span>STK (L0)</span></div>
@@ -2568,7 +2568,7 @@
     });
     $('pdosCardFeed')?.querySelector('[data-pdos-hierarchy-revert]')?.addEventListener('click', async () => {
       try {
-        const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
+        const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy?summary=1&includeRevert=1`);
         const count = hierarchy?.revertableRepairs?.count || 0;
         if (!count) return;
         if (!window.confirm(`Reverter ${count} STK(s) criados automaticamente?`)) return;

@@ -1336,17 +1336,21 @@ function renderProjectClarity(project) {
 
 async function fetchRequirementsHierarchy(project, options = {}) {
   if (!project?.id) return null;
+  const cacheKey = options.summary ? 'summary' : 'full';
   const cache = state.requirementsHierarchy;
   if (!options.force
     && cache?.projectId === project.id
     && cache?.updatedAt === project.updatedAt
+    && cache?.mode === cacheKey
     && cache?.data) {
     return cache.data;
   }
-  const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy`);
+  const qs = options.summary ? '?summary=1' : '';
+  const hierarchy = await apiRequest(`/projects/${encodeURIComponent(project.id)}/requirements/hierarchy${qs}`);
   state.requirementsHierarchy = {
     projectId: project.id,
     updatedAt: project.updatedAt,
+    mode: cacheKey,
     data: hierarchy,
   };
   return hierarchy;
@@ -1359,11 +1363,12 @@ async function refreshHierarchyKpis(project) {
   const orphEl = document.getElementById('hierarchyOrphansKpi');
   if (!project?.id || !covEl) return;
   try {
-    const hierarchy = await fetchRequirementsHierarchy(project);
+    const hierarchy = await fetchRequirementsHierarchy(project, { summary: true });
     const stats = hierarchy?.stats || {};
     covEl.innerHTML = `<strong>${stats.coveragePct ?? 0}%</strong><small>Cobertura V (STK)</small>`;
     if (orphEl) {
-      orphEl.innerHTML = `<strong>${stats.orphans ?? 0}</strong><small>Órfãos V-cycle</small>`;
+      const orphans = stats.orphans ?? hierarchy?.orphanCount ?? 0;
+      orphEl.innerHTML = `<strong>${orphans}</strong><small>Órfãos V-cycle</small>`;
     }
   } catch {
     covEl.innerHTML = '<strong>—</strong><small>Cobertura V (STK)</small>';

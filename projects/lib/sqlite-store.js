@@ -140,6 +140,24 @@ function createSqliteStore({ dataDir }) {
     );
   }
 
+  function getRepairActivity(projectId) {
+    const rows = getDb().prepare(`
+      SELECT id, at, actor_user_id, project_id, action, details
+      FROM activity
+      WHERE project_id = ? AND action IN ('requirement_hierarchy_repaired', 'requirement_hierarchy_repair_reverted')
+      ORDER BY at DESC
+      LIMIT 200
+    `).all(projectId);
+    return rows.map((r) => ({
+      id: r.id,
+      at: r.at,
+      actorUserId: r.actor_user_id,
+      projectId: r.project_id,
+      action: r.action,
+      details: r.details ? JSON.parse(r.details) : {},
+    }));
+  }
+
   function replaceActivity(list) {
     const database = getDb();
     const del = database.prepare('DELETE FROM activity');
@@ -215,6 +233,7 @@ function createSqliteStore({ dataDir }) {
     saveUsers,
     getActivity,
     appendActivity,
+    getRepairActivity,
     replaceActivity,
     loadRequirements,
     saveRequirements,

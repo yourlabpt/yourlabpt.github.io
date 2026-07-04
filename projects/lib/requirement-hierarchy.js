@@ -360,7 +360,7 @@ function suggestStakeholderForOrphan(req, project, index) {
 }
 
 function buildHierarchyTree(project, options = {}) {
-  const analysis = analyzeRequirementHierarchy(project);
+  const analysis = getCachedHierarchyAnalysis(project);
   const focusStakeholderId = textOr(options.focusStakeholderId);
   const focusRequirementId = textOr(options.focusRequirementId);
   const byLevel = {};
@@ -1006,6 +1006,62 @@ function applyHierarchyDrop(project, requirementId, drop = {}) {
   return { requirements, createdStakeholderId, movedRequirementId: reqId };
 }
 
+const hierarchyAnalysisCache = new Map();
+const HIERARCHY_CACHE_MAX = 24;
+
+function hierarchyCacheKey(project) {
+  const requirements = ensureArray(project?.requirements);
+  return `${textOr(project?.id)}:${textOr(project?.updatedAt)}:${requirements.length}`;
+}
+
+function getCachedHierarchyAnalysis(project) {
+  const key = hierarchyCacheKey(project);
+  if (hierarchyAnalysisCache.has(key)) {
+    return hierarchyAnalysisCache.get(key);
+  }
+  const analysis = analyzeRequirementHierarchy(project);
+  hierarchyAnalysisCache.set(key, analysis);
+  if (hierarchyAnalysisCache.size > HIERARCHY_CACHE_MAX) {
+    const first = hierarchyAnalysisCache.keys().next().value;
+    hierarchyAnalysisCache.delete(first);
+  }
+  return analysis;
+}
+
+function clearHierarchyAnalysisCache(projectId) {
+  if (!projectId) {
+    hierarchyAnalysisCache.clear();
+    return;
+  }
+  const prefix = `${projectId}:`;
+  for (const key of hierarchyAnalysisCache.keys()) {
+    if (key.startsWith(prefix)) hierarchyAnalysisCache.delete(key);
+  }
+}
+
+function buildHierarchySummary(project, options = {}) {
+  const analysis = getCachedHierarchyAnalysis(project);
+  const stakeholders = analysis.nodes
+    .filter((n) => normalizeRequirementType(n.type) === 'stakeholder')
+    .map((n) => ({ id: n.id, title: n.title, status: n.status }));
+
+  const summary = {
+    stats: analysis.stats,
+    levels: analysis.levels,
+    byLevel: { stakeholder: stakeholders },
+    stakeholderCount: stakeholders.length,
+    orphanCount: analysis.orphans.length,
+    suggestedCount: analysis.suggestedStakeholders.length,
+    invalidLinkCount: analysis.invalidLinks.length,
+  };
+
+  if (options.includeRevertable) {
+    summary.revertableRepairs = getRevertableStakeholderRepairs(project, options.activityLog || []);
+  }
+
+  return summary;
+}
+
 module.exports = {
   V_LEVELS,
   LINK_TYPES,
@@ -1016,6 +1072,9 @@ module.exports = {
   resolveRequirementId,
   syncRequirementHierarchyFields,
   analyzeRequirementHierarchy,
+  getCachedHierarchyAnalysis,
+  clearHierarchyAnalysisCache,
+  buildHierarchySummary,
   buildHierarchyTree,
   suggestStakeholderForOrphan,
   applyHierarchyMove,

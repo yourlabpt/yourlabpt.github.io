@@ -47,18 +47,28 @@
     const params = new URLSearchParams();
     const stkFocus = options.focusStakeholderId ?? mapState.focusStakeholderId;
     const frFocus = options.focusRequirementId ?? mapState.focusRequirementId;
-    if (stkFocus && options.applyStkFocus !== false) {
-      params.set('focusStakeholderId', stkFocus);
+
+    if (options.summary) {
+      params.set('summary', '1');
+      if (options.includeRevert) params.set('includeRevert', '1');
+    } else {
+      if (stkFocus && options.applyStkFocus !== false) {
+        params.set('focusStakeholderId', stkFocus);
+      }
+      if (frFocus) {
+        params.set('focusRequirementId', frFocus);
+      }
+      if (options.includeRevert) params.set('includeRevert', '1');
     }
-    if (frFocus) {
-      params.set('focusRequirementId', frFocus);
-    }
+
     const qs = params.toString();
     const payload = await apiRequest(
       `/projects/${encodeURIComponent(project.id)}/requirements/hierarchy${qs ? `?${qs}` : ''}`
     );
     if (options.storeAsFull) {
       mapState.hierarchyFull = payload;
+    } else if (options.summary) {
+      mapState.hierarchyFull = mapState.hierarchyFull || payload;
     } else {
       mapState.hierarchyCache = payload;
     }
@@ -763,6 +773,13 @@
     const container = $('requirementsGroupedView');
     if (!container || !project) return;
 
+    const projectKey = `${project.id}:${project.updatedAt || ''}`;
+    if (mapState._projectKey !== projectKey) {
+      mapState.hierarchyFull = null;
+      mapState.hierarchyCache = null;
+      mapState._projectKey = projectKey;
+    }
+
     cleanupEdgeListeners();
     container.classList.add('req-map-container');
     container.innerHTML = '<p class="muted-text req-map-loading">A carregar mapa…</p>';
@@ -772,12 +789,14 @@
         const hierarchy = await fetchHierarchy(project, { applyStkFocus: false });
         container.innerHTML = renderImplMap(project, hierarchy);
       } else {
-        const fullHierarchy = await fetchHierarchy(project, { applyStkFocus: false, storeAsFull: true });
-        ensureActiveStk(fullHierarchy, project);
-        let hierarchy = fullHierarchy;
-        if (mapState.focusStakeholderId) {
-          hierarchy = filterHierarchyToStk(fullHierarchy, mapState.focusStakeholderId);
+        if (!mapState.hierarchyFull?.stats) {
+          await fetchHierarchy(project, { summary: true, storeAsFull: true });
         }
+        ensureActiveStk(mapState.hierarchyFull, project);
+        const hierarchy = await fetchHierarchy(project, {
+          focusStakeholderId: mapState.focusStakeholderId,
+          applyStkFocus: true,
+        });
         mapState.hierarchyCache = hierarchy;
         container.innerHTML = renderVMapColumns(project, hierarchy);
         scheduleDrawEdges(container, hierarchy);

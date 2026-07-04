@@ -121,6 +121,7 @@ function registerRequirementsPlatform(app, options) {
       getUsers: () => [],
       saveUsers: () => {},
       getActivity: () => [],
+      getRepairActivity: () => [],
       appendActivity: () => {},
       replaceActivity: () => {},
       loadRequirements: () => [],
@@ -390,11 +391,26 @@ function registerRequirementsPlatform(app, options) {
     return project;
   }
 
-  async function readStore() {
+  function getProjectRepairActivity(projectId) {
+    try {
+      if (typeof sqliteStore.getRepairActivity === 'function') {
+        return sqliteStore.getRepairActivity(projectId);
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
+
+  async function readStore(options = {}) {
     const store = await storeLayer.readStore(ensureStoreInitialized);
     if (isHybridStorage(store)) {
       store.users = sqliteStore.getUsers();
-      store.activity = sqliteStore.getActivity();
+      if (options.includeActivity) {
+        store.activity = sqliteStore.getActivity(options.activityLimit || 300);
+      } else {
+        store.activity = store.activity || [];
+      }
       if (store._index) {
         store._index.users = [];
         store._index.activity = [];
@@ -410,7 +426,7 @@ function registerRequirementsPlatform(app, options) {
     await storeLayer.updateStore(async (store) => {
       if (isHybridStorage(store)) {
         store.users = sqliteStore.getUsers();
-        store.activity = sqliteStore.getActivity(500);
+        store.activity = sqliteStore.getActivity(300);
       }
       await mutator(store);
       if (isHybridStorage(store)) {
@@ -431,12 +447,18 @@ function registerRequirementsPlatform(app, options) {
     const project = await storeLayer.ensureProjectLoaded(projectId);
     if (!project) return null;
 
-    Object.assign(project, normalizeOneProject(project));
+    if (project._normalizedVersion !== project.updatedAt) {
+      Object.assign(project, normalizeOneProject(project));
+      project._normalizedVersion = project.updatedAt;
+    }
     await hydrateProjectFromHybrid(project);
 
-    const externalized = await blobStore.externalizeProjectBlobs(project, dataDir, writeJson);
-    if (externalized) {
-      await persistProjectHybrid(project);
+    if (!project._blobsCompacted) {
+      const externalized = await blobStore.externalizeProjectBlobs(project, dataDir, writeJson);
+      if (externalized) {
+        await persistProjectHybrid(project);
+      }
+      project._blobsCompacted = true;
     }
     return project;
   }
@@ -574,7 +596,8 @@ function registerRequirementsPlatform(app, options) {
       integrations: ensureArray(project.integrations),
       technicalApproach: project.technicalApproach || defaultTechnicalApproach(),
       requirements: ensureArray(project.requirements).map((entry) => {
-        const normalized = normalizeRequirementRecord(entry);
+        const useFastPath = entry?.id && Array.isArray(entry.hierarchyLinks) && entry.vLevel !== undefined;
+        const normalized = useFastPath ? entry : normalizeRequirementRecord(entry);
         const smartValidationErrors = getSmartRequirementValidationErrors(normalized);
         return {
           ...normalized,
@@ -675,7 +698,6 @@ function registerRequirementsPlatform(app, options) {
         return res.status(403).json({ message: 'Sem permissao para este projeto.' });
       }
 
-      req.loadedStore = await readStore();
       req.loadedProject = project;
       return next();
     } catch (error) {
@@ -2392,9 +2414,26 @@ function registerRequirementsPlatform(app, options) {
     const project = req.loadedProject;
     const focusStakeholderId = textOr(req.query?.focusStakeholderId);
     const focusRequirementId = textOr(req.query?.focusRequirementId);
-    const store = await readStore();
+    const summaryOnly = req.query.summary === '1' || req.query.summary === 'true';
+    const includeRevert = req.query.includeRevert === '1' || req.query.includeRevert === 'true';
+
+    if (summaryOnly) {
+      const repairActivity = includeRevert ? getProjectRepairActivity(project.id) : [];
+      return res.json(reqHierarchy.buildHierarchySummary(project, {
+        includeRevertable: includeRevert,
+        activityLog: repairActivity,
+      }));
+    }
+
     const tree = reqHierarchy.buildHierarchyTree(project, { focusStakeholderId, focusRequirementId });
-    tree.revertableRepairs = reqHierarchy.getRevertableStakeholderRepairs(project, store.activity);
+    if (includeRevert) {
+      tree.revertableRepairs = reqHierarchy.getRevertableStakeholderRepairs(
+        project,
+        getProjectRepairActivity(project.id),
+      );
+    } else {
+      tree.revertableRepairs = { count: 0, stakeholderIds: [] };
+    }
     return res.json(tree);
   });
 
@@ -2913,19 +2952,20 @@ function registerRequirementsPlatform(app, options) {
   });
 
   app.get('/api/projects/projects/:projectId/activity', authMiddleware, loadProjectForUser, async (req, res) => {
-    const activity = ensureArray(req.loadedStore.activity)
+    const store = await readStore({ includeActivity: true, activityLimit: 400 });
+    const activity = ensureArray(store.activity)
       .filter((entry) => entry.projectId === req.loadedProject.id)
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 300)
       .map((entry) => ({
         ...entry,
-        actorName: getUserName(req.loadedStore, entry.actorUserId),
+        actorName: getUserName(store, entry.actorUserId),
       }));
 
     const auditLog = projectAudit.normalizeAuditLog(req.loadedProject.auditLog)
       .map((entry) => ({
         ...entry,
-        actorName: entry.actorName || getUserName(req.loadedStore, entry.actorUserId),
+        actorName: entry.actorName || getUserName(store, entry.actorUserId),
         canRevert: Boolean(entry.snapshotId) && !entry.revertedAt,
       }));
 
