@@ -26,7 +26,9 @@ function buildIndexEntry(project) {
     updatedAt: project.updatedAt,
     createdBy: project.createdBy,
     members: ensureArray(project.members),
-    requirementCount: ensureArray(project.requirements).length,
+    requirementCount: Number.isFinite(project.requirementCount)
+      ? project.requirementCount
+      : ensureArray(project.requirements).length,
   };
 }
 

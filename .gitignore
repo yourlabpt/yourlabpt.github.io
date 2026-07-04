@@ -37,3 +37,10 @@ server/inquiries/*
 
 # Runtime content
 server/project-showcase.json
+
+# Platform hybrid storage (local runtime)
+projects/data/platform.db
+projects/data/platform.db-*
+projects/data/blobs/
+projects/data/snapshots/
+projects/data/store.json.bak

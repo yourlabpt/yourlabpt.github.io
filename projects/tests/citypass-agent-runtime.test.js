@@ -5,18 +5,40 @@ const path = require('node:path');
 
 const executionPlans = require('../lib/execution-plans');
 const { createAgentRuntimeClient } = require('../lib/agent-runtime-client');
+const blobStore = require('../lib/blob-store');
 
 const CITYPASS_PROJECT_ID = 'prj_2b139f34-c3cd-4f6e-8794-da5f467a690a';
 const citypassProjectPath = path.resolve(
   __dirname,
   '../data/projects/prj_2b139f34-c3cd-4f6e-8794-da5f467a690a.json'
 );
+const dataDir = path.resolve(__dirname, '../data');
+
+function readJsonSync(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function hydrateExecutionPlanSync(plan, projectId) {
+  if (!plan?.blobStored) return plan;
+  const filePath = blobStore.blobPath(dataDir, projectId, blobStore.KIND.EXEC_PLAN, plan.id);
+  if (!fs.existsSync(filePath)) return plan;
+  const body = readJsonSync(filePath);
+  return {
+    ...plan,
+    masterPlanMarkdown: body.masterPlanMarkdown || '',
+    tasks: Array.isArray(body.tasks) ? body.tasks : [],
+  };
+}
 
 function loadCityPassProject() {
   if (!fs.existsSync(citypassProjectPath)) {
     return null;
   }
-  return JSON.parse(fs.readFileSync(citypassProjectPath, 'utf8'));
+  const project = readJsonSync(citypassProjectPath);
+  project.executionPlans = (project.executionPlans || []).map((plan) =>
+    hydrateExecutionPlanSync(plan, project.id)
+  );
+  return project;
 }
 
 describe('CityPass agent runtime integration', () => {

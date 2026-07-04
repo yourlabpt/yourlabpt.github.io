@@ -26,10 +26,13 @@ function slimPromptRun(run) {
     createdBy: run.createdBy,
     reviewedAt: run.reviewedAt,
     reviewedBy: run.reviewedBy,
-    hasFullPrompt: Boolean(run.fullPrompt),
-    hasRawOutput: Boolean(run.rawOutput),
-    hasParsedOutput: Boolean(run.parsedOutput),
-    fullPromptLength: run.fullPrompt ? String(run.fullPrompt).length : 0,
+    hasFullPrompt: Boolean(run.fullPrompt) || Boolean(run.hasFullPrompt),
+    hasRawOutput: Boolean(run.rawOutput) || Boolean(run.hasRawOutput),
+    hasParsedOutput: Boolean(run.parsedOutput) || Boolean(run.hasParsedOutput),
+    fullPromptLength: run.fullPrompt
+      ? String(run.fullPrompt).length
+      : (Number(run.fullPromptLength) || 0),
+    blobStored: Boolean(run.blobStored),
   };
 }
 

@@ -9,7 +9,9 @@ const projectAccess = require('./lib/project-access');
 const projectAudit = require('./lib/project-audit');
 const { createSplitStoreLayer } = require('./lib/split-store');
 const projectPayload = require('./lib/project-payload');
-const snapshotStorage = require('./lib/snapshot-storage');
+const blobStore = require('./lib/blob-store');
+const { createSqliteStore } = require('./lib/sqlite-store');
+const { migrateToHybridStorage } = require('./lib/hybrid-migrate');
 const zlib = require('zlib');
 const { promisify } = require('util');
 const gzipAsync = promisify(zlib.gzip);
@@ -106,6 +108,34 @@ function registerRequirementsPlatform(app, options) {
   const dataDir = path.join(platformDir, 'data');
   const uploadsDir = path.join(platformDir, 'uploads');
   const storePath = path.join(dataDir, 'store.json');
+
+  let sqliteStore;
+  try {
+    sqliteStore = createSqliteStore({ dataDir });
+  } catch (error) {
+    console.warn('SQLite indisponivel — modo apenas ficheiros:', error.message);
+    sqliteStore = {
+      isEnabled: () => false,
+      isHybridLayout: () => false,
+      markHybridLayout: () => {},
+      getUsers: () => [],
+      saveUsers: () => {},
+      getActivity: () => [],
+      appendActivity: () => {},
+      replaceActivity: () => {},
+      loadRequirements: () => [],
+      saveRequirements: () => {},
+      deleteProjectData: () => {},
+    };
+  }
+
+  function isHybridStorage(store) {
+    return store?._index?.meta?.storageLayout === 'hybrid-v2';
+  }
+
+  function isProjectHybrid(project) {
+    return Boolean(project?.storageHybrid || project?.requirementsInDb);
+  }
 
   let storeQueue = Promise.resolve();
   let storeInitialized = false;
@@ -224,6 +254,24 @@ function registerRequirementsPlatform(app, options) {
           projects: [],
         }, { compact: true });
         storeLayer.seedMemoryStore(seedStore);
+        await storeLayer.migrateMonolithicIfNeeded();
+        try {
+          const migration = await migrateToHybridStorage({
+            dataDir,
+            storeLayer,
+            sqliteStore,
+            blobStore,
+            readJson,
+            writeJson,
+            normalizeOneProject,
+            nowIso,
+          });
+          if (migration.migrated) {
+            console.log('Hybrid storage inicializado para instalação nova.');
+          }
+        } catch (error) {
+          console.error('Migracao hybrid ignorada:', error.message);
+        }
         storeInitialized = true;
         return;
       }
@@ -238,6 +286,28 @@ function registerRequirementsPlatform(app, options) {
       }
 
       await storeLayer.migrateMonolithicIfNeeded();
+
+      try {
+        const migration = await migrateToHybridStorage({
+          dataDir,
+          storeLayer,
+          sqliteStore,
+          blobStore,
+          readJson,
+          writeJson,
+          normalizeOneProject,
+          nowIso,
+        });
+        if (migration.migrated) {
+          console.log(
+            `Hybrid storage: ${migration.projectsMigrated} projetos, `
+            + `${migration.users} utilizadores, ${migration.activity} atividades migrados.`,
+          );
+        }
+      } catch (error) {
+        console.error('Migracao hybrid ignorada:', error.message);
+      }
+
       storeInitialized = true;
     });
   }
@@ -266,24 +336,107 @@ function registerRequirementsPlatform(app, options) {
     nowIso,
   });
 
+  const originalWriteProjectBlob = storeLayer.writeProjectBlob.bind(storeLayer);
+
+  async function persistProjectHybrid(project, { storeHybrid = false } = {}) {
+    if (!project?.id) return;
+    const full = storeLayer.loadedProjects.get(project.id) || project;
+    const requirements = ensureArray(full.requirements);
+    const useDb = isProjectHybrid(full) || storeHybrid;
+
+    if (useDb) {
+      sqliteStore.saveRequirements(project.id, requirements);
+    }
+
+    await blobStore.externalizeProjectBlobs(full, dataDir, writeJson);
+
+    const disk = blobStore.prepareProjectForDisk({
+      ...full,
+      storageHybrid: useDb,
+      requirementsInDb: useDb,
+      requirementCount: requirements.length,
+    });
+    await originalWriteProjectBlob(disk);
+    storeLayer.loadedProjects.set(project.id, {
+      ...full,
+      requirements,
+      storageHybrid: disk.storageHybrid,
+      requirementsInDb: disk.requirementsInDb,
+    });
+  }
+
+  storeLayer.writeProjectBlob = async function writeProjectBlobHybrid(project) {
+    const mem = storeLayer.loadedProjects.get(project?.id) || project;
+    const idx = await storeLayer.loadIndex();
+    const storeHybrid = idx?.meta?.storageLayout === 'hybrid-v2';
+    if (storeHybrid || isProjectHybrid(mem)) {
+      await persistProjectHybrid(mem, { storeHybrid });
+      return;
+    }
+    await blobStore.externalizeProjectBlobs(mem, dataDir, writeJson);
+    return originalWriteProjectBlob(mem);
+  };
+
+  async function hydrateProjectFromHybrid(project) {
+    if (!project?.id) return project;
+    if (isProjectHybrid(project)) {
+      const reqs = sqliteStore.loadRequirements(project.id);
+      if (reqs.length) {
+        project.requirements = reqs;
+      }
+      project.storageHybrid = true;
+      project.requirementsInDb = true;
+    }
+    return project;
+  }
+
   async function readStore() {
-    return storeLayer.readStore(ensureStoreInitialized);
+    const store = await storeLayer.readStore(ensureStoreInitialized);
+    if (isHybridStorage(store)) {
+      store.users = sqliteStore.getUsers();
+      store.activity = sqliteStore.getActivity();
+      if (store._index) {
+        store._index.users = [];
+        store._index.activity = [];
+        store._index.meta = store._index.meta || {};
+        store._index.meta.usersInDb = true;
+        store._index.meta.activityInDb = true;
+      }
+    }
+    return store;
   }
 
   async function updateStore(mutator, options) {
-    const result = await storeLayer.updateStore(mutator, ensureStoreInitialized, options);
+    await storeLayer.updateStore(async (store) => {
+      if (isHybridStorage(store)) {
+        store.users = sqliteStore.getUsers();
+        store.activity = sqliteStore.getActivity(500);
+      }
+      await mutator(store);
+      if (isHybridStorage(store)) {
+        sqliteStore.saveUsers(store.users);
+        if (store._index) {
+          store._index.users = [];
+          store._index.activity = [];
+          store._index.meta = store._index.meta || {};
+          store._index.meta.usersInDb = true;
+          store._index.meta.activityInDb = true;
+        }
+      }
+    }, ensureStoreInitialized, options);
     projectPayload.clearSanitizeCache();
-    return result;
   }
 
   async function ensureProjectLoaded(projectId) {
     const project = await storeLayer.ensureProjectLoaded(projectId);
-    if (project) {
-      Object.assign(project, normalizeOneProject(project));
-      const externalized = await snapshotStorage.compactProjectSnapshotsOnRead(project, dataDir, writeJson);
-      if (externalized) {
-        await storeLayer.writeProjectBlob(project);
-      }
+    if (!project) return null;
+
+    Object.assign(project, normalizeOneProject(project));
+    await hydrateProjectFromHybrid(project);
+
+    const externalized = await blobStore.externalizeProjectBlobs(project, dataDir, writeJson);
+    if (externalized) {
+      await persistProjectHybrid(project);
     }
     return project;
   }
@@ -294,6 +447,12 @@ function registerRequirementsPlatform(app, options) {
       at: nowIso(),
       ...entry,
     };
+    if (isHybridStorage(store)) {
+      sqliteStore.appendActivity(record);
+      store.activity = store.activity || [];
+      store.activity.unshift(record);
+      return;
+    }
     store.activity.push(record);
   }
 
@@ -1708,7 +1867,8 @@ function registerRequirementsPlatform(app, options) {
     if (!document) {
       return res.status(404).json({ message: 'Documento nao encontrado.' });
     }
-    const normalized = phaseContent.normalizeProjectDocument(document);
+    const hydrated = await blobStore.hydrateDocument(document, req.loadedProject.id, dataDir, readJson);
+    const normalized = phaseContent.normalizeProjectDocument(hydrated);
     return res.json({
       document: {
         id: normalized.id,
@@ -1721,7 +1881,7 @@ function registerRequirementsPlatform(app, options) {
         contentType: normalized.contentType,
         size: normalized.size,
         hasExtractedText: Boolean(normalized.extractedText || normalized.contentMarkdown),
-        hasContent: Boolean(normalized.contentMarkdown || normalized.extractedText),
+        hasContent: Boolean(normalized.contentMarkdown || normalized.extractedText || normalized.hasContent),
         deliveryStageId: normalized.deliveryStageId,
         docType: normalized.docType,
         origin: normalized.origin,
@@ -1743,6 +1903,14 @@ function registerRequirementsPlatform(app, options) {
     }
 
     const content = document.contentMarkdown || document.extractedText || '';
+    if (!content && document.blobStored) {
+      const hydrated = await blobStore.hydrateDocument(document, req.loadedProject.id, dataDir, readJson);
+      const body = hydrated.contentMarkdown || hydrated.extractedText || '';
+      res.setHeader('Content-Type', document.contentType || 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFileName(document.title || document.originalName || 'documento.txt')}"`);
+      return res.send(body);
+    }
+
     res.setHeader('Content-Type', document.contentType || 'text/plain');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFileName(document.title || document.originalName || 'documento.txt')}"`);
     return res.send(content);
@@ -1837,24 +2005,30 @@ function registerRequirementsPlatform(app, options) {
     if (!run) {
       return res.status(404).json({ message: 'Execução IA nao encontrada.' });
     }
+    const hydrated = await blobStore.hydratePromptRun(run, req.loadedProject.id, dataDir, readJson);
     return res.json({
       promptRun: {
-        id: run.id,
-        agentType: run.agentType,
-        stageId: run.stageId,
-        capabilityId: run.capabilityId,
-        moduleTag: run.moduleTag,
-        targetOutput: run.targetOutput,
-        summaryMarkdown: run.summaryMarkdown,
-        status: run.status,
-        version: run.version,
-        createdAt: run.createdAt,
-        createdBy: run.createdBy,
-        reviewedAt: run.reviewedAt,
-        reviewedBy: run.reviewedBy,
-        fullPrompt: run.fullPrompt || '',
-        rawOutput: run.rawOutput || '',
-        parsedOutput: run.parsedOutput ?? null,
+        id: hydrated.id,
+        agentType: hydrated.agentType,
+        stageId: hydrated.stageId,
+        capabilityId: hydrated.capabilityId,
+        moduleTag: hydrated.moduleTag,
+        targetOutput: hydrated.targetOutput,
+        summaryMarkdown: hydrated.summaryMarkdown,
+        status: hydrated.status,
+        version: hydrated.version,
+        createdAt: hydrated.createdAt,
+        createdBy: hydrated.createdBy,
+        reviewedAt: hydrated.reviewedAt,
+        reviewedBy: hydrated.reviewedBy,
+        fullPrompt: hydrated.fullPrompt || '',
+        rawOutput: hydrated.rawOutput || '',
+        parsedOutput: hydrated.parsedOutput ?? null,
+        contextPack: hydrated.contextPack || {},
+        systemPrompt: hydrated.systemPrompt || '',
+        stageInstruction: hydrated.stageInstruction || '',
+        taskPrompt: hydrated.taskPrompt || '',
+        outputSchema: hydrated.outputSchema || '',
       },
     });
   });
@@ -1875,7 +2049,11 @@ function registerRequirementsPlatform(app, options) {
 
         if (patch.summaryMarkdown !== undefined) run.summaryMarkdown = String(patch.summaryMarkdown);
         if (patch.rawOutput !== undefined) run.rawOutput = String(patch.rawOutput);
+        if (patch.parsedOutput !== undefined) run.parsedOutput = patch.parsedOutput;
         if (patch.status !== undefined) run.status = String(patch.status);
+        if (run.blobStored && (patch.rawOutput !== undefined || patch.parsedOutput !== undefined)) {
+          run.blobStored = false;
+        }
         project.updatedAt = nowIso();
 
         appendActivity(store, {
@@ -3125,7 +3303,7 @@ function registerRequirementsPlatform(app, options) {
     projectAudit,
     getUserName,
     dataDir,
-    resolveSnapshotData: (project, snapshotId) => snapshotStorage.resolveSnapshotData(project, snapshotId, dataDir),
+    resolveSnapshotData: (project, snapshotId) => blobStore.resolveSnapshotData(project, snapshotId, dataDir, readJson),
   });
 
   deliveryOsPlatform.registerDeliveryOsPlatformRoutes(app, {
