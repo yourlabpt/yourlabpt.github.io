@@ -476,10 +476,13 @@ function registerRequirementsPlatform(app, options) {
       return project;
     }
 
-    let reqs = sqliteStore.loadRequirements(project.id);
-    if (!reqs.length && ensureArray(project.requirements).length) {
-      sqliteStore.saveRequirements(project.id, project.requirements);
-      reqs = sqliteStore.loadRequirements(project.id);
+    let reqs = ensureArray(project.requirements);
+    if (!reqs.length) {
+      try {
+        reqs = sqliteStore.loadRequirements(project.id);
+      } catch {
+        reqs = [];
+      }
     }
 
     if (!reqs.length) {
@@ -504,8 +507,12 @@ function registerRequirementsPlatform(app, options) {
       project.requirements = reqs;
     }
 
-    project.storageHybrid = true;
-    project.requirementsInDb = true;
+    if (sqliteReady && reqs.length) {
+      sqliteStore.saveRequirements(project.id, reqs);
+    }
+
+    project.storageHybrid = Boolean(sqliteReady && reqs.length);
+    project.requirementsInDb = project.storageHybrid;
     return project;
   }
 

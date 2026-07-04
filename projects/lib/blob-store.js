@@ -341,9 +341,13 @@ async function externalizeProjectBlobs(project, dataDir, writeJson) {
 
 function prepareProjectForDisk(project) {
   const disk = { ...project };
+  disk.requirements = ensureArray(project.requirements);
+  disk.requirementCount = disk.requirements.length;
   if (project.storageHybrid) {
-    disk.requirements = [];
     disk.requirementsInDb = true;
+  } else {
+    delete disk.requirementsInDb;
+    delete disk.storageHybrid;
   }
   return disk;
 }

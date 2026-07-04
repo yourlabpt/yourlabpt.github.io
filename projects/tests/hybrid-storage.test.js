@@ -108,7 +108,8 @@ describe('hybrid storage migration', () => {
     const disk = await readJson(path.join(dataDir, 'projects', `${projectId}.json`));
     assert.equal(disk.storageHybrid, true);
     assert.equal(disk.requirementsInDb, true);
-    assert.equal(disk.requirements.length, 0);
+    assert.equal(disk.requirements.length, 1);
+    assert.equal(disk.requirementCount, 1);
     assert.equal(disk.promptRuns[0].blobStored, true);
     assert.equal(disk.promptRuns[0].fullPrompt, undefined);
 
