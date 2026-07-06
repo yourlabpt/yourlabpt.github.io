@@ -2,6 +2,7 @@
  * SQLite store for relational / queryable data (users, activity, requirements).
  * Large AI text blobs stay in blob-store files.
  */
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -469,6 +470,48 @@ function createSqliteStore({ dataDir }) {
     };
   }
 
+  function requirementsFingerprint(requirements) {
+    const list = ensureArray(requirements).filter((req) => req?.id);
+    const hash = crypto.createHash('sha1');
+    for (const req of list) {
+      hash.update(normalizeReqId(req.id));
+      hash.update('\0');
+      hash.update(String(req.updatedAt || req.updated_at || ''));
+      hash.update('\0');
+    }
+    return `${list.length}:${hash.digest('hex')}`;
+  }
+
+  function getStoredRequirementsFingerprint(projectId) {
+    const rows = getDb().prepare(`
+      SELECT display_id, updated_at
+      FROM requirements
+      WHERE project_id = ?
+      ORDER BY sort_order ASC, req_id ASC
+    `).all(projectId);
+    const hash = crypto.createHash('sha1');
+    for (const row of rows) {
+      hash.update(normalizeReqId(row.display_id));
+      hash.update('\0');
+      hash.update(String(row.updated_at || ''));
+      hash.update('\0');
+    }
+    return `${rows.length}:${hash.digest('hex')}`;
+  }
+
+  function getRequirementCount(projectId) {
+    const row = getDb().prepare(
+      'SELECT COUNT(*) AS total FROM requirements WHERE project_id = ?',
+    ).get(projectId);
+    return row?.total || 0;
+  }
+
+  function requirementsMatchStore(projectId, requirements) {
+    const incoming = requirementsFingerprint(requirements);
+    const stored = getStoredRequirementsFingerprint(projectId);
+    return incoming === stored;
+  }
+
   function saveRequirements(projectId, requirements) {
     const database = getDb();
     const list = ensureArray(requirements).filter((req) => req?.id);
@@ -563,6 +606,9 @@ function createSqliteStore({ dataDir }) {
     loadRequirementRows,
     loadRequirementLinks,
     getRequirementStats,
+    getRequirementCount,
+    requirementsMatchStore,
+    requirementsFingerprint,
     saveRequirements,
     deleteProjectData,
     close,

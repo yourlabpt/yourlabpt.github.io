@@ -214,12 +214,19 @@ function clearSanitizeCache(projectId) {
 function wrapSanitizeProject(sanitizeProjectFn) {
   return function cachedSanitizeProject(project, viewer, options = {}) {
     if (!project?.id) return sanitizeProjectFn(project, viewer, options);
-    const mode = options.full ? 'full' : 'slim';
+    const mode = options.full ? 'full' : (options.skipRequirements ? 'overview' : 'slim');
     const key = cacheKey(project.id, project.updatedAt, viewer?.id, mode);
     if (!options.bypassCache && sanitizeCache.has(key)) {
       return sanitizeCache.get(key);
     }
-    const source = options.full ? project : slimProjectForTransport(project, options);
+    let source;
+    if (options.full) {
+      source = project;
+    } else if (options.skipRequirements) {
+      source = { ...slimProjectForTransport(project, options), requirements: [] };
+    } else {
+      source = slimProjectForTransport(project, options);
+    }
     const result = sanitizeProjectFn(source, viewer, options);
     if (!options.bypassCache) {
       sanitizeCache.set(key, result);

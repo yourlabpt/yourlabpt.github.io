@@ -1264,7 +1264,7 @@
     el.innerHTML = html;
 
     if (stageId === 'requirements') {
-      hydrateVChainCard(project);
+      scheduleVChainCardHydrate(project);
     } else if (stageId === 'idea') {
       hydrateIdeaStage(project);
     } else if (stageId === 'discovery') {
@@ -1279,6 +1279,47 @@
 
     wireCardFeedEvents(project);
     renderMermaidInFeed();
+  }
+
+  function scheduleVChainCardHydrate(project) {
+    const statsEl = document.getElementById('pdosVChainStats');
+    if (!statsEl || !project?.id) return;
+
+    statsEl.innerHTML = `
+      <div><strong>…</strong><span>STK (L0)</span></div>
+      <div><strong>…</strong><span>órfãos</span></div>
+      <div><strong>…</strong><span>cobertura V</span></div>
+    `;
+
+    if (statsEl._vchainObserver) {
+      statsEl._vchainObserver.disconnect();
+      statsEl._vchainObserver = null;
+    }
+
+    const run = () => hydrateVChainCard(project);
+
+    if (typeof IntersectionObserver === 'function') {
+      const observer = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        statsEl._vchainObserver = null;
+        run();
+      }, { rootMargin: '120px' });
+      observer.observe(statsEl);
+      statsEl._vchainObserver = observer;
+
+      requestAnimationFrame(() => {
+        const rect = statsEl.getBoundingClientRect();
+        if (rect.width > 0 && rect.top < window.innerHeight + 120 && rect.bottom > -120) {
+          observer.disconnect();
+          statsEl._vchainObserver = null;
+          run();
+        }
+      });
+      return;
+    }
+
+    window.setTimeout(run, 400);
   }
 
   async function hydrateVChainCard(project) {

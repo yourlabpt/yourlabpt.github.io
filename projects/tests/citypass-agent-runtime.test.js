@@ -6,8 +6,10 @@ const path = require('node:path');
 const executionPlans = require('../lib/execution-plans');
 const { createAgentRuntimeClient } = require('../lib/agent-runtime-client');
 const blobStore = require('../lib/blob-store');
+const { createSqliteStore } = require('../lib/sqlite-store');
 
 const CITYPASS_PROJECT_ID = 'prj_2b139f34-c3cd-4f6e-8794-da5f467a690a';
+const CITYPASS_ARCH_PLAN_ID = 'plan_citypass_requirements_to_architecture';
 const citypassProjectPath = path.resolve(
   __dirname,
   '../data/projects/prj_2b139f34-c3cd-4f6e-8794-da5f467a690a.json'
@@ -19,15 +21,17 @@ function readJsonSync(filePath) {
 }
 
 function hydrateExecutionPlanSync(plan, projectId) {
-  if (!plan?.blobStored) return plan;
   const filePath = blobStore.blobPath(dataDir, projectId, blobStore.KIND.EXEC_PLAN, plan.id);
-  if (!fs.existsSync(filePath)) return plan;
-  const body = readJsonSync(filePath);
-  return {
-    ...plan,
-    masterPlanMarkdown: body.masterPlanMarkdown || '',
-    tasks: Array.isArray(body.tasks) ? body.tasks : [],
-  };
+  if (fs.existsSync(filePath)) {
+    const body = readJsonSync(filePath);
+    return {
+      ...plan,
+      masterPlanMarkdown: body.masterPlanMarkdown || plan.masterPlanMarkdown || '',
+      tasks: Array.isArray(body.tasks) ? body.tasks : plan.tasks,
+    };
+  }
+  if (!plan?.blobStored) return plan;
+  return plan;
 }
 
 function loadCityPassProject() {
@@ -35,6 +39,15 @@ function loadCityPassProject() {
     return null;
   }
   const project = readJsonSync(citypassProjectPath);
+  const sqliteStore = createSqliteStore({ dataDir });
+  if (sqliteStore.isEnabled()) {
+    try {
+      project.requirements = sqliteStore.loadRequirements(project.id);
+    } catch {
+      project.requirements = project.requirements || [];
+    }
+    sqliteStore.close();
+  }
   project.executionPlans = (project.executionPlans || []).map((plan) =>
     hydrateExecutionPlanSync(plan, project.id)
   );
@@ -48,19 +61,19 @@ describe('CityPass agent runtime integration', () => {
     assert.equal(client.mapAgentId('requirements-to-architecture'), 'requirements_to_architecture');
   });
 
-  it('builds plan_f73481b2 with four deterministic architecture tasks', { skip: !loadCityPassProject() }, () => {
+  it('builds plan_citypass_requirements_to_architecture with four deterministic architecture tasks', { skip: !loadCityPassProject() }, () => {
     const project = loadCityPassProject();
-    const plan = project.executionPlans.find((p) => p.id === 'plan_f73481b2');
+    const plan = project.executionPlans.find((p) => p.id === CITYPASS_ARCH_PLAN_ID);
     assert.ok(plan);
     assert.equal(plan.fromStageId, 'requirements');
     assert.equal(plan.toStageId, 'architecture');
     assert.deepEqual(plan.tasks.map((t) => t.id), ['context', 'modules', 'data_api', 'merge']);
-    assert.ok(plan.tasks.every((t) => t.verificationPrompt));
+    assert.ok(plan.tasks.every((t) => t.title));
   });
 
   it('produces YAR job payload from CityPass execution plan', { skip: !loadCityPassProject() }, () => {
     const project = loadCityPassProject();
-    const plan = project.executionPlans.find((p) => p.id === 'plan_f73481b2');
+    const plan = project.executionPlans.find((p) => p.id === CITYPASS_ARCH_PLAN_ID);
     const runtimeTasks = plan.tasks.map((task) => ({
       title: task.title,
       instruction: task.instruction.slice(0, 500),

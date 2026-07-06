@@ -142,4 +142,22 @@ describe('sqlite requirement store', () => {
     assert.deepEqual(rows.map((row) => row.storageId), ['FR-01', 'FR-01#DUP-2']);
     store.close();
   });
+
+  it('skips redundant saves when requirements fingerprint matches', () => {
+    const store = createSqliteStore({ dataDir: path.join(tmpDir, 'case-d') });
+    const projectId = 'prj_fingerprint';
+    const requirements = [
+      { id: 'FR-01', type: 'functional', title: 'One', updatedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'FR-02', type: 'functional', title: 'Two', updatedAt: '2026-01-02T00:00:00.000Z' },
+    ];
+
+    store.saveRequirements(projectId, requirements);
+    assert.equal(store.getRequirementCount(projectId), 2);
+    assert.equal(store.requirementsMatchStore(projectId, requirements), true);
+    assert.equal(store.requirementsMatchStore(projectId, [
+      ...requirements,
+      { id: 'FR-03', type: 'functional', title: 'Three' },
+    ]), false);
+    store.close();
+  });
 });

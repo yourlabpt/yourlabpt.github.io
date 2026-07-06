@@ -7,7 +7,7 @@ const deliveryOs = require('./lib/delivery-os');
 const deliveryOsPlatform = require('./lib/delivery-os-platform');
 const projectAccess = require('./lib/project-access');
 const projectAudit = require('./lib/project-audit');
-const { createSplitStoreLayer } = require('./lib/split-store');
+const { createSplitStoreLayer, projectFileName } = require('./lib/split-store');
 const projectPayload = require('./lib/project-payload');
 const blobStore = require('./lib/blob-store');
 const { createSqliteStore } = require('./lib/sqlite-store');
@@ -316,6 +316,7 @@ function registerRequirementsPlatform(app, options) {
       }
 
       await repairHybridProjectsOnStartup();
+      await externalizeInlineRequirementsOnStartup();
 
       storeInitialized = true;
     });
@@ -386,6 +387,91 @@ function registerRequirementsPlatform(app, options) {
     } catch (error) {
       console.error('Reparacao hybrid no arranque:', error.message);
     }
+  }
+
+  async function externalizeInlineRequirementsOnStartup() {
+    try {
+      const sqliteReady = typeof sqliteStore.isReady === 'function'
+        ? sqliteStore.isReady()
+        : sqliteStore.isEnabled();
+      if (!sqliteReady) return;
+
+      const idx = await storeLayer.loadIndex();
+      for (const entry of ensureArray(idx?.projects)) {
+        const project = await storeLayer.readProjectBlob(entry.id);
+        if (!project) continue;
+
+        const inlineReqs = ensureArray(project.requirements);
+        if (!inlineReqs.length) continue;
+
+        if (!sqliteStore.requirementsMatchStore(project.id, inlineReqs)) {
+          sqliteStore.saveRequirements(project.id, inlineReqs);
+        }
+
+        project.requirements = inlineReqs;
+        project.storageHybrid = true;
+        project.requirementsInDb = true;
+        project.requirementCount = inlineReqs.length;
+
+        await blobStore.externalizeProjectBlobs(project, dataDir, writeJson);
+        const disk = blobStore.prepareProjectForDisk({
+          ...project,
+          storageHybrid: true,
+          requirementsInDb: true,
+          requirementCount: inlineReqs.length,
+        });
+        const filePath = path.join(dataDir, 'projects', projectFileName(project.id));
+        await writeJson(filePath, disk, { compact: true });
+        storeLayer.loadedProjects.set(project.id, project);
+
+        const indexPos = ensureArray(idx.projects).findIndex((item) => item.id === project.id);
+        if (indexPos >= 0) {
+          idx.projects[indexPos] = {
+            ...idx.projects[indexPos],
+            requirementCount: inlineReqs.length,
+            updatedAt: project.updatedAt,
+          };
+        }
+        console.log(`Requisitos externalizados para SQLite (${project.id}): ${inlineReqs.length}`);
+      }
+
+      if (idx?.meta) {
+        idx.meta.storageLayout = idx.meta.storageLayout || 'hybrid-v2';
+        await writeJson(path.join(dataDir, 'store-index.json'), idx, { compact: true });
+      }
+    } catch (error) {
+      console.error('Externalizacao de requisitos no arranque:', error.message);
+    }
+  }
+
+  async function attachProjectRequirements(project) {
+    if (!project?.id) return project;
+    if (ensureArray(project.requirements).length) return project;
+
+    const sqliteReady = typeof sqliteStore.isReady === 'function'
+      ? sqliteStore.isReady()
+      : sqliteStore.isEnabled();
+    if (sqliteReady) {
+      try {
+        const count = typeof sqliteStore.getRequirementCount === 'function'
+          ? sqliteStore.getRequirementCount(project.id)
+          : 0;
+        if (count > 0) {
+          project.requirements = sqliteStore.loadRequirements(project.id);
+          return project;
+        }
+      } catch {
+        // fall through to inline JSON on disk
+      }
+    }
+
+    if (!ensureArray(project.requirements).length) {
+      const fresh = await storeLayer.readProjectBlob(project.id);
+      if (fresh && ensureArray(fresh.requirements).length) {
+        project.requirements = fresh.requirements;
+      }
+    }
+    return project;
   }
 
   async function persistProjectHybrid(project, { storeHybrid = false } = {}) {
@@ -508,7 +594,15 @@ function registerRequirementsPlatform(app, options) {
     }
 
     if (sqliteReady && reqs.length) {
-      sqliteStore.saveRequirements(project.id, reqs);
+      const dbCount = typeof sqliteStore.getRequirementCount === 'function'
+        ? sqliteStore.getRequirementCount(project.id)
+        : 0;
+      const shouldSync = dbCount === 0
+        || (typeof sqliteStore.requirementsMatchStore === 'function'
+          && !sqliteStore.requirementsMatchStore(project.id, reqs));
+      if (shouldSync) {
+        sqliteStore.saveRequirements(project.id, reqs);
+      }
     }
 
     project.storageHybrid = Boolean(sqliteReady && reqs.length);
@@ -720,7 +814,11 @@ function registerRequirementsPlatform(app, options) {
     return normalizePhases(phases);
   }
 
-  function sanitizeProjectFull(project, viewer) {
+  function sanitizeProjectFull(project, viewer, options = {}) {
+    const skipRequirements = options.skipRequirements === true;
+    const requirements = skipRequirements ? [] : ensureArray(project.requirements);
+    const requirementIdSet = skipRequirements ? null : buildRequirementIdSet(project.requirements);
+
     const sanitized = {
       id: project.id,
       name: project.name,
@@ -738,16 +836,18 @@ function registerRequirementsPlatform(app, options) {
       risks: ensureArray(project.risks),
       integrations: ensureArray(project.integrations),
       technicalApproach: project.technicalApproach || defaultTechnicalApproach(),
-      requirements: ensureArray(project.requirements).map((entry) => {
-        const useFastPath = entry?.id && Array.isArray(entry.hierarchyLinks) && entry.vLevel !== undefined;
-        const normalized = useFastPath ? entry : normalizeRequirementRecord(entry);
-        const smartValidationErrors = getSmartRequirementValidationErrors(normalized);
-        return {
-          ...normalized,
-          smartValidationErrors,
-          smartIsValid: smartValidationErrors.length === 0,
-        };
-      }),
+      requirements: skipRequirements
+        ? []
+        : requirements.map((entry) => {
+          const useFastPath = entry?.id && Array.isArray(entry.hierarchyLinks) && entry.vLevel !== undefined;
+          const normalized = useFastPath ? entry : normalizeRequirementRecord(entry);
+          const smartValidationErrors = getSmartRequirementValidationErrors(normalized);
+          return {
+            ...normalized,
+            smartValidationErrors,
+            smartIsValid: smartValidationErrors.length === 0,
+          };
+        }),
       clarificationQuestions: normalizeClarificationQuestions(project.clarificationQuestions || project.questions),
       phases: sanitizePhasesForViewer(project.phases),
       sourceText: project.sourceText || '',
@@ -756,7 +856,9 @@ function registerRequirementsPlatform(app, options) {
       deliveryLevel: normalizeDeliveryLevel(project.deliveryLevel),
       stages: normalizeProjectStages(project.stages, normalizeDeliveryLevel(project.deliveryLevel)),
       artifacts: normalizeArtifacts(project.artifacts),
-      traceLinks: normalizeTraceLinks(project.traceLinks, project.requirements, project.artifacts, project),
+      traceLinks: skipRequirements
+        ? []
+        : normalizeTraceLinks(project.traceLinks, project.requirements, project.artifacts, project, requirementIdSet),
       approvals: normalizeApprovals(project.approvals),
       impactReports: normalizeImpactReports(project.impactReports),
       documents: phaseContent.normalizeProjectDocuments(project.documents).map((doc) => ({
@@ -1183,7 +1285,7 @@ function registerRequirementsPlatform(app, options) {
           const n = ensureArray(project.requirements).length;
           reqStats = { total: n, stakeholder: 0, functional: 0, nonFunctional: 0, testCase: 0, links: 0 };
         }
-        const base = sanitizeProject(project, req.auth.user);
+        const base = sanitizeProject(project, req.auth.user, { skipRequirements: true });
         const overviewPayload = projectPayload.buildOverviewPayload(base, { requirementStats: reqStats });
         return res.json({ project: overviewPayload });
       }
@@ -2653,31 +2755,45 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.get('/api/projects/projects/:projectId/requirements/hierarchy', authMiddleware, loadProjectForUser, async (req, res) => {
-    const project = req.loadedProject;
+  app.get('/api/projects/projects/:projectId/requirements/hierarchy', authMiddleware, async (req, res) => {
+    const projectId = req.params.projectId;
     const focusStakeholderId = textOr(req.query?.focusStakeholderId);
     const focusRequirementId = textOr(req.query?.focusRequirementId);
     const summaryOnly = req.query.summary === '1' || req.query.summary === 'true';
     const includeRevert = req.query.includeRevert === '1' || req.query.includeRevert === 'true';
 
-    if (summaryOnly) {
-      const repairActivity = includeRevert ? getProjectRepairActivity(project.id) : [];
-      return res.json(reqHierarchy.buildHierarchySummary(project, {
-        includeRevertable: includeRevert,
-        activityLog: repairActivity,
-      }));
-    }
+    try {
+      let project = await ensureProjectLoadedLite(projectId);
+      if (!project) {
+        return res.status(404).json({ message: 'Projeto nao encontrado.' });
+      }
+      if (!canAccessProject(req.auth.user, project)) {
+        return res.status(403).json({ message: 'Sem permissao para este projeto.' });
+      }
 
-    const tree = reqHierarchy.buildHierarchyTree(project, { focusStakeholderId, focusRequirementId });
-    if (includeRevert) {
-      tree.revertableRepairs = reqHierarchy.getRevertableStakeholderRepairs(
-        project,
-        getProjectRepairActivity(project.id),
-      );
-    } else {
-      tree.revertableRepairs = { count: 0, stakeholderIds: [] };
+      await attachProjectRequirements(project);
+
+      if (summaryOnly) {
+        const repairActivity = includeRevert ? getProjectRepairActivity(project.id) : [];
+        return res.json(reqHierarchy.buildHierarchySummary(project, {
+          includeRevertable: includeRevert,
+          activityLog: repairActivity,
+        }));
+      }
+
+      const tree = reqHierarchy.buildHierarchyTree(project, { focusStakeholderId, focusRequirementId });
+      if (includeRevert) {
+        tree.revertableRepairs = reqHierarchy.getRevertableStakeholderRepairs(
+          project,
+          getProjectRepairActivity(project.id),
+        );
+      } else {
+        tree.revertableRepairs = { count: 0, stakeholderIds: [] };
+      }
+      return res.json(tree);
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
     }
-    return res.json(tree);
   });
 
   app.post('/api/projects/projects/:projectId/requirements/hierarchy/repair', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
@@ -5583,7 +5699,16 @@ function normalizeArtifacts(list) {
     .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
 }
 
-function hasTraceableNode(requirements, artifacts, nodeType, nodeId, project) {
+function buildRequirementIdSet(requirements) {
+  const ids = new Set();
+  for (const entry of ensureArray(requirements)) {
+    const id = String(entry?.id || '').trim().replace(/\s+/g, '').toUpperCase();
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+function hasTraceableNode(requirements, artifacts, nodeType, nodeId, project, requirementIdSet) {
   const targetId = textOr(nodeId);
   const type = textOr(nodeType, 'requirement').toLowerCase();
   if (!targetId) return false;
@@ -5605,15 +5730,18 @@ function hasTraceableNode(requirements, artifacts, nodeType, nodeId, project) {
     return ensureArray(project?.businessObjectives).some((entry) => entry.id === targetId);
   }
 
+  const normalizedTarget = targetId.replace(/\s+/g, '').toUpperCase();
+  const idSet = requirementIdSet || buildRequirementIdSet(requirements);
+
   if (['stakeholder_requirement', 'technical_requirement', 'requirement'].includes(type)) {
-    return ensureArray(requirements).map((entry) => normalizeRequirementRecord(entry)).some((entry) => entry.id === targetId);
+    return idSet.has(normalizedTarget);
   }
 
   if (['architecture_object', 'data_entity', 'api_endpoint', 'test_case', 'deliverable', 'monitoring_signal'].includes(type)) {
     return normalizeArtifacts(artifacts).some((entry) => entry.id === targetId || entry.name === targetId);
   }
 
-  return ensureArray(requirements).map((entry) => normalizeRequirementRecord(entry)).some((entry) => entry.id === targetId);
+  return idSet.has(normalizedTarget);
 }
 
 function normalizeTraceNodeType(rawType) {
@@ -5627,14 +5755,14 @@ function normalizeTraceNodeType(rawType) {
   return type === 'artifact' ? 'artifact' : 'requirement';
 }
 
-function normalizeTraceLinkRecord(raw, requirements, artifacts, project) {
+function normalizeTraceLinkRecord(raw, requirements, artifacts, project, requirementIdSet) {
   const relationshipType = textOr(raw?.relationshipType, 'depends_on').toLowerCase();
   const sourceType = normalizeTraceNodeType(raw?.sourceType);
   const targetType = normalizeTraceNodeType(raw?.targetType);
 
   const sourceId = textOr(raw?.sourceId);
   const targetId = textOr(raw?.targetId);
-  if (!hasTraceableNode(requirements, artifacts, sourceType, sourceId, project)) {
+  if (!hasTraceableNode(requirements, artifacts, sourceType, sourceId, project, requirementIdSet)) {
     if (!raw?.autoDerived) {
       return {
         id: textOr(raw?.id, `trc_${crypto.randomUUID()}`),
@@ -5651,7 +5779,7 @@ function normalizeTraceLinkRecord(raw, requirements, artifacts, project) {
       };
     }
   }
-  if (!hasTraceableNode(requirements, artifacts, targetType, targetId, project)) {
+  if (!hasTraceableNode(requirements, artifacts, targetType, targetId, project, requirementIdSet)) {
     if (!raw?.autoDerived) {
       return {
         id: textOr(raw?.id, `trc_${crypto.randomUUID()}`),
@@ -5684,10 +5812,11 @@ function normalizeTraceLinkRecord(raw, requirements, artifacts, project) {
   };
 }
 
-function normalizeTraceLinks(links, requirements, artifacts, project) {
+function normalizeTraceLinks(links, requirements, artifacts, project, requirementIdSet) {
+  const idSet = requirementIdSet || buildRequirementIdSet(requirements);
   const map = new Map();
   for (const entry of ensureArray(links)) {
-    const normalized = normalizeTraceLinkRecord(entry, requirements, artifacts, project);
+    const normalized = normalizeTraceLinkRecord(entry, requirements, artifacts, project, idSet);
     if (!normalized.sourceId || !normalized.targetId) continue;
     const dedupeKey = `${normalized.sourceType}:${normalized.sourceId}|${normalized.relationshipType}|${normalized.targetType}:${normalized.targetId}`;
     if (!map.has(dedupeKey)) {
