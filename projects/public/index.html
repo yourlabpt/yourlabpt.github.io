@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=65" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=66" />
 </head>
 <body>
   <div class="page-bg"></div>
+  <div id="appProgressBar" role="progressbar" aria-label="A carregar" aria-hidden="true"></div>
   <div class="app" id="root">
 
     <!-- LOGIN -->
@@ -425,6 +426,8 @@
                         <option value="Frontend">Frontend</option>
                         <option value="Backend" selected>Backend</option>
                         <option value="Database">Database</option>
+                        <option value="System">System</option>
+                        <option value="Integrations">Integrations</option>
                       </select>
                     </label>
                     <label>Submódulo<input id="reqSubmodule" list="submoduleSuggestions" placeholder="Ex: Auth, Coupons" /></label>
@@ -467,6 +470,8 @@
                           <option value="Frontend">Frontend</option>
                           <option value="Backend">Backend</option>
                           <option value="Database">Database</option>
+                          <option value="System">System</option>
+                          <option value="Integrations">Integrations</option>
                         </select>
                       </label>
                       <label>Submódulo<input id="detailReqSubmodule" list="submoduleSuggestions" /></label>
@@ -1075,7 +1080,7 @@
   <div id="pdosPromptWorkbench" class="pdos-modal hidden">
     <div class="pdos-modal-backdrop"></div>
     <div class="pdos-modal-panel pdos-modal-wide">
-      <h3>Execution Workbench</h3>
+      <h3>Execution Workbench <span class="pdos-prompt-loading-indicator yl-loading-card" style="display:none;font-size:13px;padding:4px 10px;border-radius:8px;vertical-align:middle;margin-left:8px"></span></h3>
       <div id="pdosExecPlanBar" class="pdos-exec-plan-bar hidden"></div>
       <p id="pdosPromptAwaitBanner" class="pdos-prompt-await-banner hidden muted-text">Output ainda não submetido — a revisão humana só é criada quando colar JSON com alterações reais ao projecto.</p>
       <div id="pdosJobBar" class="pdos-job-bar hidden"></div>
@@ -1184,13 +1189,13 @@
   <script src="/projects/static/help-ui.js?v=3" defer></script>
   <script src="/projects/static/proposal-downloads-ui.js?v=5" defer></script>
   <script src="/projects/static/proposal-configurator-ui.js?v=3" defer></script>
-  <script src="/projects/static/app.js?v=42" defer></script>
-  <script src="/projects/static/requirements-map-ui.js?v=12" defer></script>
+  <script src="/projects/static/app.js?v=43" defer></script>
+  <script src="/projects/static/requirements-map-ui.js?v=13" defer></script>
   <script src="/projects/static/requirements-ui.js?v=16" defer></script>
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
-  <script src="/projects/static/delivery-os-ui.js?v=59" defer></script>
+  <script src="/projects/static/delivery-os-ui.js?v=60" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=3" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

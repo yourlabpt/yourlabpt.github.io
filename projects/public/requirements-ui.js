@@ -164,7 +164,7 @@
   // Módulos canónicos partilhados com a linha de entrega (moduleTags). A
   // pagina de requisitos passa a usar moduleTags como fonte única, em vez do
   // antigo campo único req.module, para manter tudo coerente.
-  const MODULE_PRIORITY = ['Database', 'Backend', 'Frontend'];
+  const MODULE_PRIORITY = ['System', 'Integrations', 'Database', 'Backend', 'Frontend'];
   function moduleTagsOf(req) {
     const tags = Array.isArray(req?.moduleTags) ? req.moduleTags.filter(Boolean) : [];
     if (tags.length) return tags;
@@ -547,6 +547,8 @@
             <option value="Frontend">Frontend</option>
             <option value="Backend">Backend</option>
             <option value="Database">Database</option>
+            <option value="System">System</option>
+            <option value="Integrations">Integrations</option>
           </select>
         </div>
         <div class="req-batch-actions">
@@ -796,7 +798,7 @@
       </label>
       <label>${helperLabel('Módulo', 'module')}
         <select id="modalReqModule">
-          <option value="Frontend">Frontend</option><option value="Backend">Backend</option><option value="Database">Database</option>
+          <option value="Frontend">Frontend</option><option value="Backend">Backend</option><option value="Database">Database</option><option value="System">System</option><option value="Integrations">Integrations</option>
         </select>
       </label>
       <label>${helperLabel('Fase de implementação', 'phase')}

@@ -114,49 +114,86 @@ async function savePromptRunBody(projectId, runId, body, dataDir, writeJson) {
   await saveBlob(dataDir, projectId, KIND.PROMPT_RUN, runId, body, writeJson);
 }
 
-function externalizeExecutionPlan(plan, projectId, dataDir, writeJson) {
+async function loadExistingExecutionPlanBody(plan, projectId, dataDir) {
+  if (!plan?.blobStored) return null;
+  try {
+    const raw = await fs.readFile(blobPath(dataDir, projectId, KIND.EXEC_PLAN, plan.id), 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function mergeExecutionPlanTaskBody(current, existing) {
+  if (!existing) return { ...current };
+  return {
+    ...existing,
+    ...current,
+    instruction: current.instruction || existing.instruction || '',
+    outputSchema: current.outputSchema || existing.outputSchema || '',
+    verificationPrompt: current.verificationPrompt || existing.verificationPrompt || '',
+    mergePrompt: current.mergePrompt || existing.mergePrompt || '',
+    regressionGuardPrompt: current.regressionGuardPrompt || existing.regressionGuardPrompt || '',
+    reversePrompt: current.reversePrompt || existing.reversePrompt || '',
+    rawOutput: current.rawOutput || existing.rawOutput || '',
+    parsedOutput: current.parsedOutput ?? existing.parsedOutput ?? null,
+  };
+}
+
+async function externalizeExecutionPlan(plan, projectId, dataDir, writeJson) {
   const hasTasks = ensureArray(plan.tasks).some((t) =>
     hasText(t.instruction) || hasText(t.verificationPrompt) || hasText(t.mergePrompt)
     || hasText(t.regressionGuardPrompt) || hasText(t.reversePrompt) || t.parsedOutput != null);
   const hasMaster = hasText(plan.masterPlanMarkdown);
-  if (!hasTasks && !hasMaster) return Promise.resolve(false);
+  if (!hasTasks && !hasMaster && !plan.blobStored) return false;
+
+  const existingBody = await loadExistingExecutionPlanBody(plan, projectId, dataDir);
+  const existingTasks = new Map(ensureArray(existingBody?.tasks).map((t) => [t.id, t]));
+  const bodyTasks = ensureArray(plan.tasks).map((t) => mergeExecutionPlanTaskBody(t, existingTasks.get(t.id)));
+  const bodyMaster = hasMaster
+    ? plan.masterPlanMarkdown
+    : (existingBody?.masterPlanMarkdown || '');
+  const hasBodyTasks = bodyTasks.some((t) =>
+    hasText(t.instruction) || hasText(t.verificationPrompt) || hasText(t.mergePrompt)
+    || hasText(t.regressionGuardPrompt) || hasText(t.reversePrompt) || t.parsedOutput != null);
+  if (!hasBodyTasks && !hasText(bodyMaster)) return false;
 
   const body = {
-    masterPlanMarkdown: plan.masterPlanMarkdown || '',
-    tasks: ensureArray(plan.tasks).map((t) => ({ ...t })),
+    masterPlanMarkdown: bodyMaster,
+    tasks: bodyTasks,
   };
-  return saveBlob(dataDir, projectId, KIND.EXEC_PLAN, plan.id, body, writeJson).then(() => {
-    plan.blobStored = true;
-    plan.hasMasterPlan = hasMaster;
-    plan.taskCount = ensureArray(plan.tasks).length;
-    plan.masterPlanMarkdown = hasMaster ? `[${body.masterPlanMarkdown.length} chars]` : '';
-    plan.tasks = ensureArray(plan.tasks).map((t) => ({
-      id: t.id,
-      title: t.title,
-      role: t.role,
-      status: t.status,
-      agentType: t.agentType,
-      dependsOn: ensureArray(t.dependsOn),
-      contextFromTaskIds: ensureArray(t.contextFromTaskIds),
-      estimatedInputTokens: t.estimatedInputTokens,
-      targetOutputTokens: t.targetOutputTokens,
-      preTaskSnapshotId: t.preTaskSnapshotId,
-      preApprovalSnapshotId: t.preApprovalSnapshotId,
-      auditId: t.auditId,
-      revertedAt: t.revertedAt,
-      revertedBy: t.revertedBy,
-      hasInstruction: hasText(t.instruction),
-      hasVerificationPrompt: hasText(t.verificationPrompt),
-      hasMergePrompt: hasText(t.mergePrompt),
-      hasRegressionGuardPrompt: hasText(t.regressionGuardPrompt),
-      hasReversePrompt: hasText(t.reversePrompt),
-      hasParsedOutput: Boolean(t.parsedOutput),
-      diagramType: t.diagramType,
-      requirementIds: t.requirementIds,
-      roadmapPhaseId: t.roadmapPhaseId,
-    }));
-    return true;
-  });
+  await saveBlob(dataDir, projectId, KIND.EXEC_PLAN, plan.id, body, writeJson);
+
+  plan.blobStored = true;
+  plan.hasMasterPlan = hasText(body.masterPlanMarkdown);
+  plan.taskCount = bodyTasks.length;
+  plan.masterPlanMarkdown = hasText(body.masterPlanMarkdown) ? `[${body.masterPlanMarkdown.length} chars]` : '';
+  plan.tasks = bodyTasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    role: t.role,
+    status: t.status,
+    agentType: t.agentType,
+    dependsOn: ensureArray(t.dependsOn),
+    contextFromTaskIds: ensureArray(t.contextFromTaskIds),
+    estimatedInputTokens: t.estimatedInputTokens,
+    targetOutputTokens: t.targetOutputTokens,
+    preTaskSnapshotId: t.preTaskSnapshotId,
+    preApprovalSnapshotId: t.preApprovalSnapshotId,
+    auditId: t.auditId,
+    revertedAt: t.revertedAt,
+    revertedBy: t.revertedBy,
+    hasInstruction: hasText(t.instruction),
+    hasVerificationPrompt: hasText(t.verificationPrompt),
+    hasMergePrompt: hasText(t.mergePrompt),
+    hasRegressionGuardPrompt: hasText(t.regressionGuardPrompt),
+    hasReversePrompt: hasText(t.reversePrompt),
+    hasParsedOutput: Boolean(t.parsedOutput),
+    diagramType: t.diagramType,
+    requirementIds: t.requirementIds,
+    roadmapPhaseId: t.roadmapPhaseId,
+  }));
+  return true;
 }
 
 async function hydrateExecutionPlan(plan, projectId, dataDir, readJson) {
@@ -341,11 +378,14 @@ async function externalizeProjectBlobs(project, dataDir, writeJson) {
 
 function prepareProjectForDisk(project) {
   const disk = { ...project };
-  disk.requirements = ensureArray(project.requirements);
-  disk.requirementCount = disk.requirements.length;
   if (project.storageHybrid) {
+    const requirements = ensureArray(project.requirements);
+    disk.requirements = [];
+    disk.requirementCount = requirements.length;
     disk.requirementsInDb = true;
   } else {
+    disk.requirements = ensureArray(project.requirements);
+    disk.requirementCount = disk.requirements.length;
     delete disk.requirementsInDb;
     delete disk.storageHybrid;
   }

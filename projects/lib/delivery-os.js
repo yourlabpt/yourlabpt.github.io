@@ -10,8 +10,9 @@ const MODULE_TAGS = [
   'Frontend',
   'Backend',
   'Database',
+  'System',
+  'Integrations',
   'API',
-  'Integration',
   'Tests',
   'Operations',
 ];
@@ -482,11 +483,19 @@ function nowIso() {
 }
 
 function normalizeModuleTags(raw, fallbackModule) {
-  const fromArray = ensureArray(raw).map((t) => String(t || '').trim()).filter(Boolean);
+  const normalizeTag = (tag) => {
+    const value = String(tag || '').trim();
+    if (!value) return '';
+    const key = value.toLowerCase().replace(/[\s_-]+/g, '');
+    if (key === 'integration' || key === 'integrations' || key === 'externalintegrations') return 'Integrations';
+    if (key === 'system' || key === 'sistema' || key === 'crossmodule' || key === 'transversal') return 'System';
+    return value;
+  };
+  const fromArray = ensureArray(raw).map(normalizeTag).filter(Boolean);
   if (fromArray.length) {
     return fromArray.filter((t) => MODULE_TAGS.includes(t) || ['Frontend', 'Backend', 'Database'].includes(t));
   }
-  const mod = textOr(fallbackModule);
+  const mod = normalizeTag(fallbackModule);
   if (mod && MODULE_TAGS.includes(mod)) return [mod];
   if (mod === 'Frontend' || mod === 'Backend' || mod === 'Database') return [mod];
   return mod ? [mod] : [];
@@ -1795,7 +1804,8 @@ Regras:
 - Responde APENAS com JSON válido (sem \`\`\` fences).
 - Não duplique requisitos que já existem — use "updates" para melhorar IDs existentes quando aplicável.
 - Novos requisitos devem ser SMART e verificáveis (need + shall + condition + measure quando possível).
-- moduleTags: Frontend, Backend, Database, API, Integration conforme apropriado.
+- moduleTags: Frontend, Backend, Database, System, Integrations, API conforme apropriado.
+  Usa System para requisitos transversais/cross-module e Integrations para fornecedores externos/conectores.
 - Se o diagrama mostrar lacunas, registe em openQuestions.
 - Mantenha linkedDiagramId no output — a plataforma usa-o para ligar requisitos novos/actualizados ao diagrama.
 - Marque requiresHumanConfirmation: true.
@@ -1842,6 +1852,7 @@ const ARCHITECTURE_DIAGRAM_BY_MODULE = {
   Backend: { type: 'sequence', notation: 'mermaid' },
   Database: { type: 'erd', notation: 'mermaid' },
   API: { type: 'openapi_spec', notation: 'openapi' },
+  Integrations: { type: 'api_flow', notation: 'mermaid' },
   Integration: { type: 'api_flow', notation: 'mermaid' },
 };
 
@@ -2231,7 +2242,7 @@ Schema de output (architecture_pack_v2):
     "description": "",
     "relatedRequirementIds": []
   }],
-  "modules": [{ "name": "Frontend|Backend|Database", "submodules": [] }],
+  "modules": [{ "name": "Frontend|Backend|Database|System|Integrations", "submodules": [] }],
   "diagramArtifacts": [{
     "title": "",
     "description": "",
@@ -2364,7 +2375,7 @@ function applyGroupingResult(project, parsed, userId) {
 // modulo, recolhe parciais e funde-os com um prompt final de reconciliacao.
 // ---------------------------------------------------------------------------
 
-const GROUPING_MODULE_PRIORITY = ['Database', 'Backend', 'Frontend'];
+const GROUPING_MODULE_PRIORITY = ['System', 'Integrations', 'Database', 'Backend', 'Frontend'];
 
 function requirementSummaryForIds(project, ids) {
   const wanted = new Set(ensureArray(ids).map(String));
@@ -5070,6 +5081,8 @@ module.exports = {
   buildGroupingPrompt,
   buildHierarchyReorganizePrompt,
   buildReverseIdeaPrompt,
+  buildDiscoveryPrompt,
+  buildRoadmapPrompt,
   buildDiagramToRequirementsPrompt,
   buildArchitecturePackPrompt,
   buildArchitectureContextPack,

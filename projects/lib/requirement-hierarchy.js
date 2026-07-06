@@ -266,6 +266,7 @@ function analyzeRequirementHierarchy(project) {
   const orphans = [];
   const invalidLinks = [];
   const nodes = [];
+  const chainsByStakeholder = new Map();
 
   for (const req of synced) {
     const type = normalizeRequirementType(req.type) || 'other';
@@ -307,21 +308,65 @@ function analyzeRequirementHierarchy(project) {
       moduleTags: req.moduleTags || [],
       hierarchyLinks: req.hierarchyLinks,
     });
+
+    if (stkRoot) {
+      if (!chainsByStakeholder.has(stkRoot)) {
+        chainsByStakeholder.set(stkRoot, {
+          stakeholderId: stkRoot,
+          title: '',
+          stakeholder: 0,
+          functional: 0,
+          non_functional: 0,
+          test_case: 0,
+          other: 0,
+          total: 0,
+        });
+      }
+      const chain = chainsByStakeholder.get(stkRoot);
+      if (type === 'stakeholder') chain.title = textOr(req.title, chain.title);
+      if (chain[type] !== undefined) chain[type] += 1;
+      else chain.other += 1;
+      chain.total += 1;
+    }
   }
 
   const suggestedStakeholders = orphans
     .filter((o) => o.type !== 'stakeholder')
     .map((o) => suggestStakeholderForOrphan(synced.find((r) => r.id === o.id), project, index));
 
+  const chains = [...chainsByStakeholder.values()]
+    .map((chain) => {
+      const missing = [];
+      if (chain.functional === 0) missing.push('functional');
+      if (chain.non_functional === 0) missing.push('non_functional');
+      if (chain.test_case === 0) missing.push('test_case');
+      return { ...chain, missing, complete: missing.length === 0 };
+    })
+    .sort((a, b) => a.stakeholderId.localeCompare(b.stakeholderId, undefined, { numeric: true }));
+  const incompleteChains = chains.filter((chain) => !chain.complete);
+  const chainCoveragePct = chains.length
+    ? Math.round(((chains.length - incompleteChains.length) / chains.length) * 100)
+    : 100;
+
   const coveragePct = requirements.length
     ? Math.round((stats.withStakeholderRoot / requirements.length) * 100)
     : 100;
 
   return {
-    stats: { ...stats, total: requirements.length, coveragePct },
+    stats: {
+      ...stats,
+      total: requirements.length,
+      coveragePct,
+      stakeholderChains: chains.length,
+      completeChains: chains.length - incompleteChains.length,
+      incompleteChains: incompleteChains.length,
+      chainCoveragePct,
+    },
     nodes,
     orphans,
     invalidLinks,
+    chains,
+    incompleteChains,
     suggestedStakeholders,
     levels: V_LEVELS,
   };
@@ -1051,6 +1096,8 @@ function buildHierarchySummary(project, options = {}) {
     byLevel: { stakeholder: stakeholders },
     stakeholderCount: stakeholders.length,
     orphanCount: analysis.orphans.length,
+    incompleteChainCount: analysis.incompleteChains.length,
+    incompleteChains: analysis.incompleteChains,
     suggestedCount: analysis.suggestedStakeholders.length,
     invalidLinkCount: analysis.invalidLinks.length,
   };

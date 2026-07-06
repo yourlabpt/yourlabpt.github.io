@@ -166,7 +166,7 @@
 
   function renderGenControls(project) {
     const caps = project.capabilities || [];
-    const modules = ['Frontend', 'Backend', 'Database', 'API', 'Integration'];
+    const modules = ['Frontend', 'Backend', 'Database', 'System', 'API', 'Integrations'];
     const selectedMod = window.PdosUI?.pdosState?.moduleFilter || 'Backend';
     return `
       <div class="diagrams-gen-controls form-grid compact">

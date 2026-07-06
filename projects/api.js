@@ -53,7 +53,7 @@ const REQUIREMENT_TYPE_META = {
   out_of_scope: { prefix: 'OOS', label: 'Fora de Escopo' }
 };
 
-const ARCHITECTURE_MODULES = ['Frontend', 'Backend', 'Database'];
+const ARCHITECTURE_MODULES = ['Frontend', 'Backend', 'Database', 'System', 'Integrations'];
 const DEFAULT_ARCHITECTURE_MODULE = 'Backend';
 const QUESTION_STATUS_FLOW = ['open', 'sent', 'answered', 'resolved', 'blocked'];
 const QUESTION_TARGET_FLOW = ['client', 'partner', 'both'];
@@ -585,6 +585,24 @@ function registerRequirementsPlatform(app, options) {
       }
       project._blobsCompacted = true;
     }
+    return project;
+  }
+
+  /**
+   * Lite project load for overview mode — skips SQLite requirement hydration and blob
+   * compaction.  For hybrid projects the returned project will have an empty requirements
+   * array; callers must NOT use project.requirements for count/display — use sqliteStore
+   * counts instead.  Returned project is the shared in-memory instance, so if a full load
+   * has already populated requirements they will still be present.
+   */
+  async function ensureProjectLoadedLite(projectId) {
+    const project = await storeLayer.ensureProjectLoaded(projectId);
+    if (!project) return null;
+    if (project._normalizedVersion !== project.updatedAt) {
+      Object.assign(project, normalizeOneProject(project));
+      project._normalizedVersion = project.updatedAt;
+    }
+    // Skip hydrateProjectFromHybrid and blob compaction — that's the whole point.
     return project;
   }
 
@@ -1130,21 +1148,121 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.get('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, async (req, res) => {
-    const project = req.loadedProject;
-    const etag = `"${project.id}:${project.updatedAt || ''}"`;
-    if (req.headers['if-none-match'] === etag) {
-      return res.status(304).end();
-    }
-    res.setHeader('ETag', etag);
+  app.get('/api/projects/projects/:projectId', authMiddleware, async (req, res) => {
+    const projectId = req.params.projectId;
+    const view = textOr(req.query.view, 'workspace'); // 'overview' | 'workspace' | (default)
     const full = req.query.full === '1' || req.query.full === 'true';
-    return res.json({ project: sanitizeProject(project, req.auth.user, { full }) });
+    try {
+      let project;
+      if (view === 'overview' && !full) {
+        project = await ensureProjectLoadedLite(projectId);
+      } else {
+        project = await ensureProjectLoaded(projectId);
+      }
+      if (!project) return res.status(404).json({ message: 'Projeto nao encontrado.' });
+      if (!canAccessProject(req.auth.user, project)) {
+        return res.status(403).json({ message: 'Sem permissao para este projeto.' });
+      }
+
+      // ETag encodes view so overview and workspace have separate cache entries
+      const etag = `"${project.id}:${project.updatedAt || ''}:${view}"`;
+      if (req.headers['if-none-match'] === etag) return res.status(304).end();
+      res.setHeader('ETag', etag);
+
+      if (full) {
+        return res.json({ project: sanitizeProject(project, req.auth.user, { full: true }) });
+      }
+
+      if (view === 'overview') {
+        // Fast COUNT from SQLite; falls back to in-memory requirements length
+        let reqStats = null;
+        if (sqliteStore && typeof sqliteStore.isEnabled === 'function' && sqliteStore.isEnabled()) {
+          try { reqStats = sqliteStore.getRequirementStats(projectId); } catch { /* ignore */ }
+        }
+        if (!reqStats) {
+          const n = ensureArray(project.requirements).length;
+          reqStats = { total: n, stakeholder: 0, functional: 0, nonFunctional: 0, testCase: 0, links: 0 };
+        }
+        const base = sanitizeProject(project, req.auth.user);
+        const overviewPayload = projectPayload.buildOverviewPayload(base, { requirementStats: reqStats });
+        return res.json({ project: overviewPayload });
+      }
+
+      // Default / workspace: slim full payload (existing behaviour)
+      return res.json({ project: sanitizeProject(project, req.auth.user) });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  /**
+   * On-demand requirements endpoint.  Fetches requirements only when needed (V-map open,
+   * requisitos tab, etc.) rather than on every project load.
+   *
+   * Query params:
+   *   type          — filter by requirement type (stakeholder|functional|non_functional|test_case)
+   *   module        — filter by module
+   *   phase         — filter by phase
+   *   deliveryStageId — filter by delivery stage
+   *   q             — text search in id/title
+   *   limit         — max items (default 2000)
+   *   offset        — skip N items (default 0)
+   */
+  app.get('/api/projects/projects/:projectId/requirements', authMiddleware, async (req, res) => {
+    const projectId = req.params.projectId;
+    try {
+      // Lite load — just for access check; avoids double SQLite hydration
+      const project = await ensureProjectLoadedLite(projectId);
+      if (!project) return res.status(404).json({ message: 'Projeto nao encontrado.' });
+      if (!canAccessProject(req.auth.user, project)) {
+        return res.status(403).json({ message: 'Sem permissao para este projeto.' });
+      }
+
+      let requirements;
+      const sqliteReady = sqliteStore && typeof sqliteStore.isEnabled === 'function' && sqliteStore.isEnabled();
+      if (sqliteReady) {
+        // Use SQLite directly — loadRequirements returns full data JSON
+        requirements = sqliteStore.loadRequirements(projectId);
+      } else {
+        // Fallback: full project load, then slice
+        const full = await ensureProjectLoaded(projectId);
+        requirements = ensureArray(full?.requirements);
+      }
+
+      // Apply optional filters
+      const filterType = textOr(req.query.type);
+      const filterModule = textOr(req.query.module);
+      const filterPhase = textOr(req.query.phase);
+      const filterStage = textOr(req.query.deliveryStageId);
+      const q = textOr(req.query.q).toLowerCase();
+
+      if (filterType) requirements = requirements.filter((r) => r.type === filterType);
+      if (filterModule) requirements = requirements.filter((r) => r.module === filterModule || (r.moduleTags || []).includes(filterModule));
+      if (filterPhase) requirements = requirements.filter((r) => r.phase === filterPhase);
+      if (filterStage) requirements = requirements.filter((r) => r.deliveryStageId === filterStage);
+      if (q) requirements = requirements.filter((r) =>
+        (r.id || '').toLowerCase().includes(q)
+        || (r.title || '').toLowerCase().includes(q)
+        || (r.shall || '').toLowerCase().includes(q)
+        || (r.need || '').toLowerCase().includes(q)
+      );
+
+      const total = requirements.length;
+      const limit = Math.min(Number(req.query.limit) || 2000, 10000);
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      requirements = requirements.slice(offset, offset + limit);
+
+      return res.json({ requirements, total, offset, limit });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
+    }
   });
 
   app.patch('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const patch = req.body || {};
+
       let requirementsPhaseRenamed = 0;
       let requirementsPhaseSynced = 0;
       let roadmapSynced = false;
@@ -3999,7 +4117,9 @@ Cada fase deve ter objetivo, duração, entregáveis e critérios de aceitação
 - Frontend
 - Backend
 - Database
-Usa também submodule para detalhar (ex: Login, Coupons, Reporting, Integrations).
+- System (requisitos transversais, segurança, auditoria, regras globais e comportamento cross-module)
+- Integrations (fornecedores externos, pagamentos, OAuth, mapas, APIs de terceiros e conectores)
+Usa também submodule para detalhar (ex: Login, Coupons, Reporting, Payments, OAuth).
 10) Para cada requisito, indica correlações com outros requisitos usando relatedRequirementIds.
 11) Usa nomes de fases consistentes: "Fase 1 - ...", "Fase 2 - ...", "Fase 3 - ...".
 12) Responde apenas com JSON válido (sem markdown, sem texto fora do JSON).
@@ -4033,7 +4153,7 @@ Esquema mínimo esperado:
       "phase":"Fase 1",
       "source":"...",
       "owner":"...",
-      "module":"Frontend|Backend|Database",
+      "module":"Frontend|Backend|Database|System|Integrations",
       "submodule":"Nome do submódulo",
       "relatedRequirementIds":["SR-002","RF-03"]
     }
@@ -4051,7 +4171,7 @@ Esquema mínimo esperado:
     "status":"proposed|approved|implemented|tested|rejected|deferred",
     "phase":"Fase 1",
     "stakeholderRequirementLink":"SR-001",
-    "module":"Frontend|Backend|Database",
+    "module":"Frontend|Backend|Database|System|Integrations",
     "submodule":"Nome do submódulo",
     "relatedRequirementIds":["SR-001","RF-002"]
   }],
@@ -4067,7 +4187,7 @@ Esquema mínimo esperado:
       "priority":"Alta|Media|Baixa",
       "status":"proposed|approved|implemented|tested|rejected|deferred",
       "phase":"Fase 1",
-      "module":"Frontend|Backend|Database",
+      "module":"Frontend|Backend|Database|System|Integrations",
       "submodule":"Nome do submódulo",
       "relatedRequirementIds":["FR-001","SR-001"]
     }
@@ -4081,7 +4201,7 @@ Esquema mínimo esperado:
       "priority":"Alta|Media|Baixa",
       "status":"proposed|approved|implemented|tested|rejected|deferred",
       "phase":"Fase 1",
-      "module":"Frontend|Backend|Database",
+      "module":"Frontend|Backend|Database|System|Integrations",
       "submodule":"Nome do submódulo",
       "relatedRequirementIds":["RF-001"]
     }
@@ -5033,6 +5153,9 @@ function normalizeStringArray(value) {
 }
 
 function normalizeModuleName(value) {
+  const direct = textOr(value);
+  if (ARCHITECTURE_MODULES.includes(direct)) return direct;
+  if (direct.toLowerCase() === 'integration') return 'Integrations';
   const normalized = normalizeArchitectureModuleToken(value);
   return normalized || DEFAULT_ARCHITECTURE_MODULE;
 }
@@ -5053,6 +5176,49 @@ function normalizeArchitectureModuleToken(value) {
   const normalizedText = normalizeForCompare(value);
   if (!normalizedText) return null;
   const hasWord = (word) => new RegExp(`(^|\\s)${word}(\\s|$)`).test(normalizedText);
+
+  if (
+    normalizedText.includes('integration') ||
+    normalizedText.includes('integracao') ||
+    normalizedText.includes('integra') ||
+    normalizedText.includes('oauth') ||
+    normalizedText.includes('apple pay') ||
+    normalizedText.includes('google pay') ||
+    normalizedText.includes('mb way') ||
+    normalizedText.includes('mbway') ||
+    normalizedText.includes('payment gateway') ||
+    normalizedText.includes('gateway') ||
+    normalizedText.includes('fornecedor') ||
+    normalizedText.includes('external') ||
+    normalizedText.includes('terceiro') ||
+    normalizedText.includes('mapa') ||
+    normalizedText.includes('maps')
+  ) {
+    return 'Integrations';
+  }
+
+  if (
+    normalizedText.includes('system') ||
+    normalizedText.includes('sistema') ||
+    normalizedText.includes('transversal') ||
+    normalizedText.includes('cross module') ||
+    normalizedText.includes('cross-module') ||
+    normalizedText.includes('seguranca') ||
+    normalizedText.includes('security') ||
+    normalizedText.includes('auditoria') ||
+    normalizedText.includes('audit') ||
+    normalizedText.includes('sla') ||
+    normalizedText.includes('disponibilidade') ||
+    normalizedText.includes('performance') ||
+    normalizedText.includes('escalabilidade') ||
+    normalizedText.includes('compatibilidade') ||
+    normalizedText.includes('conformidade') ||
+    normalizedText.includes('pci') ||
+    normalizedText.includes('gdpr') ||
+    normalizedText.includes('rgpd')
+  ) {
+    return 'System';
+  }
 
   if (
     normalizedText.includes('frontend') ||
@@ -5083,8 +5249,7 @@ function normalizeArchitectureModuleToken(value) {
     normalizedText.includes('back end') ||
     normalizedText.includes('api') ||
     normalizedText.includes('server') ||
-    normalizedText.includes('servico') ||
-    normalizedText.includes('integracao')
+    normalizedText.includes('servico')
   ) {
     return 'Backend';
   }
@@ -5697,7 +5862,8 @@ ${objective}
 
 Regras obrigatórias:
 1) Trabalha apenas com alterações incrementais (add/update/remove), não reescrevas tudo.
-2) Mantém módulos de arquitetura determinísticos: Frontend, Backend, Database.
+2) Mantém módulos de arquitetura determinísticos: Frontend, Backend, Database, System, Integrations.
+   Usa System para requisitos transversais/cross-module e Integrations para fornecedores externos, OAuth, pagamentos, mapas e conectores.
 3) Quando criares novos requisitos, inclui módulo e submodule.
 4) Preserva texto de requisitos já aprovados, a menos que a ata peça mudança explícita.
 5) Tudo que ficou ambiguo deve ir para "clarifications".
@@ -5735,7 +5901,7 @@ Formato de saída:
       "priority": "high|medium|low",
       "status": "draft|needs_clarification|approved|planned|in_development|validated|delivered|excluded",
       "phase": "Fase 1|Fase 2|Fase 3|Backlog",
-      "module": "Frontend|Backend|Database",
+      "module": "Frontend|Backend|Database|System|Integrations",
       "submodule": "..."
     }
   ],
@@ -5753,7 +5919,7 @@ Formato de saída:
         "priority": "opcional",
         "status": "opcional",
         "phase": "opcional",
-        "module": "Frontend|Backend|Database",
+        "module": "Frontend|Backend|Database|System|Integrations",
         "submodule": "opcional"
       },
       "reason": "porque mudar"

@@ -233,9 +233,19 @@
         </div>
         <div class="req-map-toolbar-actions">
           <div class="req-map-stat-pill">
-            <span class="req-map-stat-label">Cobertura V</span>
+            <span class="req-map-stat-label">Ligação STK</span>
             <strong class="req-map-stat-value">${stats.coveragePct ?? 0}%</strong>
           </div>
+          <div class="req-map-stat-pill">
+            <span class="req-map-stat-label">Cadeias completas</span>
+            <strong class="req-map-stat-value">${stats.chainCoveragePct ?? 0}%</strong>
+          </div>
+          ${stats.incompleteChains ? `
+            <div class="req-map-stat-pill" title="Stakeholders sem cadeia completa STK → FR → RNF → TC">
+              <span class="req-map-stat-label">Incompletas</span>
+              <strong class="req-map-stat-value">${stats.incompleteChains}</strong>
+            </div>
+          ` : ''}
           ${orphanCount ? `
             <button type="button" class="req-map-orphans-toggle btn tiny ghost is-active" id="reqMapToggleOrphans" title="Órfãos visíveis na secção inferior">
               Órfãos (${orphanCount})
@@ -256,7 +266,7 @@
   }
 
   function collectOrphansForPanel(hierarchy) {
-    const full = mapState.hierarchyFull || hierarchy;
+    const full = Array.isArray(mapState.hierarchyFull?.orphans) ? mapState.hierarchyFull : hierarchy;
     const list = [...(full?.orphans || [])];
     const seen = new Set(list.map((o) => o.id));
     for (const node of (full?.byLevel?.other || [])) {
@@ -782,17 +792,29 @@
 
     cleanupEdgeListeners();
     container.classList.add('req-map-container');
-    container.innerHTML = '<p class="muted-text req-map-loading">A carregar mapa…</p>';
+    container.innerHTML = ylLoadingCard('A carregar mapa de requisitos…');
 
     try {
       if (mode === 'implmap') {
         const hierarchy = await fetchHierarchy(project, { applyStkFocus: false });
         container.innerHTML = renderImplMap(project, hierarchy);
       } else {
+        // Phase 1: fetch summary and show stakeholder selector immediately
         if (!mapState.hierarchyFull?.stats) {
           await fetchHierarchy(project, { summary: true, storeAsFull: true });
         }
         ensureActiveStk(mapState.hierarchyFull, project);
+
+        // Render a light skeleton: navigator + loading placeholder for the chain
+        const navHtml = renderStkNavigator(project, mapState.hierarchyFull || {});
+        container.innerHTML = `
+          ${navHtml}
+          <div class="req-map-vmap-body">
+            ${ylVmapSkeleton()}
+          </div>
+        `;
+
+        // Phase 2: fetch focused chain and replace the body
         const hierarchy = await fetchHierarchy(project, {
           focusStakeholderId: mapState.focusStakeholderId,
           applyStkFocus: true,

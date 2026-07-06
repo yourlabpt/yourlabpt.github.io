@@ -280,6 +280,109 @@ function questionCategoryOptions() {
   return source.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
 }
 
+/* ─── Progress bar & loading helpers ─────────────────────────── */
+(function () {
+  const bar = document.getElementById('appProgressBar');
+  let _timer = null;
+  let _width = 0;
+  let _active = 0;
+
+  function _setWidth(w) {
+    _width = w;
+    if (bar) bar.style.width = w + '%';
+  }
+
+  window.loadingStart = function loadingStart() {
+    _active++;
+    if (_active === 1) {
+      clearTimeout(_timer);
+      _setWidth(0);
+      if (bar) { bar.classList.add('is-loading'); bar.classList.remove('is-done'); }
+      // quick jump to ~25% then slow crawl to ~80%
+      requestAnimationFrame(() => {
+        _setWidth(25);
+        _timer = setTimeout(() => _setWidth(55), 400);
+        _timer = setTimeout(() => _setWidth(75), 1000);
+      });
+    }
+  };
+
+  window.loadingDone = function loadingDone() {
+    _active = Math.max(0, _active - 1);
+    if (_active === 0) {
+      clearTimeout(_timer);
+      _setWidth(100);
+      if (bar) bar.classList.add('is-done');
+      _timer = setTimeout(() => {
+        _setWidth(0);
+        if (bar) { bar.classList.remove('is-loading', 'is-done'); }
+      }, 600);
+    }
+  };
+})();
+
+/**
+ * Returns a dots-spinner HTML string for use inside text labels.
+ * Usage:  `A carregar${ylDots()}`
+ */
+function ylDots() {
+  return '<span class="yl-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
+}
+
+/**
+ * Returns a spinner ring HTML element.
+ * @param {'sm'|''|'lg'} size
+ */
+function ylSpinner(size = '') {
+  return `<span class="yl-spinner${size ? ' ' + size : ''}" aria-hidden="true"></span>`;
+}
+
+/**
+ * Skeleton row block — generates N animated skeleton rows for lists/tables.
+ */
+function ylSkeletonRows(n = 5) {
+  let html = '<div class="req-loading-state">';
+  for (let i = 0; i < n; i++) {
+    html += `
+      <div class="req-skel-row">
+        <span class="yl-skeleton"></span>
+        <span class="yl-skeleton"></span>
+        <span class="yl-skeleton"></span>
+        <span class="yl-skeleton"></span>
+        <span class="yl-skeleton"></span>
+      </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Vmap column skeletons.
+ */
+function ylVmapSkeleton() {
+  const col = (cards) => `
+    <div class="vmap-skel-col">
+      <span class="yl-skeleton h" style="width:60%"></span>
+      ${Array.from({ length: cards }, () => '<span class="yl-skeleton vmap-skel-card"></span>').join('')}
+    </div>`;
+  return `<div class="vmap-skel-wrap">${col(3)}${col(5)}${col(4)}${col(3)}</div>`;
+}
+
+/**
+ * Generic loading card for panels that are fetching data.
+ */
+function ylLoadingCard(label) {
+  return `<div class="yl-loading-card">${ylSpinner()} <span>${escapeHtml(label)}</span></div>`;
+}
+
+/* ─── End loading helpers ─────────────────────────────────────── */
+
+window.ylDots = ylDots;
+window.ylSpinner = ylSpinner;
+window.ylSkeletonRows = ylSkeletonRows;
+window.ylVmapSkeleton = ylVmapSkeleton;
+window.ylLoadingCard = ylLoadingCard;
+
 async function apiRequest(path, { method = 'GET', body, isForm = false } = {}) {
   const headers = {};
   if (state.token) {
@@ -353,7 +456,10 @@ async function fetchProjectById(projectId) {
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   if (cached?.etag) headers['If-None-Match'] = cached.etag;
 
-  const response = await fetch(`${API}/projects/${encodeURIComponent(projectId)}`, { headers });
+  // Request overview by default — skips loading the full requirements array so the
+  // Delivery shell renders immediately.  Callers that truly need the full payload can
+  // pass view=workspace.
+  const response = await fetch(`${API}/projects/${encodeURIComponent(projectId)}?view=overview`, { headers });
   if (response.status === 304 && cached?.project) {
     return { project: cached.project, fromCache: true };
   }
@@ -381,12 +487,70 @@ async function fetchProjectById(projectId) {
   return payload;
 }
 
+/**
+ * Per-project resource load state — tracks which heavy resources have been fetched so
+ * we only fetch once per project session.
+ * Keys: `req:<projectId>` → 'loading' | 'loaded' | 'error'
+ */
+const projectResourceState = {};
+
+/**
+ * Ensures that the full requirements array is loaded into state.selectedProject.
+ * No-op if requirements are already present or the project is not an overview payload.
+ * Returns the requirements array after loading (or the already-loaded array).
+ */
+async function ensureProjectRequirementsLoaded(projectId) {
+  const project = state.selectedProject;
+  // Already loaded (non-overview project or previously fetched)
+  if (!project || project.id !== projectId) return null;
+  if (!project.hasHeavyData) return project.requirements || [];
+  if (Array.isArray(project.requirements) && project.requirements.length > 0) {
+    return project.requirements;
+  }
+
+  const cacheKey = `req:${projectId}`;
+  if (projectResourceState[cacheKey] === 'loading') {
+    // Another tab switch is already fetching — wait a tick
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return ensureProjectRequirementsLoaded(projectId);
+  }
+  if (projectResourceState[cacheKey] === 'loaded') return project.requirements || [];
+
+  projectResourceState[cacheKey] = 'loading';
+  loadingStart();
+  try {
+    const payload = await apiRequest(`/projects/${encodeURIComponent(projectId)}/requirements`);
+    if (state.selectedProject?.id === projectId) {
+      state.selectedProject.requirements = payload.requirements || [];
+      // Also patch any cached ETag entry so future reads have requirements
+      const cached = readProjectCache(projectId);
+      if (cached?.project) {
+        cached.project.requirements = payload.requirements || [];
+        cached.project.hasHeavyData = false;
+        writeProjectCache(projectId, cached.etag, cached.project);
+      }
+    }
+    projectResourceState[cacheKey] = 'loaded';
+    return payload.requirements || [];
+  } catch (err) {
+    projectResourceState[cacheKey] = 'error';
+    throw err;
+  } finally {
+    loadingDone();
+  }
+}
+
+window.ensureProjectRequirementsLoaded = ensureProjectRequirementsLoaded;
+
 function applyProjectPatch(project, options = {}) {
   if (!project) return;
   state.selectedProject = project;
   state.selectedProjectId = project.id;
   state.requirementsHierarchy = null;
   clearProjectCache(project.id);
+  // Always invalidate the requirements resource cache on project patch so the next
+  // requisitos tab open fetches fresh data from the server.
+  delete projectResourceState[`req:${project.id}`];
   if (options.renderList !== false) renderProjects();
   const tab = options.tab || state.activeTab;
   if (options.refreshChrome) {
@@ -403,8 +567,18 @@ async function refreshSelectedProject(options = {}) {
   const id = options.projectId || state.selectedProjectId || state.selectedProject?.id;
   if (!id) return null;
   const payload = await fetchProjectById(id);
-  applyProjectPatch(payload.project, options);
-  return payload.project;
+  // If the server returned an overview payload (hasHeavyData) but the current project
+  // already had requirements loaded, preserve them so we don't regress on open tabs.
+  const incoming = payload.project;
+  if (incoming?.hasHeavyData) {
+    const prev = state.selectedProject;
+    if (prev?.id === id && Array.isArray(prev.requirements) && prev.requirements.length) {
+      incoming.requirements = prev.requirements;
+      incoming.hasHeavyData = false; // requirements are now available in-memory
+    }
+  }
+  applyProjectPatch(incoming, options);
+  return incoming;
 }
 
 window.applyProjectPatch = applyProjectPatch;
@@ -529,7 +703,7 @@ function joinRequirementIds(value) {
 
 function getArchitectureModules() {
   const modules = Array.isArray(state.config?.architectureModules) ? state.config.architectureModules : [];
-  return modules.length ? modules : ['Frontend', 'Backend', 'Database'];
+  return modules.length ? modules : ['Frontend', 'Backend', 'Database', 'System', 'Integrations'];
 }
 
 function normalizeForCompare(value) {
@@ -673,6 +847,12 @@ function normalizeModuleToken(value) {
   if (!text) return null;
   const hasWord = (word) => new RegExp(`(^|\\s)${word}(\\s|$)`).test(text);
 
+  if (text.includes('integration') || text.includes('integracao') || text.includes('integra') || text.includes('oauth') || text.includes('gateway') || text.includes('apple pay') || text.includes('google pay') || text.includes('mbway') || text.includes('mb way') || text.includes('external') || text.includes('terceiro')) {
+    return 'Integrations';
+  }
+  if (text.includes('system') || text.includes('sistema') || text.includes('transversal') || text.includes('cross module') || text.includes('cross-module') || text.includes('seguranca') || text.includes('security') || text.includes('auditoria') || text.includes('audit') || text.includes('performance') || text.includes('sla') || text.includes('conformidade')) {
+    return 'System';
+  }
   if (text.includes('frontend') || text.includes('front end') || hasWord('ui') || hasWord('ux') || text.includes('client')) {
     return 'Frontend';
   }
@@ -686,11 +866,11 @@ function normalizeModuleToken(value) {
 }
 
 function normalizeModuleName(value) {
-  const direct = normalizeModuleToken(value);
-  if (direct) return direct;
-  if (getArchitectureModules().includes(String(value || '').trim())) {
-    return String(value || '').trim();
-  }
+  const direct = String(value || '').trim();
+  if (direct === 'Integration') return 'Integrations';
+  if (getArchitectureModules().includes(direct)) return direct;
+  const normalized = normalizeModuleToken(value);
+  if (normalized) return normalized;
   return 'Backend';
 }
 
@@ -1147,6 +1327,26 @@ function renderActiveTab(project, tabId) {
       renderClarificationQuestions(project);
       break;
     case 'requisitos':
+      // If this is an overview-only payload, load requirements first before rendering.
+      if (project.hasHeavyData && !(Array.isArray(project.requirements) && project.requirements.length)) {
+        renderRequirementModuleControls(project);
+        const reqContainer = document.getElementById('requirementsGroupedView');
+        if (reqContainer) {
+          reqContainer.innerHTML = ylSkeletonRows(7);
+        } else {
+          const reqTable = document.getElementById('requirementsTableBody');
+          if (reqTable) reqTable.innerHTML = `<tr><td colspan="99" style="padding:0">${ylSkeletonRows(7)}</td></tr>`;
+        }
+        ensureProjectRequirementsLoaded(project.id)
+          .then(() => {
+            if (state.selectedProject?.id === project.id) {
+              renderRequirementModuleControls(state.selectedProject);
+              renderRequirements(state.selectedProject);
+            }
+          })
+          .catch((err) => showToast(err.message, 'error'));
+        break;
+      }
       renderRequirementModuleControls(project);
       renderRequirements(project);
       break;
@@ -1290,6 +1490,7 @@ function renderProjectClarity(project) {
     <div class="kpi-box"><strong>${smartRate}%</strong><small>Cobertura SMART funcional</small></div>
     <div class="kpi-box" id="hierarchyCoverageKpi"><strong>—</strong><small>Cobertura V (STK)</small></div>
     <div class="kpi-box" id="hierarchyOrphansKpi"><strong>—</strong><small>Órfãos V-cycle</small></div>
+    <div class="kpi-box" id="hierarchyIncompleteKpi"><strong>—</strong><small>Cadeias V incompletas</small></div>
     <div class="kpi-box"><strong>${openQuestions}</strong><small>Perguntas em aberto</small></div>
   `;
 
@@ -1361,6 +1562,7 @@ window.fetchRequirementsHierarchy = fetchRequirementsHierarchy;
 async function refreshHierarchyKpis(project) {
   const covEl = document.getElementById('hierarchyCoverageKpi');
   const orphEl = document.getElementById('hierarchyOrphansKpi');
+  const incompleteEl = document.getElementById('hierarchyIncompleteKpi');
   if (!project?.id || !covEl) return;
   try {
     const hierarchy = await fetchRequirementsHierarchy(project, { summary: true });
@@ -1370,9 +1572,14 @@ async function refreshHierarchyKpis(project) {
       const orphans = stats.orphans ?? hierarchy?.orphanCount ?? 0;
       orphEl.innerHTML = `<strong>${orphans}</strong><small>Órfãos V-cycle</small>`;
     }
+    if (incompleteEl) {
+      const incomplete = stats.incompleteChains ?? hierarchy?.incompleteChainCount ?? 0;
+      incompleteEl.innerHTML = `<strong>${incomplete}</strong><small>Cadeias V incompletas</small>`;
+    }
   } catch {
     covEl.innerHTML = '<strong>—</strong><small>Cobertura V (STK)</small>';
     if (orphEl) orphEl.innerHTML = '<strong>—</strong><small>Órfãos V-cycle</small>';
+    if (incompleteEl) incompleteEl.innerHTML = '<strong>—</strong><small>Cadeias V incompletas</small>';
   }
 }
 
@@ -2316,7 +2523,13 @@ async function loadUsers() {
 }
 
 async function loadProjects(selectId) {
-  const payload = await apiRequest('/projects');
+  loadingStart();
+  let payload;
+  try {
+    payload = await apiRequest('/projects');
+  } finally {
+    loadingDone();
+  }
   state.projects = payload.projects || [];
   renderProjects();
 
@@ -2340,8 +2553,15 @@ async function loadProjects(selectId) {
 
 async function loadProjectById(projectId, options = {}) {
   state.selectedProjectId = projectId;
-  const payload = await fetchProjectById(projectId);
-  state.selectedProject = payload.project;
+  // Clear per-project resource state so we fetch fresh heavy data for this project
+  delete projectResourceState[`req:${projectId}`];
+  loadingStart();
+  try {
+    const payload = await fetchProjectById(projectId);
+    state.selectedProject = payload.project;
+  } finally {
+    loadingDone();
+  }
   if (!getSelectedRequirement(state.selectedProject)) {
     state.selectedRequirementId = state.selectedProject?.requirements?.[0]?.id || null;
   }
@@ -2511,7 +2731,14 @@ async function loadActivity() {
     return;
   }
 
-  const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/activity`);
+  els.activityList.innerHTML = ylLoadingCard('A carregar actividade…');
+  loadingStart();
+  let payload;
+  try {
+    payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/activity`);
+  } finally {
+    loadingDone();
+  }
   const activity = payload.activity || [];
   const auditLog = payload.auditLog || [];
   const canRevert = canEdit();
@@ -3021,7 +3248,7 @@ async function handleAddRequirement(event) {
 
 async function handleClearAllRequirements() {
   if (!state.selectedProject) return;
-  const count = (state.selectedProject.requirements || []).length;
+  const count = state.selectedProject.requirementCount ?? (state.selectedProject.requirements || []).length;
   if (!count) {
     showToast('Não há requisitos para limpar.', 'ok');
     return;

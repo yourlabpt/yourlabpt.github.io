@@ -1,13 +1,14 @@
 /* Product Delivery OS UI — shell, cards, drawer, agents, reviews */
 (function () {
   const MODULE_NAV = [
-    { id: '', label: 'Todos os módulos', title: 'Ver requisitos e artefactos de Frontend, Backend e Database' },
+    { id: '', label: 'Todos os módulos', title: 'Ver requisitos e artefactos de todos os módulos' },
     { id: 'CustomerNeed', label: 'Necessidade do cliente', title: 'Requisitos ligados à necessidade de negócio' },
     { id: 'Frontend', label: 'Frontend (ecrãs)', title: 'Aplicação visível ao utilizador' },
     { id: 'Backend', label: 'Backend (serviços)', title: 'APIs, regras de negócio e integrações' },
     { id: 'Database', label: 'Base de dados', title: 'Modelo e persistência de dados' },
+    { id: 'System', label: 'System', title: 'Requisitos transversais, segurança, auditoria e regras globais' },
     { id: 'API', label: 'API', title: 'Contratos e endpoints entre sistemas' },
-    { id: 'Integration', label: 'Integrações', title: 'Ligações a sistemas externos' },
+    { id: 'Integrations', label: 'Integrações', title: 'Ligações a sistemas externos' },
     { id: 'Tests', label: 'Testes', title: 'Casos de teste e validação' },
     { id: 'Operations', label: 'Operação', title: 'Monitorização e produção' },
   ];
@@ -92,6 +93,16 @@
     if (output) output.value = '';
     if (runId && loading) runId.value = '';
     if (summaryEl && summary) summaryEl.textContent = summary;
+    // Show/hide spinner inside the workbench header while loading
+    const wbHeader = $('pdosPromptWorkbench')?.querySelector('.pdos-prompt-loading-indicator');
+    if (wbHeader) {
+      if (loading) {
+        wbHeader.innerHTML = `${typeof ylSpinner === 'function' ? ylSpinner('sm') : ''} <span>A carregar…</span>`;
+        wbHeader.style.display = 'inline-flex';
+      } else {
+        wbHeader.style.display = 'none';
+      }
+    }
   }
 
   function actionableReviews(project) {
@@ -314,7 +325,7 @@
                 requirementIds: t.requirementIds,
                 dependsOn: t.dependsOn,
               })),
-              totalRequirements: ensureArray(project.requirements).length,
+              totalRequirements: project.requirementCount ?? ensureArray(project.requirements).length,
               diagramTaskCount: epTasks.filter((t) => t.diagramType || t.role === 'diagram').length,
             },
           };
@@ -1208,7 +1219,8 @@
     let html = renderPhaseContentBlock(project, stageId);
 
     if (stageId === 'requirements') {
-      const reqCount = (project.requirements || []).length;
+      // Use requirementCount (present on overview payloads) or fall back to array length
+      const reqCount = project.requirementCount ?? (project.requirements || []).length;
       const openQ = openQuestions.length;
       html += `
         <article class="pdos-card pdos-card-req-bridge">
@@ -2393,7 +2405,8 @@
     const p = proposalData(project);
     const showMoney = proposalCanViewBudget();
     const showHistory = proposalCanViewHistory();
-    const reqCount = (project.requirements || []).length;
+    // Use requirementCount (overview payload) or fall back to array length
+    const reqCount = project.requirementCount ?? (project.requirements || []).length;
 
     if (!proposalHasContent(p)) {
       return `
@@ -3634,6 +3647,7 @@
     $('pdosPromptWorkbench')?.classList.remove('hidden');
     $('pdosPromptAwaitBanner')?.classList.remove('hidden');
     resetPromptWorkbenchUI({ summary: 'A preparar plano…', loading: true });
+    if (typeof loadingStart === 'function') loadingStart();
 
     const body = {
       agentType,
@@ -3644,7 +3658,13 @@
       const ta = $('pdosCardFeed')?.querySelector('[data-proposal-instructions]');
       if (ta && ta.value.trim()) body.instructions = ta.value.trim();
     }
-    const res = await apiRequest(`/projects/${project.id}/execution-plans`, { method: 'POST', body });
+    let res;
+    try {
+      res = await apiRequest(`/projects/${project.id}/execution-plans`, { method: 'POST', body });
+    } finally {
+      if (typeof loadingDone === 'function') loadingDone();
+      resetPromptWorkbenchUI({ loading: false });
+    }
     if (!isPromptLoadCurrent(loadToken)) return null;
     pdosState.activePlan = res.plan;
     await openExecutionWorkbench(res.plan, project, { loadToken });
@@ -3903,7 +3923,7 @@
       return runDiagramToRequirements(project);
     }
     if (BATCHABLE_AGENT_TYPES.includes(agentType)
-      && ensureArray(project.requirements).length > AGENT_JOB_THRESHOLD) {
+      && (project.requirementCount ?? ensureArray(project.requirements).length) > AGENT_JOB_THRESHOLD) {
       try {
         return await openExecutionPlan(agentType, project);
       } catch (err) {
@@ -3964,8 +3984,8 @@
 
     const project = window.state?.selectedProject;
     if (project && promptRun?.id && !promptRun.fullPrompt && promptRun.hasFullPrompt) {
-      $('pdosPromptRaw').value = 'A carregar prompt…';
-      $('pdosPromptRaw').dataset.loading = '1';
+      resetPromptWorkbenchUI({ loading: true });
+      if (typeof loadingStart === 'function') loadingStart();
       try {
         promptRun = await fetchPromptRunFull(project, promptRun);
         pdosState.pendingPromptRun = promptRun;
@@ -3977,6 +3997,9 @@
       } catch (err) {
         $('pdosPromptRaw').dataset.loading = '';
         showToast(err.message || 'Nao foi possivel carregar o prompt.', 'error');
+      } finally {
+        resetPromptWorkbenchUI({ loading: false });
+        if (typeof loadingDone === 'function') loadingDone();
       }
     }
   }

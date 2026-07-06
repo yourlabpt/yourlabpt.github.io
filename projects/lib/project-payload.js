@@ -292,6 +292,30 @@ function pruneProjectStorage(project) {
   return changed;
 }
 
+/**
+ * Overview payload — omits requirements array; includes counts, slim metadata.
+ * Used by ?view=overview to skip shipping the full requirements array on initial load.
+ */
+function buildOverviewPayload(project, extras = {}) {
+  // Start from the slim transport (trims prompt/plan bodies, limits list sizes)
+  const base = slimProjectForTransport(project, extras);
+
+  // Strip requirements; add count + stats instead
+  const reqStats = extras.requirementStats || null;
+  const requirementCount = reqStats?.total
+    ?? (Array.isArray(project.requirements) ? project.requirements.length : 0);
+
+  return {
+    ...base,
+    requirements: [],
+    requirementCount,
+    requirementStats: reqStats,
+    promptRunCount: ensureArray(project.promptRuns).length,
+    executionPlanCount: ensureArray(project.executionPlans).length,
+    hasHeavyData: true,
+  };
+}
+
 module.exports = {
   slimProjectForTransport,
   slimPromptRun,
@@ -299,4 +323,5 @@ module.exports = {
   wrapSanitizeProject,
   clearSanitizeCache,
   pruneProjectStorage,
+  buildOverviewPayload,
 };
