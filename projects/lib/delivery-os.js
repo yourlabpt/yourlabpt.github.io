@@ -4695,6 +4695,14 @@ function registerDeliveryOsRoutes(app, deps) {
         p.executionPlans = ensureArray(p.executionPlans);
         p.executionPlans.unshift(plan);
         p.executionPlans = p.executionPlans.slice(0, 20);
+        try {
+          const workItemsSync = require('./work-items-sync');
+          if (workItemsSync.isAutoSyncEnabled()) {
+            workItemsSync.syncWorkItemsFromExecutionPlan(p, plan);
+          }
+        } catch {
+          // optional bridge
+        }
         p.updatedAt = nowIso();
       });
 

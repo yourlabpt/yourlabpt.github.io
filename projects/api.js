@@ -17,6 +17,7 @@ const zlib = require('zlib');
 const { promisify } = require('util');
 const gzipAsync = promisify(zlib.gzip);
 const { registerAgentRuntimeRoutes } = require('./lib/agent-runtime-routes');
+const { registerWorkItemRoutes } = require('./lib/work-items-routes');
 const phaseContent = require('./lib/phase-content');
 const reqHierarchy = require('./lib/requirement-hierarchy');
 const phaseSync = require('./lib/phase-sync');
@@ -1193,6 +1194,7 @@ function registerRequirementsPlatform(app, options) {
         commercialTerms: { ...DEFAULT_COMMERCIAL_TERMS },
         requirements: [],
         clarificationQuestions: [],
+        workItems: [],
         phases: proposalGenerator.defaultPlanPhases(),
         sourceText: '',
         aiPrompt: '',
@@ -3726,6 +3728,17 @@ function registerRequirementsPlatform(app, options) {
     appendActivity,
     sanitizeProject,
     getUserName,
+  });
+
+  registerWorkItemRoutes(app, {
+    authMiddleware,
+    requireProjectEditor,
+    ensureProjectLoadedLite,
+    canAccessProject: projectAccess.canAccessProject,
+    updateStore,
+    appendActivity,
+    ensureArray,
+    nowIso,
   });
 
   registerAgentRuntimeRoutes(app, {

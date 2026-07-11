@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=66" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=74" />
 </head>
 <body>
   <div class="page-bg"></div>
@@ -547,6 +547,21 @@
                 <div class="section-divider"></div>
                 <p class="subsection-label">Propostas comerciais geradas</p>
                 <div id="generatedLinks" class="simple-list mt-8"></div>
+              </section>
+            </div>
+
+            <!-- TAB: TAREFAS (ADO work items) -->
+            <div class="tab-panel hidden" data-panel="tarefas">
+              <section id="workItemsRoot" class="panel section-panel ado-work-items">
+                <header id="workItemsToolbar" class="ado-toolbar"></header>
+                <div id="workItemsWorkspace" class="ado-workspace">
+                  <div id="workItemsBrowse" class="ado-browse">
+                    <main id="workItemsBoard" class="ado-board">
+                      <p class="ado-empty">Abra um projecto para ver tarefas.</p>
+                    </main>
+                  </div>
+                  <div id="workItemEditor" class="ado-editor hidden" aria-label="Editor de tarefa"></div>
+                </div>
               </section>
             </div>
 
@@ -1189,13 +1204,15 @@
   <script src="/projects/static/help-ui.js?v=3" defer></script>
   <script src="/projects/static/proposal-downloads-ui.js?v=5" defer></script>
   <script src="/projects/static/proposal-configurator-ui.js?v=3" defer></script>
-  <script src="/projects/static/app.js?v=43" defer></script>
+  <script src="/projects/static/app.js?v=44" defer></script>
   <script src="/projects/static/requirements-map-ui.js?v=13" defer></script>
   <script src="/projects/static/requirements-ui.js?v=16" defer></script>
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
   <script src="/projects/static/delivery-os-ui.js?v=61" defer></script>
+  <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
+  <script src="/projects/static/work-items-ui.js?v=7" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=3" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

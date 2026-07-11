@@ -17,6 +17,7 @@ const NAV_ICON_PATHS = {
   plan: 'M4 18h16M7 18V9M12 18V6M17 18v-4',
   bolt: 'M13 3L4 14h6l-1 7 9-11h-6z',
   clock: 'M12 6v6l4 2M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z',
+  checklist: 'M9 6h11M9 12h11M9 18h6M4 6h.01M4 12h.01M4 18h.01',
   settings: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 15a1.7 1.7 0 0 0 .1-1l2-1.5-2-3.5-2.4 1a8 8 0 0 0-1.7-1l.8-4h-7l.8 4a8 8 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a1.7 1.7 0 0 0 .1 1l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 1.7 1l.8 4h7l.8-4a8 8 0 0 0 1.7-1l2.4 1 2-3.5z',
   more: 'M6 12h.01M12 12h.01M18 12h.01',
 };
@@ -33,6 +34,7 @@ const NAV_GROUPS = [
     items: [
       { id: 'deliveryos', label: 'Entrega', icon: 'timeline' },
       { id: 'requisitos', label: 'Requisitos', icon: 'list' },
+      { id: 'tarefas', label: 'Tarefas', icon: 'checklist' },
     ],
   },
   {
@@ -1155,6 +1157,19 @@ function navIconSvg(iconKey) {
   return `<svg class="nav-rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+function isNavItemVisible(item) {
+  if (item.id === 'tarefas') {
+    if (!state.selectedProject) return false;
+    const meta = window.workItemsTabMeta;
+    if (meta?.projectId === state.selectedProject.id) {
+      return Boolean(meta.tabVisible);
+    }
+    if (isSuperAdmin() || isPartnerEditor()) return true;
+    return false;
+  }
+  return true;
+}
+
 function isNavGroupVisible(group) {
   if (group.requiresProject && !state.selectedProject) return false;
   return true;
@@ -1168,6 +1183,7 @@ function isNavPageRequiresProject(pageId) {
 }
 
 function renderNavItem(item, { compact = false } = {}) {
+  if (!isNavItemVisible(item)) return '';
   const active = state.activeTab === item.id;
   return `
     <button type="button"
@@ -1358,6 +1374,9 @@ function renderActiveTab(project, tabId) {
       break;
     case 'deliveryos':
       window.PdosUI?.renderAll?.(project);
+      break;
+    case 'tarefas':
+      window.WorkItemsUI?.open?.(project);
       break;
     case 'atividade':
       loadActivity().catch(() => {});
@@ -2582,6 +2601,16 @@ async function loadProjectById(projectId, options = {}) {
   }
   window.DeliveryOsPlatform?.refreshPlatformUi?.(state.selectedProject);
   window.ClientPortalUI?.refresh?.(state.selectedProject);
+  scheduleWorkItemsMetaFetch(state.selectedProjectId);
+}
+
+let workItemsMetaTimer = null;
+function scheduleWorkItemsMetaFetch(projectId) {
+  if (!projectId || typeof window.WorkItemsUI?.fetchMeta !== 'function') return;
+  clearTimeout(workItemsMetaTimer);
+  workItemsMetaTimer = setTimeout(() => {
+    window.WorkItemsUI.fetchMeta(projectId).catch(() => {});
+  }, 400);
 }
 
 function stageLabel(stageId) {
@@ -2688,7 +2717,18 @@ function navigateToFilteredTab(tabId, filters = {}) {
 
 function switchToTab(tabId) {
   const target = tabId || 'projetos';
-  if (isNavPageRequiresProject(target) && !state.selectedProject) {
+  if (target === 'tarefas') {
+    const meta = window.workItemsTabMeta;
+    const visible = (meta?.projectId === state.selectedProject?.id && meta.tabVisible)
+      || isSuperAdmin()
+      || isPartnerEditor();
+    if (!visible) {
+      showToast('Sem tarefas atribuídas neste projeto.', 'error');
+      state.activeTab = 'deliveryos';
+    } else {
+      state.activeTab = target;
+    }
+  } else if (isNavPageRequiresProject(target) && !state.selectedProject) {
     showToast('Seleccione ou crie um projecto primeiro.', 'error');
     state.activeTab = 'projetos';
   } else {

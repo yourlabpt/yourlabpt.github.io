@@ -209,6 +209,20 @@ function registerAgentRuntimeRoutes(app, deps) {
             agentJob.updatedAt = nowIso();
           }
 
+          try {
+            const workItemsSync = require('./work-items-sync');
+            const summary = typeof parsed === 'object' && parsed
+              ? JSON.stringify(parsed).slice(0, 4000)
+              : String(rawOutput || '').slice(0, 4000);
+            workItemsSync.onAgentRunComplete(project, {
+              agentJobId: agentJob?.id,
+              promptRunId: runId,
+              resultSummaryMarkdown: summary,
+            });
+          } catch {
+            // optional bridge
+          }
+
           project.updatedAt = nowIso();
 
           appendActivity(store, {
@@ -474,6 +488,15 @@ function registerAgentRuntimeRoutes(app, deps) {
           job.yarJobId = yarResponse?.job?.id || null;
           job.status = yarResponse?.job?.status || 'queued';
           job.updatedAt = nowIso();
+        }
+        try {
+          const workItemsSync = require('./work-items-sync');
+          workItemsSync.onAgentRunStart(mutableProject, {
+            agentJobId: agentJob.id,
+            planId: options?.taskPlan?.planId,
+          });
+        } catch {
+          // optional bridge
         }
       });
 
