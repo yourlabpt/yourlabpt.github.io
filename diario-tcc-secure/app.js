@@ -18,6 +18,7 @@ let backgroundLockTimer = null;
 let hiddenAt = 0;
 let failedAttempts = Number(sessionStorage.getItem('diarioTccFailedAttempts') || 0);
 let lockoutUntil = Number(sessionStorage.getItem('diarioTccLockoutUntil') || 0);
+let autoLockSuspendCount = 0;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -69,6 +70,27 @@ function securityMeta() {
 function setMessage(element, message, kind = '') {
   element.textContent = message;
   element.className = `form-message ${kind}`.trim();
+}
+
+function suspendAutoLock() {
+  autoLockSuspendCount += 1;
+}
+
+function resumeAutoLock() {
+  autoLockSuspendCount = Math.max(0, autoLockSuspendCount - 1);
+}
+
+function canAutoLockNow() {
+  return Boolean(masterCryptoKey) && autoLockSuspendCount === 0;
+}
+
+async function withAutoLockSuspended(task) {
+  suspendAutoLock();
+  try {
+    return await task();
+  } finally {
+    resumeAutoLock();
+  }
 }
 
 async function derivePinKey(code, salt, iterations = PIN_ITERATIONS) {
@@ -194,7 +216,9 @@ async function showUnlock({ autoFace = false } = {}) {
 function showApp() {
   document.body.classList.remove('locked');
   $('#authScreen').classList.add('hidden');
+  $('#authScreen').setAttribute('hidden', '');
   $('#appRoot').hidden = false;
+  $('#appRoot').removeAttribute('hidden');
   $('#appRoot').inert = false;
   failedAttempts = 0;
   lockoutUntil = 0;
@@ -202,6 +226,7 @@ function showApp() {
   sessionStorage.removeItem('diarioTccLockoutUntil');
   renderInsights();
   updateSecurityUi();
+  window.scrollTo(0, 0);
 }
 
 function lockApp({ autoFace = false } = {}) {
@@ -231,55 +256,63 @@ function registerFailedAttempt() {
 }
 
 async function createVault(code, enableFaceId) {
-  const salt = randomBytes(16);
-  const pinKey = await derivePinKey(code, salt);
-  const rawMaster = randomBytes(32);
-  const pinWrap = await wrapMasterKey(rawMaster, pinKey, 'diario-tcc-master-pin-v2');
-  const meta = {
-    version: VERSION,
-    createdAt: new Date().toISOString(),
-    pin: { salt: bytesToBase64(salt), iterations: PIN_ITERATIONS, wrap: pinWrap },
-    faceId: null
-  };
-  writeJson(SECURITY_KEY, meta);
-  await setUnlockedKey(rawMaster);
-  rawMaster.fill(0);
+  suspendAutoLock();
+  try {
+    const salt = randomBytes(16);
+    const pinKey = await derivePinKey(code, salt);
+    const rawMaster = randomBytes(32);
+    const pinWrap = await wrapMasterKey(rawMaster, pinKey, 'diario-tcc-master-pin-v2');
+    const meta = {
+      version: VERSION,
+      createdAt: new Date().toISOString(),
+      pin: { salt: bytesToBase64(salt), iterations: PIN_ITERATIONS, wrap: pinWrap },
+      faceId: null
+    };
+    writeJson(SECURITY_KEY, meta);
+    await setUnlockedKey(rawMaster);
+    rawMaster.fill(0);
 
-  const legacy = readJson(LEGACY_STORAGE_KEY);
-  entries = Array.isArray(legacy) ? legacy : [];
-  await saveVault();
-  localStorage.removeItem(LEGACY_STORAGE_KEY);
-  showApp();
+    const legacy = readJson(LEGACY_STORAGE_KEY);
+    entries = Array.isArray(legacy) ? legacy : [];
+    await saveVault();
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    showApp();
 
-  if (enableFaceId) {
-    try {
-      await enableFaceIdUnlock();
-    } catch (error) {
-      setMessage($('#securityMessage'), faceIdErrorMessage(error), 'warning');
-      switchView('settings');
+    if (enableFaceId) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      try {
+        await enableFaceIdUnlock();
+      } catch (error) {
+        setMessage($('#securityMessage'), faceIdErrorMessage(error), 'warning');
+        switchView('settings');
+      }
     }
+  } finally {
+    resumeAutoLock();
   }
 }
 
 async function unlockWithCode(code) {
-  const seconds = currentLockoutSeconds();
-  if (seconds > 0) throw new Error(`Muitas tentativas. Aguarde ${seconds} segundos.`);
-  const meta = securityMeta();
-  if (!meta?.pin?.wrap) throw new Error('Configuração de segurança inválida.');
-  try {
-    const key = await derivePinKey(code, base64ToBytes(meta.pin.salt), meta.pin.iterations);
-    const rawMaster = await unwrapMasterKey(meta.pin.wrap, key, 'diario-tcc-master-pin-v2');
-    await setUnlockedKey(rawMaster);
-    rawMaster.fill(0);
-    await loadVault();
-    showApp();
-  } catch (error) {
-    clearUnlockedKey();
-    registerFailedAttempt();
-    const wait = currentLockoutSeconds();
-    if (wait > 0) throw new Error(`Código incorreto. Aguarde ${wait} segundos.`);
-    throw new Error('Código incorreto.');
-  }
+  return withAutoLockSuspended(async () => {
+    const seconds = currentLockoutSeconds();
+    if (seconds > 0) throw new Error(`Muitas tentativas. Aguarde ${seconds} segundos.`);
+    const meta = securityMeta();
+    if (!meta?.pin?.wrap) throw new Error('Configuração de segurança inválida.');
+    try {
+      const key = await derivePinKey(code, base64ToBytes(meta.pin.salt), meta.pin.iterations);
+      const rawMaster = await unwrapMasterKey(meta.pin.wrap, key, 'diario-tcc-master-pin-v2');
+      await setUnlockedKey(rawMaster);
+      rawMaster.fill(0);
+      await loadVault();
+      showApp();
+    } catch (error) {
+      clearUnlockedKey();
+      registerFailedAttempt();
+      const wait = currentLockoutSeconds();
+      if (wait > 0) throw new Error(`Código incorreto. Aguarde ${wait} segundos.`);
+      throw new Error('Código incorreto.');
+    }
+  });
 }
 
 async function canUsePlatformAuthenticator() {
@@ -376,17 +409,19 @@ async function unlockWithFaceId() {
   $('#faceUnlockBtn').disabled = true;
   setMessage($('#unlockMessage'), 'A aguardar confirmação no iPhone…');
   try {
-    const prfOutput = await getPrfOutputForCredential(
-      meta.faceId.credentialId,
-      base64ToBytes(meta.faceId.prfSalt)
-    );
-    const faceKey = await importAesKey(prfOutput);
-    const rawMaster = await unwrapMasterKey(meta.faceId.wrap, faceKey, 'diario-tcc-master-face-v2');
-    prfOutput.fill(0);
-    await setUnlockedKey(rawMaster);
-    rawMaster.fill(0);
-    await loadVault();
-    showApp();
+    await withAutoLockSuspended(async () => {
+      const prfOutput = await getPrfOutputForCredential(
+        meta.faceId.credentialId,
+        base64ToBytes(meta.faceId.prfSalt)
+      );
+      const faceKey = await importAesKey(prfOutput);
+      const rawMaster = await unwrapMasterKey(meta.faceId.wrap, faceKey, 'diario-tcc-master-face-v2');
+      prfOutput.fill(0);
+      await setUnlockedKey(rawMaster);
+      rawMaster.fill(0);
+      await loadVault();
+      showApp();
+    });
   } catch (error) {
     clearUnlockedKey();
     setMessage($('#unlockMessage'), faceIdErrorMessage(error), 'error');
@@ -578,8 +613,8 @@ function restoreEncryptedBackup(parsed) {
 
 $('#setupForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const code = $('#setupCode').value;
-  const confirmation = $('#setupCodeConfirm').value;
+  const code = $('#setupCode').value.trim();
+  const confirmation = $('#setupCodeConfirm').value.trim();
   if (code.length < 8) {
     setMessage($('#setupMessage'), 'Use pelo menos 8 caracteres.', 'error');
     return;
@@ -589,7 +624,7 @@ $('#setupForm').addEventListener('submit', async (event) => {
     return;
   }
   $('#createVaultBtn').disabled = true;
-  setMessage($('#setupMessage'), 'A criar e encriptar o diário…');
+  setMessage($('#setupMessage'), 'A criar e encriptar o diário… Isto pode demorar alguns segundos no telemóvel.');
   try {
     await createVault(code, $('#setupFaceId').checked);
     $('#setupForm').reset();
@@ -616,9 +651,9 @@ $('#restoreBackupAtSetup').addEventListener('change', async (event) => {
 
 $('#unlockForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const code = $('#unlockCode').value;
+  const code = $('#unlockCode').value.trim();
   $('#unlockBtn').disabled = true;
-  setMessage($('#unlockMessage'), 'A desencriptar…');
+  setMessage($('#unlockMessage'), 'A desencriptar… Isto pode demorar alguns segundos no telemóvel.');
   try {
     await unlockWithCode(code);
   } catch (error) {
@@ -746,11 +781,12 @@ $('#toggleFaceId').addEventListener('click', async () => {
   setMessage($('#securityMessage'), '');
   try {
     if (securityMeta()?.faceId) await disableFaceIdUnlock();
-    else await enableFaceIdUnlock();
+    else await withAutoLockSuspended(() => enableFaceIdUnlock());
   } catch (error) {
     setMessage($('#securityMessage'), faceIdErrorMessage(error), 'error');
   } finally {
     updateSecurityUi();
+    $('#toggleFaceId').disabled = false;
   }
 });
 
@@ -799,14 +835,16 @@ $('#installBtn').addEventListener('click', async () => {
 });
 
 window.addEventListener('pagehide', () => {
-  if (masterCryptoKey) lockApp({ autoFace: false });
+  if (canAutoLockNow()) lockApp({ autoFace: false });
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && masterCryptoKey) {
+  if (document.hidden && canAutoLockNow()) {
     hiddenAt = Date.now();
     clearTimeout(backgroundLockTimer);
-    backgroundLockTimer = setTimeout(() => lockApp({ autoFace: false }), AUTO_LOCK_DELAY_MS);
+    backgroundLockTimer = setTimeout(() => {
+      if (canAutoLockNow()) lockApp({ autoFace: false });
+    }, AUTO_LOCK_DELAY_MS);
     return;
   }
 
@@ -815,7 +853,7 @@ document.addEventListener('visibilitychange', () => {
     clearTimeout(backgroundLockTimer);
     backgroundLockTimer = null;
     hiddenAt = 0;
-    if (wasAwayLongEnough && masterCryptoKey) lockApp({ autoFace: false });
+    if (wasAwayLongEnough && canAutoLockNow()) lockApp({ autoFace: false });
   }
 });
 
