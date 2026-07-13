@@ -2,6 +2,16 @@
 <html lang="pt-PT">
 <head>
   <meta charset="utf-8" />
+  <script>
+    (function () {
+      var path = location.pathname;
+      if (path === '/diario-tcc-secure' || path.indexOf('/diario-tcc-secure/') === 0) {
+        var base = document.createElement('base');
+        base.href = '/diario-tcc-secure/';
+        document.head.appendChild(base);
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
   <meta name="description" content="Diário TCC privado, encriptado e instalável." />

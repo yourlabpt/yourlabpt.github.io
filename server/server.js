@@ -160,12 +160,12 @@ app.use('/diario-tcc-secure', (req, res, next) => {
     next();
 });
 
-app.get('/diario-tcc-secure/', (req, res) => {
+app.get(['/diario-tcc-secure', '/diario-tcc-secure/'], (req, res) => {
+    const pathname = req.originalUrl.split('?')[0];
+    if (pathname !== '/diario-tcc-secure/') {
+        return res.redirect(301, '/diario-tcc-secure/');
+    }
     res.sendFile(path.join(__dirname, '..', 'diario-tcc-secure', 'index.html'));
-});
-
-app.get('/diario-tcc-secure', (req, res) => {
-    res.redirect(301, '/diario-tcc-secure/');
 });
 
 // Serve static files
