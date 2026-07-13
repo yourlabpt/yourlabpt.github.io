@@ -153,6 +153,21 @@ registerRequirementsPlatform(app, {
 app.use('/projects/data', (req, res) => res.status(403).json({ error: 'Forbidden' }));
 app.use('/projects/uploads', (req, res) => res.status(403).json({ error: 'Forbidden' }));
 
+// Diário TCC PWA — private encrypted journal at /diario-tcc-secure
+app.use('/diario-tcc-secure', (req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Service-Worker-Allowed', '/diario-tcc-secure/');
+    next();
+});
+
+app.get('/diario-tcc-secure/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'diario-tcc-secure', 'index.html'));
+});
+
+app.get('/diario-tcc-secure', (req, res) => {
+    res.redirect(301, '/diario-tcc-secure/');
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '..')));
 

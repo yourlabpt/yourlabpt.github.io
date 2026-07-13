@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="description" content="Diário TCC privado, encriptado e instalável." />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Diário TCC" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Diário TCC</title>
+</head>
+<body class="locked">
+  <section id="authScreen" class="auth-screen" aria-live="polite">
+    <div class="auth-card">
+      <div class="lock-mark" aria-hidden="true">◉</div>
+
+      <div id="setupPanel" class="auth-panel hidden">
+        <p class="eyebrow">Primeira utilização</p>
+        <h1>Criar diário privado</h1>
+        <p class="auth-copy">Defina um código mestre. Ele encripta os registos e não pode ser recuperado por nós.</p>
+
+        <form id="setupForm" autocomplete="off">
+          <label class="field-label" for="setupCode">Código mestre</label>
+          <input id="setupCode" class="secure-input" type="password" minlength="8" maxlength="64" required autocomplete="new-password" placeholder="Mínimo de 8 caracteres" />
+
+          <label class="field-label" for="setupCodeConfirm">Confirmar código</label>
+          <input id="setupCodeConfirm" class="secure-input" type="password" minlength="8" maxlength="64" required autocomplete="new-password" placeholder="Repita o código" />
+
+          <label class="check-row">
+            <input id="setupFaceId" type="checkbox" checked />
+            <span><strong>Ativar Face ID</strong><small>Será configurado depois de criar o diário, quando disponível.</small></span>
+          </label>
+
+          <button id="createVaultBtn" class="primary full" type="submit">Criar diário</button>
+          <p id="setupMessage" class="form-message" role="status"></p>
+        </form>
+
+        <div class="auth-divider"><span>ou</span></div>
+        <label class="secondary full file-label">Restaurar cópia encriptada<input id="restoreBackupAtSetup" type="file" accept="application/json" hidden /></label>
+        <p class="security-note">Não existe recuperação do código mestre. Guarde-o num gestor de palavras-passe.</p>
+      </div>
+
+      <div id="unlockPanel" class="auth-panel hidden">
+        <p class="eyebrow">Registo privado</p>
+        <h1>Diário TCC</h1>
+        <p class="auth-copy">Desbloqueie para aceder aos registos encriptados.</p>
+
+        <button id="faceUnlockBtn" class="face-button hidden" type="button">
+          <span class="face-icon" aria-hidden="true">⌁</span>
+          <span>Desbloquear com Face ID</span>
+        </button>
+
+        <form id="unlockForm" autocomplete="off">
+          <label class="field-label" for="unlockCode">Código mestre</label>
+          <input id="unlockCode" class="secure-input" type="password" maxlength="64" required autocomplete="current-password" placeholder="Introduza o código" />
+          <button id="unlockBtn" class="primary full" type="submit">Desbloquear</button>
+          <p id="unlockMessage" class="form-message" role="status"></p>
+        </form>
+        <p class="security-note">Os dados não são enviados para um servidor. Sem o código ou a passkey, não há recuperação.</p>
+      </div>
+    </div>
+  </section>
+
+  <div id="appRoot" class="app-shell" hidden inert>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Registo privado</p>
+        <h1>Diário TCC</h1>
+      </div>
+      <div class="top-actions">
+        <button id="installBtn" class="ghost hidden" type="button">Instalar</button>
+        <button id="lockBtn" class="ghost" type="button" aria-label="Bloquear diário">Bloquear</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Navegação principal">
+      <button class="tab active" data-view="quick" type="button">Registar</button>
+      <button class="tab" data-view="history" type="button">Histórico</button>
+      <button class="tab" data-view="insights" type="button">Padrões</button>
+      <button class="tab" data-view="settings" type="button">Dados</button>
+    </nav>
+
+    <main>
+      <section id="quick" class="view active">
+        <div class="hero-card">
+          <div>
+            <p class="muted">Agora</p>
+            <h2>Como está o impulso?</h2>
+          </div>
+          <div class="score-display"><span id="urgeValue">30</span><small>/100</small></div>
+          <input id="urge" type="range" min="0" max="100" step="1" value="30" aria-label="Intensidade do impulso" />
+          <div class="risk-scale">
+            <span>Baixo</span><span>Médio</span><span>Alto</span><span>Crítico</span>
+          </div>
+        </div>
+
+        <form id="entryForm" autocomplete="off">
+          <section class="card compact-section">
+            <div class="section-head">
+              <h3>O que mais combina com este momento?</h3>
+              <span class="step-chip">1 toque por grupo</span>
+            </div>
+
+            <fieldset>
+              <legend>Emoção principal</legend>
+              <div class="chip-grid single" data-name="emotion">
+                <button type="button" class="chip" data-value="Ansiedade">Ansiedade</button>
+                <button type="button" class="chip" data-value="Solidão">Solidão</button>
+                <button type="button" class="chip" data-value="Stress">Stress</button>
+                <button type="button" class="chip" data-value="Tédio">Tédio</button>
+                <button type="button" class="chip" data-value="Vergonha">Vergonha</button>
+                <button type="button" class="chip" data-value="Tristeza">Tristeza</button>
+                <button type="button" class="chip" data-value="Raiva">Raiva</button>
+                <button type="button" class="chip" data-value="Excitação">Excitação</button>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Gatilho principal</legend>
+              <div class="chip-grid single" data-name="trigger">
+                <button type="button" class="chip" data-value="Redes sociais">Redes sociais</button>
+                <button type="button" class="chip" data-value="Sozinho">Estar sozinho</button>
+                <button type="button" class="chip" data-value="Cansaço">Cansaço</button>
+                <button type="button" class="chip" data-value="Conflito">Conflito</button>
+                <button type="button" class="chip" data-value="Procrastinação">Procrastinação</button>
+                <button type="button" class="chip" data-value="Imagem ou perfil">Imagem/perfil</button>
+                <button type="button" class="chip" data-value="Insónia">Insónia</button>
+                <button type="button" class="chip" data-value="Não sei">Não sei</button>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Pensamento automático</legend>
+              <div class="chip-grid single" data-name="thought">
+                <button type="button" class="chip" data-value="Só desta vez">Só desta vez</button>
+                <button type="button" class="chip" data-value="Depois paro">Depois paro</button>
+                <button type="button" class="chip" data-value="Preciso disto">Preciso disto</button>
+                <button type="button" class="chip" data-value="Ninguém vai saber">Ninguém vai saber</button>
+                <button type="button" class="chip" data-value="Não aguento">Não aguento</button>
+                <button type="button" class="chip" data-value="Já estraguei tudo">Já estraguei tudo</button>
+              </div>
+            </fieldset>
+          </section>
+
+          <section class="card compact-section">
+            <h3>Escolha a saída mais fácil agora</h3>
+            <fieldset>
+              <legend>Ação imediata</legend>
+              <div class="chip-grid single" data-name="action">
+                <button type="button" class="chip" data-value="Sair do local">Sair do local</button>
+                <button type="button" class="chip" data-value="Afastar dispositivo">Afastar telemóvel</button>
+                <button type="button" class="chip" data-value="Caminhar 10 minutos">Caminhar 10 min</button>
+                <button type="button" class="chip" data-value="Tomar banho">Tomar banho</button>
+                <button type="button" class="chip" data-value="Ir para perto de alguém">Ir para perto de alguém</button>
+                <button type="button" class="chip" data-value="Ativar bloqueador">Ativar bloqueador</button>
+              </div>
+            </fieldset>
+
+            <label class="field-label" for="alternative">Frase realista</label>
+            <select id="alternative">
+              <option value="Esta urgência é forte, mas não é uma ordem.">Esta urgência é forte, mas não é uma ordem.</option>
+              <option value="A vontade sobe e desce; posso esperar sem obedecer.">A vontade sobe e desce; posso esperar sem obedecer.</option>
+              <option value="O conteúdo não resolve aquilo de que realmente preciso.">O conteúdo não resolve aquilo de que realmente preciso.</option>
+              <option value="O próximo passo certo é afastar-me, não discutir comigo.">O próximo passo certo é afastar-me, não discutir comigo.</option>
+            </select>
+
+            <label class="field-label" for="note">Nota opcional</label>
+            <textarea id="note" rows="2" maxlength="240" placeholder="Só algumas palavras, se ajudar."></textarea>
+          </section>
+
+          <section class="card emergency-card hidden" id="highRiskCard">
+            <h3>Risco alto</h3>
+            <p>Saia do local, afaste o dispositivo e contacte alguém de confiança. Não fique sozinho com o acesso aberto.</p>
+            <label class="field-label" for="contactName">Pessoa de apoio</label>
+            <input id="contactName" type="text" maxlength="100" placeholder="Nome ou contacto" />
+          </section>
+
+          <button class="primary sticky-save" type="submit">Guardar registo</button>
+          <p class="privacy-note">Os registos são encriptados antes de serem guardados neste dispositivo.</p>
+        </form>
+      </section>
+
+      <section id="history" class="view">
+        <div class="section-title-row">
+          <div><p class="eyebrow">Registos</p><h2>Histórico</h2></div>
+          <button id="clearFilters" class="ghost" type="button">Limpar filtro</button>
+        </div>
+        <div class="filter-row">
+          <select id="historyRange" aria-label="Período do histórico">
+            <option value="7">Últimos 7 dias</option>
+            <option value="30" selected>Últimos 30 dias</option>
+            <option value="3650">Todos</option>
+          </select>
+        </div>
+        <div id="historyList" class="entry-list"></div>
+      </section>
+
+      <section id="insights" class="view">
+        <p class="eyebrow">Resumo local</p>
+        <h2>Padrões</h2>
+        <div class="stats-grid">
+          <article class="stat-card"><span id="statCount">0</span><small>registos</small></article>
+          <article class="stat-card"><span id="statAverage">0</span><small>impulso médio</small></article>
+          <article class="stat-card"><span id="statHigh">0</span><small>acima de 60</small></article>
+        </div>
+        <section class="card">
+          <h3>Gatilhos mais frequentes</h3>
+          <div id="triggerBars" class="bars"></div>
+        </section>
+        <section class="card">
+          <h3>Emoções mais frequentes</h3>
+          <div id="emotionBars" class="bars"></div>
+        </section>
+      </section>
+
+      <section id="settings" class="view">
+        <p class="eyebrow">Privacidade e cópia</p>
+        <h2>Segurança</h2>
+
+        <section class="card security-card">
+          <div class="setting-row">
+            <div><strong>Face ID</strong><small id="faceIdStatus">A verificar…</small></div>
+            <button id="toggleFaceId" class="secondary compact-button" type="button">Ativar</button>
+          </div>
+          <div class="setting-row">
+            <div><strong>Código mestre</strong><small>Necessário como recuperação.</small></div>
+            <button id="openChangeCode" class="secondary compact-button" type="button">Alterar</button>
+          </div>
+          <div class="setting-row">
+            <div><strong>Bloqueio automático</strong><small>Ao sair da app por cerca de 30 segundos.</small></div>
+            <button id="settingsLockNow" class="secondary compact-button" type="button">Bloquear</button>
+          </div>
+          <p id="securityMessage" class="form-message" role="status"></p>
+        </section>
+
+        <h2 class="subheading">Os seus dados</h2>
+        <section class="card action-stack">
+          <button id="exportEncrypted" class="secondary" type="button">Exportar cópia encriptada</button>
+          <button id="exportCsv" class="secondary" type="button">Exportar CSV legível</button>
+          <label class="secondary file-label">Importar cópia<input id="importJson" type="file" accept="application/json" hidden /></label>
+          <button id="deleteAll" class="danger" type="button">Apagar todos os registos</button>
+        </section>
+        <section class="card">
+          <h3>Privacidade</h3>
+          <p class="muted">A aplicação é local e não envia os registos para servidores. A cópia CSV é legível; guarde-a apenas num local seguro. A cópia encriptada precisa do código mestre.</p>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="savedDialog">
+    <div class="dialog-content">
+      <div class="success-icon">✓</div>
+      <h2>Registo guardado</h2>
+      <p id="savedMessage">Fez uma pausa e criou espaço para escolher.</p>
+      <div class="dialog-actions">
+        <button id="newEntry" class="primary" type="button">Novo registo</button>
+        <button id="closeDialog" class="ghost" type="button">Fechar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="changeCodeDialog">
+    <form id="changeCodeForm" class="dialog-content" autocomplete="off">
+      <h2>Alterar código mestre</h2>
+      <p class="muted">Use pelo menos 8 caracteres. A alteração não apaga os registos.</p>
+      <label class="field-label" for="newCode">Novo código</label>
+      <input id="newCode" class="secure-input" type="password" minlength="8" maxlength="64" required autocomplete="new-password" />
+      <label class="field-label" for="newCodeConfirm">Confirmar novo código</label>
+      <input id="newCodeConfirm" class="secure-input" type="password" minlength="8" maxlength="64" required autocomplete="new-password" />
+      <p id="changeCodeMessage" class="form-message" role="status"></p>
+      <div class="dialog-actions horizontal">
+        <button class="primary" type="submit">Guardar</button>
+        <button id="cancelChangeCode" class="ghost" type="button">Cancelar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
