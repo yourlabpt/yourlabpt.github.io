@@ -1,7 +1,7 @@
 'use strict';
 
 const VERSION = 2;
-const APP_BUILD = 9;
+const APP_BUILD = 10;
 const SECURITY_KEY = 'diarioTccSecurityV2';
 const VAULT_KEY = 'diarioTccVaultV2';
 const LEGACY_STORAGE_KEY = 'diarioTccEntriesV1';
@@ -599,7 +599,7 @@ function updateOtherPreview(name) {
   if (!preview) return;
   const text = String(otherText[name] || '').trim();
   if (text) {
-    preview.textContent = `Outro: ${text}`;
+    preview.textContent = text;
     preview.classList.remove('hidden');
   } else {
     preview.textContent = '';
