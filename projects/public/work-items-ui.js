@@ -608,7 +608,21 @@
     }
 
     paintEditor(project);
-    if (state.detail?.agentJobId && ['running', 'queued', 'dispatching', 'executing'].includes(state.detail.agentStatus)) pollConnectedTask(project, state.detail.agentJobId, state.detail.id);
+    if (state.detail?.agentJobId && [
+      'dispatching',
+      'queued',
+      'claimed',
+      'running',
+      'planning',
+      'executing',
+      'self_review',
+      'verifying',
+      'paused',
+      'connection_lost',
+      'cancel_requested',
+    ].includes(state.detail.agentStatus)) {
+      pollConnectedTask(project, state.detail.agentJobId, state.detail.id);
+    }
     if (workItemId !== '__new__') setTaskRoute({ taskId: workItemId });
     state.lastSaveSnapshot = '';
     setSaveIndicator('idle');
@@ -703,6 +717,18 @@
     const request = state.detailRequest || null;
     const executionSettings = item.executionSettings || {};
     const isCoordination = item.taskRole === 'coordination';
+    const runtimeConfig = window.state?.config?.agentRuntime || {};
+    const agentUnavailableReason = runtimeConfig.mode === 'remote_pull' && !runtimeConfig.enabled
+      ? 'Nenhum Agent Runtime está emparelhado. Um super-admin deve emparelhar o dispositivo em Definições.'
+      : runtimeConfig.mode === 'disabled'
+        ? 'A execução por agente está desativada.'
+        : '';
+    const agentConnectAttributes = agentUnavailableReason
+      ? `disabled title="${escapeHtml(agentUnavailableReason)}"`
+      : '';
+    const agentPairingGuidance = agentUnavailableReason
+      ? `<p class="ado-section-hint">${escapeHtml(agentUnavailableReason)}</p>`
+      : '';
 
     const assigneeOptions = members.map((m) => {
       const u = users.find((entry) => entry.id === m.userId);
@@ -736,7 +762,8 @@
             <div class="ado-section-heading"><div><h3 class="ado-section-title">Plano deste pedido</h3><p class="ado-section-hint">Execute o pacote completo ou avance subtarefa a subtarefa.</p></div><strong>${children.filter((child) => child.status === 'completed').length}/${children.length}</strong></div>
             ${request?.diffSummary ? `<div class="ado-request-diff-summary"><span>${request.diffSummary.changedTasks || 0} alterada(s)</span><span>${request.diffSummary.newTasks || 0} nova(s)</span><span>${request.diffSummary.removedTasks || 0} removida(s)</span></div>` : ''}
             <div class="ado-child-task-list">${children.map((child, index) => `<button type="button" data-ado-open-child="${escapeHtml(child.id)}"><span>${index + 1}</span><strong>${escapeHtml(child.title)}</strong><small>${escapeHtml(statusLabel(child.status))}</small></button>`).join('')}</div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-connect-agent>Connectar agente</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar pacote completo</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar todos os resultados</button></div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-connect-agent ${agentConnectAttributes}>Connectar agente</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar pacote completo</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar todos os resultados</button></div>
+            ${agentPairingGuidance}
             <div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>
             <div class="ado-manual-output-pane hidden" data-ado-bundle-pane><label>Pacote JSON completo<textarea rows="14" data-ado-bundle-raw placeholder='{"requestId":"…","requestVersion":1,"taskOutputs":[…]}'></textarea></label><p class="ado-section-hint" data-ado-bundle-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-bundle>Validar pacote</button><button type="button" class="ado-action-primary" data-ado-submit-bundle disabled>Enviar tudo para revisão</button></div></div>
             ${children.some((child) => child.status === 'waiting_review') && state.canManage ? `<div class="ado-bundle-review"><strong>Resultados prontos para decisão</strong><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-bundle="approved">Aprovar e aplicar todos</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="rejected">Rejeitar</button></div></div>` : ''}
@@ -839,7 +866,8 @@
         ${item.origin === 'agent' && !isCoordination ? `
           <section class="ado-editor-section ado-agent-actions">
             <div><h3 class="ado-section-title">Execução manual</h3><p class="ado-section-hint">Use as mesmas instruções fora da plataforma e mantenha o resultado ligado à tarefa.</p></div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button>${!isCoordination ? '<button type="button" class="ado-action-primary" data-ado-connect-agent>Connectar agente para esta tarefa</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>' : ''}${item.agentStatus !== 'running' && !isCoordination ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button>${!isCoordination ? `<button type="button" class="ado-action-primary" data-ado-connect-agent ${agentConnectAttributes}>Connectar agente para esta tarefa</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>` : ''}${item.agentStatus !== 'running' && !isCoordination ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div>
+            ${agentPairingGuidance}
             ${!isCoordination ? '<div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>' : ''}
             <div class="ado-manual-output-pane hidden" data-ado-manual-pane><label>Resultado obtido<textarea rows="10" data-ado-manual-raw placeholder="Cole aqui a resposta completa ou o JSON produzido…"></textarea></label><p class="ado-section-hint" data-ado-manual-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-manual>Validar e pré-visualizar</button><button type="button" class="ado-action-primary" data-ado-submit-manual disabled>Enviar para revisão</button></div></div>
           </section>

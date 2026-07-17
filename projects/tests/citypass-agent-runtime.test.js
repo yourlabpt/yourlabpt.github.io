@@ -61,6 +61,12 @@ describe('CityPass agent runtime integration', () => {
     assert.equal(client.mapAgentId('requirements-to-architecture'), 'requirements_to_architecture');
   });
 
+  it('keeps unknown agent ids portable for connector-backed runtimes', () => {
+    const client = createAgentRuntimeClient();
+    assert.equal(client.mapPlatformType('custom-research-agent'), 'custom-research-agent');
+    assert.equal(client.mapAgentId('custom-research-agent'), 'custom-research-agent');
+  });
+
   it('builds plan_citypass_requirements_to_architecture with four deterministic architecture tasks', { skip: !loadCityPassProject() }, () => {
     const project = loadCityPassProject();
     const plan = project.executionPlans.find((p) => p.id === CITYPASS_ARCH_PLAN_ID);

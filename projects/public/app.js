@@ -205,6 +205,11 @@ const els = {
   settingsProjectSection: document.getElementById('settingsProjectSection'),
   settingsProjectHint: document.getElementById('settingsProjectHint'),
   settingsProjectBody: document.getElementById('settingsProjectBody'),
+  agentConnectorCard: document.getElementById('agentConnectorCard'),
+  agentConnectorList: document.getElementById('agentConnectorList'),
+  agentPairingForm: document.getElementById('agentPairingForm'),
+  agentPairingPassword: document.getElementById('agentPairingPassword'),
+  agentPairingResult: document.getElementById('agentPairingResult'),
   phaseContextBar: document.getElementById('phaseContextBar'),
   usersList: document.getElementById('usersList'),
   createUserForm: document.getElementById('createUserForm'),
@@ -2806,6 +2811,40 @@ function renderSettingsAvailability() {
   if (levelSelect && hasProject) {
     levelSelect.value = state.selectedProject.deliveryLevel || 'standard';
   }
+  if (els.agentConnectorCard) {
+    els.agentConnectorCard.classList.toggle('hidden', !isSuperAdmin());
+    if (isSuperAdmin()) refreshAgentConnectors().catch(() => {});
+  }
+}
+
+async function refreshAgentConnectors() {
+  if (!isSuperAdmin() || !els.agentConnectorList) return;
+  const payload = await apiRequest('/agent-connectors');
+  const connectors = payload.connectors || [];
+  els.agentConnectorList.innerHTML = connectors.length
+    ? connectors.map((connector) => {
+      const capabilities = connector.capabilities || {};
+      const runtimeKind = capabilities.runtime?.kind || 'custom';
+      const agentCount = Array.isArray(capabilities.agents) ? capabilities.agents.length : 0;
+      const skillCount = new Set([
+        ...(capabilities.skills || []),
+        ...(capabilities.agents || []).flatMap((agent) => agent.skills || []),
+      ]).size;
+      const toolCount = new Set([
+        ...(capabilities.tools || []),
+        ...(capabilities.agents || []).flatMap((agent) => agent.tools || []),
+      ]).size;
+      return `
+      <article class="user-admin-card ${connector.status === 'active' ? '' : 'is-inactive'}">
+        <header class="user-admin-card-head">
+          <div><strong>${escapeHtml(connector.name)}</strong><p>${connector.online ? 'Ligado agora' : `Offline · último contacto ${escapeHtml(connector.lastSeenAt ? new Date(connector.lastSeenAt).toLocaleString('pt-PT') : 'nunca')}`}</p></div>
+          <div class="user-admin-badges"><span class="chip">${escapeHtml(connector.runtimeVersion || 'versão desconhecida')}</span><span class="chip">${connector.status === 'active' ? 'Activo' : 'Revogado'}</span></div>
+        </header>
+        <p class="muted-text">${escapeHtml(runtimeKind)} · ${agentCount} agente(s) · ${skillCount} skill(s) · ${toolCount} ferramenta(s)</p>
+        ${connector.status === 'active' ? `<button type="button" class="btn tiny ghost" data-revoke-agent-connector="${escapeHtml(connector.id)}">Revogar dispositivo</button>` : ''}
+      </article>`;
+    }).join('')
+    : '<p class="muted-text">Nenhum Agent Runtime emparelhado.</p>';
 }
 
 function renderPhaseContextBar() {
@@ -3784,6 +3823,38 @@ function wireEvents() {
   els.openSettingsBtn?.addEventListener('click', () => {
     setUserMenuOpen(false);
     switchToTab('definicoes');
+  });
+  els.agentPairingForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const payload = await apiRequest('/agent-connectors/pairing-codes', {
+        method: 'POST',
+        body: { password: els.agentPairingPassword.value },
+      });
+      els.agentPairingPassword.value = '';
+      const platformOrigin = window.location.origin;
+      els.agentPairingResult.classList.remove('hidden');
+      els.agentPairingResult.innerHTML = `
+        <p><strong>Código válido durante 10 minutos:</strong> <code>${escapeHtml(payload.code)}</code></p>
+        <pre>npm run connector:pair -- --url ${escapeHtml(platformOrigin)} --code ${escapeHtml(payload.code)} --name "Tulio MacBook"</pre>
+        <p class="muted-text">Execute este comando no repositório yourlab-agent-runtime. O código só pode ser usado uma vez.</p>`;
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+  els.agentConnectorList?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-revoke-agent-connector]');
+    if (!button || !confirm('Revogar este Agent Runtime? Os trabalhos activos ficarão em ligação perdida.')) return;
+    try {
+      await apiRequest(`/agent-connectors/${encodeURIComponent(button.dataset.revokeAgentConnector)}/revoke`, {
+        method: 'POST',
+        body: {},
+      });
+      await refreshAgentConnectors();
+      showToast('Agent Runtime revogado.', 'ok');
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   });
   els.currentProjectSwitchBtn?.addEventListener('click', () => switchToTab('projetos'));
   els.userMenuBtn?.addEventListener('click', (event) => {

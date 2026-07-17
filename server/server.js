@@ -10,10 +10,13 @@ const nodemailer = require('nodemailer');
 const { createAdminAuth } = require('./lib/admin-auth');
 const { createProjectShowcaseStore } = require('./lib/project-showcase-store');
 const { registerRequirementsPlatform } = require('../projects/api');
+const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
 const app = express();
+app.set('trust proxy', 'loopback');
 const PORT = process.env.PORT || 3000;
 const CHAT_SESSION_TTL_MS = Number(process.env.CHAT_SESSION_TTL_MS || 45 * 60 * 1000);
+const AGENT_CONNECTION_MODE = validateAgentConnectionConfig(process.env);
 
 if (loadedEnvPath) {
     console.log('Environment loaded from:', loadedEnvPath);
@@ -124,7 +127,12 @@ app.use(cors({
         }
     }
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+    limit: '10mb',
+    verify: (req, _res, buffer) => {
+        req.rawBody = buffer.toString('utf8');
+    },
+}));
 
 // Serve vCard with explicit MIME type for better mobile compatibility
 app.get('/business-card/contact.vcf', (req, res, next) => {

@@ -68,6 +68,7 @@ function registerWorkItemRoutes(app, deps) {
     canAccessProject,
     updateStore,
     appendActivity,
+    connectorStore,
     ensureArray,
     nowIso,
     sendProjectEmail,
@@ -620,11 +621,13 @@ function registerWorkItemRoutes(app, deps) {
       if (!['approved', 'changes_requested', 'rejected'].includes(action)) throw new Error('Decisao de revisao invalida.');
       if (action !== 'approved' && !feedback) throw new Error('O feedback e obrigatorio.');
       let result = null;
+      let connectorRunId = '';
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === req.params.projectId); const at = nowIso();
         const parent = workItems.findWorkItem(project, req.params.workItemId); if (!parent || parent.taskRole !== 'coordination') throw new Error('Tarefa-pai nao encontrada.');
         const children = workItems.getWorkItems(project).filter((task) => task.parentTaskId === parent.id && task.status === 'waiting_review');
         if (!children.length) throw new Error('Nao existem resultados a aguardar revisao.');
+        connectorRunId = children.map((child) => child.attempts[child.attempts.length - 1]?.promptRunId).find(Boolean) || '';
         if (action === 'approved') {
           project.artifacts = ensureArray(project.artifacts);
           for (const child of children) {
@@ -642,6 +645,7 @@ function registerWorkItemRoutes(app, deps) {
         project.updatedAt = at; result = { parent: workItems.findWorkItem(project, parent.id), children: workItems.getWorkItems(project).filter((task) => task.parentTaskId === parent.id) };
         appendActivity(store, { actorUserId: req.auth.user.id, projectId: project.id, action: `work_item_bundle_review_${action}`, details: { parentTaskId: parent.id, taskIds: children.map((child) => child.id) } });
       });
+      if (connectorRunId && connectorStore) connectorStore.markReviewed(connectorRunId, action);
       return res.json({ workItem: result.parent, children: result.children });
     } catch (error) { return res.status(400).json({ message: error.message }); }
   });
@@ -732,6 +736,7 @@ function registerWorkItemRoutes(app, deps) {
       const feedback = textOr(req.body?.feedbackMarkdown);
       if (action !== 'approved' && !feedback) throw new Error('O feedback e obrigatorio ao pedir alteracoes ou rejeitar.');
       let updated = null;
+      let connectorRunId = '';
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === req.params.projectId);
         if (!project) throw new Error('Projeto nao encontrado.');
@@ -742,6 +747,7 @@ function registerWorkItemRoutes(app, deps) {
         const at = nowIso();
         const nextStatus = action === 'approved' ? 'completed' : action === 'changes_requested' ? 'ready' : 'failed';
         const attempts = item.attempts.map((attempt, index, all) => index === all.length - 1 && feedback ? { ...attempt, feedbackMarkdown: feedback, updatedAt: at } : attempt);
+        connectorRunId = item.promptRunId || attempts[attempts.length - 1]?.promptRunId || '';
         if (action === 'approved') {
           const latest = attempts[attempts.length - 1];
           const linkedRun = item.promptRunId ? ensureArray(project.promptRuns).find((run) => run.id === item.promptRunId) : null;
@@ -778,6 +784,7 @@ function registerWorkItemRoutes(app, deps) {
         project.updatedAt = at;
         appendActivity(store, { actorUserId: req.auth.user.id, projectId: project.id, action: `work_item_review_${action}`, details: { workItemId: item.id } });
       });
+      if (connectorRunId && connectorStore) connectorStore.markReviewed(connectorRunId, action);
       return res.json({ workItem: updated });
     } catch (error) { return res.status(400).json({ message: error.message }); }
   });

@@ -131,6 +131,7 @@ nano .env
 PORT=3000
 NODE_ENV=production
 ALLOWED_ORIGIN=https://yourlabpt.com,https://www.yourlabpt.com
+AGENT_CONNECTION_MODE=remote_pull
 
 # Ollama — these defaults already match the installed setup
 OLLAMA_BASE_URL=http://localhost:11434/v1
@@ -153,6 +154,15 @@ SMTP_USER=yourlabpt@gmail.com
 SMTP_PASS=your_gmail_app_password
 SMTP_FROM=YourLab <yourlabpt@gmail.com>
 ```
+
+The hosted server must not set `AGENT_RUNTIME_URL` and must not attempt to
+reach a developer laptop. Local Agent Runtimes pair in Projects settings and
+claim approved work using outbound signed HTTPS. Their Platform origin is
+`https://www.yourlabpt.com` without `/projects`.
+
+The connector is provider-neutral. A different local agent platform can
+implement the same versioned capability and dispatch contract described in
+[`AGENT_CONNECTOR_PROTOCOL.md`](./AGENT_CONNECTOR_PROTOCOL.md).
 
 > For Gmail, use an **App Password** (Google Account → Security → 2FA → App passwords), not your regular password.
 

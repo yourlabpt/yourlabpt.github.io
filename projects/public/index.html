@@ -816,6 +816,20 @@
                       </form><div id="usersList" class="simple-list mt-8"></div>
                   </article></div>
                 </details>
+                <details class="settings-advanced-details" id="agentConnectorCard">
+                  <summary>Agent Runtime — ligação segura</summary>
+                  <div class="read-card mt-12">
+                    <p class="muted-text">O Agent Runtime liga-se à plataforma por HTTPS. A plataforma nunca abre uma ligação ao seu Mac.</p>
+                    <div id="agentConnectorList" class="simple-list mt-8"></div>
+                    <form id="agentPairingForm" class="form-grid compact mt-8">
+                      <label>Password actual
+                        <input id="agentPairingPassword" type="password" autocomplete="current-password" required />
+                      </label>
+                      <button class="btn primary" type="submit">Criar código de emparelhamento</button>
+                    </form>
+                    <div id="agentPairingResult" class="hidden mt-8"></div>
+                  </div>
+                </details>
               </section>
 
               <section class="panel section-panel settings-section mt-12" id="settingsProjectSection">
@@ -1288,15 +1302,15 @@
   <script src="/projects/static/help-ui.js?v=3" defer></script>
   <script src="/projects/static/proposal-downloads-ui.js?v=5" defer></script>
   <script src="/projects/static/proposal-configurator-ui.js?v=3" defer></script>
-  <script src="/projects/static/app.js?v=48" defer></script>
+  <script src="/projects/static/app.js?v=50" defer></script>
   <script src="/projects/static/requirements-map-ui.js?v=13" defer></script>
   <script src="/projects/static/requirements-ui.js?v=16" defer></script>
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
-  <script src="/projects/static/delivery-os-ui.js?v=63" defer></script>
+  <script src="/projects/static/delivery-os-ui.js?v=64" defer></script>
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
-  <script src="/projects/static/work-items-ui.js?v=10" defer></script>
+  <script src="/projects/static/work-items-ui.js?v=11" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=6" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

@@ -133,20 +133,29 @@
   };
 
   const RUNTIME_ACTIVE_STATUSES = new Set([
-    'dispatching', 'running', 'queued', 'planning', 'executing', 'self_review',
+    'dispatching', 'claimed', 'running', 'queued', 'planning', 'executing',
+    'self_review', 'verifying', 'cancel_requested',
   ]);
   const RUNTIME_PAUSED_STATUSES = new Set(['paused']);
-  const RUNTIME_DONE_STATUSES = new Set(['pending_human_review', 'completed']);
+  const RUNTIME_DONE_STATUSES = new Set([
+    'result_received', 'waiting_review', 'pending_human_review', 'completed',
+  ]);
   const RUNTIME_ERROR_STATUSES = new Set(['failed', 'cancelled']);
 
   const RUNTIME_STATUS_LABELS = {
     dispatching: 'A iniciar…',
+    claimed: 'Pacote recebido',
     running: 'Em execução',
     queued: 'Na fila',
     planning: 'A planear tarefas',
     executing: 'A executar',
     self_review: 'Revisão automática',
+    verifying: 'A verificar resultado',
     paused: 'Pausado',
+    connection_lost: 'Ligação perdida — sem repetição automática',
+    cancel_requested: 'Cancelamento pendente',
+    result_received: 'Resultado recebido — a preparar revisão',
+    waiting_review: 'Concluído — revisão humana',
     pending_human_review: 'Concluído — revisão humana',
     completed: 'Concluído',
     failed: 'Falhou',
@@ -349,7 +358,9 @@
           healthEl.classList.remove('hidden');
           healthEl.classList.add('is-ok');
         } else {
-          healthEl.textContent = `Agent Runtime indisponível: ${prepare.runtimeHealth?.error || 'sem ligação'}. Verifique se o serviço e o Ollama estão a correr.`;
+          healthEl.textContent = prepare.runtimeHealth?.waitingForConnector
+            ? `O trabalho ficará na fila até ${prepare.runtimeHealth.connector?.name || 'o Agent Runtime'} voltar a ligar.`
+            : `Agent Runtime indisponível: ${prepare.runtimeHealth?.error || 'sem ligação'}.`;
           healthEl.classList.remove('hidden', 'is-ok');
         }
       }
@@ -3183,8 +3194,8 @@
 
   function runtimeBadgeClass(status) {
     if (RUNTIME_DONE_STATUSES.has(status)) return 'is-done';
-    if (RUNTIME_ERROR_STATUSES.has(status)) return 'is-error';
-    if (RUNTIME_PAUSED_STATUSES.has(status)) return 'is-paused';
+    if (RUNTIME_ERROR_STATUSES.has(status) || status === 'connection_lost') return 'is-error';
+    if (RUNTIME_PAUSED_STATUSES.has(status) || status === 'cancel_requested') return 'is-paused';
     return 'is-running';
   }
 
@@ -3226,6 +3237,10 @@
     const agentJob = payload?.agentJob;
     const yarError = payload?.yarError;
     let status = yar?.status || agentJob?.status || 'dispatching';
+    if (payload?.dispatch?.desiredAction === 'cancel'
+      && !['cancelled', 'failed', 'completed', 'pending_human_review', 'waiting_review'].includes(status)) {
+      status = 'cancel_requested';
+    }
     if (yarError && RUNTIME_ACTIVE_STATUSES.has(status)) {
       status = agentJob?.status || status;
     }
@@ -3307,7 +3322,7 @@
 
     if (payload?.events?.length) {
       appendAgentRuntimeLog(payload.events);
-      const maxId = Math.max(...payload.events.map((e) => Number(e._id) || 0));
+      const maxId = Math.max(...payload.events.map((e) => Number(e._id ?? e.id) || 0));
       if (maxId && pdosState.activeRuntimeRun) {
         pdosState.activeRuntimeRun.lastEventId = maxId;
       }
@@ -3484,14 +3499,17 @@
 
   async function cancelAgentRuntime(runId, projectId) {
     try {
-      await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST', body: {} });
-      stopAgentRuntimeMonitor();
-      showToast('YourLab Agent parado');
+      const cancelled = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST', body: {} });
+      const pending = cancelled.agentJob?.status === 'cancel_requested'
+        || cancelled.dispatch?.status === 'cancel_requested';
+      showToast(pending ? 'Cancelamento pedido — aguarda confirmação do agente' : 'YourLab Agent parado');
       const project = await reloadProject(projectId);
       const status = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status`);
       updateAgentRuntimePanel(status);
       renderAgentRuntimeHistory(project);
       renderAgentRuntimeBar(project);
+      if (pending) startAgentRuntimeMonitor(runId, projectId);
+      else stopAgentRuntimeMonitor();
     } catch (err) {
       showToast(err.message, 'error');
     }

@@ -92,7 +92,7 @@ function createAgentRuntimeClient() {
       return AGENT_ID_TO_PLATFORM_TYPE[agentId] || agentId;
     },
     mapPlatformType(agentType) {
-      return PLATFORM_TYPE_TO_AGENT_ID[agentType] || null;
+      return PLATFORM_TYPE_TO_AGENT_ID[agentType] || agentType || null;
     },
   };
 }

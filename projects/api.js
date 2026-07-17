@@ -17,6 +17,8 @@ const zlib = require('zlib');
 const { promisify } = require('util');
 const gzipAsync = promisify(zlib.gzip);
 const { registerAgentRuntimeRoutes } = require('./lib/agent-runtime-routes');
+const { AgentConnectorStore } = require('./lib/agent-connector-store');
+const { normalizeMode } = require('./lib/agent-connection-mode');
 const { registerWorkItemRoutes } = require('./lib/work-items-routes');
 const phaseContent = require('./lib/phase-content');
 const reqHierarchy = require('./lib/requirement-hierarchy');
@@ -102,6 +104,7 @@ function registerRequirementsPlatform(app, options) {
   } = options;
 
   const rootBase = rootDir || path.resolve(platformDir, '..');
+  const agentConnectionMode = normalizeMode(process.env.AGENT_CONNECTION_MODE, process.env.NODE_ENV);
   const resolvedLogoPath = logoPath
     ? (path.isAbsolute(logoPath) ? logoPath : path.join(rootBase, logoPath))
     : path.join(rootBase, 'Logos YourLab', '1.png');
@@ -137,6 +140,9 @@ function registerRequirementsPlatform(app, options) {
       deleteProjectData: () => {},
     };
   }
+  const connectorStore = sqliteStore.canUseSqlite()
+    ? new AgentConnectorStore(sqliteStore.getDb())
+    : null;
 
   function isHybridStorage(store) {
     return store?._index?.meta?.storageLayout === 'hybrid-v2';
@@ -1022,8 +1028,16 @@ function registerRequirementsPlatform(app, options) {
       defaultAdminEmail: process.env.REQ_PLATFORM_SUPER_ADMIN_EMAIL || 'admin@yourlab.local',
       note: 'Se for primeiro acesso, use a password definida em REQ_PLATFORM_SUPER_ADMIN_PASSWORD ou change-me-now.',
       agentRuntime: {
-        enabled: Boolean(String(process.env.AGENT_RUNTIME_API_KEY || '').trim()),
-        url: String(process.env.AGENT_RUNTIME_URL || 'http://127.0.0.1:3847').replace(/\/$/, ''),
+        enabled: agentConnectionMode === 'remote_pull'
+          ? Boolean(connectorStore?.activeConnector())
+          : agentConnectionMode === 'disabled'
+            ? false
+            : Boolean(String(process.env.AGENT_RUNTIME_API_KEY || '').trim()),
+        mode: agentConnectionMode,
+        url: agentConnectionMode === 'local_push'
+          ? String(process.env.AGENT_RUNTIME_URL || 'http://127.0.0.1:3847').replace(/\/$/, '')
+          : '',
+        connector: connectorStore?.activeConnector() || null,
         supportedAgentTypes: [
           'reverse_idea',
           'requirements_to_architecture',
@@ -1555,7 +1569,8 @@ function registerRequirementsPlatform(app, options) {
         userMessage
       );
 
-      const runtimeEnabled = Boolean(String(process.env.AGENT_RUNTIME_API_KEY || '').trim());
+      const runtimeEnabled = agentConnectionMode === 'local_push'
+        && Boolean(String(process.env.AGENT_RUNTIME_API_KEY || '').trim());
       if (!runtimeEnabled) {
         return res.json({ prompt, mode: 'manual' });
       }
@@ -3888,6 +3903,7 @@ function registerRequirementsPlatform(app, options) {
     nowIso,
     sendProjectEmail,
     normalizeRequirementRecord,
+    connectorStore,
   });
 
   registerAgentRuntimeRoutes(app, {
@@ -3904,6 +3920,9 @@ function registerRequirementsPlatform(app, options) {
     ensureArray,
     nowIso,
     sendProjectEmail,
+    sqliteStore,
+    connectorStore,
+    verifyPassword,
   });
 
   ensureStore().catch((error) => {
