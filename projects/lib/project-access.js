@@ -69,29 +69,27 @@ function filterWorkItemsForViewer(items, user, project) {
   if (canManageWorkItems(user, project)) return list;
   const userId = user?.id;
   if (!userId) return [];
-  return list.filter((item) =>
-    item.origin === 'human' && item.assigneeUserId === userId
-  );
+  return list.filter((item) => item.clientVisible === true);
 }
 
 function viewerHasAssignedHumanWorkItems(user, project, items) {
   const userId = user?.id;
   if (!userId) return false;
-  return ensureArray(items).some((item) =>
-    item.origin === 'human' && item.assigneeUserId === userId
-  );
+  return ensureArray(items).some((item) => item.clientVisible === true
+    && (item.assigneeUserId === userId || item.approverUserId === userId));
 }
 
 function canViewWorkItemsTab(user, project, items) {
   if (!canAccessProject(user, project)) return false;
   if (canManageWorkItems(user, project)) return true;
-  return viewerHasAssignedHumanWorkItems(user, project, items);
+  return ensureArray(items).some((item) => item.clientVisible === true);
 }
 
 function canPostWorkItemUpdate(user, project, item) {
   if (canManageWorkItems(user, project)) return true;
   const userId = user?.id;
-  return Boolean(userId && item?.origin === 'human' && item.assigneeUserId === userId);
+  return Boolean(userId && item?.clientVisible === true
+    && (item.assigneeUserId === userId || item.approverUserId === userId));
 }
 
 function canEditWorkItemUpdate(user, project) {

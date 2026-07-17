@@ -63,6 +63,7 @@ function createAgentRuntimeClient() {
   }
 
   return {
+    request,
     createJob(payload) {
       return request('POST', '/v1/jobs', payload);
     },

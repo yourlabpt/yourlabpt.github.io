@@ -577,6 +577,8 @@ function normalizePromptRun(raw) {
     createdBy: textOr(raw?.createdBy),
     reviewedAt: textOr(raw?.reviewedAt),
     reviewedBy: textOr(raw?.reviewedBy),
+    workItemId: textOr(raw?.workItemId),
+    agentRequestId: textOr(raw?.agentRequestId),
   };
 }
 
@@ -612,6 +614,8 @@ function normalizeAgentJob(raw) {
       agentId: textOr(raw?.agentId),
       yarJobId: textOr(raw?.yarJobId) || null,
       promptRunId: textOr(raw?.promptRunId),
+      workItemId: textOr(raw?.workItemId),
+      agentRequestId: textOr(raw?.agentRequestId),
       projectId: textOr(raw?.projectId),
       status: runtimeStatuses.includes(normalizedStatus) ? normalizedStatus : 'queued',
       error: textOr(raw?.error),
@@ -636,6 +640,8 @@ function normalizeAgentJob(raw) {
     reconcileRaw: textOr(raw?.reconcileRaw),
     reconcileParsed: raw?.reconcileParsed ?? null,
     promptRunId: textOr(raw?.promptRunId),
+    agentRequestId: textOr(raw?.agentRequestId),
+    workItemIds: ensureArray(raw?.workItemIds).map(String).filter(Boolean),
     createdBy: textOr(raw?.createdBy),
     createdAt: textOr(raw?.createdAt, nowIso()),
     updatedAt: textOr(raw?.updatedAt, nowIso()),
@@ -1064,7 +1070,16 @@ function normalizeProjectV3Fields(project) {
     alternativeResponses: ensureArray(project.alternativeResponses).map(normalizeAlternativeResponse),
     informationEntries: ensureArray(project.informationEntries).map(normalizeInformationEntry),
     nextDecision: textOr(project.nextDecision),
+    originalIdeaText: textOr(project.originalIdeaText),
     ideaBriefMarkdown: textOr(project.ideaBriefMarkdown),
+    ideaConversation: ensureArray(project.ideaConversation)
+      .filter((turn) => turn && ['user', 'assistant'].includes(turn.role) && textOr(turn.content))
+      .map((turn) => ({
+        role: turn.role,
+        content: textOr(turn.content),
+        timestamp: textOr(turn.timestamp),
+      }))
+      .slice(-100),
     vision: normalizeVision(project.vision, project),
     discovery: normalizeDiscovery(project.discovery),
     roadmap: normalizeRoadmap(project.roadmap, project),
@@ -1072,6 +1087,55 @@ function normalizeProjectV3Fields(project) {
     proposal: normalizeProposal(project.proposal),
     ...diagramFields,
   };
+}
+
+function buildIdeaGuidancePrompt(project, mode = 'interpret', conversationHistory = [], userMessage = '') {
+  const allowedModes = new Set(['interpret', 'question', 'organize', 'critique', 'solutions', 'research', 'freeform']);
+  const selectedMode = allowedModes.has(mode) ? mode : 'freeform';
+  const vision = normalizeVision(project?.vision, project || {});
+  const history = ensureArray(conversationHistory)
+    .filter((turn) => turn && ['user', 'assistant'].includes(turn.role) && textOr(turn.content))
+    .slice(-20)
+    .map((turn) => `${turn.role === 'assistant' ? 'GUIA' : 'UTILIZADOR'}: ${textOr(turn.content).slice(0, 3000)}`)
+    .join('\n');
+  const instructions = {
+    interpret: 'Resume o que entendeste. Distingue claramente informação dada de sugestões. Termina com, no máximo, uma pergunta útil.',
+    question: 'Identifica a lacuna mais importante e faz UMA pergunta clara. Não tentes preencher a lacuna.',
+    organize: 'Organiza apenas o que já se sabe em secções curtas: ideia principal, problema, público, melhoria esperada e hipóteses abertas.',
+    critique: 'Aponta aspectos promissores, incertezas e pontos frágeis. Não cries uma lista completa de riscos e faz, no máximo, uma pergunta.',
+    solutions: 'Explora poucas direcções de solução como possibilidades, nunca como decisões tomadas, e liga cada uma ao problema descrito.',
+    research: 'Sugere um plano compacto de pesquisa inicial baseado apenas nas incógnitas presentes. Não inventes resultados de pesquisa.',
+    freeform: 'Responde à mensagem do utilizador, ajudando a clarificar e organizar a ideia. Faz, no máximo, uma pergunta.',
+  };
+
+  return `És um guia de descoberta de ideias. Responde em português europeu, com linguagem simples e acolhedora.
+
+REGRAS OBRIGATÓRIAS:
+- Baseia todas as afirmações APENAS em informação explicitamente fornecida abaixo.
+- Não transformes suposições em factos. Identifica sugestões e hipóteses como tal.
+- Aceita "não sei ainda" como uma resposta válida.
+- Faz no máximo uma pergunta por resposta.
+
+IDEIA ORIGINAL:
+${textOr(project?.originalIdeaText) || '(ainda não descrita)'}
+
+COMPREENSÃO ACTUAL:
+${JSON.stringify({
+    headline: vision.headline,
+    mainIdea: vision.mainIdeaMarkdown || textOr(project?.ideaBriefMarkdown),
+    problem: vision.problemMarkdown,
+    targetUsers: vision.targetUsers,
+    valueProposition: vision.valuePropositionMarkdown,
+  }, null, 2)}
+
+CONVERSA ANTERIOR:
+${history || '(sem conversa anterior)'}
+
+MENSAGEM ACTUAL:
+${textOr(userMessage) || '(foi escolhida uma acção guiada)'}
+
+TAREFA (${selectedMode}):
+${instructions[selectedMode]}`;
 }
 
 function enrichRequirementWithModuleTags(requirement) {
@@ -3495,6 +3559,7 @@ function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
     }
     merged.updatedAt = nowIso();
     project.implementation = normalizeImplementation(merged, project);
+    require('./work-items-sync').syncImplementationTasks(project);
   }
 
   if (parsed.transitionSummaryMarkdown) {
@@ -3825,6 +3890,7 @@ function registerDeliveryOsRoutes(app, deps) {
         if (!project) throw new Error('Projeto nao encontrado.');
         const review = ensureArray(project.humanReviews).find((r) => r.id === reviewId);
         if (!review) throw new Error('Review nao encontrada.');
+
         const run = ensureArray(project.promptRuns).find(
           (r) => r.id === review.promptRunId || r.id === review.sourceId
         );
@@ -3855,6 +3921,9 @@ function registerDeliveryOsRoutes(app, deps) {
         if (!project) throw new Error('Projeto nao encontrado.');
         const review = ensureArray(project.humanReviews).find((r) => r.id === reviewId);
         if (!review) throw new Error('Review nao encontrada.');
+        require('./work-items-sync').syncDomainTasks(project);
+
+        try {
 
         if (resolvedAction === 'rollback' && review.preApplySnapshotId) {
           const snap = ensureArray(project.versionSnapshots).find((s) => s.id === review.preApplySnapshotId);
@@ -3986,6 +4055,13 @@ function registerDeliveryOsRoutes(app, deps) {
           }
         }
         project.updatedAt = nowIso();
+        } finally {
+          require('./work-items-sync').syncDomainTasks(project);
+        }
+      });
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === projectId);
+        if (project) require('./work-items-sync').syncDomainTasks(project);
       });
       const store = await readStore();
       const updated = store.projects.find((e) => e.id === projectId);
@@ -4295,16 +4371,39 @@ function registerDeliveryOsRoutes(app, deps) {
         summaryMarkdown: `Prompt gerado para ${agentType}. Tempo estimado de leitura: ${Math.max(1, Math.ceil(fullPrompt.length / 1200))} min.`,
       });
 
+      let delegation = null;
       await updateStore(async (store) => {
         const p = store.projects.find((e) => e.id === projectId);
         if (!p) throw new Error('Projeto nao encontrado.');
+        const agentRequests = require('./agent-requests');
+        const workItems = require('./work-items');
+        delegation = agentRequests.createAgentRequest(p, {
+          idempotencyKey: `manual-prompt:${run.id}`,
+          title: `Execucao manual: ${agentType}`,
+          requestMarkdown: textOr(body.userRequest, `Gerar o output ${targetOutput || 'pedido'} com o agente ${agentType}.`),
+          desiredOutcomeMarkdown: targetOutput || 'Resultado estruturado do prompt.',
+          agentId: agentType, agentType, deliveryStageId: body.stageId || 'unclassified',
+          targetOutput, sourceRefs: body.sourceRefs,
+          tasks: [{ id: 'manual', title: textOr(body.title, `Executar ${agentType}`), instruction: fullPrompt, expectedOutput: targetOutput || 'Resultado do prompt', reviewRequired: true }],
+        }, { actorUserId: req.auth.user.id, nowIso });
+        const task = delegation.tasks[0];
+        const list = workItems.getWorkItems(p);
+        const patched = workItems.normalizeWorkItem({
+          ...task, status: 'waiting_input', promptRunId: run.id,
+          currentAction: 'Copie as instrucoes, execute externamente e registe o resultado nesta tarefa.',
+          taskActivity: [...task.taskActivity, { type: 'manual_prompt_ready', message: 'Pacote de execucao manual preparado.', actorType: 'platform', actorId: req.auth.user.id, createdAt: nowIso() }],
+          updatedAt: nowIso(),
+        }, { project: p });
+        workItems.setWorkItems(p, list.map((entry) => entry.id === task.id ? patched : entry));
+        run.workItemId = task.id;
+        run.agentRequestId = delegation.request.id;
         p.promptRuns = ensureArray(p.promptRuns);
         p.promptRuns.unshift(run);
         p.promptRuns = p.promptRuns.slice(0, 100);
         p.updatedAt = nowIso();
       }, { deferPersist: true });
 
-      return res.json({ promptRun: run, review: null, prompt: fullPrompt });
+      return res.json({ promptRun: run, review: null, prompt: fullPrompt, agentRequest: delegation?.request, workItem: delegation?.tasks?.[0] });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -4340,6 +4439,15 @@ function registerDeliveryOsRoutes(app, deps) {
         }
 
         upsertHumanReviewFromPromptRun(project, run, parsed, rawOutput);
+        try {
+          const workItemsSync = require('./work-items-sync');
+          workItemsSync.onAgentRunComplete(project, {
+            workItemId: run.workItemId,
+            promptRunId: run.id,
+            resultSummaryMarkdown: rawOutput.slice(0, 4000),
+            waitingReview: deferApply,
+          });
+        } catch { /* task migration remains best-effort for legacy prompt runs */ }
 
         if (!deferApply && parsed) {
           applyPromptRunOutput(project, run, parsed, req.auth.user.id, { normalizeRequirementRecord });
@@ -4423,13 +4531,27 @@ function registerDeliveryOsRoutes(app, deps) {
       await updateStore(async (store) => {
         const p = store.projects.find((e) => e.id === projectId);
         if (!p) throw new Error('Projeto nao encontrado.');
+        const agentRequests = require('./agent-requests');
+        const delegation = agentRequests.createAgentRequest(p, {
+          idempotencyKey: `agent-job:${job.id}`,
+          title: `Plano em lotes: ${agentType}`,
+          requestMarkdown: `Processar o trabalho de ${agentType} em ${chunks.length} lotes e consolidar o resultado.`,
+          desiredOutcomeMarkdown: spec.targetOutput,
+          agentId: agentType, agentType, deliveryStageId: body.stageId || 'requirements', targetOutput: spec.targetOutput,
+          tasks: [
+            ...chunks.map((chunk) => ({ id: `chunk_${chunk.index}`, title: chunk.label, instruction: chunk.prompt, expectedOutput: spec.targetOutput, reviewRequired: false })),
+            { id: 'reconcile', title: 'Consolidar e rever resultado', instruction: 'Consolidar os outputs dos lotes num resultado unico.', expectedOutput: spec.targetOutput, dependsOn: chunks.map((chunk) => `chunk_${chunk.index}`), reviewRequired: true },
+          ],
+        }, { actorUserId: req.auth.user.id, nowIso });
+        job.agentRequestId = delegation.request.id;
+        job.workItemIds = delegation.tasks.map((task) => task.id);
         p.agentJobs = ensureArray(p.agentJobs);
         p.agentJobs.unshift(job);
         p.agentJobs = p.agentJobs.slice(0, 20);
         p.updatedAt = nowIso();
       });
 
-      return res.json({ agentJob: job });
+      return res.json({ agentJob: job, agentRequestId: job.agentRequestId, workItemIds: job.workItemIds });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -4464,6 +4586,12 @@ function registerDeliveryOsRoutes(app, deps) {
         chunk.rawOutput = rawOutput;
         chunk.parsedOutput = parsed;
         chunk.status = 'done';
+        try {
+          require('./work-items-sync').onAgentRunComplete(project, {
+            workItemId: ensureArray(job.workItemIds)[index],
+            resultSummaryMarkdown: rawOutput.slice(0, 4000), waitingReview: false,
+          });
+        } catch { /* legacy jobs may not have linked tasks */ }
 
         const required = ensureArray(job.chunks).filter((c) => !c.deferred);
         const allRequiredDone = required.length > 0 && required.every((c) => c.status === 'done');
@@ -4571,6 +4699,8 @@ function registerDeliveryOsRoutes(app, deps) {
           status: 'pending_review',
           createdBy: req.auth.user.id,
           summaryMarkdown: `Output final consolidado de ${job.agentType} (job em lotes${useMergeFallback ? ', fusao automatica' : ''}).`,
+          workItemId: ensureArray(job.workItemIds).at(-1),
+          agentRequestId: job.agentRequestId,
         });
         const payload = buildHumanReviewPayload(project, run, parsed, rawOutput);
         let review = null;
@@ -4600,6 +4730,12 @@ function registerDeliveryOsRoutes(app, deps) {
         job.promptRunId = run.id;
         job.status = 'review_pending';
         job.updatedAt = nowIso();
+        try {
+          require('./work-items-sync').onAgentRunComplete(project, {
+            workItemId: run.workItemId, promptRunId: run.id,
+            resultSummaryMarkdown: rawOutput.slice(0, 4000), waitingReview: true,
+          });
+        } catch { /* legacy jobs may not have linked tasks */ }
         project.updatedAt = nowIso();
 
         resultRun = run;
@@ -5089,6 +5225,7 @@ module.exports = {
   buildGroupingPrompt,
   buildHierarchyReorganizePrompt,
   buildReverseIdeaPrompt,
+  buildIdeaGuidancePrompt,
   buildDiscoveryPrompt,
   buildRoadmapPrompt,
   buildDiagramToRequirementsPrompt,

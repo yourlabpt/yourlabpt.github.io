@@ -46,7 +46,7 @@ describe('execution plan model profiles', () => {
     assert.ok(a.tasks.every((t) => t.regressionGuardPrompt));
   });
 
-  it('falls back to a planner prompt when the profile cannot fit deterministic tasks', () => {
+  it('keeps semantic tasks instead of replacing work with a planner placeholder', () => {
     const plan = executionPlans.buildExecutionPlan('stage_transition', projectFixture(), {
       fromStageId: 'requirements',
       toStageId: 'architecture',
@@ -55,9 +55,10 @@ describe('execution plan model profiles', () => {
       targetOutputTokens: 500,
     });
 
-    assert.equal(plan.splitStrategy, 'planner_prompt');
-    assert.equal(plan.tasks[0].id, 'plan_breakdown');
-    assert.match(plan.tasks[0].instruction, /Return ONLY JSON/);
+    assert.equal(plan.splitStrategy, 'deterministic');
+    assert.ok(plan.tasks.length >= 2);
+    assert.equal(plan.tasks.some((task) => task.id === 'plan_breakdown'), false);
+    assert.match(plan.masterPlanMarkdown, /configuração deve ser revista/);
   });
 
   it('builds prompt packs with task, verification and rollback sections', () => {

@@ -259,86 +259,6 @@ function computeFlowHealth(project) {
   };
 }
 
-function computeProjectActions(project, viewer) {
-  const role = textOr(viewer?.role, 'partner');
-  const health = computeFlowHealth(project);
-  const actions = [];
-
-  if (role !== 'client') {
-    if (health.pendingReviews > 0) {
-      actions.push({
-        id: 'approve_reviews',
-        priority: 1,
-        label: `Aprovar ${health.pendingReviews} revisão(ões) pendente(s)`,
-        tab: 'deliveryos',
-        stageId: null,
-        count: health.pendingReviews,
-      });
-    }
-    if (health.proposedDecisions > 0) {
-      actions.push({
-        id: 'decide_pending',
-        priority: 2,
-        label: `Formalizar ${health.proposedDecisions} decisão(ões) proposta(s)`,
-        tab: 'deliveryos',
-        stageId: 'discovery',
-        count: health.proposedDecisions,
-      });
-    }
-    if (health.orphanFrCount > 0) {
-      actions.push({
-        id: 'link_orphans',
-        priority: 3,
-        label: `Ligar ${health.orphanFrCount} FR(s) sem rastreio completo`,
-        tab: 'requisitos',
-        stageId: 'requirements',
-        count: health.orphanFrCount,
-      });
-    }
-    if (health.openChangeRequests > 0) {
-      actions.push({
-        id: 'review_changes',
-        priority: 4,
-        label: `Rever ${health.openChangeRequests} pedido(s) de alteração`,
-        tab: 'deliveryos',
-        stageId: 'roadmap',
-        count: health.openChangeRequests,
-      });
-    }
-  }
-
-  const clientQuestions = ensureArray(project.clarificationQuestions).filter((q) => {
-    if (q.resolvedAt || q.answer) return false;
-    const target = textOr(q.targetAudience, 'both').toLowerCase();
-    return role === 'client' ? (target === 'client' || target === 'both') : true;
-  });
-
-  if (clientQuestions.length) {
-    actions.push({
-      id: 'answer_questions',
-      priority: role === 'client' ? 1 : 5,
-      label: role === 'client'
-        ? `Responder ${clientQuestions.length} pergunta(s) em aberto`
-        : `Aguardam resposta: ${clientQuestions.length} pergunta(s)`,
-      tab: 'perguntas',
-      count: clientQuestions.length,
-    });
-  }
-
-  const pendingApprovals = ensureArray(project.approvals).filter((a) => a.status === 'pending');
-  if (pendingApprovals.length) {
-    actions.push({
-      id: 'pending_approvals',
-      priority: role === 'client' ? 2 : 6,
-      label: `Aprovar ${pendingApprovals.length} entregável(is)`,
-      tab: role === 'client' ? 'deliveryos' : 'deliveryos',
-      count: pendingApprovals.length,
-    });
-  }
-
-  return actions.sort((a, b) => a.priority - b.priority).slice(0, 5);
-}
-
 function computeSinceLastVisit(project, userId) {
   const visits = project.projectVisits || {};
   const lastVisit = visits[userId] || null;
@@ -506,7 +426,6 @@ function buildClientPortalSummary(project, viewer) {
     pendingApprovals,
     deliverables,
     deliveryConfidence: computeFlowHealth(project).deliveryConfidence,
-    actions: computeProjectActions(project, viewer),
   };
 }
 
@@ -608,11 +527,6 @@ function registerDeliveryOsPlatformRoutes(app, deps) {
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
-  });
-
-  app.get('/api/projects/projects/:projectId/project-actions', authMiddleware, loadProjectForUser, async (req, res) => {
-    const actions = computeProjectActions(req.loadedProject, req.auth.user);
-    return res.json({ actions });
   });
 
   app.get('/api/projects/projects/:projectId/since-last-visit', authMiddleware, loadProjectForUser, async (req, res) => {
@@ -742,6 +656,7 @@ function registerDeliveryOsPlatformRoutes(app, deps) {
         const action = textOr(body.action, 'approved');
         const targetId = textOr(body.approvalId || body.artifactId || body.stageId);
         project.approvals = normalizeApprovals(project.approvals);
+        require('./work-items-sync').syncDomainTasks(project);
         const existing = project.approvals.find((a) => a.id === targetId || a.stageId === targetId);
         if (existing) {
           existing.status = ['approved', 'rejected', 'deferred'].includes(action) ? action : 'approved';
@@ -763,6 +678,7 @@ function registerDeliveryOsPlatformRoutes(app, deps) {
           };
           project.approvals.unshift(approval);
         }
+        require('./work-items-sync').syncDomainTasks(project);
         project.updatedAt = nowIso();
         appendActivity(store, { projectId, type: 'client_approval', approvalId: approval.id, action, userId: req.auth.user.id });
       });
@@ -837,7 +753,6 @@ module.exports = {
   normalizePlatformFields,
   promoteMinuteDecisionToRecord,
   computeFlowHealth,
-  computeProjectActions,
   computeSinceLastVisit,
   recordProjectVisit,
   runConsistencyCheck,

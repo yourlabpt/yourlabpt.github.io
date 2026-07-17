@@ -243,6 +243,9 @@
       prepare: cfg.prepare,
       options: {
         ...cfg.options,
+        userRequest: $('pdosAgentCfgRequest')?.value?.trim() || cfg.options.userRequest || '',
+        userRequestTitle: $('pdosAgentCfgRequest')?.value?.trim().split(/[.!?\n]/)[0].slice(0, 100) || cfg.options.userRequestTitle || '',
+        desiredOutcome: $('pdosAgentCfgOutcome')?.value?.trim() || cfg.options.desiredOutcome || '',
         enableWebSearch: Boolean($('pdosAgentCfgWebSearch')?.checked),
         modelProfileId: $('pdosAgentCfgModelProfile')?.value || cfg.options.modelProfileId || 'medium',
         targetInputTokens: Number($('pdosAgentCfgInputTokens')?.value) || cfg.options.targetInputTokens,
@@ -271,7 +274,9 @@
     pdosState.pendingAgentConfig = { agentType, project, options, prepare: null };
     $('pdosAgentConfigModal')?.classList.remove('hidden');
     $('pdosAgentConfigTitle').textContent = `Configurar — ${agentFriendlyLabel(agentType)}`;
-    $('pdosAgentConfigDesc').textContent = 'Defina orçamento e opções. A execução só começa quando clicar em Executar.';
+    $('pdosAgentConfigDesc').textContent = 'Explique o trabalho e o resultado esperado. O agente transformará o pedido em tarefas visíveis antes de executar.';
+    if ($('pdosAgentCfgRequest')) $('pdosAgentCfgRequest').value = extraOptions.userRequest || `Executar ${agentFriendlyLabel(agentType)} nesta etapa do projecto.`;
+    if ($('pdosAgentCfgOutcome')) $('pdosAgentCfgOutcome').value = extraOptions.desiredOutcome || '';
     const healthEl = $('pdosAgentConfigHealth');
     healthEl?.classList.add('hidden');
 
@@ -745,8 +750,6 @@
   function renderProjectHeader(project) {
     const el = $('pdosProjectHeader');
     if (!el || !project) return;
-    const desc = projectDescription(project);
-    const goals = (project.summary?.goals || []).slice(0, 2);
     const latestCommercial = proposalCanViewHistory() && window.ProposalDownloads?.findLatestCommercial?.(project);
     const downloadActions = latestCommercial && window.ProposalDownloads?.renderActions
       ? window.ProposalDownloads.renderActions(project.id, latestCommercial, { compact: true })
@@ -754,19 +757,17 @@
     el.innerHTML = `
       <div class="pdos-header-grid pdos-header-compact">
         <div class="pdos-header-main">
-          <p class="pdos-header-eyebrow">${escapeHtml(project.clientName || 'Cliente')}</p>
           <h2>${escapeHtml(project.name)}</h2>
         </div>
         <div class="pdos-header-side">
-          <div class="pdos-header-meta">
-            <span class="chip">${escapeHtml(project.status || 'active')}</span>
-            <span class="chip accent">${escapeHtml(project.deliveryLevel || 'standard')}</span>
-          </div>
-          <div class="pdos-header-actions" role="group" aria-label="Acções do projecto">
-            <button class="btn pdos-header-btn" id="pdosRelinkBtn" type="button" title="Reaplica ligações entre fases e gera log para revisão">Reaplicar ligações</button>
-            <button class="btn primary pdos-header-btn" id="pdosGenProposalBtn" type="button" title="Gera proposta comercial a partir do projecto actual">Gerar proposta</button>
-          </div>
-          ${downloadActions ? `<div class="pdos-header-downloads">${downloadActions}</div>` : ''}
+          <details class="pdos-project-more">
+            <summary>Acções do projecto</summary>
+            <div class="pdos-header-actions" role="group" aria-label="Acções do projecto">
+              <button class="btn pdos-header-btn" id="pdosRelinkBtn" type="button">Reaplicar ligações</button>
+              <button class="btn primary pdos-header-btn" id="pdosGenProposalBtn" type="button">Gerar proposta</button>
+            </div>
+            ${downloadActions ? `<div class="pdos-header-downloads">${downloadActions}</div>` : ''}
+          </details>
         </div>
       </div>
     `;
@@ -827,10 +828,11 @@
 
     const badge = $('pdosCurrentStageBadge');
     if (badge) {
-      const current = stages.find((s) => s.id === processStageId) || stages[0];
+      const selectedId = window.state.deliverySelectedStageId || processStageId;
+      const current = stages.find((s) => s.id === selectedId) || stages[0];
       badge.innerHTML = `
-        <span class="pdos-badge-label">Estágio actual</span>
-        <strong>${escapeHtml(current?.label || processStageId)}</strong>
+        <span class="pdos-badge-label">Fase aberta</span>
+        <strong>${escapeHtml(current?.label || selectedId)}</strong>
         <small>${escapeHtml(STAGE_STATUS_LABEL[current?.status] || '')}</small>
       `;
     }
@@ -965,62 +967,84 @@
     const from = stages.find((s) => s.id === fromStageId);
     const to = stages.find((s) => s.id === toStageId);
     $('pdosTransitionTitle').textContent = `${from?.label || fromStageId} ↔ ${to?.label || toStageId}`;
-    $('pdosTransitionDesc').textContent = 'Escolhe se queres avançar para a fase seguinte ou retroceder para regenerar artefactos da fase anterior.';
-    $('pdosTransitionActions').innerHTML = `
-      <button type="button" class="btn primary pdos-transition-btn" data-dir="forward">
-        Avançar → ${escapeHtml(to?.label || toStageId)}
-        <small>Gerar artefactos para a fase seguinte</small>
-      </button>
-      <button type="button" class="btn ghost pdos-transition-btn" data-dir="backward">
-        ← Retroceder ${escapeHtml(from?.label || fromStageId)}
-        <small>Regenerar com base na fase seguinte</small>
-      </button>
-    `;
+    $('pdosTransitionDesc').textContent = 'Configure o pedido. Os prompts e resultados serão tratados dentro das tarefas.';
+    $('pdosTransitionForwardLabel').textContent = `Avançar para ${to?.label || toStageId}`;
+    $('pdosTransitionBackwardLabel').textContent = `Regenerar ${from?.label || fromStageId}`;
     modal.classList.remove('hidden');
-
-    const loadTransitionPreview = async (direction) => {
-      const fwdFrom = direction === 'forward' ? fromStageId : toStageId;
-      const fwdTo = direction === 'forward' ? toStageId : fromStageId;
+    const form = $('pdosTransitionConfigForm');
+    let previewTimer = null;
+    let activePreview = null;
+    let requestToken = 0;
+    const directionValues = () => {
+      const direction = form.elements.transitionDirection.value || 'forward';
+      return { direction, fromStageId: direction === 'forward' ? fromStageId : toStageId, toStageId: direction === 'forward' ? toStageId : fromStageId };
+    };
+    const readConfig = () => ({
+      userRequest: $('pdosTransitionRequest').value.trim(), desiredOutcome: $('pdosTransitionOutcome').value.trim(),
+      modelProfileId: $('pdosTransitionModelProfile').value, targetInputTokens: Number($('pdosTransitionInputTokens').value),
+      targetOutputTokens: Number($('pdosTransitionOutputTokens').value), maxTokens: Number($('pdosTransitionMaxTokens').value),
+      maxWallClockMinutes: Number($('pdosTransitionMaxMinutes').value), maxSubtasks: Number($('pdosTransitionMaxSubtasks').value),
+      enableWebSearch: $('pdosTransitionWebSearch').checked,
+    });
+    const fillConfig = (values = {}, firstRequest = false) => {
+      $('pdosTransitionRequest').value = values.userRequest || `Produzir o trabalho necessário para a transição de ${from?.label || fromStageId} para ${to?.label || toStageId}.`;
+      $('pdosTransitionOutcome').value = values.desiredOutcome || `Artefactos de ${to?.label || toStageId} prontos para revisão.`;
+      $('pdosTransitionModelProfile').value = values.modelProfileId || 'medium';
+      $('pdosTransitionInputTokens').value = values.targetInputTokens || 14000; $('pdosTransitionOutputTokens').value = values.targetOutputTokens || 2500;
+      $('pdosTransitionMaxTokens').value = values.maxTokens || 120000; $('pdosTransitionMaxMinutes').value = values.maxWallClockMinutes || 45;
+      $('pdosTransitionMaxSubtasks').value = values.maxSubtasks || 8; $('pdosTransitionWebSearch').checked = values.enableWebSearch !== false;
+      $('pdosTransitionRegeneration').value = firstRequest ? 'full' : 'affected';
+    };
+    const paintPreview = (preview) => {
+      activePreview = preview;
+      const summary = preview.diffSummary || {};
+      $('pdosTransitionChangeSummary').textContent = preview.baselineRequest
+        ? `${summary.changedTasks || 0} alterada(s), ${summary.newTasks || 0} nova(s), ${summary.removedTasks || 0} removida(s). ${summary.changedContext ? 'O contexto do projecto mudou.' : ''}`
+        : 'Primeiro pedido desta transição: será criada uma versão completa.';
+      const list = $('pdosTransitionPlanList');
+      list.innerHTML = (preview.tasks || []).map((task, index) => `<li class="pdos-transition-preview-task"><span class="pdos-agent-plan-step">${index + 1}</span><div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml((task.requiredSkills || []).join(' · ') || task.role || 'execução')}</small>${task.promptDiff ? `<details><summary>Ver alteração do subprompt</summary><pre>${escapeHtml(task.promptDiff)}</pre></details>` : ''}</div><span class="pdos-task-change is-${escapeHtml(task.changeType || 'new')}">${escapeHtml(({ new: 'Nova', changed: 'Alterada', unchanged: 'Sem alteração' })[task.changeType] || task.changeType)}</span></li>`).join('');
+      $('pdosTransitionPlanWrap').classList.remove('hidden');
+      $('pdosTransitionPlanHeading').textContent = `${preview.tasks?.length || 0} subtarefa(s) serão criadas`;
+      $('pdosTransitionPromptDiff').textContent = preview.requestPromptDiff || 'Sem alterações no texto principal do pedido.';
+      $('pdosTransitionDiffWrap').classList.toggle('hidden', !preview.baselineRequest);
+    };
+    const loadTransitionPreview = async () => {
+      const token = ++requestToken; const transition = directionValues();
+      $('pdosTransitionChangeSummary').textContent = 'A preparar a divisão e a comparação…';
       try {
-        const res = await apiRequest(`/projects/${project.id}/execution-plans`, {
-          method: 'POST',
-          body: {
-            agentType: 'stage_transition',
-            fromStageId: fwdFrom,
-            toStageId: fwdTo,
-            direction,
-            stageId: fwdTo,
-            preview: true,
-          },
-        });
-        renderAgentPlanList(res.plan?.tasks || [], {
-          listId: 'pdosTransitionPlanList',
-          wrapId: 'pdosTransitionPlanWrap',
-        });
-        const heading = $('pdosTransitionPlanHeading');
-        if (heading) {
-          heading.textContent = `${res.plan?.tasks?.length || 0} tarefa(s) — ${direction === 'forward' ? 'avançar' : 'retroceder'}`;
-        }
-      } catch {
+        const res = await apiRequest(`/projects/${project.id}/work-items/stage-transitions/preview`, { method: 'POST', body: { ...transition, regenerationMode: $('pdosTransitionRegeneration').value, config: readConfig() } });
+        if (token !== requestToken) return; paintPreview(res.preview);
+      } catch (error) {
+        if (token !== requestToken) return;
+        $('pdosTransitionChangeSummary').textContent = error.message;
         $('pdosTransitionPlanWrap')?.classList.add('hidden');
       }
     };
-
-    loadTransitionPreview('forward');
-
-    modal.querySelectorAll('.pdos-transition-btn').forEach((btn) => {
-      btn.addEventListener('mouseenter', () => loadTransitionPreview(btn.dataset.dir));
-      btn.addEventListener('focus', () => loadTransitionPreview(btn.dataset.dir));
-      btn.addEventListener('click', () => {
-        const direction = btn.dataset.dir;
-        if (direction === 'forward') {
-          runStageTransition(fromStageId, toStageId, 'forward', project);
-        } else {
-          runStageTransition(toStageId, fromStageId, 'backward', project);
-        }
-        closeTransitionModal();
-      });
-    });
+    const loadSaved = async () => {
+      const transition = directionValues();
+      try {
+        const res = await apiRequest(`/projects/${project.id}/work-items/stage-transitions/config?fromStageId=${encodeURIComponent(transition.fromStageId)}&toStageId=${encodeURIComponent(transition.toStageId)}&direction=${encodeURIComponent(transition.direction)}`);
+        fillConfig(res.config?.values || {}, !res.config?.version); await loadTransitionPreview();
+      } catch (error) { showToast(error.message, 'error'); }
+    };
+    form.oninput = () => { clearTimeout(previewTimer); previewTimer = setTimeout(loadTransitionPreview, 350); };
+    form.onchange = (event) => { if (event.target.name === 'transitionDirection') loadSaved(); };
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (!activePreview) return;
+      if (activePreview.baselineRequest && !['completed', 'cancelled', 'superseded'].includes(activePreview.baselineRequest.status)
+        && !confirm('Existe um pedido anterior ainda aberto. Criar esta versão irá substituí-lo e cancelar apenas o trabalho inacabado. Continuar?')) return;
+      const button = $('pdosTransitionCreateRequest'); button.disabled = true; button.textContent = 'A criar tarefas…';
+      try {
+        const transition = directionValues();
+        const res = await apiRequest(`/projects/${project.id}/work-items/stage-transitions/requests`, { method: 'POST', body: { ...transition, regenerationMode: $('pdosTransitionRegeneration').value, config: readConfig(), idempotencyKey: `transition:${project.id}:${Date.now()}` } });
+        closeTransitionModal(); window.switchToTab?.('tarefas');
+        if (res.parentTaskId) await window.WorkItemsUI?.openTask?.(project, res.parentTaskId);
+        showToast('Pedido criado. Os prompts e resultados ficam agora nas tarefas.', 'ok');
+      } catch (error) { showToast(error.message, 'error'); }
+      finally { button.disabled = false; button.textContent = 'Criar pedido e tarefas'; }
+    };
+    loadSaved();
   }
 
   function closeTransitionModal() {
@@ -1188,7 +1212,7 @@
     sections.push({ label: 'Perguntas', count: (items.questions || []).length, body: qRows, addTab: 'perguntas' });
 
     const sectionsHtml = sections.map((sec) => `
-      <details class="pdos-phase-section"${sec.count ? ' open' : ''}>
+      <details class="pdos-phase-section">
         <summary>${escapeHtml(sec.label)} <span class="pdos-phase-count">${sec.count}</span></summary>
         <div class="pdos-phase-section-body">
           ${sec.body || '<p class="muted-text pdos-phase-empty">Sem itens nesta fase.</p>'}
@@ -1197,15 +1221,48 @@
       </details>
     `).join('');
 
-    return `
-      <article class="pdos-card pdos-phase-content-card">
-        <span class="pdos-section-label">Conteúdo desta fase</span>
-        <div class="pdos-stat-tiles">
-          ${tiles.map((t) => renderPhaseStatTile({ ...t, stageId })).join('')}
-        </div>
-        ${sectionsHtml ? `<div class="pdos-phase-sections">${sectionsHtml}</div>` : ''}
-      </article>
+    const materialsTotal = Number(counts.requirements || 0) + Number(counts.documents || 0) + Number(counts.questions || 0);
+    const taskTile = `
+      <button type="button"
+        class="pdos-stat-tile pdos-task-material-tile"
+        data-view-all-phase-tasks="${escapeHtml(stageId)}"
+        title="Ver todas as tarefas desta fase">
+        <span class="pdos-stat-tile-count" data-phase-task-count="${escapeHtml(stageId)}">…</span>
+        <span class="pdos-stat-tile-label">Tarefas</span>
+        <span class="pdos-task-material-preview" data-phase-task-preview="${escapeHtml(stageId)}"></span>
+      </button>
     `;
+    return `
+      <details class="pdos-card pdos-phase-content-card pdos-materials-card">
+        <summary>Materiais ligados a esta fase <span class="pdos-phase-count" data-phase-material-total data-material-base-total="${materialsTotal}">${materialsTotal}</span></summary>
+        <div class="pdos-materials-body">
+          <div class="pdos-stat-tiles">${tiles.map((t) => renderPhaseStatTile({ ...t, stageId })).join('')}${taskTile}</div>
+          ${sectionsHtml ? `<div class="pdos-phase-sections">${sectionsHtml}</div>` : ''}
+        </div>
+      </details>
+    `;
+  }
+
+  async function hydratePhaseTaskCount(project, stageId) {
+    const feed = $('pdosCardFeed');
+    const countHost = feed?.querySelector(`[data-phase-task-count="${stageId}"]`);
+    const previewHost = feed?.querySelector(`[data-phase-task-preview="${stageId}"]`);
+    if (!countHost) return;
+    try {
+      const [payload, relevant] = await Promise.all([
+        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?deliveryStageId=${encodeURIComponent(stageId)}&limit=1`),
+        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/relevant?deliveryStageId=${encodeURIComponent(stageId)}&limit=4`),
+      ]);
+      const taskCount = Number(payload.total || 0);
+      countHost.textContent = String(taskCount);
+      if (previewHost) previewHost.innerHTML = ensureArray(relevant.workItems).map((task) => `<span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.status === 'waiting_review' ? 'Aguarda revisão' : task.status === 'in_progress' ? 'Em curso' : task.status === 'blocked' ? 'Bloqueada' : task.status === 'failed' ? 'Falhou' : task.status === 'waiting_input' ? 'Aguarda informação' : task.status === 'ready' ? 'Pronta' : 'Planeada')} · ${escapeHtml(task.executorMode === 'agent' ? (task.agentId || 'YourLab Agent') : 'Responsável humano')}</small></span>`).join('');
+      const totalHost = feed.querySelector('[data-phase-material-total]');
+      if (totalHost) {
+        totalHost.textContent = String(Number(totalHost.dataset.materialBaseTotal || 0) + taskCount);
+      }
+    } catch {
+      countHost.textContent = '—';
+    }
   }
 
   function renderCardFeed(project) {
@@ -1216,7 +1273,7 @@
     const openQuestions = (project.clarificationQuestions || []).filter((q) => ['open', 'sent', 'blocked'].includes(q.status));
     const risks = (project.risks || []);
 
-    let html = renderPhaseContentBlock(project, stageId);
+    let html = '';
 
     if (stageId === 'requirements') {
       // Use requirementCount (present on overview payloads) or fall back to array length
@@ -1225,7 +1282,7 @@
       html += `
         <article class="pdos-card pdos-card-req-bridge">
           <h4>Requisitos</h4>
-          <p class="muted-text">A árvore STK → FR → RNF → TC, mapa V e edição em massa estão na página <strong>Requisitos</strong> — evite duplicar trabalho aqui.</p>
+          <p class="muted-text">Consulte e edite os requisitos no espaço dedicado.</p>
           <div class="pdos-summary-grid pdos-summary-grid-static">
             <div><strong>${reqCount}</strong><span>requisitos</span></div>
             <div><strong>${openQ}</strong><span>dúvidas abertas</span></div>
@@ -1261,6 +1318,8 @@
       `;
     }
 
+    html += renderPhaseContentBlock(project, stageId);
+
     el.innerHTML = html;
 
     if (stageId === 'requirements') {
@@ -1278,6 +1337,7 @@
     }
 
     wireCardFeedEvents(project);
+    hydratePhaseTaskCount(project, stageId);
     renderMermaidInFeed();
   }
 
@@ -1381,82 +1441,68 @@
   function renderIdeaStage(project) {
     const v = ideaVision(project);
     const genLabel = agentButtonLabel(ideaHasContent(v) ? 'Regenerar visão com IA' : 'Gerar visão com IA', 'reverse_idea');
-
-    if (!ideaHasContent(v)) {
-      return `
-        <article class="pdos-card idea-empty">
-          <h4>A visão da ideia ainda não foi escrita</h4>
-          <p class="muted-text">Gere uma narrativa clara da ideia principal, a sua filosofia e as ideias que dela nascem — a partir dos requisitos e contexto do projecto.</p>
-          <div class="pdos-card-actions">
-            <button type="button" class="btn primary" data-agent="reverse_idea">${genLabel}</button>
-          </div>
-        </article>
-      `;
-    }
-
-    const usersChips = v.targetUsers.length
-      ? `<div class="idea-users">${v.targetUsers.map((u) => `<span class="idea-user-chip">${escapeHtml(u)}</span>`).join('')}</div>`
+    const canEdit = Boolean(window.canEditProject?.());
+    const original = String(project.originalIdeaText || '').trim();
+    const conversation = ensureArray(project.ideaConversation).slice(-30);
+    const actionButtons = ideaHasContent(v)
+      ? [
+          ['organize', 'Organizar o que escrevi'],
+          ['critique', 'Mostrar o que não está claro'],
+          ['solutions', 'Explorar soluções'],
+          ['research', 'Pesquisa inicial'],
+        ]
+      : [
+          ['interpret', 'Interpretar a minha ideia'],
+          ['question', 'Fazer uma pergunta útil'],
+        ];
+    const section = (title, field, markdownKey, content, extra = '') => content ? `
+      <section class="idea-understanding-section" data-idea-section="${escapeHtml(field)}">
+        <header><h4>${escapeHtml(title)}</h4>${canEdit ? `<div class="pdos-card-actions"><button type="button" class="btn tiny ghost" data-idea-accept="${escapeHtml(field)}">Aceitar</button><button type="button" class="btn tiny ghost" data-idea-edit="${escapeHtml(field)}">Editar</button><button type="button" class="btn tiny ghost" data-idea-reject="${escapeHtml(field)}">Rejeitar</button></div>` : ''}</header>
+        ${markdownKey ? `<div class="idea-md" data-idea-md="${escapeHtml(markdownKey)}"></div>` : extra}
+      </section>` : '';
+    const usersHtml = v.targetUsers.length
+      ? `<div class="idea-users">${v.targetUsers.map((user) => `<span class="idea-user-chip">${escapeHtml(user)}</span>`).join('')}</div>`
       : '';
-
-    const principles = v.principles.length
-      ? `<section class="idea-block">
-          <h4 class="idea-block-title">Filosofia &amp; princípios</h4>
-          <div class="idea-principles">
-            ${v.principles.map((p, i) => `
-              <div class="idea-principle">
-                <span class="idea-principle-index">${i + 1}</span>
-                <div>
-                  <strong>${escapeHtml(p.title || '')}</strong>
-                  <div class="idea-md" data-idea-md="principle-${i}"></div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </section>`
+    const direction = v.consequentIdeas.length
+      ? v.consequentIdeas.map((item) => item.title || item.descriptionMarkdown || '').filter(Boolean).join('\n')
       : '';
-
-    const consequent = v.consequentIdeas.length
-      ? `<section class="idea-block">
-          <h4 class="idea-block-title">Ideias consequentes</h4>
-          <div class="idea-consequent-grid">
-            ${v.consequentIdeas.map((c, i) => `
-              <article class="idea-consequent-card">
-                <h5>${escapeHtml(c.title || '')}</h5>
-                <div class="idea-md" data-idea-md="consequent-${i}"></div>
-              </article>
-            `).join('')}
-          </div>
-        </section>`
-      : '';
+    const assumptions = ensureArray(project.assumptions).filter(Boolean);
 
     return `
-      <article class="pdos-card idea-canvas">
-        <header class="idea-hero">
-          <span class="idea-eyebrow">A IDEIA</span>
-          ${v.headline ? `<h2 class="idea-headline">${escapeHtml(v.headline)}</h2>` : ''}
-          <div class="pdos-card-actions">
-            <button type="button" class="btn tiny" data-agent="reverse_idea">${genLabel}</button>
-          </div>
-        </header>
+      <div class="idea-workspace">
+        <article class="pdos-card idea-workspace-panel idea-panel-original">
+          <header class="idea-panel-head"><div><span class="idea-eyebrow">1 · LEIA O PONTO DE PARTIDA</span><h3>A sua ideia original</h3></div>${canEdit ? '<button type="button" class="btn tiny ghost" data-idea-original-edit>Editar</button>' : ''}</header>
+          <div class="idea-original-copy ${original ? '' : 'muted-text'}">${escapeHtml(original || 'Descreva a sua ideia aqui…')}</div>
+          ${canEdit ? `<div class="idea-original-editor hidden"><textarea rows="8" data-idea-original-input placeholder="Descreva a sua ideia livremente…">${escapeHtml(original)}</textarea><div class="pdos-card-actions"><button type="button" class="btn tiny primary" data-idea-original-save>Guardar</button><button type="button" class="btn tiny ghost" data-idea-original-cancel>Cancelar</button></div></div>` : ''}
+        </article>
 
-        <div class="idea-md idea-main" data-idea-md="main"></div>
+        <article class="pdos-card idea-workspace-panel idea-panel-understanding">
+          <header class="idea-panel-head"><div><span class="idea-eyebrow">2 · REVEJA E CORRIJA</span><h3>O que entendemos até agora</h3></div></header>
+          ${section('Ideia principal', 'mainIdeaMarkdown', 'main', v.mainIdeaMarkdown)}
+          ${section('O problema', 'problemMarkdown', 'problem', v.problemMarkdown)}
+          ${section('Para quem', 'targetUsers', '', usersHtml, usersHtml)}
+          ${section('Melhoria esperada', 'valuePropositionMarkdown', 'value', v.valuePropositionMarkdown)}
+          ${direction ? section('Direcção possível', 'consequentIdeas', '', direction, `<p class="overview-preserve-lines">${escapeHtml(direction)}</p>`) : ''}
+          ${assumptions.length ? `<section class="idea-understanding-section"><header><h4>Hipóteses abertas</h4></header><ul>${assumptions.map((item) => `<li>${escapeHtml(typeof item === 'string' ? item : item.description || item.title || '')}</li>`).join('')}</ul></section>` : ''}
+          ${!ideaHasContent(v) ? '<p class="idea-later-note">Podemos explorar estas secções mais tarde.</p>' : ''}
+          ${canEdit ? `<details class="collapsible idea-advanced-action"><summary>Acção avançada</summary><button type="button" class="btn tiny mt-8" data-agent="reverse_idea">${genLabel}</button></details>` : ''}
+        </article>
 
-        ${v.philosophyMarkdown ? `
-          <section class="idea-block idea-philosophy">
-            <h4 class="idea-block-title">Cultura &amp; filosofia</h4>
-            <div class="idea-md" data-idea-md="philosophy"></div>
-          </section>` : ''}
-
-        ${(v.problemMarkdown || v.valuePropositionMarkdown || usersChips) ? `
-          <section class="idea-block idea-why">
-            ${v.problemMarkdown ? `<div class="idea-why-col"><h4 class="idea-block-title">O problema</h4><div class="idea-md" data-idea-md="problem"></div></div>` : ''}
-            ${v.valuePropositionMarkdown ? `<div class="idea-why-col"><h4 class="idea-block-title">Porque importa</h4><div class="idea-md" data-idea-md="value"></div></div>` : ''}
-            ${usersChips ? `<div class="idea-why-col"><h4 class="idea-block-title">Para quem</h4>${usersChips}</div>` : ''}
-          </section>` : ''}
-
-        ${principles}
-        ${consequent}
-      </article>
+        <article class="pdos-card idea-workspace-panel idea-panel-guidance">
+          <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE A CONVERSA</span><h3>Guia de IA</h3></div></header>
+          <div class="idea-guidance-actions">${actionButtons.map(([mode, label]) => `<button type="button" class="btn tiny" data-idea-guidance-mode="${mode}" ${canEdit ? '' : 'disabled'}>${escapeHtml(label)}</button>`).join('')}</div>
+          <div class="idea-conversation" data-idea-conversation>${conversation.length ? conversation.map((turn) => `<div class="idea-turn is-${turn.role === 'assistant' ? 'assistant' : 'user'}"><small>${turn.role === 'assistant' ? 'Guia' : 'Você'}</small><p>${escapeHtml(turn.content || '')}</p></div>`).join('') : '<p class="muted-text">Escolha uma acção ou escreva o que gostaria de explorar.</p>'}</div>
+          <label class="idea-guidance-compose"><span class="sr-only">Mensagem para o guia</span><textarea rows="3" data-idea-guidance-input placeholder="Escreva uma resposta, dúvida ou detalhe…" ${canEdit ? '' : 'disabled'}></textarea></label>
+          <div class="pdos-card-actions"><button type="button" class="btn tiny ghost" data-idea-guidance-unknown ${canEdit ? '' : 'disabled'}>Ainda não sei</button><button type="button" class="btn tiny primary" data-idea-guidance-send ${canEdit ? '' : 'disabled'}>Enviar</button></div>
+          <div class="idea-guidance-status muted-text" data-idea-guidance-status aria-live="polite"></div>
+          <details class="collapsible idea-manual-response hidden" data-idea-manual>
+            <summary>Prompt gerado — modo manual</summary>
+            <label class="full mt-8">Prompt<textarea rows="8" readonly data-idea-prompt></textarea></label>
+            <label class="full mt-8">Colar resposta da IA<textarea rows="6" data-idea-manual-reply></textarea></label>
+            <button type="button" class="btn tiny primary mt-8" data-idea-manual-accept>Guardar como compreensão</button>
+          </details>
+        </article>
+      </div>
     `;
   }
 
@@ -1472,6 +1518,127 @@
     fill('value', v.valuePropositionMarkdown);
     v.principles.forEach((p, i) => fill(`principle-${i}`, p.descriptionMarkdown));
     v.consequentIdeas.forEach((c, i) => fill(`consequent-${i}`, c.descriptionMarkdown));
+  }
+
+  async function patchIdea(project, patch, successMessage = 'Ideia actualizada.') {
+    await apiRequest(`/projects/${encodeURIComponent(project.id)}`, { method: 'PATCH', body: patch });
+    showToast(successMessage, 'ok');
+    await reloadProject(project.id);
+  }
+
+  function wireIdeaStageEvents(project) {
+    const root = $('pdosCardFeed')?.querySelector('.idea-workspace');
+    if (!root) return;
+    const originalCopy = root.querySelector('.idea-original-copy');
+    const originalEditor = root.querySelector('.idea-original-editor');
+    root.querySelector('[data-idea-original-edit]')?.addEventListener('click', () => {
+      originalCopy?.classList.add('hidden');
+      originalEditor?.classList.remove('hidden');
+      root.querySelector('[data-idea-original-input]')?.focus();
+    });
+    root.querySelector('[data-idea-original-cancel]')?.addEventListener('click', () => {
+      originalCopy?.classList.remove('hidden');
+      originalEditor?.classList.add('hidden');
+    });
+    root.querySelector('[data-idea-original-save]')?.addEventListener('click', async () => {
+      try {
+        await patchIdea(project, { originalIdeaText: root.querySelector('[data-idea-original-input]')?.value || '' }, 'Ideia original guardada.');
+      } catch (error) { showToast(error.message, 'error'); }
+    });
+
+    root.querySelectorAll('[data-idea-accept]').forEach((button) => {
+      button.addEventListener('click', () => showToast('Compreensão aceite.', 'ok'));
+    });
+    root.querySelectorAll('[data-idea-edit]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const field = button.dataset.ideaEdit;
+        const sectionEl = button.closest('[data-idea-section]');
+        if (!sectionEl || sectionEl.querySelector('[data-idea-inline-editor]')) return;
+        const vision = ideaVision(project);
+        let current = vision[field];
+        if (field === 'targetUsers') current = ensureArray(current).join(', ');
+        if (field === 'consequentIdeas') current = ensureArray(current).map((item) => item.title || item.descriptionMarkdown || '').filter(Boolean).join('\n');
+        sectionEl.insertAdjacentHTML('beforeend', `<div class="idea-inline-editor" data-idea-inline-editor><textarea rows="5">${escapeHtml(String(current || ''))}</textarea><div class="pdos-card-actions"><button type="button" class="btn tiny primary" data-idea-inline-save>Guardar</button><button type="button" class="btn tiny ghost" data-idea-inline-cancel>Cancelar</button></div></div>`);
+        const editor = sectionEl.querySelector('[data-idea-inline-editor]');
+        editor.querySelector('[data-idea-inline-cancel]').addEventListener('click', () => editor.remove());
+        editor.querySelector('[data-idea-inline-save]').addEventListener('click', async () => {
+          try {
+            const value = editor.querySelector('textarea').value.trim();
+            const nextVision = { ...(project.vision || {}) };
+            if (field === 'targetUsers') nextVision[field] = value.split(',').map((item) => item.trim()).filter(Boolean);
+            else if (field === 'consequentIdeas') nextVision[field] = value.split('\n').map((title) => title.trim()).filter(Boolean).map((title) => ({ title, descriptionMarkdown: '' }));
+            else nextVision[field] = value;
+            const patch = { vision: nextVision };
+            if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = value;
+            await patchIdea(project, patch);
+          } catch (error) { showToast(error.message, 'error'); }
+        });
+      });
+    });
+    root.querySelectorAll('[data-idea-reject]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!confirm('Remover esta parte da compreensão actual?')) return;
+        try {
+          const field = button.dataset.ideaReject;
+          const nextVision = { ...(project.vision || {}) };
+          nextVision[field] = ['targetUsers', 'consequentIdeas'].includes(field) ? [] : '';
+          const patch = { vision: nextVision };
+          if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = '';
+          await patchIdea(project, patch, 'Secção removida.');
+        } catch (error) { showToast(error.message, 'error'); }
+      });
+    });
+
+    const requestGuidance = async (mode, userMessage = '') => {
+      const status = root.querySelector('[data-idea-guidance-status]');
+      const buttons = root.querySelectorAll('[data-idea-guidance-mode], [data-idea-guidance-send], [data-idea-guidance-unknown]');
+      buttons.forEach((button) => { button.disabled = true; });
+      if (status) status.textContent = 'A preparar orientação…';
+      try {
+        const response = await apiRequest(`/projects/${encodeURIComponent(project.id)}/idea-guidance`, {
+          method: 'POST',
+          body: { mode, userMessage, conversationHistory: project.ideaConversation || [] },
+        });
+        if (response.mode === 'auto' && response.reply) {
+          if (status) status.textContent = '';
+          await reloadProject(project.id);
+          return;
+        }
+        const manual = root.querySelector('[data-idea-manual]');
+        manual?.classList.remove('hidden');
+        if (manual) manual.open = true;
+        const prompt = root.querySelector('[data-idea-prompt]');
+        if (prompt) prompt.value = response.prompt || '';
+        if (status) status.textContent = response.runtimeError ? 'Resposta automática indisponível; use o prompt manual abaixo.' : 'Prompt pronto para usar manualmente.';
+      } catch (error) {
+        if (status) status.textContent = '';
+        showToast(error.message, 'error');
+      } finally {
+        buttons.forEach((button) => { button.disabled = false; });
+      }
+    };
+    root.querySelectorAll('[data-idea-guidance-mode]').forEach((button) => {
+      button.addEventListener('click', () => requestGuidance(button.dataset.ideaGuidanceMode));
+    });
+    root.querySelector('[data-idea-guidance-send]')?.addEventListener('click', () => {
+      const input = root.querySelector('[data-idea-guidance-input]');
+      const message = input?.value.trim() || '';
+      if (!message) return showToast('Escreva uma mensagem para continuar.', 'error');
+      requestGuidance('freeform', message);
+    });
+    root.querySelector('[data-idea-guidance-unknown]')?.addEventListener('click', () => requestGuidance('freeform', 'Ainda não sei. Ajuda-me a avançar sem assumir uma resposta.'));
+    root.querySelector('[data-idea-manual-accept]')?.addEventListener('click', async () => {
+      const reply = root.querySelector('[data-idea-manual-reply]')?.value.trim() || '';
+      if (!reply) return showToast('Cole primeiro a resposta da IA.', 'error');
+      try {
+        const now = new Date().toISOString();
+        await patchIdea(project, {
+          ideaBriefMarkdown: reply,
+          vision: { ...(project.vision || {}), mainIdeaMarkdown: reply },
+          ideaConversation: [...ensureArray(project.ideaConversation), { role: 'assistant', content: reply, timestamp: now }].slice(-100),
+        }, 'Resposta guardada como compreensão inicial.');
+      } catch (error) { showToast(error.message, 'error'); }
+    });
   }
 
   function discoveryData(project) {
@@ -1885,7 +2052,10 @@
         modules: Array.isArray(stack.modules) ? stack.modules : [],
         confirmed: Boolean(stack.confirmed),
       },
-      tasks: Array.isArray(impl.tasks) ? impl.tasks : [],
+      // Legacy implementation tasks are migrated to project.workItems and are
+      // never rendered as a second work queue inside this phase.
+      tasks: [],
+      legacyTaskCount: Array.isArray(impl.tasks) ? impl.tasks.length : 0,
     };
   }
 
@@ -2089,10 +2259,10 @@
     if (!data.tasks.length) {
       tasksBlock = `
         <article class="pdos-card idea-empty">
-          <h4>Ainda não há tarefas de implementação</h4>
-          <p class="muted-text">Divida cada fase do roadmap em tarefas prontas para agentes. A IA recomenda o tamanho do modelo por complexidade e cada tarefa gera um prompt descarregável.</p>
+          <h4>Execução centralizada em Tasks</h4>
+          <p class="muted-text">Tarefas humanas, de agentes e aprovações são criadas e acompanhadas num único local.${data.legacyTaskCount ? ` ${data.legacyTaskCount} tarefa(s) anterior(es) serão migradas automaticamente.` : ''}</p>
           <div class="pdos-card-actions">
-            <button type="button" class="btn primary" data-agent="implementation_tasks">Gerar tarefas com IA</button>
+            <button type="button" class="btn primary" data-open-central-tasks>Abrir Tasks</button>
           </div>
         </article>`;
     } else {
@@ -2568,6 +2738,16 @@
   }
 
   function wireCardFeedEvents(project) {
+    $('pdosCardFeed')?.querySelectorAll('[data-view-all-phase-tasks]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        window.navigateToFilteredTab?.('tarefas', { deliveryStageId: btn.dataset.viewAllPhaseTasks });
+        window.WorkItemsUI?.openFiltered?.(project, { deliveryStageId: btn.dataset.viewAllPhaseTasks });
+      });
+    });
+    $('pdosCardFeed')?.querySelector('[data-open-central-tasks]')?.addEventListener('click', () => {
+      window.navigateToFilteredTab?.('tarefas', { deliveryStageId: 'implementation' });
+      window.WorkItemsUI?.openFiltered?.(project, { deliveryStageId: 'implementation' });
+    });
     $('pdosCardFeed')?.querySelectorAll('[data-open-capability]').forEach((btn) => {
       btn.addEventListener('click', () => openDrawer(project, 'capability', btn.dataset.openCapability));
     });
@@ -3254,6 +3434,12 @@
         budget,
       };
       const res = await apiRequest('/agent-runs', { method: 'POST', body });
+      if (res.requiresApproval && res.agentRequest) {
+        showToast('O plano foi criado. Reveja as tarefas antes de iniciar.');
+        window.switchToTab?.('tarefas');
+        await window.WorkItemsUI?.openRequestPlan?.(project, res.agentRequest.id);
+        return true;
+      }
       pdosState.pendingPromptRun = res.promptRun;
       const runId = res.agentJob?.promptRunId || res.promptRun?.id;
       openYourlabAgentPanel();
@@ -3601,17 +3787,27 @@
     bar.classList.remove('hidden');
     const runId = active.promptRunId || active.id;
     const status = active.status || 'running';
+    const task = poll?.workItem || ensureArray(project.workItems).find((item) => item.id === active.workItemId);
+    const requestTasks = task?.agentRequestId ? ensureArray(project.workItems).filter((item) => item.agentRequestId === task.agentRequestId) : [];
+    const position = requestTasks.length ? requestTasks.findIndex((item) => item.id === task?.id) + 1 : Number(poll?.agentRequest?.completedTaskCount || 0) + 1;
+    const totalTasks = requestTasks.length || Number(poll?.agentRequest?.taskCount || 0);
+    const waitingReview = Number(poll?.agentRequest?.attentionCount || 0) || ensureArray(project.workItems).filter((item) => item.status === 'waiting_review').length;
     bar.innerHTML = `
       <span>
-        <strong>YourLab Agent</strong>
+        <strong>${escapeHtml(task?.title || 'YourLab Agent')}</strong>
         <span class="pdos-agent-runtime-badge ${runtimeBadgeClass(status)}">${escapeHtml(runtimeStatusLabel(status))}</span>
-        <span class="muted-text"> · ${escapeHtml(agentFriendlyLabel(active.agentType))}</span>
+        <span class="muted-text">${totalTasks ? ` · ${position || 1} de ${totalTasks}` : ''}${waitingReview ? ` · ${waitingReview} precisa(m) de atenção` : ''}</span>
       </span>
-      <span class="muted-text">Clique para ver progresso</span>
+      <span class="muted-text">Abrir tarefa</span>
     `;
     bar.onclick = () => {
-      openYourlabAgentPanel();
-      selectRuntimeHistoryRun(runId, project);
+      window.switchToTab?.('tarefas');
+      if (task?.id) window.WorkItemsUI?.openTask?.(project, task.id);
+      else if (active.agentRequestId) window.WorkItemsUI?.openRequestPlan?.(project, active.agentRequestId);
+      else {
+        openYourlabAgentPanel();
+        selectRuntimeHistoryRun(runId, project);
+      }
     };
   }
 
@@ -3890,6 +4086,7 @@
       if (!runtimeAgent) return;
       openAgentConfigModal(runtimeAgent, window.state?.selectedProject, {
         ...(pdosState.activePlan.config || {}),
+        executionPlanId: pdosState.activePlan.id,
         fromStageId: pdosState.activePlan.fromStageId,
         toStageId: pdosState.activePlan.toStageId,
         direction: pdosState.activePlan.direction,
@@ -4538,7 +4735,7 @@
     renderModuleNav();
     renderHumanReviewsSection(project);
     renderAgentRuntimeBar(project);
-    renderAgentOverviewCockpit(project);
+    $('projectAgentCockpit')?.classList.add('hidden');
     renderCardFeed(project);
     window.DiagramsUI?.renderShell?.(project);
     const flowEl = document.getElementById('pdosFlowHealth');

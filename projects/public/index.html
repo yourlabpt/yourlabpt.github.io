@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=74" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=78" />
 </head>
 <body>
   <div class="page-bg"></div>
@@ -132,9 +132,16 @@
                   <h3 class="panel-heading"><span class="section-badge badge-green">+</span> Novo projecto</h3>
                 </div>
                 <form id="createProjectForm" class="form-grid compact projects-create-form">
-                  <label>Nome<input id="newProjectName" required /></label>
-                  <label>Cliente<input id="newProjectClient" required /></label>
-                  <label>Moeda<input id="newProjectCurrency" value="EUR" /></label>
+                  <label class="full">Nome do projecto<input id="newProjectName" required placeholder="Como quer chamar a esta ideia?" /></label>
+                  <label class="full">A sua ideia
+                    <textarea id="newProjectInitialIdea" rows="6" placeholder="Conte-nos o que tem em mente, mesmo que ainda esteja incompleto. Pode escrever livremente — ajudamos a organizar depois."></textarea>
+                  </label>
+                  <details class="collapsible full project-idea-hints">
+                    <summary>Já tenho mais detalhes</summary>
+                    <div class="muted-text mt-8">
+                      Se ajudar, inclua: que problema quer resolver, para quem, o que gostaria de melhorar e quaisquer limites ou dúvidas que já conhece. Não precisa de responder a tudo.
+                    </div>
+                  </details>
                   <button class="btn primary" type="submit">Criar projecto</button>
                 </form>
               </section>
@@ -149,64 +156,7 @@
                 <div id="projectKpis" class="kpi-strip"></div>
                 <div id="projectReadability" class="readability-grid mt-8"></div>
                 <div id="projectAgentCockpit" class="project-agent-cockpit hidden" aria-live="polite"></div>
-              </section>
-              <section class="panel section-panel">
-                <div class="panel-title-row">
-                  <h3 class="panel-heading"><span class="section-badge badge-gray">INFO</span> Configuração do Projeto</h3>
-                  <button class="btn tiny primary" id="saveProjectBtn">Guardar</button>
-                </div>
-                <div class="form-grid config-form" id="projectForm">
-                  <p class="form-section-label full">Identificação</p>
-                  <label>Nome do projeto<input id="projectName" placeholder="Ex: City Pass" /></label>
-                  <label>Cliente<input id="projectClient" placeholder="Ex: Impakta" /></label>
-                  <label>Status
-                    <select id="projectStatus">
-                      <option value="active">Ativo</option>
-                      <option value="on_hold">Em espera</option>
-                      <option value="done">Concluído</option>
-                    </select>
-                  </label>
-                  <label>Proposal Code<input id="projectCode" placeholder="Ex: RP-CITY-PASS" /></label>
-                  <label>Idioma<input id="projectLanguage" value="pt-PT" placeholder="pt-PT" /></label>
-                  <label>Moeda<input id="projectCurrency" placeholder="EUR" /></label>
-
-                  <p class="form-section-label full">Resumo e Visão</p>
-                  <label class="full">Descrição curta
-                    <textarea id="projectDescription" rows="3" placeholder="Uma a duas frases que descrevem o projeto."></textarea>
-                    <small class="field-help">Resumo rápido usado em listagens e cabeçalhos.</small>
-                  </label>
-                  <label class="full">Contexto de negócio
-                    <textarea id="summaryBusinessContext" rows="5" placeholder="Que problema de negócio resolve? Quem são os stakeholders e porquê agora?"></textarea>
-                  </label>
-                  <label class="full">Objetivos prioritários
-                    <textarea id="summaryGoals" rows="5" placeholder="Um objetivo por linha. Ex:&#10;Reduzir tempo de check-in&#10;Aumentar conversão de venda de passes"></textarea>
-                    <small class="field-help">Um objetivo por linha.</small>
-                  </label>
-                  <label class="full">Escopo em linguagem simples
-                    <textarea id="summaryScope" rows="5" placeholder="O que está incluído (e o que não está), explicado de forma não técnica."></textarea>
-                  </label>
-                  <label class="full">Visão da solução
-                    <textarea id="summarySolution" rows="5" placeholder="Como será a solução a alto nível: principais módulos, fluxos e resultado esperado."></textarea>
-                    <small class="field-help">Esta visão alimenta a aba Visão do Projeto.</small>
-                  </label>
-                </div>
-              </section>
-              <section class="panel section-panel">
-                <div class="panel-title-row">
-                  <h3 class="panel-heading"><span class="section-badge badge-gray">EQUIPA</span> Membros do Projeto</h3>
-                </div>
-                <p class="muted-text docs-section-intro">Associe clientes e parceiros ao projeto. <strong>Parceiros</strong> podem editar requisitos, correr IA e aprovar revisões (com registo auditável). <strong>Clientes</strong> têm acesso só de leitura às páginas Entrega, Requisitos, Fases, Atas e Documentos.</p>
-                <form id="assignMemberForm" class="form-grid compact member-assign-form">
-                  <label>Utilizador<select id="assignUserId"></select></label>
-                  <label>Perfil no projeto
-                    <select id="assignMemberRole">
-                      <option value="client">Client</option>
-                      <option value="partner">Partner</option>
-                    </select>
-                  </label>
-                  <button class="btn primary" type="submit">Associar Membro</button>
-                </form>
-                <div id="projectMembers" class="member-list mt-8"></div>
+                <div id="projectOverview" class="project-overview mt-12"></div>
               </section>
             </div>
 
@@ -556,9 +506,11 @@
                 <header id="workItemsToolbar" class="ado-toolbar"></header>
                 <div id="workItemsWorkspace" class="ado-workspace">
                   <div id="workItemsBrowse" class="ado-browse">
+                    <div id="workItemsSelectionBar" class="ado-selection-bar hidden" aria-live="polite"></div>
                     <main id="workItemsBoard" class="ado-board">
                       <p class="ado-empty">Abra um projecto para ver tarefas.</p>
                     </main>
+                    <section id="workItemSuggestions" class="ado-suggestions hidden" aria-label="Sugestões contextuais de tarefas"></section>
                   </div>
                   <div id="workItemEditor" class="ado-editor hidden" aria-label="Editor de tarefa"></div>
                 </div>
@@ -570,28 +522,21 @@
               <section class="panel section-panel pdos-shell">
                 <div id="pdosProjectHeader" class="pdos-project-header"></div>
 
-                <div id="pdosNextActionBar" class="pdos-next-action-bar" aria-label="Próximas acções"></div>
-
                 <div id="pdosClientPortal" class="pdos-client-portal hidden" aria-label="Portal do cliente"></div>
 
                 <div class="pdos-timeline-block">
                   <div class="pdos-timeline-head">
                     <div class="pdos-timeline-head-main">
                       <div class="pdos-timeline-head-row">
-                        <span class="pdos-section-label">Linha de entrega</span>
+                        <span class="pdos-section-label">Escolher fase</span>
                         <button type="button" class="help-btn help-btn-phase" id="pdosPhaseHelpBtn" title="Ajuda desta fase" aria-label="Ajuda desta fase">?</button>
                       </div>
-                      <h3 class="pdos-timeline-title">Fases do projecto</h3>
                     </div>
                     <div id="pdosCurrentStageBadge" class="pdos-current-stage-badge"></div>
                   </div>
                   <div id="pdosGoldenTimeline" class="golden-timeline" aria-label="Fases de entrega do projecto"></div>
                   <div id="pdosStageGuidance" class="pdos-stage-guidance hidden" aria-hidden="true"></div>
                 </div>
-
-                <div id="pdosPhaseWorkspace" class="pdos-phase-workspace" aria-label="Painel contextual da fase"></div>
-
-                <div id="pdosFlowHealth" class="pdos-flow-health hidden" aria-label="Saúde do fluxo de entrega"></div>
 
                 <div id="pdosHumanReviews" class="pdos-human-reviews hidden" aria-label="Revisões humanas pendentes"></div>
 
@@ -609,6 +554,17 @@
                 <div id="pdosAgentRuntimeBar" class="pdos-agent-runtime-bar hidden" role="status" aria-live="polite"></div>
 
                 <div id="pdosCardFeed" class="pdos-card-feed"></div>
+
+                <div class="pdos-secondary-area">
+                  <details class="pdos-secondary-panel">
+                    <summary>Resumo e ferramentas desta fase</summary>
+                    <div id="pdosPhaseWorkspace" class="pdos-phase-workspace" aria-label="Painel contextual da fase"></div>
+                  </details>
+                  <details class="pdos-secondary-panel pdos-health-details">
+                    <summary>Indicadores de acompanhamento</summary>
+                    <div id="pdosFlowHealth" class="pdos-flow-health hidden" aria-label="Saúde do fluxo de entrega"></div>
+                  </details>
+                </div>
 
                 <details class="collapsible mt-12 pdos-advanced-trace hidden" id="pdosAdvancedTrace">
                   <summary>Mapa de ligações (rastreabilidade avançada)</summary>
@@ -743,38 +699,132 @@
 
             <!-- TAB: DEFINIÇÕES -->
             <div class="tab-panel hidden" data-panel="definicoes">
+              <section class="settings-welcome" aria-labelledby="settingsWelcomeTitle">
+                <span class="idea-eyebrow">DEFINIÇÕES DO PROJECTO</span>
+                <h2 id="settingsWelcomeTitle">Dê contexto às pessoas que vão trabalhar neste projecto</h2>
+                <p>Comece pela informação essencial. Os dados comerciais podem ficar vazios enquanto a ideia ainda está a ser explorada.</p>
+                <ol class="settings-steps" aria-label="Ordem recomendada">
+                  <li><strong>Identifique</strong><span>nome, descrição e estado</span></li>
+                  <li><strong>Prepare a proposta</strong><span>cliente, moeda e código — quando existirem</span></li>
+                  <li><strong>Dê acesso</strong><span>associe a equipa e o cliente</span></li>
+                </ol>
+              </section>
+
+              <section class="panel section-panel settings-section" id="settingsIdentitySection">
+                <div class="panel-title-row settings-section-heading">
+                  <div>
+                    <span class="settings-step-number">1</span>
+                    <h3 class="panel-heading">Informação essencial</h3>
+                    <p>É isto que as pessoas vêem nas listas e nos cabeçalhos do projecto.</p>
+                  </div>
+                </div>
+                <div class="settings-guided-form" id="projectForm">
+                  <div class="settings-field-group">
+                    <label>Nome do projecto
+                      <input id="projectName" placeholder="Ex.: Plataforma de reservas locais" />
+                      <small class="field-help">Use um nome curto que qualquer pessoa reconheça. Pode alterá-lo mais tarde.</small>
+                    </label>
+                    <label>Descrição curta
+                      <textarea id="projectDescription" rows="4" placeholder="Ex.: Uma plataforma que ajuda pequenos negócios a receber e gerir reservas num único lugar."></textarea>
+                      <small class="field-help">Explique em uma ou duas frases o que está a construir e para quem. Não escreva requisitos aqui.</small>
+                    </label>
+                    <div class="settings-inline-fields">
+                      <label>Estado do projecto
+                        <select id="projectStatus">
+                          <option value="active">Ativo — estamos a trabalhar nele</option>
+                          <option value="on_hold">Em espera — trabalho temporariamente parado</option>
+                          <option value="done">Concluído — trabalho terminado</option>
+                        </select>
+                        <small class="field-help">Escolha “Ativo” enquanto o projecto estiver a ser explorado ou desenvolvido.</small>
+                      </label>
+                      <label>Idioma de trabalho
+                        <input id="projectLanguage" value="pt-PT" placeholder="Ex.: pt-PT" />
+                        <small class="field-help">Idioma usado nos conteúdos gerados. Exemplos: pt-PT, pt-BR ou en-GB.</small>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="settings-commercial-group">
+                    <header>
+                      <span class="settings-step-number">2</span>
+                      <div><h3>Dados para a proposta comercial</h3><p>Preencha apenas quando souber para quem será feita a proposta. Estes campos são opcionais durante a fase de ideia.</p></div>
+                    </header>
+                    <div class="settings-callout"><strong>Quando são necessários?</strong> Antes de gerar uma proposta comercial. Não impedem a exploração da ideia nem o trabalho nas outras fases.</div>
+                    <div class="settings-inline-fields">
+                      <label>Nome do cliente
+                        <input id="projectClient" placeholder="Ex.: Impakta, Lda." />
+                        <small class="field-help">Nome da organização ou pessoa que aparecerá na proposta. Use a designação comercial correcta.</small>
+                      </label>
+                      <label>Moeda da proposta
+                        <input id="projectCurrency" placeholder="Ex.: EUR" />
+                        <small class="field-help">Código de três letras: EUR, USD, GBP, BRL, etc.</small>
+                      </label>
+                    </div>
+                    <label>Código da proposta
+                      <input id="projectCode" placeholder="Ex.: PROP-2026-014" />
+                      <small class="field-help">Referência interna ou comercial para identificar a proposta. Se a sua equipa não usa códigos, deixe vazio.</small>
+                    </label>
+                  </div>
+
+                  <div class="settings-save-row">
+                    <p><strong>Pronto?</strong> Guarde para actualizar o projecto em todas as páginas.</p>
+                    <button class="btn primary" id="saveProjectBtn">Guardar definições do projecto</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel section-panel settings-section mt-12">
+                <div class="panel-title-row settings-section-heading">
+                  <div>
+                    <span class="settings-step-number">3</span>
+                    <h3 class="panel-heading">Quem pode aceder ao projecto?</h3>
+                    <p>Associe pessoas que já tenham uma conta na plataforma.</p>
+                  </div>
+                </div>
+                <div class="settings-role-explainer">
+                  <div><strong>Parceiro</strong><span>Pode editar conteúdo, trabalhar nas fases e usar as funcionalidades de IA.</span></div>
+                  <div><strong>Cliente</strong><span>Pode acompanhar o projecto em modo de leitura, sem alterar o trabalho.</span></div>
+                </div>
+                <form id="assignMemberForm" class="form-grid compact member-assign-form">
+                  <label>Pessoa<select id="assignUserId"></select><small class="field-help">Escolha uma conta existente.</small></label>
+                  <label>O que esta pessoa pode fazer?
+                    <select id="assignMemberRole">
+                      <option value="partner">Parceiro — pode editar</option>
+                      <option value="client">Cliente — apenas leitura</option>
+                    </select>
+                  </label>
+                  <button class="btn primary" type="submit">Dar acesso ao projecto</button>
+                </form>
+                <div id="projectMembers" class="member-list mt-8"></div>
+              </section>
+
               <section class="panel section-panel settings-section">
                 <div class="panel-title-row">
-                  <h3 class="panel-heading"><span class="section-badge badge-gray">PLATAFORMA</span> Gestão da plataforma</h3>
+                  <h3 class="panel-heading"><span class="section-badge badge-gray">ADMIN</span> Administração da plataforma</h3>
                 </div>
-                <div class="settings-grid mt-12">
-                  <article class="read-card settings-users-card" id="settingsUsersCard">
-                    <h4>Utilizadores</h4>
-                    <form id="createUserForm" class="form-grid compact mt-8">
-                      <label>Nome<input id="newUserName" required /></label>
-                      <label>Email<input id="newUserEmail" type="email" required /></label>
-                      <label>Perfil
-                        <select id="newUserRole">
-                          <option value="client">Client</option>
-                          <option value="partner">Partner</option>
-                        </select>
-                      </label>
-                      <label class="checkline budget-access-field"><input id="newUserCanViewBudget" type="checkbox" /> Budget access</label>
-                      <label>Password<input id="newUserPassword" type="text" required /></label>
-                      <button class="btn primary" type="submit">Criar utilizador</button>
-                    </form>
-                    <div id="usersList" class="simple-list mt-8"></div>
-                  </article>
-                </div>
+                <p class="muted-text">Só precisa desta área para criar e gerir contas. Não faz parte da configuração normal de um projecto.</p>
+                <details class="settings-advanced-details" open>
+                  <summary>Utilizadores — criar e editar contas</summary>
+                  <div class="settings-grid mt-12"><article class="read-card settings-users-card" id="settingsUsersCard">
+                      <h4>Criar utilizador</h4>
+                      <form id="createUserForm" class="form-grid compact mt-8">
+                        <label>Nome<input id="newUserName" required /></label><label>Email<input id="newUserEmail" type="email" required /></label>
+                        <label>Perfil<select id="newUserRole"><option value="client">Cliente</option><option value="partner">Parceiro</option></select></label>
+                        <label class="checkline budget-access-field"><input id="newUserCanViewBudget" type="checkbox" /> Pode ver valores comerciais</label>
+                        <label>Password temporária<input id="newUserPassword" type="text" required /></label>
+                        <button class="btn primary" type="submit">Criar utilizador</button>
+                      </form><div id="usersList" class="simple-list mt-8"></div>
+                  </article></div>
+                </details>
               </section>
 
               <section class="panel section-panel settings-section mt-12" id="settingsProjectSection">
                 <div class="panel-title-row">
-                  <h3 class="panel-heading"><span class="section-badge badge-blue">PROJECTO</span> Configuração do projecto</h3>
-                  <button class="btn tiny primary" id="saveAdvancedBtn">Guardar alterações</button>
+                  <h3 class="panel-heading"><span class="section-badge badge-gray">AVANÇADO</span> Opções técnicas e comerciais</h3>
                 </div>
-                <p class="muted-text" id="settingsProjectHint">Seleccione um projecto para editar fases, riscos, integrações e abordagem técnica.</p>
-                <div id="settingsProjectBody" class="hidden">
+                <p class="muted-text" id="settingsProjectHint">Seleccione um projecto para ver as opções avançadas.</p>
+                <details id="settingsProjectBody" class="hidden settings-advanced-details">
+                  <summary>Editar nível de detalhe, condições comerciais, riscos e integrações</summary>
                   <div class="form-grid compact mt-12">
                     <label>Nível de detalhe na linha de entrega
                       <select id="deliveryLevelSelect">
@@ -796,7 +846,8 @@
                     <label class="full">Assunções (1 por linha)<textarea id="assumptionsText" rows="4"></textarea></label>
                     <label class="full">Abordagem técnica (JSON)<textarea id="technicalApproachJson" rows="6"></textarea></label>
                   </div>
-                </div>
+                  <div class="settings-save-row"><p>Estas opções destinam-se a utilizadores experientes.</p><button class="btn primary" id="saveAdvancedBtn">Guardar opções avançadas</button></div>
+                </details>
               </section>
             </div>
 
@@ -887,15 +938,37 @@
   <!-- Stage Transition Picker -->
   <div id="pdosTransitionModal" class="pdos-modal hidden">
     <div class="pdos-modal-backdrop" data-close-transition></div>
-    <div class="pdos-modal-panel">
-      <h3 id="pdosTransitionTitle">Transição de fase</h3>
-      <p id="pdosTransitionDesc" class="muted-text"></p>
+    <div class="pdos-modal-panel pdos-modal-wide pdos-transition-config-panel">
+      <div class="pdos-agent-panel-head"><div><h3 id="pdosTransitionTitle">Configurar transição</h3><p id="pdosTransitionDesc" class="muted-text"></p></div><button type="button" class="btn tiny ghost" data-close-transition>Fechar</button></div>
+      <form id="pdosTransitionConfigForm" class="pdos-transition-config-form">
+        <div class="pdos-transition-direction" role="radiogroup" aria-label="Direção da transição">
+          <label><input type="radio" name="transitionDirection" value="forward" checked> <span id="pdosTransitionForwardLabel">Avançar</span></label>
+          <label><input type="radio" name="transitionDirection" value="backward"> <span id="pdosTransitionBackwardLabel">Retroceder</span></label>
+        </div>
+        <div class="pdos-agent-brief">
+          <label>O que pretende gerar?<textarea id="pdosTransitionRequest" rows="3" required></textarea></label>
+          <label>Resultado esperado<input id="pdosTransitionOutcome" type="text" required /></label>
+        </div>
+        <div class="pdos-agent-config-grid">
+          <label>Perfil do modelo<select id="pdosTransitionModelProfile"><option value="small">small</option><option value="medium">medium</option><option value="large">large</option><option value="long_context">long_context</option></select></label>
+          <label>Input alvo / tarefa<input type="number" id="pdosTransitionInputTokens" min="1000" max="200000" step="1000" /></label>
+          <label>Output alvo / tarefa<input type="number" id="pdosTransitionOutputTokens" min="500" max="50000" step="500" /></label>
+          <label>Tokens máximos<input type="number" id="pdosTransitionMaxTokens" min="10000" max="500000" step="5000" /></label>
+          <label>Tempo máximo (minutos)<input type="number" id="pdosTransitionMaxMinutes" min="5" max="240" step="5" /></label>
+          <label>Subtarefas máximas<input type="number" id="pdosTransitionMaxSubtasks" min="2" max="24" step="1" /></label>
+        </div>
+        <div class="pdos-transition-options">
+          <label class="checkline"><input type="checkbox" id="pdosTransitionWebSearch" /> Permitir pesquisa web</label>
+          <label>Regeneração<select id="pdosTransitionRegeneration"><option value="affected">Apenas trabalho afectado</option><option value="full">Transição completa</option></select></label>
+        </div>
+        <p id="pdosTransitionChangeSummary" class="pdos-transition-change-summary" role="status"></p>
       <div id="pdosTransitionPlanWrap" class="pdos-agent-plan-wrap hidden">
-        <p class="pdos-agent-plan-heading" id="pdosTransitionPlanHeading">Tarefas previstas</p>
+        <p class="pdos-agent-plan-heading" id="pdosTransitionPlanHeading">Subtarefas previstas</p>
         <ol id="pdosTransitionPlanList" class="pdos-agent-plan-list"></ol>
       </div>
-      <div id="pdosTransitionActions" class="pdos-transition-actions"></div>
-      <button type="button" class="btn ghost mt-12" data-close-transition>Cancelar</button>
+        <details id="pdosTransitionDiffWrap" class="ado-advanced-details hidden"><summary>Ver diferenças do pedido</summary><pre id="pdosTransitionPromptDiff"></pre></details>
+        <div class="actions-row pdos-agent-config-actions"><button type="submit" class="btn primary" id="pdosTransitionCreateRequest">Criar pedido e tarefas</button><button type="button" class="btn ghost" data-close-transition>Cancelar</button></div>
+      </form>
     </div>
   </div>
 
@@ -957,6 +1030,16 @@
       <p id="pdosAgentConfigHealth" class="pdos-agent-config-health hidden" role="status"></p>
 
       <form id="pdosAgentConfigForm" class="pdos-agent-config-form">
+        <div class="pdos-agent-brief">
+          <label>O que pretende delegar?
+            <textarea id="pdosAgentCfgRequest" rows="3" placeholder="Descreva o trabalho que o agente deve realizar…"></textarea>
+          </label>
+          <label>Que resultado espera?
+            <input id="pdosAgentCfgOutcome" type="text" placeholder="Ex.: requisitos revistos e prontos para aprovação" />
+          </label>
+        </div>
+        <details class="pdos-agent-advanced">
+          <summary>Configuração avançada</summary>
         <div class="pdos-agent-config-grid">
           <label>Perfil do modelo
             <select id="pdosAgentCfgModelProfile">
@@ -986,6 +1069,7 @@
           <input type="checkbox" id="pdosAgentCfgWebSearch" />
           Permitir pesquisa web durante a execução
         </label>
+        </details>
 
         <section id="pdosAgentConfigPlanWrap" class="pdos-agent-plan-wrap hidden">
           <h4 class="pdos-agent-plan-heading">Plano de execução</h4>
@@ -1204,16 +1288,16 @@
   <script src="/projects/static/help-ui.js?v=3" defer></script>
   <script src="/projects/static/proposal-downloads-ui.js?v=5" defer></script>
   <script src="/projects/static/proposal-configurator-ui.js?v=3" defer></script>
-  <script src="/projects/static/app.js?v=44" defer></script>
+  <script src="/projects/static/app.js?v=48" defer></script>
   <script src="/projects/static/requirements-map-ui.js?v=13" defer></script>
   <script src="/projects/static/requirements-ui.js?v=16" defer></script>
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
-  <script src="/projects/static/delivery-os-ui.js?v=61" defer></script>
+  <script src="/projects/static/delivery-os-ui.js?v=63" defer></script>
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
-  <script src="/projects/static/work-items-ui.js?v=7" defer></script>
-  <script src="/projects/static/delivery-os-platform-ui.js?v=3" defer></script>
+  <script src="/projects/static/work-items-ui.js?v=10" defer></script>
+  <script src="/projects/static/delivery-os-platform-ui.js?v=6" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>
     (function () {

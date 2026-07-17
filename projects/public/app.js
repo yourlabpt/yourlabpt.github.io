@@ -3,6 +3,10 @@ const TOKEN_KEY = 'requirements_platform_token';
 const NAV_RAIL_DOCKED_KEY = 'platform_navRail_docked';
 const NAV_RAIL_EXPANDED_KEY = 'platform_navRail_expanded';
 const NAV_RAIL_MORE_OPEN_KEY = 'platform_navRail_more_open';
+const NAVIGATION_STATE_KEY = 'requirements_platform_navigation';
+const LAST_PROJECT_KEY = 'requirements_platform_last_project';
+const LAST_TAB_KEY = 'requirements_platform_last_tab';
+const LAST_STAGE_KEY = 'requirements_platform_last_stage';
 
 const PROJECTLESS_TABS = new Set(['projetos', 'definicoes']);
 
@@ -54,12 +58,42 @@ const NAV_GROUPS = [
   },
   {
     id: 'system',
-    items: [{ id: 'definicoes', label: 'Definições', icon: 'settings' }],
+    items: [{ id: 'definicoes', label: 'Definições do projecto', icon: 'settings' }],
   },
 ];
 
 /** Flat lookup for tab metadata */
 const NAV_PAGES = NAV_GROUPS.flatMap((g) => g.items);
+const VALID_NAV_TABS = new Set(NAV_PAGES.map((page) => page.id));
+
+function readTaskPath(pathname = window.location.pathname) {
+  const match = String(pathname || '').match(/^\/projects\/([^/]+)\/tasks(?:\/requests\/([^/]+)\/plan|\/([^/]+))?\/?$/);
+  if (!match) return null;
+  try {
+    return { projectId: decodeURIComponent(match[1]), requestId: match[2] ? decodeURIComponent(match[2]) : '', taskId: match[3] ? decodeURIComponent(match[3]) : '' };
+  } catch {
+    return null;
+  }
+}
+
+function readInitialNavigationState() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(NAVIGATION_STATE_KEY) || '{}') || {};
+  } catch {
+    saved = {};
+  }
+  const params = new URLSearchParams(window.location.search);
+  const taskPath = readTaskPath();
+  const requestedTab = taskPath ? 'tarefas' : (params.get('tab') || localStorage.getItem(LAST_TAB_KEY) || saved.tab || 'projetos');
+  return {
+    projectId: taskPath?.projectId || params.get('project') || params.get('projectId') || localStorage.getItem(LAST_PROJECT_KEY) || saved.projectId || null,
+    tab: VALID_NAV_TABS.has(requestedTab) ? requestedTab : 'projetos',
+    stage: params.get('stage') || localStorage.getItem(LAST_STAGE_KEY) || saved.stage || 'requirements',
+  };
+}
+
+const initialNavigationState = readInitialNavigationState();
 
 const state = {
   token: localStorage.getItem(TOKEN_KEY) || '',
@@ -67,10 +101,10 @@ const state = {
   config: null,
   users: [],
   projects: [],
-  selectedProjectId: null,
+  selectedProjectId: initialNavigationState.projectId,
   selectedProject: null,
   traceMap: null,
-  deliverySelectedStageId: 'requirements',
+  deliverySelectedStageId: initialNavigationState.stage,
   selectedRequirementId: null,
   generationModulesSelected: [],
   selectedMinuteIds: [],
@@ -79,7 +113,7 @@ const state = {
     targetRole: '',
     byCurrentStage: true,
   },
-  activeTab: 'projetos',
+  activeTab: initialNavigationState.tab,
   tabFilters: {
     deliveryStageId: '',
     contentView: '',
@@ -101,6 +135,44 @@ const state = {
     implPlanReqsPerPhase: 30,
   },
 };
+
+function persistNavigationState(overrides = {}) {
+  const projectId = overrides.projectId !== undefined
+    ? overrides.projectId
+    : (state.selectedProjectId || state.selectedProject?.id || null);
+  const tab = VALID_NAV_TABS.has(overrides.tab || state.activeTab)
+    ? (overrides.tab || state.activeTab)
+    : 'projetos';
+  const stage = overrides.stage || state.deliverySelectedStageId || 'requirements';
+  const navigation = { projectId, tab, stage };
+
+  try {
+    localStorage.setItem(NAVIGATION_STATE_KEY, JSON.stringify(navigation));
+    if (projectId) localStorage.setItem(LAST_PROJECT_KEY, projectId);
+    else localStorage.removeItem(LAST_PROJECT_KEY);
+    localStorage.setItem(LAST_TAB_KEY, tab);
+    localStorage.setItem(LAST_STAGE_KEY, stage);
+  } catch {
+    // Navigation still works when storage is unavailable.
+  }
+
+  if (!window.history?.replaceState) return;
+  const params = new URLSearchParams(window.location.search);
+  params.delete('projectId');
+  if (projectId) params.set('project', projectId);
+  else params.delete('project');
+  params.set('tab', tab);
+  if (tab === 'deliveryos' && stage) params.set('stage', stage);
+  else params.delete('stage');
+  const query = params.toString();
+  const currentTaskPath = readTaskPath();
+  const pathname = tab === 'tarefas' && projectId
+    ? (currentTaskPath?.projectId === projectId ? window.location.pathname : `/projects/${encodeURIComponent(projectId)}/tasks`)
+    : '/projects';
+  window.history.replaceState(window.history.state || {}, '', `${pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+}
+
+window.persistNavigationState = persistNavigationState;
 
 const els = {
   loginCard: document.getElementById('loginCard'),
@@ -150,12 +222,9 @@ const els = {
   projectCurrency: document.getElementById('projectCurrency'),
   projectLanguage: document.getElementById('projectLanguage'),
   projectDescription: document.getElementById('projectDescription'),
-  summaryBusinessContext: document.getElementById('summaryBusinessContext'),
-  summaryGoals: document.getElementById('summaryGoals'),
-  summaryScope: document.getElementById('summaryScope'),
-  summarySolution: document.getElementById('summarySolution'),
   projectKpis: document.getElementById('projectKpis'),
   projectReadability: document.getElementById('projectReadability'),
+  projectOverview: document.getElementById('projectOverview'),
   uploadDocForm: document.getElementById('uploadDocForm'),
   docFile: document.getElementById('docFile'),
   documentsList: document.getElementById('documentsList'),
@@ -1044,18 +1113,62 @@ function syncBudgetAccessControl() {
 function renderUsersPanel() {
   if (!isSuperAdmin()) return;
 
-  const visibleUsers = state.users.filter((user) => user.role !== 'super_admin');
-  els.usersList.innerHTML = visibleUsers.length
-    ? visibleUsers.map((user) => `
-      <div class="simple-item">
-        <strong>${escapeHtml(user.name)}</strong>
-        <small>${escapeHtml(user.email)} • ${escapeHtml(user.role)}${user.canViewBudget ? ' • budget' : ''}</small>
-      </div>
-    `).join('')
-    : '<div class="simple-item"><small>Sem utilizadores client/partner.</small></div>';
+  const roleLabel = { super_admin: 'Superutilizador', partner: 'Parceiro', client: 'Cliente' };
+  els.usersList.innerHTML = state.users.length
+    ? state.users.map((user) => {
+      const isSelf = user.id === state.user?.id;
+      const active = user.isActive !== false;
+      return `
+      <article class="user-admin-card ${active ? '' : 'is-inactive'}">
+        <header class="user-admin-card-head">
+          <div><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></div>
+          <div class="user-admin-badges"><span class="chip">${escapeHtml(roleLabel[user.role] || user.role)}</span><span class="chip ${active ? '' : 'status-blocked'}">${active ? 'Activo' : 'Inactivo'}</span>${isSelf ? '<span class="chip">A sua conta</span>' : ''}</div>
+        </header>
+        <details class="user-admin-editor">
+          <summary>Editar utilizador</summary>
+          <form class="user-edit-form" data-edit-user="${escapeHtml(user.id)}">
+            <div class="settings-inline-fields">
+              <label>Nome<input name="name" value="${escapeHtml(user.name)}" required /></label>
+              <label>Email<input name="email" type="email" value="${escapeHtml(user.email)}" required /></label>
+            </div>
+            <div class="settings-inline-fields">
+              <label>Perfil
+                <select name="role" ${isSelf ? 'disabled' : ''}>
+                  <option value="super_admin" ${user.role === 'super_admin' ? 'selected' : ''}>Superutilizador</option>
+                  <option value="partner" ${user.role === 'partner' ? 'selected' : ''}>Parceiro</option>
+                  <option value="client" ${user.role === 'client' ? 'selected' : ''}>Cliente</option>
+                </select>
+                ${isSelf ? '<small class="field-help">O seu próprio perfil de superutilizador está protegido.</small>' : ''}
+              </label>
+              <label>Nova senha
+                <input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="Deixe vazio para manter a senha actual" />
+                <small class="field-help">A senha actual nunca é mostrada. Preencha apenas para a substituir.</small>
+              </label>
+            </div>
+            <div class="user-edit-options">
+              <label class="checkline"><input name="isActive" type="checkbox" ${active ? 'checked' : ''} ${isSelf ? 'disabled' : ''} /> Conta activa</label>
+              <label class="checkline"><input name="canViewBudget" type="checkbox" ${user.canViewBudget ? 'checked' : ''} ${user.role === 'partner' ? '' : 'disabled'} /> Pode ver valores comerciais</label>
+            </div>
+            <div class="user-edit-actions"><button class="btn primary" type="submit">Guardar alterações</button><span class="muted-text" data-user-save-status aria-live="polite"></span></div>
+          </form>
+        </details>
+      </article>`;
+    }).join('')
+    : '<div class="simple-item"><small>Sem utilizadores.</small></div>';
 
-  els.assignUserId.innerHTML = visibleUsers
-    .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)} (${escapeHtml(user.role)})</option>`)
+  els.usersList.querySelectorAll('[data-edit-user]').forEach((form) => {
+    form.addEventListener('submit', handleUpdateUser);
+    const role = form.elements.role;
+    const budget = form.elements.canViewBudget;
+    role?.addEventListener('change', () => {
+      budget.disabled = role.value !== 'partner';
+      if (budget.disabled) budget.checked = false;
+    });
+  });
+
+  const assignableUsers = state.users.filter((user) => user.role !== 'super_admin' && user.isActive !== false);
+  els.assignUserId.innerHTML = assignableUsers
+    .map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)} (${escapeHtml(roleLabel[user.role] || user.role)})</option>`)
     .join('');
 }
 
@@ -1330,7 +1443,7 @@ function renderActiveTab(project, tabId) {
   switch (tab) {
     case 'projeto':
       renderProjectClarity(project);
-      renderMembers(project);
+      renderProjectOverview(project);
       renderRiskAssumptionView(project);
       break;
     case 'documentos':
@@ -1383,6 +1496,7 @@ function renderActiveTab(project, tabId) {
       break;
     case 'definicoes':
       renderUsersPanel();
+      renderMembers(project);
       setReadonlyByRole();
       break;
     default:
@@ -1423,11 +1537,6 @@ function renderProjectDetails(options = {}) {
   els.projectCurrency.value = project.currency || 'EUR';
   els.projectLanguage.value = project.language || 'pt-PT';
   els.projectDescription.value = project.description || '';
-
-  els.summaryBusinessContext.value = project.summary?.businessContext || '';
-  els.summaryGoals.value = arrayToLines(project.summary?.goals || []);
-  els.summaryScope.value = project.summary?.scopeInPlainLanguage || '';
-  els.summarySolution.value = project.summary?.solutionOverview || '';
 
   const sourceTextEl = document.getElementById('sourceText');
   if (sourceTextEl) sourceTextEl.value = project.sourceText || '';
@@ -1552,6 +1661,49 @@ function renderProjectClarity(project) {
   `;
 
   refreshHierarchyKpis(project);
+}
+
+function renderProjectOverview(project) {
+  const container = els.projectOverview;
+  if (!container) return;
+  const vision = project.vision && typeof project.vision === 'object' ? project.vision : {};
+  const idea = String(vision.mainIdeaMarkdown || project.ideaBriefMarkdown || '').trim();
+  const problem = String(vision.problemMarkdown || '').trim();
+  const users = Array.isArray(vision.targetUsers) ? vision.targetUsers.filter(Boolean) : [];
+  const openQuestions = (project.clarificationQuestions || []).filter((question) => !['resolved'].includes(String(question.status || 'open'))).length;
+  const currentStageId = state.deliverySelectedStageId || 'idea';
+  const statusLabels = { active: 'Ativo', on_hold: 'Em espera', done: 'Concluído' };
+
+  container.innerHTML = `
+    <article class="read-card project-overview-card">
+      <header class="project-overview-head">
+        <div>
+          <span class="idea-eyebrow">PROJECTO</span>
+          <h3>${escapeHtml(project.name || 'Projecto sem nome')}</h3>
+        </div>
+        <span class="chip">${escapeHtml(statusLabels[project.status] || project.status || 'Ativo')}</span>
+      </header>
+      <div class="project-overview-links">
+        <button type="button" class="btn tiny ghost" data-overview-tab="definicoes">Editar configurações →</button>
+        <button type="button" class="btn tiny ghost" data-overview-stage="${escapeHtml(currentStageId)}">Abrir linha de entrega: ${escapeHtml(stageLabel(currentStageId))} →</button>
+      </div>
+      ${idea ? `<section><h4>Ideia principal</h4><p class="overview-preserve-lines">${escapeHtml(shortText(idea, 900))}</p></section>` : ''}
+      ${problem ? `<section><h4>O problema</h4><p class="overview-preserve-lines">${escapeHtml(shortText(problem, 700))}</p></section>` : ''}
+      ${users.length ? `<section><h4>Para quem</h4><div class="idea-users">${users.map((user) => `<span class="idea-user-chip">${escapeHtml(user)}</span>`).join('')}</div></section>` : ''}
+      ${openQuestions ? `<button type="button" class="btn tiny ghost" data-overview-tab="perguntas">${openQuestions} pergunta(s) em aberto →</button>` : ''}
+      ${!idea ? `<div class="project-overview-empty"><p>A ideia ainda não foi organizada.</p><button type="button" class="btn primary" data-overview-stage="idea">Começar pela fase Ideia →</button></div>` : ''}
+    </article>
+  `;
+
+  container.querySelectorAll('[data-overview-tab]').forEach((button) => {
+    button.addEventListener('click', () => switchToTab(button.dataset.overviewTab));
+  });
+  container.querySelectorAll('[data-overview-stage]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.deliverySelectedStageId = button.dataset.overviewStage || 'idea';
+      switchToTab('deliveryos');
+    });
+  });
 }
 
 async function fetchRequirementsHierarchy(project, options = {}) {
@@ -2191,6 +2343,7 @@ function renderImplementationPlan(project) {
         </div>
         ${objSnippet}
         <div class="ip-req-chips ip-phase-dropzone" data-ip-phase="${escapeHtml(phase.name)}">${chips}${moreBtn}</div>
+        ${phase.id ? `<div class="ip-phase-tasks" data-ip-phase-tasks="${escapeHtml(phase.id)}"><span class="ip-muted">A carregar tarefas relevantes…</span></div><button type="button" class="btn tiny ghost" data-open-plan-phase-tasks="${escapeHtml(phase.id)}">Ver todas as tarefas</button>` : ''}
       </div>
     `;
   }).join('');
@@ -2201,15 +2354,6 @@ function renderImplementationPlan(project) {
       .map((req) => renderIpReqChip(req, { warn: true, showAssign: true }))
       .join('')
     : '';
-
-  const nextActions = [
-    ...pendingRequirements
-      .filter((entry) => entry.priority === 'high')
-      .slice(0, 5)
-      .map((entry) => `<li>${escapeHtml(entry.id)} — ${escapeHtml(shortText(entry.title, 70))}</li>`),
-    ...(outOfPlan.length ? [`<li class="ip-warn">${outOfPlan.length} requisito(s) sem fase atribuída</li>`] : []),
-    ...(smartMissing.length ? [`<li class="ip-warn">${smartMissing.length} lacuna(s) SMART por fechar</li>`] : []),
-  ].slice(0, 7);
 
   const moduleInsights = collectModules(project).map((moduleName) => {
     const moduleReqs = requirements.filter((entry) => {
@@ -2275,11 +2419,6 @@ function renderImplementationPlan(project) {
     </details>`}
 
     <details class="ip-section">
-      <summary>Próximos Passos</summary>
-      ${nextActions.length ? `<ul class="ip-list">${nextActions.join('')}</ul>` : '<p class="ip-empty">Sem ações prioritárias pendentes.</p>'}
-    </details>
-
-    <details class="ip-section">
       <summary>Módulos de Arquitetura</summary>
       ${moduleInsights.length ? `
         <div class="ip-table-wrap">
@@ -2307,6 +2446,29 @@ function renderImplementationPlan(project) {
   `;
 
   wireImplementationPlanEvents();
+  hydrateImplementationPhaseTasks(project);
+}
+
+async function hydrateImplementationPhaseTasks(project) {
+  const hosts = els.implementationPlanView?.querySelectorAll('[data-ip-phase-tasks]') || [];
+  await Promise.all([...hosts].map(async (host) => {
+    try {
+      const phaseId = host.dataset.ipPhaseTasks;
+      const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/relevant?planPhaseId=${encodeURIComponent(phaseId)}&limit=4`);
+      const tasks = payload.workItems || [];
+      host.innerHTML = tasks.length ? tasks.map((task) => {
+        const user = state.users.find((entry) => entry.id === task.assigneeUserId);
+        const responsible = task.executorMode === 'agent' ? (task.agentId || 'YourLab Agent') : (task.executorMode === 'both' ? 'Humano + agente' : (user?.name || user?.email || 'Sem responsável'));
+        return `<div class="ip-phase-task-row"><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(task.status)} · ${escapeHtml(responsible)}${task.priority ? ` · ${escapeHtml(task.priority)}` : ''}</span></div>`;
+      }).join('') : '<span class="ip-muted">Sem tarefas abertas relevantes.</span>';
+    } catch (error) { host.innerHTML = `<span class="ip-muted">${escapeHtml(error.message || 'Não foi possível carregar tarefas.')}</span>`; }
+  }));
+  els.implementationPlanView?.querySelectorAll('[data-open-plan-phase-tasks]').forEach((button) => {
+    button.addEventListener('click', () => {
+      navigateToFilteredTab('tarefas', {});
+      window.WorkItemsUI?.openFiltered?.(project, { planPhaseId: button.dataset.openPlanPhaseTasks });
+    });
+  });
 }
 
 function renderRequirements(project) {
@@ -2572,6 +2734,10 @@ async function loadProjects(selectId) {
 
 async function loadProjectById(projectId, options = {}) {
   state.selectedProjectId = projectId;
+  persistNavigationState({
+    projectId,
+    tab: options.switchTab === false ? state.activeTab : (options.tab || 'deliveryos'),
+  });
   // Clear per-project resource state so we fetch fresh heavy data for this project
   delete projectResourceState[`req:${projectId}`];
   loadingStart();
@@ -2591,7 +2757,9 @@ async function loadProjectById(projectId, options = {}) {
   renderProjects();
   renderProjectDetails({ skipTab: true });
   if (options.switchTab !== false) {
-    const tab = deepLink.tab || 'deliveryos';
+    // An explicit project selection opens its delivery workspace. URL state is
+    // only used during bootstrap, where loadProjects calls with switchTab=false.
+    const tab = options.tab || 'deliveryos';
     switchToTab(tab);
   } else {
     renderActiveTab(state.selectedProject, state.activeTab);
@@ -2602,6 +2770,7 @@ async function loadProjectById(projectId, options = {}) {
   window.DeliveryOsPlatform?.refreshPlatformUi?.(state.selectedProject);
   window.ClientPortalUI?.refresh?.(state.selectedProject);
   scheduleWorkItemsMetaFetch(state.selectedProjectId);
+  persistNavigationState();
 }
 
 let workItemsMetaTimer = null;
@@ -2719,18 +2888,26 @@ function switchToTab(tabId) {
   const target = tabId || 'projetos';
   if (target === 'tarefas') {
     const meta = window.workItemsTabMeta;
-    const visible = (meta?.projectId === state.selectedProject?.id && meta.tabVisible)
+    const metaIsCurrent = meta?.projectId === state.selectedProject?.id;
+    const visible = (!metaIsCurrent && Boolean(state.selectedProject))
+      || (metaIsCurrent && meta.tabVisible)
       || isSuperAdmin()
       || isPartnerEditor();
     if (!visible) {
-      showToast('Sem tarefas atribuídas neste projeto.', 'error');
+      showToast('Sem tarefas visíveis neste projeto.', 'error');
       state.activeTab = 'deliveryos';
     } else {
       state.activeTab = target;
     }
   } else if (isNavPageRequiresProject(target) && !state.selectedProject) {
-    showToast('Seleccione ou crie um projecto primeiro.', 'error');
-    state.activeTab = 'projetos';
+    if (state.selectedProjectId) {
+      // The project is still loading during refresh. Keep the requested page;
+      // bootstrap will render it as soon as the project payload arrives.
+      state.activeTab = target;
+    } else {
+      showToast('Seleccione ou crie um projecto primeiro.', 'error');
+      state.activeTab = 'projetos';
+    }
   } else {
     state.activeTab = target;
   }
@@ -2756,6 +2933,7 @@ function switchToTab(tabId) {
   } else if (state.selectedProject) {
     renderActiveTab(state.selectedProject, activeId);
   }
+  persistNavigationState();
 }
 
 window.switchToTab = switchToTab;
@@ -2840,12 +3018,6 @@ function readProjectPatchFromForm() {
     currency: els.projectCurrency.value.trim() || 'EUR',
     language: els.projectLanguage.value.trim() || 'pt-PT',
     description: els.projectDescription.value,
-    summary: {
-      businessContext: els.summaryBusinessContext.value,
-      goals: linesToArray(els.summaryGoals.value),
-      scopeInPlainLanguage: els.summaryScope.value,
-      solutionOverview: els.summarySolution.value,
-    },
   };
 }
 
@@ -2936,6 +3108,11 @@ async function handleLogout() {
   state.questionFilters.status = '';
   state.questionFilters.targetRole = '';
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(NAVIGATION_STATE_KEY);
+  localStorage.removeItem(LAST_PROJECT_KEY);
+  localStorage.removeItem(LAST_TAB_KEY);
+  localStorage.removeItem(LAST_STAGE_KEY);
+  persistNavigationState({ projectId: null, tab: 'projetos', stage: 'requirements' });
   els.workspace.classList.add('hidden');
   els.loginCard.classList.remove('hidden');
   showToast('Sessão terminada.', 'ok');
@@ -2948,14 +3125,15 @@ async function handleCreateProject(event) {
       method: 'POST',
       body: {
         name: document.getElementById('newProjectName').value.trim(),
-        clientName: document.getElementById('newProjectClient').value.trim(),
-        currency: document.getElementById('newProjectCurrency').value.trim() || 'EUR',
+        originalIdeaText: document.getElementById('newProjectInitialIdea').value.trim(),
       },
     });
 
     showToast('Projeto criado com sucesso.', 'ok');
     event.target.reset();
     await loadProjects(payload.project.id);
+    state.deliverySelectedStageId = 'idea';
+    switchToTab('deliveryos');
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -2981,6 +3159,36 @@ async function handleCreateUser(event) {
     await loadUsers();
     renderUsersPanel();
   } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function handleUpdateUser(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const userId = form.dataset.editUser;
+  const status = form.querySelector('[data-user-save-status]');
+  const password = form.elements.password.value;
+  const body = {
+    name: form.elements.name.value.trim(),
+    email: form.elements.email.value.trim(),
+    role: form.elements.role.value,
+    isActive: form.elements.isActive.checked,
+    canViewBudget: form.elements.role.value === 'partner' && form.elements.canViewBudget.checked,
+  };
+  if (password) body.password = password;
+
+  try {
+    if (status) status.textContent = 'A guardar…';
+    const response = await apiRequest(`/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body });
+    state.users = response.users || [];
+    const current = state.users.find((user) => user.id === state.user?.id);
+    if (current) state.user = current;
+    renderUsersPanel();
+    renderUserMenuInfo();
+    showToast('Utilizador actualizado.', 'ok');
+  } catch (error) {
+    if (status) status.textContent = error.message;
     showToast(error.message, 'error');
   }
 }
@@ -3551,6 +3759,24 @@ function toggleTheme() {
 
 function wireEvents() {
   window.HelpUI?.wireHelpEvents?.();
+  window.addEventListener('popstate', async () => {
+    const navigation = readInitialNavigationState();
+    state.activeTab = navigation.tab;
+    state.deliverySelectedStageId = navigation.stage;
+    try {
+      if (navigation.projectId && navigation.projectId !== state.selectedProject?.id) {
+        await loadProjectById(navigation.projectId, { switchTab: false });
+      } else {
+        switchToTab(navigation.tab);
+      }
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+  window.addEventListener('pagehide', () => persistNavigationState());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persistNavigationState();
+  });
   els.loginForm.addEventListener('submit', handleLogin);
   els.logoutBtn.addEventListener('click', handleLogout);
   els.themeToggleBtn.addEventListener('click', toggleTheme);

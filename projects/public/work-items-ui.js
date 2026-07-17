@@ -4,16 +4,18 @@
 (function initWorkItemsUi() {
   const API = '/api/projects';
 
-  const BOARD_STATUSES = [
-    { id: 'new', label: 'Novo' },
-    { id: 'active', label: 'Em curso' },
-    { id: 'closed', label: 'Fechado' },
-    { id: 'resolved', label: 'Resolvido' },
-  ];
-
   const ALL_STATUSES = [
-    ...BOARD_STATUSES,
-    { id: 'blocked', label: 'Bloqueado' },
+    { id: 'planned', label: 'Planeada' }, { id: 'ready', label: 'Pronta' },
+    { id: 'in_progress', label: 'Em curso' }, { id: 'waiting_input', label: 'Aguarda informação' },
+    { id: 'waiting_review', label: 'Aguarda revisão' }, { id: 'completed', label: 'Concluída' },
+    { id: 'failed', label: 'Falhou' }, { id: 'blocked', label: 'Bloqueada' },
+    { id: 'cancelled', label: 'Cancelada' },
+  ];
+  const BOARD_GROUPS = [
+    { id: 'planned', label: 'Planeado', statuses: ['planned', 'ready'] },
+    { id: 'active', label: 'Em curso', statuses: ['in_progress'] },
+    { id: 'attention', label: 'Precisa de atenção', statuses: ['waiting_input', 'waiting_review', 'failed', 'blocked'] },
+    { id: 'completed', label: 'Concluído', statuses: ['completed', 'cancelled'] },
   ];
 
   const state = {
@@ -21,11 +23,21 @@
     items: [],
     meta: null,
     detail: null,
+    detailChildren: [],
+    detailRequest: null,
+    suggestions: [],
+    automationRules: [],
+    selectedIds: new Set(),
     selectedId: null,
     mode: 'browse',
-    view: 'board',
+    view: 'priority',
+    showCompleted: false,
+    agentRequests: [],
+    selectedRequest: null,
+    pendingConnectionTaskId: '',
+    pendingConnectionAgentId: '',
     filtersOpen: false,
-    filters: { origin: '', status: '', stage: '', complexity: '', q: '' },
+    filters: { origin: '', status: '', stage: '', planPhaseId: '', executorMode: '', assigneeUserId: '', complexity: '', priority: '', clientVisible: '', q: '' },
     loaded: false,
     canManage: false,
     canPostUpdate: false,
@@ -38,6 +50,7 @@
   let saveTimer = null;
   let draftTimer = null;
   let searchTimer = null;
+  let connectionPollTimer = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -93,6 +106,22 @@
     window.showToast?.(message, type);
   }
 
+  async function pollConnectedTask(project, runId, taskId) {
+    clearTimeout(connectionPollTimer);
+    if (!runId || state.selectedId !== taskId) return;
+    try {
+      const payload = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status`);
+      const status = $('workItemEditor')?.querySelector('[data-ado-connection-status]');
+      if (status) status.textContent = payload.agentJob?.status === 'pending_human_review' ? 'Resultado recebido. Precisa da sua revisão.' : payload.workItem?.currentAction || `Agente: ${payload.agentJob?.status || 'em execução'}.`;
+      if (['pending_human_review', 'completed', 'failed', 'cancelled'].includes(payload.agentJob?.status)) {
+        await fetchDetail(project.id, taskId); paintEditor(project); await fetchList(project.id); return;
+      }
+      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 2500);
+    } catch {
+      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 5000);
+    }
+  }
+
   function userLabel(userId) {
     if (!userId) return 'Sem responsável';
     const users = window.state?.users || [];
@@ -110,7 +139,25 @@
   }
 
   function originClassLabel(origin) {
-    return origin === 'agent' ? 'Agente' : 'Humana';
+    return ({ agent: 'Agente', platform: 'Plataforma', human: 'Humana' })[origin] || 'Humana';
+  }
+
+  function executorLabel(item) {
+    if (item.executorMode === 'both') return 'Humano + agente';
+    if (item.executorMode === 'agent' || item.origin === 'agent') return item.agentId || item.agentType || 'YourLab Agent';
+    return userLabel(item.assigneeUserId);
+  }
+
+  function stageLabel(stageId) {
+    return (window.state?.config?.deliveryStageFlow || []).find((stage) => stage.id === stageId)?.label || 'Sem etapa';
+  }
+
+  function attentionLabel(item) {
+    return ({
+      waiting_input: 'Precisa de informação', waiting_review: 'Precisa de revisão',
+      failed: 'Execução falhou', blocked: 'Está bloqueada', in_progress: 'Agente a trabalhar',
+      ready: 'Pronta para começar', planned: 'Aguarda dependências', completed: 'Concluída',
+    })[item.status] || statusLabel(item.status);
   }
 
   function syncModeLayout() {
@@ -119,7 +166,7 @@
     const editor = $('workItemEditor');
     const toolbar = $('workItemsToolbar');
     if (!workspace || !browse || !editor) return;
-    const editing = state.mode === 'editor' && state.selectedId;
+    const editing = (state.mode === 'editor' && state.selectedId) || state.mode === 'plan';
     workspace.classList.toggle('ado-workspace-editing', Boolean(editing));
     browse.classList.toggle('hidden', Boolean(editing));
     editor.classList.toggle('hidden', !editing);
@@ -170,9 +217,15 @@
       descriptionMarkdown: getMdValue(form, '[data-ado-md-mount="description"]') || fd.get('descriptionMarkdown') || '',
       acceptanceCriteriaMarkdown: getMdValue(form, '[data-ado-md-mount="acceptance"]') || fd.get('acceptanceCriteriaMarkdown') || '',
       status: fd.get('status') || state.detail.status,
+      executorMode: fd.get('executorMode') || state.detail.executorMode || 'human',
       assigneeUserId: fd.get('assigneeUserId') || '',
+      agentId: fd.get('agentId') || '',
       complexity: fd.get('complexity') || state.detail.complexity,
+      priority: fd.get('priority') || '',
       deliveryStageId: fd.get('deliveryStageId') || '',
+      planPhaseId: fd.get('planPhaseId') || '',
+      parentTaskId: fd.get('parentTaskId') || '',
+      clientVisible: fd.get('clientVisible') === 'on',
       scheduledStart: fd.get('scheduledStart') || '',
       scheduledEnd: fd.get('scheduledEnd') || '',
     };
@@ -184,6 +237,7 @@
       state.meta = payload;
       window.workItemsTabMeta = { projectId, ...payload };
       window.renderNavRail?.();
+      if (state.mode === 'browse' && state.projectId === projectId) renderToolbar();
       return payload;
     } catch {
       return null;
@@ -195,6 +249,8 @@
     Object.entries(state.filters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
+    params.set('view', state.view === 'priority' ? 'prioritized' : state.view);
+    params.set('showCompleted', state.showCompleted ? 'true' : 'false');
     const qs = params.toString();
     const payload = await apiRequest(
       `/projects/${encodeURIComponent(projectId)}/work-items${qs ? `?${qs}` : ''}`,
@@ -205,11 +261,55 @@
     return state.items;
   }
 
+  async function fetchAgentRequests(projectId) {
+    const payload = await apiRequest(`/projects/${encodeURIComponent(projectId)}/work-items/agent-requests`);
+    state.agentRequests = payload.agentRequests || [];
+    return state.agentRequests;
+  }
+
+  function setTaskRoute({ taskId = '', requestId = '' } = {}) {
+    const params = new URLSearchParams(window.location.search);
+    if (taskId) params.set('task', taskId); else params.delete('task');
+    if (requestId) params.set('agentRequest', requestId); else params.delete('agentRequest');
+    params.set('tab', 'tarefas');
+    const projectId = state.projectId || window.state?.selectedProject?.id;
+    if (!projectId) return;
+    const pathname = requestId
+      ? `/projects/${encodeURIComponent(projectId)}/tasks/requests/${encodeURIComponent(requestId)}/plan`
+      : taskId
+        ? `/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`
+        : `/projects/${encodeURIComponent(projectId)}/tasks`;
+    const nextUrl = `${pathname}?${params.toString()}${window.location.hash}`;
+    if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== nextUrl) {
+      window.history?.pushState?.(window.history.state || {}, '', nextUrl);
+    }
+  }
+
+  function readTaskRoute() {
+    const match = window.location.pathname.match(/^\/projects\/([^/]+)\/tasks(?:\/requests\/([^/]+)\/plan|\/([^/]+))?\/?$/);
+    if (!match) return { requestId: '', taskId: '' };
+    try {
+      return { requestId: match[2] ? decodeURIComponent(match[2]) : '', taskId: match[3] ? decodeURIComponent(match[3]) : '' };
+    } catch {
+      return { requestId: '', taskId: '' };
+    }
+  }
+
+  async function fetchSuggestions(projectId, evaluate = false) {
+    if (!state.canManage) return [];
+    const payload = await apiRequest(`/projects/${encodeURIComponent(projectId)}/work-items/suggestions${evaluate ? '/evaluate' : '?status=proposed'}`, evaluate ? { method: 'POST', body: {} } : {});
+    state.suggestions = (payload.suggestions || []).filter((entry) => entry.status === 'proposed');
+    state.automationRules = payload.automationRules || [];
+    return state.suggestions;
+  }
+
   async function fetchDetail(projectId, workItemId) {
     const payload = await apiRequest(
       `/projects/${encodeURIComponent(projectId)}/work-items/${encodeURIComponent(workItemId)}`,
     );
     state.detail = payload.workItem;
+    state.detailChildren = payload.children || [];
+    state.detailRequest = payload.agentRequest || null;
     state.canManage = Boolean(payload.canManage);
     state.canPostUpdate = Boolean(payload.canPostUpdate);
     state.canEditUpdate = Boolean(payload.canEditUpdate);
@@ -217,18 +317,18 @@
   }
 
   function renderCard(item) {
-    const assignee = item.origin === 'agent'
-      ? 'YourLab Agent'
-      : userLabel(item.assigneeUserId);
+    const assignee = executorLabel(item);
     return `
       <article class="ado-card"
         data-work-item-id="${escapeHtml(item.id)}"
         draggable="${state.canManage ? 'true' : 'false'}">
+        ${state.canManage ? `<input class="ado-card-select" type="checkbox" data-ado-select="${escapeHtml(item.id)}" ${state.selectedIds.has(item.id) ? 'checked' : ''} aria-label="Seleccionar tarefa" />` : ''}
         <div class="ado-card-type">${escapeHtml(originClassLabel(item.origin))} · ${escapeHtml(statusLabel(item.status))}</div>
         <h4 class="ado-card-title">${escapeHtml(item.title)}</h4>
         <div class="ado-card-foot">
           <span class="ado-card-assignee">${escapeHtml(assignee)}</span>
-          <span class="ado-card-cx ado-cx-${escapeHtml(item.complexity)}">${escapeHtml(complexityLabel(item.complexity))}</span>
+          <span>${item.clientVisible ? 'Cliente' : 'Interna'}</span>
+          <span class="ado-card-cx ado-cx-${escapeHtml(item.complexity)}">${escapeHtml(item.priority || '—')}</span>
         </div>
       </article>
     `;
@@ -238,21 +338,19 @@
     const board = $('workItemsBoard');
     if (!board) return;
     board.className = 'ado-board';
-    const byStatus = Object.fromEntries(BOARD_STATUSES.map((s) => [s.id, []]));
+    const byStatus = Object.fromEntries(BOARD_GROUPS.map((s) => [s.id, []]));
     state.items.forEach((item) => {
-      let bucket = item.status;
-      if (bucket === 'blocked') bucket = 'active';
-      if (!byStatus[bucket]) bucket = 'new';
+      const bucket = BOARD_GROUPS.find((group) => group.statuses.includes(item.status))?.id || 'planned';
       byStatus[bucket].push(item);
     });
 
-    board.innerHTML = BOARD_STATUSES.map((col) => `
+    board.innerHTML = BOARD_GROUPS.map((col) => `
       <section class="ado-column" data-status-column="${col.id}">
         <header class="ado-column-head">
           <h3>${escapeHtml(col.label)}</h3>
           <span class="ado-column-count">${byStatus[col.id].length}</span>
         </header>
-        <div class="ado-column-body" data-drop-status="${col.id}">
+        <div class="ado-column-body">
           ${byStatus[col.id].map(renderCard).join('') || '<p class="ado-column-empty">—</p>'}
         </div>
       </section>
@@ -263,27 +361,81 @@
     const board = $('workItemsBoard');
     if (!board) return;
     board.className = 'ado-list';
+    const prioritized = state.view === 'priority';
+    board.classList.toggle('ado-priority-list', prioritized);
     board.innerHTML = `
-      <div class="ado-list-head">
-        <span>Tarefa</span>
-        <span>Estado</span>
-        <span>Responsável</span>
-        <span>Tipo</span>
+      ${prioritized ? '<div class="ado-priority-intro"><strong>O trabalho mais importante aparece primeiro</strong><span>Revisões, pedidos de informação e bloqueios têm prioridade.</span></div>' : ''}
+      <div class="ado-list-head ado-list-head-tasks">
+        <span></span><span>Tarefa</span><span>Estado</span><span>Responsável</span><span>Etapa</span>
       </div>
       ${state.items.map((item) => `
-        <button type="button" class="ado-list-row" data-work-item-id="${escapeHtml(item.id)}">
-          <span class="ado-list-title">${escapeHtml(item.title)}</span>
-          <span class="ado-list-status">${escapeHtml(statusLabel(item.status))}</span>
-          <span class="ado-list-assignee">${item.origin === 'agent' ? 'Agent' : escapeHtml(userLabel(item.assigneeUserId))}</span>
-          <span class="ado-list-type">${escapeHtml(originClassLabel(item.origin))}</span>
-        </button>
+        <div class="ado-list-row ado-list-row-task ${item.requiresAttention ? 'needs-attention' : ''}" data-work-item-id="${escapeHtml(item.id)}" role="button" tabindex="0">
+          <span>${state.canManage ? `<input type="checkbox" data-ado-select="${escapeHtml(item.id)}" ${state.selectedIds.has(item.id) ? 'checked' : ''} aria-label="Seleccionar tarefa" />` : ''}</span>
+          <span class="ado-list-title"><strong>${escapeHtml(item.title)}</strong>${item.agentRequestId ? `<small>Plano de agente${item.progressTotal ? ` · ${item.progressCurrent}/${item.progressTotal}` : ''}</small>` : ''}</span>
+          <span class="ado-list-status"><span class="ado-status-dot status-${escapeHtml(item.status)}"></span>${escapeHtml(attentionLabel(item))}</span>
+          <span class="ado-list-assignee">${escapeHtml(executorLabel(item))}</span>
+          <span class="ado-list-type">${escapeHtml(stageLabel(item.deliveryStageId))}${item.priority === 'high' ? '<small>Prioridade alta</small>' : ''}</span>
+        </div>
       `).join('') || '<p class="ado-empty">Sem tarefas neste projecto.</p>'}
+    `;
+  }
+
+  function renderSelectionBar() {
+    const el = $('workItemsSelectionBar');
+    if (!el) return;
+    const count = state.selectedIds.size;
+    el.classList.toggle('hidden', !count || !state.canManage);
+    el.innerHTML = count ? `<strong>${count} tarefa(s) seleccionada(s)</strong><div><button type="button" class="btn tiny" data-ado-batch-visible="true">Mostrar ao cliente</button><button type="button" class="btn tiny ghost" data-ado-batch-visible="false">Ocultar do cliente</button><button type="button" class="btn tiny ghost" data-ado-clear-selection>Limpar</button></div>` : '';
+  }
+
+  function renderSuggestions() {
+    const el = $('workItemSuggestions');
+    if (!el) return;
+    el.classList.toggle('hidden', !state.canManage);
+    if (!state.canManage) return;
+    const enabled = new Set(state.automationRules.filter((rule) => rule.enabled && rule.autoCreate).map((rule) => rule.ruleId));
+    const labels = { pending_human_review: 'Revisões pendentes', pending_approval: 'Aprovações pendentes', unplanned_functional_requirements: 'Requisitos sem trabalho', missing_phase_deliverables: 'Entregáveis sem trabalho', resolve_stage_blockers: 'Bloqueios da etapa' };
+    el.innerHTML = `
+      <div class="ado-suggestions-head">
+        <div>
+          <span class="ado-suggestions-eyebrow">OPCIONAL E CONTEXTUAL</span>
+          <div class="ado-suggestions-title-row">
+            <strong>Sugestões de tarefas</strong>
+            <span class="ado-suggestions-count">${state.suggestions.length}</span>
+          </div>
+          <small>Propostas baseadas no estado actual do projecto. Só se tornam tarefas depois da sua confirmação.</small>
+        </div>
+        <button type="button" class="btn tiny ghost" data-ado-evaluate-suggestions>Actualizar sugestões</button>
+      </div>
+      ${state.suggestions.length ? `
+        <div class="ado-suggestion-list">
+          ${state.suggestions.map((suggestion) => `
+            <article class="ado-suggestion-card">
+              <div><strong>${escapeHtml(suggestion.title)}</strong><p>${escapeHtml(suggestion.reason)}</p></div>
+              <div>
+                <button type="button" class="btn tiny primary" data-ado-prepare-suggestion="${escapeHtml(suggestion.id)}">Rever e criar</button>
+                <button type="button" class="btn tiny ghost" data-ado-dismiss-suggestion="${escapeHtml(suggestion.id)}">Dispensar</button>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      ` : '<p class="ado-suggestions-empty">Não existem sugestões úteis para o estado actual do projecto.</p>'}
+      <details class="ado-automation-settings">
+        <summary>Configurar criação automática</summary>
+        <p class="muted-text">Regras activadas podem criar tarefas automaticamente e deixam sempre um registo de auditoria.</p>
+        ${Object.entries(labels).map(([ruleId, label]) => `<label class="checkline"><input type="checkbox" data-ado-automation-rule="${ruleId}" ${enabled.has(ruleId) ? 'checked' : ''} /> ${escapeHtml(label)}</label>`).join('')}
+      </details>
     `;
   }
 
   function renderToolbar() {
     const toolbar = $('workItemsToolbar');
     if (!toolbar) return;
+
+    if (state.mode === 'plan' && state.selectedRequest) {
+      toolbar.innerHTML = `<div class="ado-editor-bar"><button type="button" class="ado-back-btn" data-ado-close-plan>← Voltar às tarefas</button><span class="ado-plan-version">Plano v${state.selectedRequest.version || 1}</span></div>`;
+      return;
+    }
 
     if (state.mode === 'editor' && state.selectedId) {
       const isNew = state.selectedId === '__new__';
@@ -302,50 +454,82 @@
     }
 
     const stages = window.state?.config?.deliveryStageFlow || [];
+    const project = window.state?.selectedProject || {};
+    const phases = project.phases || [];
+    const members = project.members || [];
     const activeFilters = Object.values(state.filters).filter(Boolean).length;
+    const notifications = state.meta?.notifications || [];
+    const notification = notifications[0];
 
     toolbar.innerHTML = `
+      <div class="ado-toolbar-heading">
+        <div>
+          <span class="ado-toolbar-eyebrow">TRABALHO DO PROJECTO</span>
+          <h2>Tarefas${state.meta?.counts?.attention ? ` <span class="ado-attention-count">${state.meta.counts.attention} precisa(m) de atenção</span>` : ''}</h2>
+          <p>Veja primeiro o que precisa de si e acompanhe humanos e agentes no mesmo lugar.</p>
+        </div>
+        ${state.canManage ? '<button type="button" class="ado-btn-new" data-ado-new><span aria-hidden="true">+</span> Nova tarefa</button>' : ''}
+      </div>
+      ${notification ? `
+        <aside class="ado-notification-strip" role="status" aria-label="Notificação de trabalho">
+          <span class="ado-notification-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>${escapeHtml(notification.title || 'Uma tarefa precisa de atenção')}</strong>
+            <span>${escapeHtml(notification.message || '')}${notifications.length > 1 ? ` · mais ${notifications.length - 1}` : ''}</span>
+          </div>
+          <button type="button" data-ado-open-notification="${escapeHtml(notification.id)}" data-task-id="${escapeHtml(notification.taskId || '')}" data-request-id="${escapeHtml(notification.agentRequestId || '')}">Abrir</button>
+          <button type="button" class="ado-notification-dismiss" data-ado-dismiss-notification="${escapeHtml(notification.id)}" aria-label="Marcar notificação como lida">×</button>
+        </aside>` : ''}
       <div class="ado-toolbar-main">
-        <div class="ado-view-switch" role="tablist">
-          <button type="button" class="ado-view-btn ${state.view === 'board' ? 'is-active' : ''}" data-ado-view="board">Board</button>
-          <button type="button" class="ado-view-btn ${state.view === 'list' ? 'is-active' : ''}" data-ado-view="list">Lista</button>
+        <div class="ado-view-switch" role="tablist" aria-label="Modo de visualização">
+          <button type="button" role="tab" aria-selected="${state.view === 'priority'}" class="ado-view-btn ${state.view === 'priority' ? 'is-active' : ''}" data-ado-view="priority">Prioridades</button>
+          <button type="button" role="tab" aria-selected="${state.view === 'board'}" class="ado-view-btn ${state.view === 'board' ? 'is-active' : ''}" data-ado-view="board">Quadro</button>
+          <button type="button" role="tab" aria-selected="${state.view === 'list'}" class="ado-view-btn ${state.view === 'list' ? 'is-active' : ''}" data-ado-view="list">Lista</button>
         </div>
         <div class="ado-toolbar-search">
+          <span class="ado-search-icon" aria-hidden="true">⌕</span>
           <input type="search" data-ado-filter="q" placeholder="Pesquisar tarefas…" value="${escapeHtml(state.filters.q)}" />
         </div>
         <button type="button" class="ado-filter-toggle ${state.filtersOpen ? 'is-open' : ''}" data-ado-toggle-filters>
-          Filtros${activeFilters ? ` (${activeFilters})` : ''}
+          <span aria-hidden="true">≡</span> Filtros${activeFilters ? ` <strong>${activeFilters}</strong>` : ''}
         </button>
-        ${state.canManage ? '<button type="button" class="ado-btn-new" data-ado-new>+ Nova tarefa</button>' : ''}
+        <label class="ado-show-completed"><input type="checkbox" data-ado-show-completed ${state.showCompleted ? 'checked' : ''}> Concluídas</label>
       </div>
       <div class="ado-toolbar-filters ${state.filtersOpen ? '' : 'hidden'}">
-        <select class="ado-field-inline" data-ado-filter="origin">
+        <select class="ado-field-inline" data-ado-filter="origin" aria-label="Filtrar por tipo">
           <option value="">Tipo: todos</option>
           <option value="human" ${state.filters.origin === 'human' ? 'selected' : ''}>Humana</option>
           <option value="agent" ${state.filters.origin === 'agent' ? 'selected' : ''}>Agente</option>
+          <option value="platform" ${state.filters.origin === 'platform' ? 'selected' : ''}>Plataforma</option>
         </select>
-        <select class="ado-field-inline" data-ado-filter="status">
+        <select class="ado-field-inline" data-ado-filter="status" aria-label="Filtrar por estado">
           <option value="">Estado: todos</option>
           ${ALL_STATUSES.map((s) => `<option value="${s.id}" ${state.filters.status === s.id ? 'selected' : ''}>${s.label}</option>`).join('')}
         </select>
-        <select class="ado-field-inline" data-ado-filter="stage">
+        <select class="ado-field-inline" data-ado-filter="stage" aria-label="Filtrar por etapa">
           <option value="">Etapa: todas</option>
           ${stages.map((s) => `<option value="${s.id}" ${state.filters.stage === s.id ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+          <option value="unclassified" ${state.filters.stage === 'unclassified' ? 'selected' : ''}>Não classificado</option>
         </select>
-        <select class="ado-field-inline" data-ado-filter="complexity">
+        <select class="ado-field-inline" data-ado-filter="planPhaseId" aria-label="Filtrar por fase do plano"><option value="">Fase do plano: todas</option>${phases.map((phase, index) => `<option value="${escapeHtml(phase.id)}" ${state.filters.planPhaseId === phase.id ? 'selected' : ''}>${escapeHtml(phase.name || `Fase ${index + 1}`)}</option>`).join('')}</select>
+        <select class="ado-field-inline" data-ado-filter="executorMode" aria-label="Filtrar por executor"><option value="">Executor: todos</option><option value="human" ${state.filters.executorMode === 'human' ? 'selected' : ''}>Humano</option><option value="agent" ${state.filters.executorMode === 'agent' ? 'selected' : ''}>Agente</option><option value="both" ${state.filters.executorMode === 'both' ? 'selected' : ''}>Humano + agente</option></select>
+        <select class="ado-field-inline" data-ado-filter="assigneeUserId" aria-label="Filtrar por responsável"><option value="">Responsável: todos</option>${members.map((member) => `<option value="${escapeHtml(member.userId)}" ${state.filters.assigneeUserId === member.userId ? 'selected' : ''}>${escapeHtml(userLabel(member.userId))}</option>`).join('')}</select>
+        <select class="ado-field-inline" data-ado-filter="complexity" aria-label="Filtrar por complexidade">
           <option value="">Complexidade</option>
           <option value="low" ${state.filters.complexity === 'low' ? 'selected' : ''}>Simples</option>
           <option value="medium" ${state.filters.complexity === 'medium' ? 'selected' : ''}>Média</option>
           <option value="high" ${state.filters.complexity === 'high' ? 'selected' : ''}>Complexa</option>
         </select>
+        <select class="ado-field-inline" data-ado-filter="priority" aria-label="Filtrar por prioridade"><option value="">Prioridade: todas</option><option value="high" ${state.filters.priority === 'high' ? 'selected' : ''}>Alta</option><option value="medium" ${state.filters.priority === 'medium' ? 'selected' : ''}>Média</option><option value="low" ${state.filters.priority === 'low' ? 'selected' : ''}>Baixa</option></select>
+        <select class="ado-field-inline" data-ado-filter="clientVisible" aria-label="Filtrar por visibilidade"><option value="">Cliente: todas</option><option value="true" ${state.filters.clientVisible === 'true' ? 'selected' : ''}>Visíveis</option><option value="false" ${state.filters.clientVisible === 'false' ? 'selected' : ''}>Internas</option></select>
       </div>
     `;
   }
 
   function renderStatusPills(item, editable) {
     const options = item.origin === 'agent'
-      ? BOARD_STATUSES
-      : [...BOARD_STATUSES, { id: 'blocked', label: 'Bloqueado' }];
+      ? ALL_STATUSES.filter((status) => !['in_progress', 'waiting_review'].includes(status.id))
+      : ALL_STATUSES;
     return `
       <div class="ado-status-pills" role="group" aria-label="Estado">
         ${options.map((s) => `
@@ -370,10 +554,12 @@
     state.mode = 'browse';
     state.selectedId = null;
     state.detail = null;
+    state.selectedRequest = null;
     state.saveState = 'idle';
     state.lastSaveSnapshot = '';
     state.editingUpdateId = null;
     clearTimeout(saveTimer);
+    clearTimeout(connectionPollTimer);
     syncModeLayout();
     renderToolbar();
     const editor = $('workItemEditor');
@@ -381,6 +567,7 @@
       editor.classList.add('hidden');
       editor.innerHTML = '';
     }
+    setTaskRoute();
   }
 
   async function openEditor(project, workItemId, seedDetail) {
@@ -394,17 +581,19 @@
 
     if (workItemId === '__new__') {
       const draft = loadDraft(project.id);
-      state.detail = draft || seedDetail || {
+      state.detail = seedDetail || draft || {
         id: '__new__',
         origin: 'human',
+        executorMode: 'human',
         title: '',
         descriptionMarkdown: '',
         acceptanceCriteriaMarkdown: '',
         updates: [],
         complexity: 'medium',
-        status: 'new',
+        status: 'planned',
         assigneeUserId: '',
-        deliveryStageId: window.state?.deliverySelectedStageId || '',
+        priority: 'medium', clientVisible: false, planPhaseId: '', parentTaskId: '', sourceRefs: [],
+        deliveryStageId: window.state?.deliverySelectedStageId || 'unclassified',
       };
       state.canManage = true;
       state.canPostUpdate = false;
@@ -419,9 +608,83 @@
     }
 
     paintEditor(project);
+    if (state.detail?.agentJobId && ['running', 'queued', 'dispatching', 'executing'].includes(state.detail.agentStatus)) pollConnectedTask(project, state.detail.agentJobId, state.detail.id);
+    if (workItemId !== '__new__') setTaskRoute({ taskId: workItemId });
     state.lastSaveSnapshot = '';
     setSaveIndicator('idle');
     focusEditorTitle();
+  }
+
+  async function openRequestPlan(project, requestId) {
+    state.mode = 'plan';
+    state.selectedId = null;
+    syncModeLayout();
+    renderToolbar();
+    const pane = $('workItemEditor');
+    if (!pane) return;
+    pane.classList.remove('hidden');
+    pane.innerHTML = '<p class="ado-empty">A preparar o plano…</p>';
+    try {
+      const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/agent-requests/${encodeURIComponent(requestId)}`);
+      state.selectedRequest = payload.agentRequest;
+      state.selectedRequestTasks = payload.workItems || [];
+      state.canManage = Boolean(payload.canManage);
+      renderToolbar();
+      paintRequestPlan(project);
+      setTaskRoute({ requestId });
+    } catch (err) {
+      pane.innerHTML = `<p class="ado-empty">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function paintRequestPlan(project) {
+    const pane = $('workItemEditor');
+    const request = state.selectedRequest;
+    const tasks = state.selectedRequestTasks || [];
+    if (!pane || !request) return;
+    const needsApproval = ['awaiting_approval', 'revision_requested'].includes(request.status);
+    const riskLabels = { multiple_tasks: 'Várias tarefas', client_visible: 'Visível ao cliente', external_impact: 'Impacto externo', sensitive_data: 'Dados sensíveis', irreversible_change: 'Alteração difícil de reverter', high_budget: 'Orçamento elevado', human_review: 'Revisão humana' };
+    pane.innerHTML = `
+      <article class="ado-plan-review">
+        <header class="ado-plan-hero">
+          <span class="ado-editor-type">PLANO DE TRABALHO DO AGENTE</span>
+          <h2>${escapeHtml(request.title)}</h2>
+          <p>${escapeHtml(request.requestMarkdown || 'Pedido de trabalho ao agente.')}</p>
+        </header>
+        <section class="ado-plan-summary-grid">
+          <div><span>Resultado esperado</span><strong>${escapeHtml(request.desiredOutcomeMarkdown || 'Outputs definidos nas tarefas')}</strong></div>
+          <div><span>Plano</span><strong>${tasks.length} tarefa(s)</strong></div>
+          <div><span>Impacto</span><strong>${escapeHtml(request.risk?.level === 'high' ? 'Elevado' : request.risk?.level === 'medium' ? 'Moderado' : 'Baixo')}</strong></div>
+          <div><span>Decisão</span><strong>${needsApproval ? 'Precisa da sua aprovação' : 'Aprovado para executar'}</strong></div>
+        </section>
+        <section class="ado-plan-sequence">
+          <div class="ado-section-heading"><div><h3>Como o agente vai trabalhar</h3><p>Unidades de trabalho significativas, na ordem em que serão executadas.</p></div></div>
+          <ol>${tasks.map((task, index) => `
+            <li>
+              <span class="ado-plan-step">${index + 1}</span>
+              <div><strong>${escapeHtml(task.title)}</strong><p>${escapeHtml(task.expectedOutputs?.[0]?.label || task.acceptanceCriteriaMarkdown || 'Produzir o resultado esperado.')}</p><small>${escapeHtml(executorLabel(task))}${task.dependencyTaskIds?.length ? ` · depende de ${task.dependencyTaskIds.length} tarefa(s)` : ''}${task.reviewRequired ? ' · revisão humana' : ''}</small></div>
+              <div class="ado-plan-task-tools"><span class="ado-plan-task-status">${escapeHtml(statusLabel(task.status))}</span>${needsApproval && state.canManage ? `<span><button type="button" data-ado-plan-move="up" data-task-id="${escapeHtml(task.id)}" aria-label="Mover para cima" ${index === 0 ? 'disabled' : ''}>↑</button><button type="button" data-ado-plan-move="down" data-task-id="${escapeHtml(task.id)}" aria-label="Mover para baixo" ${index === tasks.length - 1 ? 'disabled' : ''}>↓</button><button type="button" data-ado-plan-remove data-task-id="${escapeHtml(task.id)}" aria-label="Remover tarefa" ${tasks.length === 1 ? 'disabled' : ''}>×</button></span>` : ''}</div>
+            </li>`).join('')}</ol>
+        </section>
+        ${needsApproval && state.canManage ? `<section class="ado-plan-decision"><div><strong>O plano está pronto para a sua decisão.</strong><p>A execução só começa depois da aprovação.</p></div><button type="button" class="ado-action-primary" data-ado-approve-plan>Aprovar e iniciar</button><button type="button" class="ado-action-ghost" data-ado-revise-plan>Pedir revisão do plano</button></section>` : ''}
+        ${!needsApproval && request.status === 'ready' && state.canManage ? `<section class="ado-plan-decision"><div><strong>Plano aprovado.</strong><p>A primeira tarefa pronta pode ser iniciada.</p></div><button type="button" class="ado-action-primary" data-ado-start-plan>Iniciar trabalho</button></section>` : ''}
+        <details class="ado-advanced-details"><summary>Mais detalhes</summary><div class="ado-advanced-grid"><p><strong>Agente</strong><br>${escapeHtml(request.agentId || request.agentType)}</p><p><strong>Etapa</strong><br>${escapeHtml(stageLabel(request.deliveryStageId))}</p><p><strong>Motivos de controlo</strong><br>${escapeHtml((request.risk?.flags || []).map((flag) => riskLabels[flag] || flag).join(', ') || 'Rotina de baixo risco')}</p><p><strong>ID rastreável</strong><br>${escapeHtml(request.id)}</p></div></details>
+      </article>`;
+  }
+
+  async function startApprovedRequest(project, request) {
+    const payload = await apiRequest('/agent-runs', {
+      method: 'POST',
+      body: { projectId: project.id, agentId: state.pendingConnectionAgentId || request.agentId, agentType: request.agentType, agentRequestId: request.id, workItemId: state.pendingConnectionTaskId || undefined },
+    });
+    if (payload.requiresApproval) throw new Error('O plano ainda precisa de aprovação.');
+    await fetchList(project.id);
+    await fetchAgentRequests(project.id).catch(() => []);
+    const taskId = state.pendingConnectionTaskId || payload.workItem?.id || (state.selectedRequestTasks || []).find((task) => task.status === 'ready')?.id;
+    state.pendingConnectionTaskId = '';
+    state.pendingConnectionAgentId = '';
+    if (taskId) await openEditor(project, taskId);
+    showToast('O agente iniciou a primeira tarefa.', 'ok');
   }
 
   function paintEditor(project) {
@@ -429,16 +692,28 @@
     if (!pane || !state.detail) return;
 
     const item = state.detail;
-    const editable = state.canManage && item.origin === 'human';
+    const editable = state.canManage;
+    const executorLocked = item.agentStatus === 'running';
+    const derivedStatus = item.executorMode === 'both' || Number(item.childTaskCount || 0) > 0;
     const stages = window.state?.config?.deliveryStageFlow || [];
+    const phases = project.phases || [];
     const members = project.members || [];
     const users = window.state?.users || [];
+    const children = state.detailChildren || [];
+    const request = state.detailRequest || null;
+    const executionSettings = item.executionSettings || {};
+    const isCoordination = item.taskRole === 'coordination';
 
     const assigneeOptions = members.map((m) => {
       const u = users.find((entry) => entry.id === m.userId);
       const label = u?.name || u?.email || m.userId;
       return `<option value="${escapeHtml(m.userId)}" ${item.assigneeUserId === m.userId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
     }).join('');
+    const parentOptions = state.items.filter((candidate) => candidate.id !== item.id && !candidate.parentTaskId).map((candidate) => `<option value="${escapeHtml(candidate.id)}" ${item.parentTaskId === candidate.id ? 'selected' : ''}>${escapeHtml(candidate.title)}</option>`).join('');
+    const reviewRef = (item.sourceRefs || []).find((ref) => ref.type === 'review');
+    const approvalRef = (item.sourceRefs || []).find((ref) => ref.type === 'approval');
+    const manualSourceTypes = ['requirement', 'document', 'project_element', 'decision', 'change_request'];
+    const primarySource = (item.sourceRefs || []).find((ref) => manualSourceTypes.includes(ref.type)) || {};
 
     pane.innerHTML = `
       <form class="ado-editor-form" data-ado-detail-form>
@@ -449,26 +724,47 @@
             ${editable ? '' : 'readonly'} required />
         </div>
 
+        ${item.origin === 'agent' ? `
+          <section class="ado-now-card status-${escapeHtml(item.status)}">
+            <div><span class="ado-meta-label">AGORA</span><h3>${escapeHtml(attentionLabel(item))}</h3><p>${escapeHtml(item.currentAction || 'Consulte o plano e o resultado esperado desta tarefa.')}</p>${item.lastMilestone ? `<small>Último marco: ${escapeHtml(item.lastMilestone)}</small>` : ''}</div>
+            ${item.progressTotal ? `<div class="ado-now-progress"><strong>${item.progressCurrent || 0}/${item.progressTotal}</strong><span>passos</span></div>` : ''}
+          </section>
+        ` : ''}
+
+        ${isCoordination ? `
+          <section class="ado-editor-section ado-coordination-panel">
+            <div class="ado-section-heading"><div><h3 class="ado-section-title">Plano deste pedido</h3><p class="ado-section-hint">Execute o pacote completo ou avance subtarefa a subtarefa.</p></div><strong>${children.filter((child) => child.status === 'completed').length}/${children.length}</strong></div>
+            ${request?.diffSummary ? `<div class="ado-request-diff-summary"><span>${request.diffSummary.changedTasks || 0} alterada(s)</span><span>${request.diffSummary.newTasks || 0} nova(s)</span><span>${request.diffSummary.removedTasks || 0} removida(s)</span></div>` : ''}
+            <div class="ado-child-task-list">${children.map((child, index) => `<button type="button" data-ado-open-child="${escapeHtml(child.id)}"><span>${index + 1}</span><strong>${escapeHtml(child.title)}</strong><small>${escapeHtml(statusLabel(child.status))}</small></button>`).join('')}</div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-connect-agent>Connectar agente</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar pacote completo</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar todos os resultados</button></div>
+            <div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>
+            <div class="ado-manual-output-pane hidden" data-ado-bundle-pane><label>Pacote JSON completo<textarea rows="14" data-ado-bundle-raw placeholder='{"requestId":"…","requestVersion":1,"taskOutputs":[…]}'></textarea></label><p class="ado-section-hint" data-ado-bundle-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-bundle>Validar pacote</button><button type="button" class="ado-action-primary" data-ado-submit-bundle disabled>Enviar tudo para revisão</button></div></div>
+            ${children.some((child) => child.status === 'waiting_review') && state.canManage ? `<div class="ado-bundle-review"><strong>Resultados prontos para decisão</strong><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-bundle="approved">Aprovar e aplicar todos</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="rejected">Rejeitar</button></div></div>` : ''}
+            <details class="ado-advanced-details ado-execution-settings"><summary>Configuração da execução do agente</summary><div class="ado-advanced-grid">
+              <label>Agente preferido<input data-ado-setting="agentId" value="${escapeHtml(executionSettings.agentId || item.agentId || '')}" /></label>
+              <label>Perfil do modelo<select data-ado-setting="modelProfileId"><option value="small" ${executionSettings.modelProfileId === 'small' ? 'selected' : ''}>small</option><option value="medium" ${!executionSettings.modelProfileId || executionSettings.modelProfileId === 'medium' ? 'selected' : ''}>medium</option><option value="large" ${executionSettings.modelProfileId === 'large' ? 'selected' : ''}>large</option><option value="long_context" ${executionSettings.modelProfileId === 'long_context' ? 'selected' : ''}>long_context</option></select></label>
+              <label>Tokens máximos<input type="number" data-ado-setting="maxTokens" value="${executionSettings.maxTokens || 120000}" /></label>
+              <label>Tempo máximo (min)<input type="number" data-ado-setting="maxWallClockMinutes" value="${executionSettings.maxWallClockMinutes || 45}" /></label>
+              <label>Input alvo<input type="number" data-ado-setting="targetInputTokens" value="${executionSettings.targetInputTokens || 14000}" /></label>
+              <label>Output alvo<input type="number" data-ado-setting="targetOutputTokens" value="${executionSettings.targetOutputTokens || 2500}" /></label>
+              <label>Subtarefas máximas<input type="number" data-ado-setting="maxSubtasks" value="${executionSettings.maxSubtasks || 8}" /></label>
+              <label>Ferramentas MCP permitidas<input data-ado-setting="allowedMcpTools" value="${escapeHtml((executionSettings.allowedMcpTools || item.requiredMcpTools || []).join(', '))}" placeholder="project.read, requirements.read" /></label>
+              <label class="checkline"><input type="checkbox" data-ado-setting="enableWebSearch" ${executionSettings.enableWebSearch !== false ? 'checked' : ''}> Pesquisa web</label>
+            </div><p class="ado-section-hint">Alterar perfil, limites por tarefa ou número de subtarefas exige uma nova versão do pedido. Orçamento e tempo aplicam-se à próxima tentativa.</p><button type="button" class="ado-action-ghost" data-ado-save-execution-settings>Guardar configuração</button></details>
+            ${request?.diffSummary?.requestPromptDiff ? `<details class="ado-advanced-details"><summary>Diferenças do pedido</summary><pre>${escapeHtml(request.diffSummary.requestPromptDiff)}</pre></details>` : ''}
+          </section>
+        ` : ''}
+
         <div class="ado-task-meta">
           <div class="ado-meta-status-row">
             <span class="ado-meta-label">Estado</span>
-            ${renderStatusPills(item, editable)}
+            ${renderStatusPills(item, editable && !derivedStatus && item.agentStatus !== 'running')}
+            ${derivedStatus ? '<small class="ado-section-hint">Estado calculado pelas subtarefas.</small>' : ''}
           </div>
           <div class="ado-meta-fields">
-            ${item.origin === 'human' ? `
-              <label class="ado-meta-field">
-                <span class="ado-meta-label">Responsável</span>
-                <select class="ado-meta-control" name="assigneeUserId" ${editable ? '' : 'disabled'}>
-                  <option value="">Sem responsável</option>
-                  ${assigneeOptions}
-                </select>
-              </label>
-            ` : `
-              <div class="ado-meta-field">
-                <span class="ado-meta-label">Responsável</span>
-                <span class="ado-meta-static">YourLab Agent</span>
-              </div>
-            `}
+            <label class="ado-meta-field"><span class="ado-meta-label">Executor</span><select class="ado-meta-control" name="executorMode" ${editable && !executorLocked ? '' : 'disabled'}><option value="human" ${item.executorMode === 'human' ? 'selected' : ''}>Humano</option><option value="agent" ${item.executorMode === 'agent' ? 'selected' : ''}>Agente de IA</option><option value="both" ${item.executorMode === 'both' ? 'selected' : ''}>Humano + agente</option></select></label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Responsável humano</span><select class="ado-meta-control" name="assigneeUserId" ${editable && !executorLocked ? '' : 'disabled'}><option value="">Sem responsável</option>${assigneeOptions}</select></label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Agente</span><input class="ado-meta-control" name="agentId" value="${escapeHtml(item.agentId || item.agentType || '')}" placeholder="Tipo ou identificador" ${editable && !executorLocked ? '' : 'disabled'} /></label>
             <label class="ado-meta-field">
               <span class="ado-meta-label">Complexidade</span>
               <select class="ado-meta-control" name="complexity" ${editable ? '' : 'disabled'} required>
@@ -477,12 +773,45 @@
                 <option value="high" ${item.complexity === 'high' ? 'selected' : ''}>Complexa</option>
               </select>
             </label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Prioridade</span><select class="ado-meta-control" name="priority" ${editable ? '' : 'disabled'}><option value="">Sem prioridade</option><option value="low" ${item.priority === 'low' ? 'selected' : ''}>Baixa</option><option value="medium" ${item.priority === 'medium' ? 'selected' : ''}>Média</option><option value="high" ${item.priority === 'high' ? 'selected' : ''}>Alta</option></select></label>
             <label class="ado-meta-field">
               <span class="ado-meta-label">Etapa</span>
               <select class="ado-meta-control" name="deliveryStageId" ${editable ? '' : 'disabled'}>
-                <option value="">—</option>
                 ${stages.map((s) => `<option value="${s.id}" ${item.deliveryStageId === s.id ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+                <option value="unclassified" ${item.deliveryStageId === 'unclassified' ? 'selected' : ''}>Não classificado</option>
               </select>
+            </label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Fase do plano</span><select class="ado-meta-control" name="planPhaseId" ${editable ? '' : 'disabled'}><option value="">Sem fase específica</option>${phases.map((phase, index) => `<option value="${escapeHtml(phase.id)}" ${item.planPhaseId === phase.id ? 'selected' : ''}>${escapeHtml(phase.name || `Fase ${index + 1}`)}</option>`).join('')}</select></label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Tarefa-pai</span><select class="ado-meta-control" name="parentTaskId" ${editable && !executorLocked ? '' : 'disabled'}><option value="">Sem tarefa-pai</option>${parentOptions}</select></label>
+            <label class="ado-meta-field ado-client-visible-field"><span class="ado-meta-label">Visibilidade</span><span class="checkline"><input type="checkbox" name="clientVisible" ${item.clientVisible ? 'checked' : ''} ${editable ? '' : 'disabled'} /> Visível para o cliente</span><small>O cliente só actualiza se for responsável ou aprovador.</small></label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Tipo de origem</span><select class="ado-meta-control" name="sourceType" ${editable ? '' : 'disabled'}><option value="">Sem origem manual</option>${manualSourceTypes.map((type) => `<option value="${type}" ${primarySource.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></label>
+            <label class="ado-meta-field"><span class="ado-meta-label">ID do elemento</span><input class="ado-meta-control" name="sourceId" value="${escapeHtml(primarySource.id || '')}" placeholder="Ex.: FR-01 ou doc_…" ${editable ? '' : 'disabled'} /></label>
+            <label class="ado-meta-field"><span class="ado-meta-label">Nome da origem</span><input class="ado-meta-control" name="sourceLabel" value="${escapeHtml(primarySource.label || '')}" placeholder="Descrição curta" ${editable ? '' : 'disabled'} /></label>
+            <label class="ado-meta-field">
+              <span class="ado-meta-label">Etapa</span>
+              <select class="ado-meta-control" name="deliveryStageId" ${editable ? '' : 'disabled'} required>
+                ${stages.map((s) => `<option value="${s.id}" ${item.deliveryStageId === s.id ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+                <option value="unclassified" ${item.deliveryStageId === 'unclassified' ? 'selected' : ''}>Não classificado</option>
+              </select>
+            </label>
+            <label class="ado-meta-field">
+              <span class="ado-meta-label">Fase do plano</span>
+              <select class="ado-meta-control" name="planPhaseId" ${editable ? '' : 'disabled'}>
+                <option value="">Sem fase específica</option>
+                ${phases.map((phase, index) => `<option value="${escapeHtml(phase.id)}" ${item.planPhaseId === phase.id ? 'selected' : ''}>${escapeHtml(phase.name || `Fase ${index + 1}`)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="ado-meta-field">
+              <span class="ado-meta-label">Tarefa-pai</span>
+              <select class="ado-meta-control" name="parentTaskId" ${editable && !executorLocked ? '' : 'disabled'}>
+                <option value="">Sem tarefa-pai</option>
+                ${parentOptions}
+              </select>
+            </label>
+            <label class="ado-meta-field ado-client-visible-field">
+              <span class="ado-meta-label">Visibilidade</span>
+              <span class="checkline"><input type="checkbox" name="clientVisible" ${item.clientVisible ? 'checked' : ''} ${editable ? '' : 'disabled'} /> Visível para o cliente</span>
+              <small>Visibilidade não concede edição; o cliente só actualiza se for responsável ou aprovador.</small>
             </label>
             <label class="ado-meta-field">
               <span class="ado-meta-label">Início</span>
@@ -503,9 +832,27 @@
         </div>
 
         <section class="ado-editor-section">
-          <h3 class="ado-section-title">Descrição</h3>
+          <h3 class="ado-section-title">${item.origin === 'agent' ? 'Instruções e contexto' : 'Descrição'}</h3>
           <div class="ado-md-editor" data-ado-md-mount="description"></div>
         </section>
+
+        ${item.origin === 'agent' && !isCoordination ? `
+          <section class="ado-editor-section ado-agent-actions">
+            <div><h3 class="ado-section-title">Execução manual</h3><p class="ado-section-hint">Use as mesmas instruções fora da plataforma e mantenha o resultado ligado à tarefa.</p></div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button>${!isCoordination ? '<button type="button" class="ado-action-primary" data-ado-connect-agent>Connectar agente para esta tarefa</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>' : ''}${item.agentStatus !== 'running' && !isCoordination ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div>
+            ${!isCoordination ? '<div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>' : ''}
+            <div class="ado-manual-output-pane hidden" data-ado-manual-pane><label>Resultado obtido<textarea rows="10" data-ado-manual-raw placeholder="Cole aqui a resposta completa ou o JSON produzido…"></textarea></label><p class="ado-section-hint" data-ado-manual-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-manual>Validar e pré-visualizar</button><button type="button" class="ado-action-primary" data-ado-submit-manual disabled>Enviar para revisão</button></div></div>
+          </section>
+        ` : ''}
+
+        ${item.sourceRefs?.length ? `<section class="ado-editor-section"><h3 class="ado-section-title">Origem e rastreabilidade</h3><div class="ado-source-list">${item.sourceRefs.map((ref) => `<span>${escapeHtml(ref.label || `${ref.type}: ${ref.id}`)}</span>`).join('')}</div></section>` : ''}
+
+        ${item.executionPackage?.promptDiff ? `<section class="ado-editor-section"><details class="ado-advanced-details"><summary>O que mudou neste subprompt</summary><pre>${escapeHtml(item.executionPackage.promptDiff)}</pre></details></section>` : ''}
+
+        ${reviewRef && state.canManage ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Decisão da revisão</h3><p class="ado-section-hint">A decisão e a evidência permanecem ligadas à revisão; o estado desta tarefa é sincronizado.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-decision="approved" data-domain-id="${escapeHtml(reviewRef.id)}">Aprovar revisão</button><button type="button" class="ado-action-ghost" data-ado-review-decision="changes_requested" data-domain-id="${escapeHtml(reviewRef.id)}">Pedir alterações</button></div></section>` : ''}
+        ${approvalRef && (state.canManage || state.canPostUpdate) ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Decisão da aprovação</h3><p class="ado-section-hint">Registe a decisão sem sair da tarefa.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-approval-decision="approved" data-domain-id="${escapeHtml(approvalRef.id)}">Aprovar entrega</button><button type="button" class="ado-action-ghost" data-ado-approval-decision="rejected" data-domain-id="${escapeHtml(approvalRef.id)}">Rejeitar</button></div></section>` : ''}
+
+        ${item.status === 'waiting_review' && !reviewRef && state.canManage ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Rever resultado</h3><p class="ado-section-hint">Confirme o resultado ou devolva feedback ao mesmo histórico de trabalho.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-task-review="approved">Aprovar e aplicar</button><button type="button" class="ado-action-ghost" data-ado-task-review="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-task-review="rejected">Rejeitar</button></div></section>` : ''}
 
         <section class="ado-editor-section">
           <h3 class="ado-section-title">Critérios de aceitação</h3>
@@ -539,8 +886,24 @@
         ` : ''}
 
         <input type="hidden" name="status" value="${escapeHtml(item.status)}" data-ado-status-input />
+        ${item.suggestionId ? `<input type="hidden" name="suggestionId" value="${escapeHtml(item.suggestionId)}" />` : ''}
       </form>
     `;
+
+    const meta = pane.querySelector('.ado-task-meta');
+    const fields = meta?.querySelector('.ado-meta-fields');
+    if (fields) {
+      const seenNames = new Set();
+      fields.querySelectorAll('[name]').forEach((control) => {
+        if (!control.name || !seenNames.has(control.name)) { seenNames.add(control.name); return; }
+        control.closest('.ado-meta-field')?.remove();
+      });
+      const details = document.createElement('details');
+      details.className = 'ado-advanced-details ado-task-details';
+      details.innerHTML = '<summary>Responsáveis, estado e mais detalhes</summary>';
+      fields.parentNode.insertBefore(details, fields);
+      details.appendChild(fields);
+    }
 
     state.lastSaveSnapshot = formSnapshot(pane.querySelector('[data-ado-detail-form]'));
 
@@ -579,7 +942,10 @@
   }
 
   function renderUpdatesTimeline(item) {
-    const updates = [...(item?.updates || [])].sort((a, b) => {
+    const updates = [
+      ...(item?.taskActivity || []).map((event) => ({ ...event, bodyMarkdown: event.message, createdBy: event.actorId, isSystemEvent: true })),
+      ...(item?.updates || []),
+    ].sort((a, b) => {
       const ta = new Date(a.createdAt || 0).getTime();
       const tb = new Date(b.createdAt || 0).getTime();
       return ta - tb;
@@ -593,13 +959,13 @@
         <article class="ado-update-item ${editing ? 'is-editing' : ''}" data-update-id="${escapeHtml(entry.id)}">
           <header class="ado-update-head">
             <div class="ado-update-meta">
-              <strong class="ado-update-author">${escapeHtml(userLabel(entry.createdBy))}</strong>
+              <strong class="ado-update-author">${escapeHtml(entry.isSystemEvent ? (entry.actorType === 'agent' ? 'Agente' : entry.actorType === 'platform' ? 'Plataforma' : userLabel(entry.createdBy)) : userLabel(entry.createdBy))}</strong>
               <time class="ado-update-date">${escapeHtml(formatWhen(entry.createdAt))}</time>
               ${entry.updatedAt && entry.updatedAt !== entry.createdAt
                 ? `<span class="ado-update-edited">editado ${escapeHtml(formatWhen(entry.updatedAt))}</span>`
                 : ''}
             </div>
-            ${state.canEditUpdate ? `<button type="button" class="ado-action-ghost ado-action-small" data-ado-update-edit="${escapeHtml(entry.id)}">Editar</button>` : ''}
+            ${state.canEditUpdate && !entry.isSystemEvent ? `<button type="button" class="ado-action-ghost ado-action-small" data-ado-update-edit="${escapeHtml(entry.id)}">Editar</button>` : ''}
           </header>
           <div class="ado-update-body ${editing ? 'hidden' : ''}" data-ado-update-body>${escapeHtml(entry.bodyMarkdown)}</div>
           ${editing ? `
@@ -650,7 +1016,13 @@
         status: updated.status,
         complexity: updated.complexity,
         assigneeUserId: updated.assigneeUserId,
+        executorMode: updated.executorMode,
+        agentId: updated.agentId,
         deliveryStageId: updated.deliveryStageId,
+        planPhaseId: updated.planPhaseId,
+        parentTaskId: updated.parentTaskId,
+        priority: updated.priority,
+        clientVisible: updated.clientVisible,
         updatedAt: updated.updatedAt,
         agentStatus: updated.agentStatus,
         origin: updated.origin,
@@ -664,8 +1036,9 @@
     if (!form || !state.canManage) return false;
 
     const body = Object.fromEntries(new FormData(form).entries());
-    if (!body.title?.trim() || !body.descriptionMarkdown?.trim()) {
-      if (!silent) showToast('Título e descrição são obrigatórios.', 'error');
+    body.clientVisible = Boolean(form.elements.clientVisible?.checked);
+    if (!body.title?.trim() || !body.descriptionMarkdown?.trim() || !body.deliveryStageId) {
+      if (!silent) showToast('Título, descrição e etapa são obrigatórios.', 'error');
       return false;
     }
 
@@ -732,6 +1105,8 @@
     if (state.mode !== 'browse') return;
     if (state.view === 'board') renderBoard();
     else renderList();
+    renderSelectionBar();
+    renderSuggestions();
   }
 
   function wireEvents(project) {
@@ -742,11 +1117,78 @@
     window.addEventListener('resize', resizeDescription);
 
     root.addEventListener('click', async (event) => {
+      project = window.state?.selectedProject || project;
+      const notificationControl = event.target.closest('[data-ado-open-notification], [data-ado-dismiss-notification]');
+      if (notificationControl) {
+        const notificationId = notificationControl.dataset.adoOpenNotification || notificationControl.dataset.adoDismissNotification;
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'POST', body: {} });
+          if (state.meta?.notifications) state.meta.notifications = state.meta.notifications.filter((entry) => entry.id !== notificationId);
+          renderToolbar();
+          if (notificationControl.dataset.adoOpenNotification) {
+            if (notificationControl.dataset.taskId) await openEditor(project, notificationControl.dataset.taskId);
+            else if (notificationControl.dataset.requestId) await openRequestPlan(project, notificationControl.dataset.requestId);
+          }
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
       const viewBtn = event.target.closest('[data-ado-view]');
       if (viewBtn) {
         state.view = viewBtn.dataset.adoView;
+        await fetchList(project.id);
         renderToolbar();
         refreshBoardView();
+        return;
+      }
+
+      if (event.target.closest('[data-ado-close-plan]')) {
+        leaveEditorMode(); refreshBoardView(); return;
+      }
+      if (event.target.closest('[data-ado-approve-plan]')) {
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/agent-requests/${encodeURIComponent(state.selectedRequest.id)}/approve`, { method: 'POST', body: {} });
+          state.selectedRequest = payload.agentRequest;
+          state.selectedRequestTasks = payload.workItems || [];
+          paintRequestPlan(project);
+          await startApprovedRequest(project, state.selectedRequest);
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-start-plan]')) {
+        try { await startApprovedRequest(project, state.selectedRequest); }
+        catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-revise-plan]')) {
+        const feedbackMarkdown = window.prompt('O que deve ser alterado neste plano?')?.trim();
+        if (!feedbackMarkdown) return;
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/agent-requests/${encodeURIComponent(state.selectedRequest.id)}/revision`, { method: 'POST', body: { feedbackMarkdown } });
+          state.selectedRequest = { ...state.selectedRequest, ...payload.agentRequest };
+          paintRequestPlan(project); showToast('Pedido de revisão registado.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      const movePlanTask = event.target.closest('[data-ado-plan-move]');
+      const removePlanTask = event.target.closest('[data-ado-plan-remove]');
+      if ((movePlanTask || removePlanTask) && state.selectedRequest) {
+        const control = movePlanTask || removePlanTask;
+        const order = (state.selectedRequestTasks || []).map((task) => task.id);
+        const index = order.indexOf(control.dataset.taskId);
+        if (index < 0) return;
+        if (removePlanTask) order.splice(index, 1);
+        else {
+          const target = movePlanTask.dataset.adoPlanMove === 'up' ? index - 1 : index + 1;
+          if (target < 0 || target >= order.length) return;
+          [order[index], order[target]] = [order[target], order[index]];
+        }
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/agent-requests/${encodeURIComponent(state.selectedRequest.id)}/plan`, { method: 'PATCH', body: { orderedTaskIds: order } });
+          state.selectedRequest = payload.agentRequest;
+          state.selectedRequestTasks = payload.workItems || [];
+          renderToolbar(); paintRequestPlan(project);
+          showToast('Plano actualizado; precisa de nova aprovação.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
         return;
       }
 
@@ -758,6 +1200,44 @@
 
       if (event.target.closest('[data-ado-new]')) {
         await openEditor(project, '__new__');
+        return;
+      }
+
+      const selection = event.target.closest('[data-ado-select]');
+      if (selection) {
+        event.stopPropagation();
+        if (selection.checked) state.selectedIds.add(selection.dataset.adoSelect); else state.selectedIds.delete(selection.dataset.adoSelect);
+        renderSelectionBar();
+        return;
+      }
+      if (event.target.closest('[data-ado-clear-selection]')) { state.selectedIds.clear(); refreshBoardView(); return; }
+      const batch = event.target.closest('[data-ado-batch-visible]');
+      if (batch) {
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/batch`, { method: 'PATCH', body: { ids: [...state.selectedIds], clientVisible: batch.dataset.adoBatchVisible === 'true' } });
+          state.selectedIds.clear(); await fetchList(project.id); refreshBoardView(); showToast('Visibilidade actualizada.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-evaluate-suggestions]')) {
+        try { await fetchSuggestions(project.id, true); renderSuggestions(); showToast('Sugestões reavaliadas.', 'ok'); }
+        catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      const prepare = event.target.closest('[data-ado-prepare-suggestion]');
+      if (prepare) {
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/suggestions/${encodeURIComponent(prepare.dataset.adoPrepareSuggestion)}/prepare`, { method: 'POST', body: {} });
+          await openEditor(project, '__new__', payload.draft);
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      const dismiss = event.target.closest('[data-ado-dismiss-suggestion]');
+      if (dismiss) {
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/suggestions/${encodeURIComponent(dismiss.dataset.adoDismissSuggestion)}/dismiss`, { method: 'POST', body: {} });
+          state.suggestions = state.suggestions.filter((entry) => entry.id !== dismiss.dataset.adoDismissSuggestion); renderSuggestions();
+        } catch (err) { showToast(err.message, 'error'); }
         return;
       }
 
@@ -787,6 +1267,146 @@
 
       if (event.target.closest('[data-ado-open-delivery]')) {
         window.switchToTab?.('deliveryos');
+        return;
+      }
+
+      const openChild = event.target.closest('[data-ado-open-child]');
+      if (openChild) { await openEditor(project, openChild.dataset.adoOpenChild); return; }
+
+      if (event.target.closest('[data-ado-bundle-output]')) {
+        $('workItemEditor')?.querySelector('[data-ado-bundle-pane]')?.classList.toggle('hidden'); return;
+      }
+      if (event.target.closest('[data-ado-preview-bundle]') && state.detail) {
+        const pane = $('workItemEditor'); const rawOutput = pane?.querySelector('[data-ado-bundle-raw]')?.value?.trim();
+        if (!rawOutput) { showToast('Cole primeiro o pacote JSON.', 'error'); return; }
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/manual-output/bundle/preview`, { method: 'POST', body: { rawOutput } });
+          pane.querySelector('[data-ado-bundle-preview]').textContent = `${payload.taskCount} resultado(s) válidos. Todos irão aguardar revisão.`;
+          pane.querySelector('[data-ado-submit-bundle]').disabled = !payload.valid;
+        } catch (err) { pane.querySelector('[data-ado-bundle-preview]').textContent = err.message; pane.querySelector('[data-ado-submit-bundle]').disabled = true; }
+        return;
+      }
+      if (event.target.closest('[data-ado-submit-bundle]') && state.detail) {
+        const rawOutput = $('workItemEditor')?.querySelector('[data-ado-bundle-raw]')?.value?.trim();
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/manual-output/bundle`, { method: 'POST', body: { rawOutput } });
+          await fetchDetail(project.id, state.detail.id); paintEditor(project); await fetchList(project.id); showToast('Pacote completo enviado para revisão.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      const bundleReview = event.target.closest('[data-ado-review-bundle]');
+      if (bundleReview && state.detail) {
+        const action = bundleReview.dataset.adoReviewBundle; const feedbackMarkdown = action === 'approved' ? '' : window.prompt(action === 'rejected' ? 'Porque rejeita estes resultados?' : 'Que alterações são necessárias?')?.trim();
+        if (action !== 'approved' && !feedbackMarkdown) return;
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/review-bundle`, { method: 'POST', body: { action, feedbackMarkdown } });
+          await fetchDetail(project.id, state.detail.id); paintEditor(project); await fetchList(project.id); showToast('Decisão aplicada ao pacote.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+
+      if (event.target.closest('[data-ado-connect-agent]') && state.detail) {
+        const pane = $('workItemEditor')?.querySelector('[data-ado-connection-pane]'); const status = pane?.querySelector('[data-ado-connection-status]'); const details = pane?.querySelector('[data-ado-connection-details]');
+        pane?.classList.remove('hidden'); if (status) status.textContent = 'A verificar ligação, competências e ferramentas…'; if (details) details.innerHTML = '';
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/agent-connection/prepare`);
+          if (!payload.selectedAgentId) throw new Error('Nenhum agente disponível possui as competências e ferramentas necessárias.');
+          if (status) status.textContent = payload.contextSummary;
+          if (details) details.innerHTML = `<div class="ado-agent-match"><label>Agente compatível<select data-ado-agent-select>${(payload.agents || []).filter((agent) => agent.compatible).map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === payload.selectedAgentId ? 'selected' : ''}>${escapeHtml(agent.name)}</option>`).join('')}</select></label><p><strong>Competências:</strong> ${escapeHtml((payload.requiredSkills || []).join(', ') || 'Contexto geral')}</p><p><strong>Ferramentas MCP:</strong> ${escapeHtml((payload.requiredMcpTools || []).join(', ') || 'Sem ferramentas adicionais')}</p><button type="button" class="ado-action-primary" data-ado-send-agent>Enviar ${payload.scope === 'tree' ? 'plano completo' : 'esta tarefa'} ao agente</button></div>`;
+        } catch (err) { if (status) status.textContent = err.message; if (details) details.innerHTML = '<button type="button" class="ado-action-ghost" data-ado-connect-agent>Tentar novamente</button>'; }
+        return;
+      }
+      if (event.target.closest('[data-ado-send-agent]') && state.detail) {
+        const editor = $('workItemEditor'); const agentId = editor?.querySelector('[data-ado-agent-select]')?.value || state.detail.agentId; const settings = {};
+        editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
+        const status = editor?.querySelector('[data-ado-connection-status]'); if (status) status.textContent = 'A ligar e a entregar o pacote versionado…';
+        try {
+          const payload = await apiRequest('/agent-runs', { method: 'POST', body: { projectId: project.id, agentId, agentType: state.detail.agentType, agentRequestId: state.detail.agentRequestId, workItemId: state.detail.id, budget: { maxTokens: settings.maxTokens, maxWallClockMinutes: settings.maxWallClockMinutes, maxSubtasks: settings.maxSubtasks }, options: { ...settings, stageId: state.detail.deliveryStageId, enableWebSearch: settings.enableWebSearch } } });
+          if (payload.requiresApproval) { state.pendingConnectionTaskId = state.detail.id; state.pendingConnectionAgentId = agentId; showToast('O plano precisa de aprovação antes de ser enviado.', 'error'); await openRequestPlan(project, state.detail.agentRequestId); return; }
+          const taskId = state.detail.id; await fetchDetail(project.id, taskId); paintEditor(project); await fetchList(project.id); showToast('Tarefa entregue ao agente. O progresso ficará visível aqui.', 'ok');
+          pollConnectedTask(project, payload.agentJob?.id || payload.promptRun?.id, taskId);
+        } catch (err) { if (status) status.textContent = err.message; showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-save-execution-settings]') && state.detail) {
+        const editor = $('workItemEditor'); const settings = {};
+        editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
+        const save = async (revisePlan) => apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/execution-settings`, { method: 'POST', body: { settings, revisePlan } });
+        try {
+          let payload;
+          try { payload = await save(false); }
+          catch (err) { if (!err.message.includes('mudam os prompts') || !confirm('Esta configuração altera a divisão ou os prompts. Criar uma nova versão do pedido e preservar esta no histórico?')) throw err; payload = await save(true); }
+          if (payload.revised && payload.parentTaskId) { showToast('Nova versão do pedido criada.', 'ok'); await openEditor(project, payload.parentTaskId); }
+          else { state.detail = payload.workItem; state.detailChildren = payload.children || state.detailChildren; paintEditor(project); showToast('Configuração guardada para a próxima tentativa.', 'ok'); }
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+
+      if (event.target.closest('[data-ado-copy-package]') && state.detail) {
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/execution-package`);
+          await navigator.clipboard.writeText(payload.text);
+          showToast('Instruções copiadas.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-manual-output]')) {
+        $('workItemEditor')?.querySelector('[data-ado-manual-pane]')?.classList.toggle('hidden');
+        return;
+      }
+      if (event.target.closest('[data-ado-preview-manual]') && state.detail) {
+        const pane = $('workItemEditor');
+        const rawOutput = pane?.querySelector('[data-ado-manual-raw]')?.value?.trim();
+        if (!rawOutput) { showToast('Cole primeiro o resultado.', 'error'); return; }
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/manual-output/preview`, { method: 'POST', body: { rawOutput } });
+          pane.querySelector('[data-ado-manual-preview]').textContent = `${payload.preview}. O resultado será enviado para revisão antes de ser aplicado.`;
+          pane.querySelector('[data-ado-submit-manual]').disabled = !payload.valid;
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-submit-manual]') && state.detail) {
+        const rawOutput = $('workItemEditor')?.querySelector('[data-ado-manual-raw]')?.value?.trim();
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/manual-output`, { method: 'POST', body: { rawOutput } });
+          state.detail = payload.workItem; paintEditor(project); await fetchList(project.id); showToast('Resultado enviado para revisão.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      if (event.target.closest('[data-ado-assume-human]') && state.detail) {
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/assume-human`, { method: 'POST', body: {} });
+          state.detail = payload.workItem; paintEditor(project); showToast('A tarefa foi atribuída a si.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      const taskReview = event.target.closest('[data-ado-task-review]');
+      if (taskReview && state.detail) {
+        const action = taskReview.dataset.adoTaskReview;
+        const feedbackMarkdown = action === 'approved' ? '' : window.prompt(action === 'rejected' ? 'Porque rejeita este resultado?' : 'Que alterações são necessárias?')?.trim();
+        if (action !== 'approved' && !feedbackMarkdown) return;
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/review`, { method: 'POST', body: { action, feedbackMarkdown } });
+          state.detail = payload.workItem; paintEditor(project); await fetchList(project.id); showToast('Decisão registada.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+
+      const reviewDecision = event.target.closest('[data-ado-review-decision]');
+      if (reviewDecision) {
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/human-reviews/${encodeURIComponent(reviewDecision.dataset.domainId)}/resolve`, { method: 'POST', body: { action: reviewDecision.dataset.adoReviewDecision, status: reviewDecision.dataset.adoReviewDecision, applyChanges: reviewDecision.dataset.adoReviewDecision === 'approved' } });
+          await fetchDetail(project.id, state.selectedId); paintEditor(project); await fetchList(project.id); showToast('Decisão registada.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+
+      const approvalDecision = event.target.closest('[data-ado-approval-decision]');
+      if (approvalDecision) {
+        try {
+          await apiRequest(`/projects/${encodeURIComponent(project.id)}/client-approvals`, { method: 'POST', body: { approvalId: approvalDecision.dataset.domainId, action: approvalDecision.dataset.adoApprovalDecision } });
+          await fetchDetail(project.id, state.selectedId); paintEditor(project); await fetchList(project.id); showToast('Decisão registada.', 'ok');
+        } catch (err) { showToast(err.message, 'error'); }
         return;
       }
 
@@ -884,6 +1504,25 @@
     });
 
     root.addEventListener('change', async (event) => {
+      project = window.state?.selectedProject || project;
+      if (event.target.closest('[data-ado-show-completed]')) {
+        state.showCompleted = event.target.checked;
+        await fetchList(project.id);
+        refreshBoardView();
+        return;
+      }
+      const automationRule = event.target.closest('[data-ado-automation-rule]');
+      if (automationRule) {
+        try {
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/automations`, { method: 'PATCH', body: { ruleId: automationRule.dataset.adoAutomationRule, enabled: automationRule.checked } });
+          state.automationRules = payload.automationRules || [];
+          showToast('Automação actualizada.', 'ok');
+        } catch (err) {
+          automationRule.checked = !automationRule.checked;
+          showToast(err.message, 'error');
+        }
+        return;
+      }
       const filter = event.target.closest('[data-ado-filter]');
       if (filter && filter.dataset.adoFilter !== 'q') {
         state.filters[filter.dataset.adoFilter] = filter.value;
@@ -895,11 +1534,19 @@
       }
 
       if (event.target.closest('[data-ado-detail-form]')) {
+        if (event.target.name === 'assigneeUserId') {
+          const member = (project.members || []).find((entry) => entry.userId === event.target.value);
+          if (member?.role === 'client' && event.target.form?.elements.clientVisible && !event.target.form.elements.clientVisible.checked) {
+            event.target.form.elements.clientVisible.checked = true;
+            showToast('A tarefa ficou visível porque foi atribuída a um cliente.', 'ok');
+          }
+        }
         scheduleAutoSave(project);
       }
     });
 
     root.addEventListener('input', (event) => {
+      project = window.state?.selectedProject || project;
       const filter = event.target.closest('[data-ado-filter="q"]');
       if (filter) {
         clearTimeout(searchTimer);
@@ -918,7 +1565,17 @@
       }
     });
 
+    root.addEventListener('keydown', (event) => {
+      project = window.state?.selectedProject || project;
+      const row = event.target.closest('.ado-list-row-task[data-work-item-id]');
+      if (row && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        openEditor(project, row.dataset.workItemId);
+      }
+    });
+
     root.addEventListener('submit', async (event) => {
+      project = window.state?.selectedProject || project;
       const form = event.target.closest('[data-ado-detail-form]');
       if (!form) return;
       event.preventDefault();
@@ -936,6 +1593,7 @@
     });
 
     root.addEventListener('drop', async (event) => {
+      project = window.state?.selectedProject || project;
       const col = event.target.closest('[data-drop-status]');
       if (!col || !state.canManage || state.mode !== 'browse') return;
       event.preventDefault();
@@ -951,7 +1609,7 @@
     });
   }
 
-  async function open(project) {
+  async function open(project, options = {}) {
     if (!project?.id) return;
     const root = $('workItemsRoot');
     if (!root) return;
@@ -960,9 +1618,18 @@
       state.projectId = project.id;
       state.loaded = false;
       state.items = [];
+      state.meta = null;
+      state.suggestions = [];
+      state.agentRequests = [];
+      state.automationRules = [];
+      state.selectedIds.clear();
+      state.filters.planPhaseId = '';
       state.filtersOpen = false;
       if (state.mode === 'editor') leaveEditorMode();
     }
+    const requestedStage = options.deliveryStageId || window.state?.tabFilters?.deliveryStageId || '';
+    if (requestedStage && state.filters.stage !== requestedStage) { state.filters.stage = requestedStage; state.loaded = false; }
+    if (options.planPhaseId && state.filters.planPhaseId !== options.planPhaseId) { state.filters.planPhaseId = options.planPhaseId; state.loaded = false; }
 
     syncModeLayout();
     renderToolbar();
@@ -971,6 +1638,9 @@
       $('workItemsBoard').innerHTML = '<p class="ado-empty">A carregar tarefas…</p>';
       try {
         await fetchList(project.id);
+        await fetchMeta(project.id).catch(() => null);
+        await fetchAgentRequests(project.id).catch(() => []);
+        await fetchSuggestions(project.id).catch(() => []);
       } catch (err) {
         $('workItemsBoard').innerHTML = `<p class="ado-empty">${escapeHtml(err.message)}</p>`;
         return;
@@ -979,6 +1649,12 @@
 
     refreshBoardView();
     wireEvents(project);
+    const params = new URLSearchParams(window.location.search);
+    const pathRoute = readTaskRoute();
+    const requestId = pathRoute.requestId || params.get('agentRequest');
+    const taskId = pathRoute.taskId || params.get('task');
+    if (requestId && state.selectedRequest?.id !== requestId) await openRequestPlan(project, requestId);
+    else if (taskId && state.selectedId !== taskId) await openEditor(project, taskId);
   }
 
   window.WorkItemsUI = {
@@ -987,5 +1663,8 @@
     getMeta() {
       return state.meta;
     },
+    openFiltered(project, filters = {}) { return open(project, filters); },
+    openRequestPlan(project, requestId) { return openRequestPlan(project, requestId); },
+    openTask(project, taskId) { return openEditor(project, taskId); },
   };
 })();

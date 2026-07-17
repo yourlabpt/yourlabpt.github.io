@@ -147,6 +147,7 @@ registerRequirementsPlatform(app, {
     platformDir: path.join(__dirname, '..', 'projects'),
     logoPath: path.join(__dirname, '..', 'Logos YourLab', '1.png'),
     buildScriptPath: process.env.REQ_PLATFORM_BUILD_SCRIPT,
+    sendProjectEmail: sendProjectNotificationEmail,
 });
 
 // Block direct access to sensitive platform data/uploads
@@ -1072,6 +1073,20 @@ function getOrCreateTransporter() {
         auth: { user, pass }
     });
     return mailTransporter;
+}
+
+async function sendProjectNotificationEmail({ to, subject, text, html }) {
+    const recipient = cleanText(to, 600);
+    if (!recipient) return { sent: false, reason: 'Recipient is missing.' };
+    const transporter = getOrCreateTransporter();
+    if (!transporter) return { sent: false, reason: 'SMTP settings are not configured.' };
+    const from = cleanText(process.env.SMTP_FROM, 300) || cleanText(process.env.SMTP_USER, 200);
+    try {
+        await transporter.sendMail({ from, to: recipient, subject: cleanText(subject, 240), text: String(text || ''), html: html || undefined });
+        return { sent: true };
+    } catch (error) {
+        return { sent: false, reason: error.message };
+    }
 }
 
 function buildLeadEmailText(inquiry) {

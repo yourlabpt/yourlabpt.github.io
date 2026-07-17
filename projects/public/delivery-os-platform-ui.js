@@ -28,6 +28,10 @@
   }
 
   function syncUrlDeepLink(stageId, tabId) {
+    if (window.persistNavigationState) {
+      window.persistNavigationState({ stage: stageId, tab: tabId });
+      return;
+    }
     if (!window.history?.replaceState) return;
     const params = new URLSearchParams(window.location.search);
     if (tabId) params.set('tab', tabId);
@@ -50,79 +54,14 @@
     if (stage && window.state) {
       window.state.deliverySelectedStageId = stage;
     }
-    if (tab && window.switchToTab) {
+    if (tab && window.state?.selectedProject && window.switchToTab) {
       window.switchToTab(tab);
+    } else if (tab && window.state) {
+      // During bootstrap the project ID is known before the full project is
+      // loaded. Preserve the requested tab without triggering the no-project
+      // fallback, which would overwrite the refresh destination.
+      window.state.activeTab = tab;
     }
-  }
-
-  async function loadProjectActions(projectId) {
-    try {
-      const res = await apiRequest(`/projects/${projectId}/project-actions`);
-      return res.actions || [];
-    } catch {
-      return [];
-    }
-  }
-
-  async function loadSinceLastVisit(projectId) {
-    try {
-      const res = await apiRequest(`/projects/${projectId}/since-last-visit`);
-      return res;
-    } catch {
-      return { changesSince: [], totalChanges: 0 };
-    }
-  }
-
-  async function recordVisit(projectId) {
-    try {
-      await apiRequest(`/projects/${projectId}/record-visit`, { method: 'POST', body: {} });
-    } catch { /* non-blocking */ }
-  }
-
-  function renderNextActionBar(project, actions, sinceVisit) {
-    const el = $('pdosNextActionBar');
-    if (!el || !project) return;
-
-    const top = (actions || []).slice(0, 3);
-    const changes = sinceVisit?.changesSince || [];
-
-    el.innerHTML = `
-      <div class="pdos-next-action-inner">
-        <div class="pdos-next-action-head">
-          <span class="pdos-section-label">Próximas acções</span>
-          ${sinceVisit?.totalChanges ? `<span class="pdos-since-visit">${sinceVisit.totalChanges} alteração(ões) desde a última visita</span>` : ''}
-        </div>
-        <div class="pdos-next-action-list">
-          ${top.length
-    ? top.map((a) => `
-              <button type="button" class="pdos-next-action-chip" data-action-tab="${escapeHtml(a.tab)}" data-action-stage="${escapeHtml(a.stageId || '')}">
-                <span class="pdos-next-action-count">${a.count || ''}</span>
-                ${escapeHtml(a.label)}
-              </button>
-            `).join('')
-    : '<span class="muted-text">Sem acções urgentes — bom progresso.</span>'}
-        </div>
-        ${changes.length ? `
-          <details class="pdos-since-visit-details">
-            <summary>Desde a última visita</summary>
-            <ul class="pdos-since-visit-list">
-              ${changes.slice(0, 5).map((c) => `<li><small>${escapeHtml(c.at?.slice(0, 10) || '')}</small> ${escapeHtml(c.label || c.type)}</li>`).join('')}
-            </ul>
-          </details>
-        ` : ''}
-      </div>
-    `;
-
-    el.querySelectorAll('.pdos-next-action-chip').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.actionTab;
-        const stage = btn.dataset.actionStage;
-        if (stage) window.state.deliverySelectedStageId = stage;
-        syncUrlDeepLink(stage || window.state.deliverySelectedStageId, tab);
-        window.switchToTab?.(tab);
-        window.PdosUI?.renderAll?.(project);
-      });
-    });
   }
 
   function renderPhaseWorkspacePanel(project) {
@@ -199,10 +138,16 @@
   }
 
   function renderIdeaPanel(project) {
-    const brief = project.ideaBriefMarkdown || '';
+    const original = String(project.originalIdeaText || '');
+    const brief = String(project.vision?.mainIdeaMarkdown || project.ideaBriefMarkdown || '');
+    const status = brief ? 'Interpretada' : (original ? 'Em desenvolvimento' : 'Por iniciar');
     return `
-      <p class="muted-text">Brief da ideia e visão inicial.</p>
-      ${brief ? `<div class="pdos-workspace-snippet">${escapeHtml(brief.slice(0, 400))}${brief.length > 400 ? '…' : ''}</div>` : '<p class="muted-text">Sem brief registado.</p>'}
+      <p class="muted-text">Ideia original e compreensão em evolução. <span class="chip">${escapeHtml(status)}</span></p>
+      ${original ? `<div class="pdos-workspace-snippet">${escapeHtml(original.slice(0, 200))}${original.length > 200 ? '…' : ''}</div>` : '<p class="muted-text">Sem ideia original registada.</p>'}
+      <div class="pdos-card-actions mt-8">
+        <button type="button" class="btn tiny primary" data-set-stage="idea" data-goto-tab="deliveryos">Abrir fase Ideia</button>
+        ${window.canEditProject?.() ? '<button type="button" class="btn tiny" data-set-stage="idea" data-goto-tab="deliveryos">Interpretar com IA</button>' : ''}
+      </div>
     `;
   }
 
@@ -369,6 +314,7 @@
       const el = $(id);
       if (el) el.classList.add('hidden');
     });
+    document.querySelector('.pdos-health-details')?.classList.add('hidden');
     $('pdosClientPortal')?.classList.remove('hidden');
   }
 
@@ -383,15 +329,9 @@
       return platformRefreshInflight;
     }
     platformRefreshInflight = (async () => {
-      const [actions, sinceVisit, health] = await Promise.all([
-        loadProjectActions(project.id),
-        loadSinceLastVisit(project.id),
-        isClientRole() ? null : loadFlowHealth(project.id),
-      ]);
-      renderNextActionBar(project, actions, sinceVisit);
+      const health = await (isClientRole() ? Promise.resolve(null) : loadFlowHealth(project.id));
       renderPhaseWorkspacePanel(project);
       renderFlowHealthDashboard(project, health);
-      recordVisit(project.id);
       lastPlatformRefreshKey = key;
     })();
     try {

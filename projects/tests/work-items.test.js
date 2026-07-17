@@ -1,206 +1,250 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-
 const workItems = require('../lib/work-items');
 const workItemsSync = require('../lib/work-items-sync');
 const projectAccess = require('../lib/project-access');
+const taskSuggestions = require('../lib/task-suggestions');
+const agentRequests = require('../lib/agent-requests');
+const stageTransitions = require('../lib/stage-transition-requests');
+
+function task(overrides = {}) {
+  return { title: 'Task', descriptionMarkdown: 'Body', complexity: 'low', deliveryStageId: 'requirements', ...overrides };
+}
 
 describe('work items model', () => {
-  it('rejects create without required fields', () => {
-    assert.throws(
-      () => workItems.validateWorkItemForCreate({ title: 'A' }),
-      /descriptionMarkdown|complexity/,
-    );
+  it('requires title, description, complexity and delivery stage', () => {
+    assert.throws(() => workItems.validateWorkItemForCreate({ title: 'A' }), /descriptionMarkdown|complexity|deliveryStageId/);
+    assert.doesNotThrow(() => workItems.validateWorkItemForCreate(task()));
   });
 
-  it('normalizes status aliases', () => {
-    const item = workItems.normalizeWorkItem({
-      id: 'witem_1',
-      title: 'Test',
-      descriptionMarkdown: 'Body',
-      complexity: 'low',
-      status: 'todo',
-    });
-    assert.equal(item.status, 'new');
+  it('normalizes aliases, sources and legacy items', () => {
+    const item = workItems.normalizeWorkItem(task({ id: 'w1', status: 'todo', linkedRequirementIds: ['FR-01'] }));
+    assert.equal(item.status, 'planned');
+    assert.equal(item.sourceRefs[0].type, 'requirement');
+    const project = { workItems: [{ id: 'old', title: 'Old', descriptionMarkdown: 'x', complexity: 'low' }] };
+    assert.equal(workItems.migrateProjectWorkItems(project).changed, true);
+    assert.equal(workItems.migrateProjectWorkItems(project).changed, false);
+    assert.equal(project.workItems[0].deliveryStageId, 'unclassified');
   });
 
-  it('slim card omits description and result', () => {
-    const item = workItems.normalizeWorkItem({
-      id: 'witem_1',
-      title: 'Test',
-      descriptionMarkdown: 'Long body',
-      complexity: 'medium',
-      resultSummaryMarkdown: 'Done',
-      linkedRequirementIds: ['FR-01', 'FR-02'],
-    });
-    const slim = workItems.toSlimCard(item);
-    assert.equal(slim.title, 'Test');
-    assert.equal(slim.linkedRequirementCount, 2);
-    assert.equal(slim.descriptionMarkdown, undefined);
-    assert.equal(slim.resultSummaryMarkdown, undefined);
-  });
-
-  it('computes meta counts by origin', () => {
+  it('returns slim cards without descriptions and counts executors', () => {
+    const item = workItems.normalizeWorkItem(task({ id: 'w1', resultSummaryMarkdown: 'Done' }));
+    assert.equal(workItems.toSlimCard(item).descriptionMarkdown, undefined);
     const counts = workItems.computeMetaCounts([
-      { origin: 'human' },
-      { origin: 'human' },
-      { origin: 'agent' },
+      { executorMode: 'human' }, { executorMode: 'agent' }, { executorMode: 'both' },
     ]);
-    assert.deepEqual(counts, { total: 3, human: 2, agent: 1 });
+    assert.deepEqual({ total: counts.total, human: counts.human, agent: counts.agent, both: counts.both }, { total: 3, human: 1, agent: 1, both: 1 });
+    assert.equal(counts.open, 3);
   });
 
-  it('normalizes acceptance criteria and updates', () => {
-    const item = workItems.normalizeWorkItem({
-      id: 'witem_2',
-      title: 'Task',
-      descriptionMarkdown: 'Body',
-      acceptanceCriteriaMarkdown: 'Done when tested',
-      complexity: 'low',
-      updates: [{ bodyMarkdown: 'Started work', createdBy: 'usr_1' }],
-    });
-    assert.equal(item.acceptanceCriteriaMarkdown, 'Done when tested');
-    assert.equal(item.updates.length, 1);
-    assert.equal(item.updates[0].bodyMarkdown, 'Started work');
+  it('derives parent status and rejects cycles', () => {
+    const items = workItems.normalizeWorkItems([
+      task({ id: 'parent', executorMode: 'both' }),
+      task({ id: 'human', parentTaskId: 'parent', status: 'closed' }),
+      task({ id: 'agent', parentTaskId: 'parent', origin: 'agent', executorMode: 'agent', status: 'active' }),
+    ]);
+    assert.equal(items.find((item) => item.id === 'parent').status, 'in_progress');
+    assert.equal(items.find((item) => item.id === 'parent').childTaskCount, 2);
+    assert.throws(() => workItems.validateHierarchy({ id: 'parent', parentTaskId: 'agent' }, items), /ciclos/);
   });
 
-  it('adds and patches work item updates', () => {
-    const item = workItems.normalizeWorkItem({
-      id: 'witem_3',
-      title: 'Task',
-      descriptionMarkdown: 'Body',
-      complexity: 'low',
-    });
-    const withUpdate = workItems.addWorkItemUpdate(item, 'First update', { actorUserId: 'usr_1' });
-    assert.equal(withUpdate.updates.length, 1);
-    const updateId = withUpdate.updates[0].id;
-    const patched = workItems.patchWorkItemUpdate(withUpdate, updateId, 'Edited update', { actorUserId: 'usr_2' });
-    assert.equal(patched.updates[0].bodyMarkdown, 'Edited update');
-    assert.equal(patched.updates[0].updatedBy, 'usr_2');
+  it('ranks blocked and review tasks for phase summaries', () => {
+    const ranked = workItems.relevantWorkItems([
+      workItems.normalizeWorkItem(task({ id: 'new', status: 'new' })),
+      workItems.normalizeWorkItem(task({ id: 'review', status: 'new', sourceRefs: [{ type: 'review', id: 'r1' }] })),
+      workItems.normalizeWorkItem(task({ id: 'blocked', status: 'blocked' })),
+    ], { deliveryStageId: 'requirements', limit: 2 });
+    assert.deepEqual(ranked.map((item) => item.id), ['review', 'blocked']);
+  });
+
+  it('adds and edits traceable updates', () => {
+    const item = workItems.normalizeWorkItem(task({ id: 'w1' }));
+    const withUpdate = workItems.addWorkItemUpdate(item, 'Started', { actorUserId: 'u1' });
+    const patched = workItems.patchWorkItemUpdate(withUpdate, withUpdate.updates[0].id, 'Edited', { actorUserId: 'u2' });
+    assert.equal(patched.updates[0].bodyMarkdown, 'Edited');
+    assert.equal(patched.updates[0].updatedBy, 'u2');
   });
 });
 
 describe('work items access', () => {
-  const project = {
-    id: 'prj_1',
-    members: [
-      { userId: 'usr_partner', role: 'partner' },
-      { userId: 'usr_client', role: 'client' },
-    ],
-  };
+  const project = { members: [{ userId: 'partner', role: 'partner' }, { userId: 'client', role: 'client' }] };
   const items = [
-    { id: '1', origin: 'human', assigneeUserId: 'usr_client' },
-    { id: '2', origin: 'agent', assigneeUserId: '' },
-    { id: '3', origin: 'human', assigneeUserId: 'usr_partner' },
+    { id: 'visible-assigned', clientVisible: true, assigneeUserId: 'client' },
+    { id: 'visible-readonly', clientVisible: true, assigneeUserId: 'partner' },
+    { id: 'internal', clientVisible: false, assigneeUserId: 'client' },
   ];
 
-  it('editors see all items including agent', () => {
-    const user = { id: 'usr_admin', role: 'super_admin' };
-    const visible = projectAccess.filterWorkItemsForViewer(items, user, project);
-    assert.equal(visible.length, 3);
-    assert.equal(projectAccess.canViewWorkItemsTab(user, project, items), true);
+  it('editors see all tasks and clients see only explicitly visible tasks', () => {
+    assert.equal(projectAccess.filterWorkItemsForViewer(items, { id: 'admin', role: 'super_admin' }, project).length, 3);
+    assert.deepEqual(projectAccess.filterWorkItemsForViewer(items, { id: 'client', role: 'client' }, project).map((item) => item.id), ['visible-assigned', 'visible-readonly']);
   });
 
-  it('assignee sees only their human items', () => {
-    const user = { id: 'usr_client', role: 'client' };
-    const visible = projectAccess.filterWorkItemsForViewer(items, user, project);
-    assert.deepEqual(visible.map((item) => item.id), ['1']);
-    assert.equal(projectAccess.canViewWorkItemsTab(user, project, items), true);
-  });
-
-  it('member without assignments cannot see tab', () => {
-    const user = { id: 'usr_other', role: 'client' };
-    assert.equal(projectAccess.canViewWorkItemsTab(user, project, items), false);
-    assert.equal(projectAccess.filterWorkItemsForViewer(items, user, project).length, 0);
-  });
-
-  it('assignee can post updates but not edit old ones', () => {
-    const user = { id: 'usr_client', role: 'client' };
-    const item = items[0];
-    assert.equal(projectAccess.canPostWorkItemUpdate(user, project, item), true);
-    assert.equal(projectAccess.canEditWorkItemUpdate(user, project), false);
+  it('visibility and collaboration are separate permissions', () => {
+    const client = { id: 'client', role: 'client' };
+    assert.equal(projectAccess.canViewWorkItemsTab(client, project, items), true);
+    assert.equal(projectAccess.canPostWorkItemUpdate(client, project, items[0]), true);
+    assert.equal(projectAccess.canPostWorkItemUpdate(client, project, items[1]), false);
   });
 });
 
-describe('work items sync adapter', () => {
-  it('syncs execution plan tasks idempotently', () => {
-    const project = {
-      id: 'prj_sync',
-      workItems: [],
-      requirements: [{ id: 'FR-01' }],
-    };
-    const plan = {
-      id: 'plan_1',
-      agentType: 'requirements_to_architecture',
-      toStageId: 'architecture',
+describe('work item synchronization', () => {
+  it('syncs execution plans idempotently', () => {
+    const project = { workItems: [], requirements: [] };
+    const plan = { id: 'p1', toStageId: 'architecture', tasks: [{ id: 't1', title: 'Diagram' }] };
+    workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
+    workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
+    assert.equal(project.workItems.length, 1);
+    assert.equal(project.workItems[0].executorMode, 'agent');
+  });
+
+  it('migrates implementation tasks once and removes the duplicate queue', () => {
+    const project = { workItems: [], implementation: { tasks: [{ id: 'old1', title: 'Build API', descriptionMarkdown: 'Implement', complexity: 'high', status: 'todo' }] } };
+    assert.equal(workItemsSync.syncImplementationTasks(project).synced, 1);
+    assert.equal(workItemsSync.syncImplementationTasks(project).synced, 0);
+    assert.equal(project.implementation.tasks.length, 0);
+    assert.equal(project.workItems[0].deliveryStageId, 'implementation');
+  });
+
+  it('links one task to each pending review and synchronizes completion', () => {
+    const project = { workItems: [], humanReviews: [{ id: 'r1', title: 'Review', status: 'pending', stageId: 'architecture' }] };
+    workItemsSync.syncDomainTasks(project);
+    workItemsSync.syncDomainTasks(project);
+    assert.equal(project.workItems.length, 1);
+    project.humanReviews[0].status = 'approved';
+    workItemsSync.syncDomainTasks(project);
+    assert.equal(project.workItems[0].status, 'completed');
+  });
+});
+
+describe('agent requests and visible plans', () => {
+  it('creates all tasks before execution and requires approval for multi-task work', () => {
+    const project = { workItems: [], requirements: [] };
+    const result = agentRequests.createAgentRequest(project, {
+      agentType: 'requirements_to_architecture', stageId: 'architecture',
+      requestMarkdown: 'Create and verify the architecture.',
       tasks: [
-        { id: 'context', title: 'Context diagram', role: 'diagram', estimatedInputTokens: 8000 },
-        { id: 'merge', title: 'Merge', role: 'merge', estimatedInputTokens: 15000 },
+        { id: 'draft', title: 'Draft architecture', instruction: 'Draft it' },
+        { id: 'verify', title: 'Verify architecture', instruction: 'Verify it', dependsOn: ['draft'] },
       ],
-    };
-
-    const first = workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
-    assert.equal(first.synced, 2);
+    }, { actorUserId: 'u1' });
+    assert.equal(result.request.status, 'awaiting_approval');
     assert.equal(project.workItems.length, 2);
-    assert.equal(project.workItems[0].origin, 'agent');
-
-    const second = workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
-    assert.equal(second.synced, 2);
-    assert.equal(project.workItems.length, 2);
+    assert.equal(project.workItems.every((item) => item.agentRequestId === result.request.id), true);
+    assert.equal(project.workItems.some((item) => item.status === 'in_progress'), false);
   });
 
-  it('does not auto-sync agent runtime when env flag is off', () => {
-    const prev = process.env.WORK_ITEMS_AUTO_SYNC;
-    delete process.env.WORK_ITEMS_AUTO_SYNC;
-    assert.equal(workItemsSync.isAutoSyncEnabled(), false);
-
-    const project = {
-      id: 'prj_rt',
-      workItems: [{
-        id: 'witem_1',
-        origin: 'agent',
-        title: 'Run',
-        descriptionMarkdown: 'x',
-        complexity: 'low',
-        agentJobId: '',
-        externalRefs: [{ source: 'execution_plan', planId: 'plan_1', taskId: 'context' }],
-      }],
-    };
-
-    const result = workItemsSync.onAgentRunComplete(project, {
-      agentJobId: 'job_1',
-      resultSummaryMarkdown: 'summary',
-    });
-    assert.equal(result, null);
-    if (prev !== undefined) process.env.WORK_ITEMS_AUTO_SYNC = prev;
+  it('approves a plan and only makes dependency-free tasks ready', () => {
+    const project = { workItems: [] };
+    const created = agentRequests.createAgentRequest(project, {
+      agentType: 'roadmap_plan', tasks: [
+        { id: 'one', title: 'One', instruction: 'One' },
+        { id: 'two', title: 'Two', instruction: 'Two', dependsOn: ['one'] },
+      ],
+    }, { actorUserId: 'u1' });
+    const approved = agentRequests.approveAgentRequest(project, created.request.id, 'u2');
+    assert.equal(approved.request.status, 'ready');
+    assert.deepEqual(approved.tasks.map((item) => item.status), ['ready', 'planned']);
   });
 
-  it('completes agent work item when auto sync enabled', () => {
-    const prev = process.env.WORK_ITEMS_AUTO_SYNC;
-    process.env.WORK_ITEMS_AUTO_SYNC = '1';
+  it('stores an explicit copyable execution package and rejects dependency cycles', () => {
+    const project = { workItems: [] };
+    const created = agentRequests.createAgentRequest(project, {
+      agentType: 'reverse_idea', requestMarkdown: 'Clarify the idea', desiredOutcomeMarkdown: 'Idea brief',
+    }, { actorUserId: 'u1' });
+    assert.match(created.tasks[0].executionPackage.instructions, /Clarify the idea/);
+    assert.equal(created.tasks[0].expectedOutputs.length, 1);
+    const cyclic = created.tasks.map((item) => ({ ...item, dependencyTaskIds: [item.id] }));
+    assert.throws(() => workItems.validateDependencies(cyclic[0], cyclic), /si propria|ciclos/);
+  });
+});
 
-    const project = {
-      id: 'prj_rt2',
-      workItems: [{
-        id: 'witem_1',
-        origin: 'agent',
-        title: 'Run',
-        descriptionMarkdown: 'x',
-        complexity: 'low',
-        status: 'active',
-        agentJobId: 'job_1',
-        agentStatus: 'running',
-      }],
+describe('stage transition requests through Tasks', () => {
+  function project() {
+    return {
+      id: 'p_transition', name: 'Transition project', updatedAt: '2026-07-01T00:00:00.000Z',
+      workItems: [], agentRequests: [], stageTransitionConfigs: [], requirements: [
+        { id: 'STK-01', type: 'stakeholder', title: 'Need', shall: 'Support the user' },
+        { id: 'FR-01', type: 'functional', title: 'Feature', shall: 'Provide the flow' },
+      ], capabilities: [], diagramArtifacts: [], documents: [], phases: [],
     };
+  }
 
-    const result = workItemsSync.onAgentRunComplete(project, {
-      agentJobId: 'job_1',
-      resultSummaryMarkdown: 'Finished successfully',
-    });
-    assert.equal(result.status, 'closed');
-    assert.equal(result.agentStatus, 'completed');
-    assert.match(result.resultSummaryMarkdown, /Finished/);
+  it('creates a coordination parent and never truncates children silently', () => {
+    const data = project();
+    const created = stageTransitions.createRequest(data, {
+      fromStageId: 'requirements', toStageId: 'architecture', direction: 'forward', regenerationMode: 'full',
+      config: { userRequest: 'Create architecture', desiredOutcome: 'Architecture ready', maxSubtasks: 2 },
+    }, { actorUserId: 'u1' });
+    const parent = data.workItems.find((item) => item.taskRole === 'coordination');
+    const children = data.workItems.filter((item) => item.parentTaskId === parent.id);
+    assert.ok(parent);
+    assert.equal(children.length, 2);
+    assert.equal(created.request.parentTaskId, parent.id);
+    assert.ok(children.every((item) => item.executionPackage?.instructions));
+  });
 
-    if (prev === undefined) delete process.env.WORK_ITEMS_AUTO_SYNC;
-    else process.env.WORK_ITEMS_AUTO_SYNC = prev;
+  it('validates a complete task-keyed bundle and rejects stale package versions', () => {
+    const data = project();
+    stageTransitions.createRequest(data, { fromStageId: 'requirements', toStageId: 'architecture', direction: 'forward', config: { maxSubtasks: 3 } }, { actorUserId: 'u1' });
+    const parent = data.workItems.find((item) => item.taskRole === 'coordination');
+    const pack = stageTransitions.buildTreePackage(data, parent);
+    const valid = { ...pack.envelope, taskOutputs: pack.envelope.taskOutputs.map((row) => ({ ...row, output: { ok: true } })) };
+    assert.equal(stageTransitions.validateBundle(data, parent, valid).tasks.length, pack.children.length);
+    valid.taskOutputs[0].packageVersion += 1;
+    assert.throws(() => stageTransitions.validateBundle(data, parent, valid), /versao antiga/);
+  });
+
+  it('versions configuration, records prompt diffs and supersedes unfinished work', () => {
+    const data = project();
+    const first = stageTransitions.createRequest(data, { fromStageId: 'requirements', toStageId: 'architecture', direction: 'forward', config: { userRequest: 'Initial architecture', maxSubtasks: 4 } }, { actorUserId: 'u1' });
+    const second = stageTransitions.createRequest(data, { fromStageId: 'requirements', toStageId: 'architecture', direction: 'forward', config: { userRequest: 'Architecture with new constraints', maxSubtasks: 4 } }, { actorUserId: 'u1' });
+    const old = data.agentRequests.find((request) => request.id === first.request.id);
+    assert.equal(old.status, 'superseded');
+    assert.equal(old.supersededByRequestId, second.request.id);
+    assert.ok(second.request.diffSummary.requestPromptDiff);
+    assert.equal(data.stageTransitionConfigs[0].version, 2);
+    assert.ok(data.workItems.filter((item) => item.agentRequestId === first.request.id && item.status === 'cancelled').length > 0);
+  });
+
+  it('migrates an open historical transition idempotently', () => {
+    const data = project();
+    data.executionPlans = [{ id: 'plan_old', agentType: 'stage_transition', fromStageId: 'requirements', toStageId: 'architecture', direction: 'forward', config: {}, tasks: [{ id: 'context', title: 'Context' }] }];
+    data.agentRequests = [{ id: 'areq_old', executionPlanId: 'plan_old', title: 'Old transition', status: 'ready', taskIds: ['w_old'] }];
+    data.workItems = [task({ id: 'w_old', origin: 'agent', executorMode: 'agent', agentRequestId: 'areq_old', executionPlanId: 'plan_old', executionPlanTaskId: 'context' })];
+    stageTransitions.migrateStageTransitionRequests(data);
+    stageTransitions.migrateStageTransitionRequests(data);
+    assert.equal(data.stageTransitionConfigs.length, 1);
+    assert.equal(data.workItems.filter((item) => item.taskRole === 'coordination').length, 1);
+    assert.equal(data.workItems.filter((item) => item.parentTaskId).length, 1);
+  });
+});
+
+describe('contextual task suggestions', () => {
+  it('persists dismissal and avoids duplicate fingerprints', () => {
+    const project = { workItems: [], humanReviews: [{ id: 'r1', title: 'Review', status: 'pending', stageId: 'architecture' }] };
+    taskSuggestions.evaluateProject(project, { now: '2026-01-01T00:00:00.000Z' });
+    taskSuggestions.dismissSuggestion(project, project.taskSuggestions[0].id, '2026-01-02T00:00:00.000Z');
+    taskSuggestions.evaluateProject(project, { now: '2026-01-03T00:00:00.000Z' });
+    assert.equal(project.taskSuggestions.length, 1);
+    assert.equal(project.taskSuggestions[0].status, 'dismissed');
+  });
+
+  it('prepares a draft without silently creating a task', () => {
+    const project = { workItems: [], approvals: [{ id: 'a1', stageId: 'delivery', status: 'pending' }] };
+    taskSuggestions.evaluateProject(project);
+    const prepared = taskSuggestions.prepareSuggestion(project, project.taskSuggestions[0].id);
+    assert.equal(prepared.draft.deliveryStageId, 'delivery');
+    assert.equal(project.workItems.length, 0);
+  });
+
+  it('auto-creates only for an explicitly enabled rule', () => {
+    const project = { workItems: [], approvals: [{ id: 'a1', stageId: 'delivery', status: 'pending' }] };
+    taskSuggestions.evaluateProject(project);
+    assert.equal(taskSuggestions.applyConfiguredAutomations(project).length, 0);
+    project.taskAutomationRules = [{ ruleId: 'pending_approval', enabled: true, autoCreate: true }];
+    const created = taskSuggestions.applyConfiguredAutomations(project);
+    assert.equal(created.length, 1);
+    assert.equal(created[0].automationRuleId, 'pending_approval');
+    assert.equal(project.taskSuggestions[0].status, 'accepted');
   });
 });

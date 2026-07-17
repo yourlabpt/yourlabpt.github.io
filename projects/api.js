@@ -23,6 +23,7 @@ const reqHierarchy = require('./lib/requirement-hierarchy');
 const phaseSync = require('./lib/phase-sync');
 const roadmapSync = require('./lib/roadmap-sync');
 const proposalGenerator = require('./lib/proposal-generator');
+const { createAgentRuntimeClient } = require('./lib/agent-runtime-client');
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const sessions = new Map();
@@ -97,6 +98,7 @@ function registerRequirementsPlatform(app, options) {
     platformDir,
     logoPath,
     buildScriptPath,
+    sendProjectEmail,
   } = options;
 
   const rootBase = rootDir || path.resolve(platformDir, '..');
@@ -772,6 +774,14 @@ function registerRequirementsPlatform(app, options) {
 
   const requireProjectEditor = projectAccess.createRequireProjectEditor();
   const requireSuperAdminProjectSettings = projectAccess.createRequireSuperAdminOnlyProjectSettings();
+  const IDEA_PATCH_FIELDS = new Set(['originalIdeaText', 'ideaBriefMarkdown', 'vision', 'ideaConversation']);
+  function requireProjectPatchAccess(req, res, next) {
+    const fields = Object.keys(req.body || {});
+    if (fields.length && fields.every((field) => IDEA_PATCH_FIELDS.has(field))) {
+      return requireProjectEditor(req, res, next);
+    }
+    return requireSuperAdminProjectSettings(req, res, next);
+  }
 
   function getUserName(store, userId) {
     const user = ensureArray(store.users).find((entry) => entry.id === userId);
@@ -957,6 +967,15 @@ function registerRequirementsPlatform(app, options) {
     res.sendFile(path.join(platformDir, 'public', 'index.html'));
   });
 
+  const serveProjectsApp = (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.sendFile(path.join(platformDir, 'public', 'index.html'));
+  };
+  app.get('/projects/:projectId/tasks', serveProjectsApp);
+  app.get('/projects/:projectId/tasks/:taskId', serveProjectsApp);
+  app.get('/projects/:projectId/tasks/requests/:requestId/plan', serveProjectsApp);
+
   app.get('/api/projects/version', async (req, res) => {
     const versionPath = path.join(platformDir, 'public', 'build-version.txt');
     let gitSha = '';
@@ -1116,6 +1135,7 @@ function registerRequirementsPlatform(app, options) {
     try {
       const userId = req.params.userId;
       const body = req.body || {};
+      const changedFields = [];
 
       await updateStore(async (store) => {
         const user = store.users.find((entry) => entry.id === userId);
@@ -1123,20 +1143,54 @@ function registerRequirementsPlatform(app, options) {
           throw new Error('Utilizador nao encontrado.');
         }
 
-        if (typeof body.name === 'string' && body.name.trim()) {
-          user.name = body.name.trim();
+        if (typeof body.name === 'string') {
+          const name = body.name.trim();
+          if (!name) throw new Error('O nome não pode ficar vazio.');
+          if (name !== user.name) changedFields.push('name');
+          user.name = name;
         }
 
-        if (typeof body.password === 'string' && body.password.trim()) {
-          user.passwordHash = hashPassword(body.password.trim());
+        if (typeof body.email === 'string') {
+          const email = body.email.trim().toLowerCase();
+          if (!email || !email.includes('@')) throw new Error('Introduza um email válido.');
+          const duplicate = store.users.some((entry) => entry.id !== userId && entry.email === email);
+          if (duplicate) throw new Error('Já existe um utilizador com este email.');
+          if (email !== user.email) changedFields.push('email');
+          user.email = email;
+        }
+
+        if (typeof body.role === 'string') {
+          const role = body.role.trim();
+          if (!['super_admin', 'partner', 'client'].includes(role)) {
+            throw new Error('Perfil inválido.');
+          }
+          if (user.id === req.auth.user.id && role !== 'super_admin') {
+            throw new Error('Não pode remover o seu próprio perfil de superutilizador.');
+          }
+          if (role !== user.role) changedFields.push('role');
+          user.role = role;
+        }
+
+        if (typeof body.password === 'string' && body.password.length) {
+          if (body.password.length < 10) throw new Error('A nova senha deve ter pelo menos 10 caracteres.');
+          user.passwordHash = hashPassword(body.password);
+          changedFields.push('password');
         }
 
         if (typeof body.isActive === 'boolean') {
+          if (user.id === req.auth.user.id && body.isActive === false) {
+            throw new Error('Não pode desactivar a sua própria conta.');
+          }
+          if (body.isActive !== user.isActive) changedFields.push('isActive');
           user.isActive = body.isActive;
         }
 
         if (typeof body.canViewBudget === 'boolean') {
-          user.canViewBudget = user.role === 'partner' && body.canViewBudget;
+          const canViewBudget = user.role === 'partner' && body.canViewBudget;
+          if (canViewBudget !== Boolean(user.canViewBudget)) changedFields.push('canViewBudget');
+          user.canViewBudget = canViewBudget;
+        } else if (user.role !== 'partner') {
+          user.canViewBudget = false;
         }
 
         user.updatedAt = nowIso();
@@ -1144,9 +1198,15 @@ function registerRequirementsPlatform(app, options) {
         appendActivity(store, {
           actorUserId: req.auth.user.id,
           action: 'user_updated',
-          details: { userId: user.id },
+          details: { userId: user.id, fields: changedFields },
         });
       });
+
+      if (changedFields.some((field) => ['email', 'password', 'isActive'].includes(field))) {
+        for (const [token, session] of sessions.entries()) {
+          if (session.userId === userId && token !== req.auth.token) sessions.delete(token);
+        }
+      }
 
       const updated = await readStore();
       return res.json({ users: updated.users.map(sanitizeUser) });
@@ -1168,8 +1228,8 @@ function registerRequirementsPlatform(app, options) {
       const name = String(body.name || '').trim();
       const clientName = String(body.clientName || '').trim();
 
-      if (!name || !clientName) {
-        return res.status(400).json({ message: 'name e clientName sao obrigatorios.' });
+      if (!name) {
+        return res.status(400).json({ message: 'name e obrigatorio.' });
       }
 
       const newProject = {
@@ -1221,7 +1281,10 @@ function registerRequirementsPlatform(app, options) {
         alternativeResponses: [],
         informationEntries: [],
         nextDecision: '',
+        originalIdeaText: String(body.originalIdeaText || ''),
         ideaBriefMarkdown: '',
+        ideaConversation: [],
+        vision: null,
         diagramArtifacts: [],
         diagramVersions: [],
         diagramReviews: [],
@@ -1362,7 +1425,7 @@ function registerRequirementsPlatform(app, options) {
     }
   });
 
-  app.patch('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, requireSuperAdminProjectSettings, async (req, res) => {
+  app.patch('/api/projects/projects/:projectId', authMiddleware, loadProjectForUser, requireProjectPatchAccess, async (req, res) => {
     try {
       const projectId = req.params.projectId;
       const patch = req.body || {};
@@ -1397,6 +1460,10 @@ function registerRequirementsPlatform(app, options) {
           'sourceText',
           'deliveryLevel',
           'stages',
+          'originalIdeaText',
+          'ideaBriefMarkdown',
+          'vision',
+          'ideaConversation',
         ];
 
         const previousPhases = patch.phases !== undefined
@@ -1408,6 +1475,17 @@ function registerRequirementsPlatform(app, options) {
             project[field] = patch[field];
           }
         }
+        project.originalIdeaText = String(project.originalIdeaText || '');
+        project.ideaBriefMarkdown = String(project.ideaBriefMarkdown || '');
+        project.vision = deliveryOs.normalizeVision(project.vision, project);
+        project.ideaConversation = ensureArray(project.ideaConversation)
+          .filter((turn) => turn && ['user', 'assistant'].includes(turn.role) && String(turn.content || '').trim())
+          .map((turn) => ({
+            role: turn.role,
+            content: String(turn.content).trim(),
+            timestamp: String(turn.timestamp || ''),
+          }))
+          .slice(-100);
 
         if (patch.phases !== undefined) {
           assertUniquePhaseNames(patch.phases);
@@ -1454,6 +1532,73 @@ function registerRequirementsPlatform(app, options) {
         roadmapSynced,
         roadmapSyncedCount,
       });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/idea-guidance', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
+    try {
+      const projectId = req.params.projectId;
+      const allowedModes = new Set(['interpret', 'question', 'organize', 'critique', 'solutions', 'research', 'freeform']);
+      const requestedMode = String(req.body?.mode || 'interpret').trim();
+      const guidanceMode = allowedModes.has(requestedMode) ? requestedMode : 'freeform';
+      const userMessage = String(req.body?.userMessage || '').trim();
+      const storedHistory = ensureArray(req.loadedProject?.ideaConversation);
+      const conversationHistory = Array.isArray(req.body?.conversationHistory)
+        ? req.body.conversationHistory
+        : storedHistory;
+      const prompt = deliveryOs.buildIdeaGuidancePrompt(
+        req.loadedProject,
+        guidanceMode,
+        conversationHistory,
+        userMessage
+      );
+
+      const runtimeEnabled = Boolean(String(process.env.AGENT_RUNTIME_API_KEY || '').trim());
+      if (!runtimeEnabled) {
+        return res.json({ prompt, mode: 'manual' });
+      }
+
+      try {
+        const runtime = createAgentRuntimeClient();
+        const runtimeResponse = await runtime.request('POST', '/v1/prompt', {
+          prompt,
+          metadata: { projectId, feature: 'idea-guidance', mode: guidanceMode },
+        });
+        const reply = String(
+          runtimeResponse?.reply
+          || runtimeResponse?.content
+          || runtimeResponse?.text
+          || runtimeResponse?.output
+          || ''
+        ).trim();
+        if (!reply) throw new Error('O runtime não devolveu uma resposta de texto.');
+
+        const now = nowIso();
+        const turn = { role: 'assistant', content: reply, timestamp: now };
+        await updateStore(async (store) => {
+          const project = store.projects.find((entry) => entry.id === projectId);
+          if (!project) throw new Error('Projeto nao encontrado.');
+          project.ideaConversation = ensureArray(project.ideaConversation);
+          if (userMessage) {
+            project.ideaConversation.push({ role: 'user', content: userMessage, timestamp: now });
+          }
+          project.ideaConversation.push(turn);
+          project.ideaConversation = project.ideaConversation.slice(-100);
+          project.updatedAt = now;
+          appendActivity(store, {
+            actorUserId: req.auth.user.id,
+            projectId,
+            action: 'idea_guidance_answered',
+            details: { mode: guidanceMode },
+          });
+        });
+
+        return res.json({ prompt, mode: 'auto', reply, turn });
+      } catch (runtimeError) {
+        return res.json({ prompt, mode: 'manual', runtimeError: runtimeError.message });
+      }
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -2390,6 +2535,8 @@ function registerRequirementsPlatform(app, options) {
         createdBy: hydrated.createdBy,
         reviewedAt: hydrated.reviewedAt,
         reviewedBy: hydrated.reviewedBy,
+        workItemId: hydrated.workItemId,
+        agentRequestId: hydrated.agentRequestId,
         fullPrompt: hydrated.fullPrompt || '',
         rawOutput: hydrated.rawOutput || '',
         parsedOutput: hydrated.parsedOutput ?? null,
@@ -3739,6 +3886,8 @@ function registerRequirementsPlatform(app, options) {
     appendActivity,
     ensureArray,
     nowIso,
+    sendProjectEmail,
+    normalizeRequirementRecord,
   });
 
   registerAgentRuntimeRoutes(app, {
@@ -3754,6 +3903,7 @@ function registerRequirementsPlatform(app, options) {
     buildHumanReviewPayload: deliveryOs.buildHumanReviewPayload,
     ensureArray,
     nowIso,
+    sendProjectEmail,
   });
 
   ensureStore().catch((error) => {

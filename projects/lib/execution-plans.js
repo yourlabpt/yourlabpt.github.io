@@ -312,39 +312,9 @@ function enrichTasksForProfile(tasks, plan, profile) {
   });
 }
 
-function needsPlannerFallback(tasks, profile) {
+function exceedsProfileBounds(tasks, profile) {
   if (ensureArray(tasks).length > profile.maxTasks) return true;
   return ensureArray(tasks).some((task) => Number(task.estimatedInputTokens || estimateTokens(task.instruction)) > profile.targetInputTokens);
-}
-
-function buildPlannerTask(agentType, project, options, profile) {
-  const reqIds = ensureArray(project?.requirements).map((r) => r.id).filter(Boolean).sort();
-  return normalizeExecutionTask({
-    id: 'plan_breakdown',
-    order: 0,
-    title: 'Plan breakdown',
-    role: 'planning',
-    dependsOn: [],
-    targetOutputTokens: profile.targetOutputTokens,
-    estimatedInputTokens: Math.min(profile.targetInputTokens, 1200 + reqIds.length * 4),
-    instruction: [
-      '# Plan breakdown',
-      `Agent type: ${agentType}`,
-      `Model profile: ${profile.id}`,
-      `Target input tokens per task: ${profile.targetInputTokens}`,
-      `Target output tokens per task: ${profile.targetOutputTokens}`,
-      'Create a deterministic task breakdown that fits these ranges.',
-      'Use stable task IDs, explicit dependsOn, contextFromTaskIds, and mark independent tasks with empty dependsOn.',
-      'Return ONLY JSON: {"tasks":[{"id":"","title":"","role":"","dependsOn":[],"contextFromTaskIds":[],"objective":"","expectedOutput":""}]}',
-      `Requirement IDs: ${reqIds.join(', ')}`,
-      `Options: ${JSON.stringify({
-        fromStageId: options.fromStageId,
-        toStageId: options.toStageId,
-        direction: options.direction,
-        propagationDirection: options.propagationDirection,
-      })}`,
-    ].join('\n\n'),
-  });
 }
 
 function defaultTaskSplit(fullPrompt, agentType, titlePrefix = 'Parte') {
@@ -1341,15 +1311,11 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
     masterPlanMarkdown = `Diagrama → requisitos (${diagram?.title || options.diagramArtifactId}).`;
   } else {
     fullPrompt = buildFullPromptForType(agentType, project, options, deliveryOs);
-    const split = defaultTaskSplit(fullPrompt, agentType);
-    tasks = split.length ? split : [{
-      id: 'main',
-      order: 0,
-      title: agentType,
-      role: 'artifact',
-      dependsOn: [],
-    }];
-    masterPlanMarkdown = tasks.length > 1 ? `${tasks.length} partes do prompt.` : 'Prompt único.';
+    tasks = [
+      { id: 'analyse', order: 0, title: `Analisar contexto de ${agentType}`, role: 'analysis', dependsOn: [] },
+      { id: 'produce', order: 1, title: `Produzir resultado de ${agentType}`, role: 'artifact', dependsOn: ['analyse'] },
+    ];
+    masterPlanMarkdown = 'Análise contextual seguida da produção do resultado; sem cortes arbitrários do prompt.';
   }
 
   if (!tasks.every((t) => t.instruction)) {
@@ -1369,11 +1335,8 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
   };
   tasks = enrichTasksForProfile(tasks, planForPrompts, profile);
   let splitStrategy = requestedSplitStrategy;
-  if (splitStrategy !== 'planner_prompt' && needsPlannerFallback(tasks, profile)) {
-    splitStrategy = 'planner_prompt';
-    const planner = buildPlannerTask(agentType, project, options, profile);
-    tasks = enrichTasksForProfile([planner], { ...planForPrompts, splitStrategy }, profile);
-    masterPlanMarkdown = `${masterPlanMarkdown}\n\nPlaneamento automático necessário: o contexto excede o perfil ${profile.id}.`;
+  if (exceedsProfileBounds(tasks, profile)) {
+    masterPlanMarkdown = `${masterPlanMarkdown}\n\nAlgumas tarefas excedem o alvo do perfil ${profile.id}; a configuração deve ser revista antes da execução.`;
   }
 
   return normalizeExecutionPlan({
