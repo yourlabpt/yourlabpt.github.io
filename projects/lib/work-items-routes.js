@@ -459,6 +459,8 @@ function registerWorkItemRoutes(app, deps) {
         progressCurrent: Number(agentJob.subtasksCompleted) || 0,
         progressTotal: Number(agentJob.subtasksTotal) || 0,
         tokensUsed: Number(agentJob.tokensUsed) || 0,
+        maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
+        maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
         error: agentJob.error || null,
         createdAt: agentJob.createdAt || null,
         updatedAt: dispatch?.updatedAt || agentJob.updatedAt || null,

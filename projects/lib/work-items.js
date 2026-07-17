@@ -153,6 +153,8 @@ function normalizeExecutionSettings(raw) {
     modelProfileId: textOr(src.modelProfileId, 'medium'),
     targetInputTokens: Math.max(0, Number(src.targetInputTokens) || 0),
     targetOutputTokens: Math.max(0, Number(src.targetOutputTokens) || 0),
+    tokenBudgetMode: src.tokenBudgetMode === 'limited' ? 'limited' : 'auto',
+    goalCheckInterval: Math.max(1, Math.min(10, Number(src.goalCheckInterval) || 3)),
     maxTokens: Math.max(0, Number(src.maxTokens) || 0),
     maxWallClockMinutes: Math.max(0, Number(src.maxWallClockMinutes) || 0),
     maxSubtasks: Math.max(1, Number(src.maxSubtasks) || 8),

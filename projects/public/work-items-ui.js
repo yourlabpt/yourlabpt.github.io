@@ -200,6 +200,8 @@
         progressCurrent: payload.progress?.current ?? payload.agentJob?.subtasksCompleted ?? 0,
         progressTotal: payload.progress?.total ?? payload.agentJob?.subtasksTotal ?? 0,
         tokensUsed: payload.progress?.tokensUsed ?? payload.agentJob?.tokensUsed ?? 0,
+        maxTokens: payload.progress?.maxTokens ?? payload.agentJob?.budget?.maxTokens ?? 0,
+        maxWallClockMinutes: payload.progress?.maxWallClockMinutes ?? payload.agentJob?.budget?.maxWallClockMinutes ?? 0,
         error: payload.agentJob?.error || null,
         createdAt: payload.agentJob?.createdAt || state.detailExecution?.createdAt || null,
         updatedAt: payload.dispatch?.updatedAt || payload.agentJob?.updatedAt || null,
@@ -874,7 +876,7 @@
       <div class="ado-agent-command-center">
         <div class="ado-agent-log-head">
           <span class="ado-agent-log-status">${escapeHtml(statusLabels[status] || status)}</span>
-          <small>${events.length} evento${events.length === 1 ? '' : 's'} · ${Number(execution.tokensUsed || 0).toLocaleString('pt-PT')} tokens</small>
+          <small>${events.length} evento${events.length === 1 ? '' : 's'} · ${Number(execution.tokensUsed || 0).toLocaleString('pt-PT')} tokens · ${Number(execution.maxTokens) > 0 ? `limite ${Number(execution.maxTokens).toLocaleString('pt-PT')}` : 'tokens locais sem limite'}</small>
         </div>
         ${total ? `<div class="ado-agent-progress"><div><span>Progresso</span><strong>${current}/${total} passos · ${progress}%</strong></div><progress max="100" value="${progress}"></progress></div>` : ''}
         ${goalTotal ? `<div class="ado-agent-goals"><span>Critérios verificados</span><strong>${goalMet}/${goalTotal}</strong></div>` : ''}
@@ -973,14 +975,16 @@
             <details class="ado-advanced-details ado-execution-settings"><summary>Configuração da execução do agente</summary><div class="ado-advanced-grid">
               <label>Agente preferido<input data-ado-setting="agentId" value="${escapeHtml(executionSettings.agentId || item.agentId || '')}" /></label>
               <label>Perfil do modelo<select data-ado-setting="modelProfileId"><option value="small" ${executionSettings.modelProfileId === 'small' ? 'selected' : ''}>small</option><option value="medium" ${!executionSettings.modelProfileId || executionSettings.modelProfileId === 'medium' ? 'selected' : ''}>medium</option><option value="large" ${executionSettings.modelProfileId === 'large' ? 'selected' : ''}>large</option><option value="long_context" ${executionSettings.modelProfileId === 'long_context' ? 'selected' : ''}>long_context</option></select></label>
-              <label>Tokens máximos<input type="number" data-ado-setting="maxTokens" value="${executionSettings.maxTokens || 120000}" /></label>
+              <label>Política de tokens<select data-ado-setting="tokenBudgetMode"><option value="auto" ${executionSettings.tokenBudgetMode !== 'limited' ? 'selected' : ''}>Automática — ilimitado local</option><option value="limited" ${executionSettings.tokenBudgetMode === 'limited' ? 'selected' : ''}>Aplicar limite</option></select></label>
+              <label>Limite de tokens externos<input type="number" min="1" data-ado-setting="maxTokens" value="${executionSettings.maxTokens || 120000}" /></label>
               <label>Tempo máximo (min)<input type="number" data-ado-setting="maxWallClockMinutes" value="${executionSettings.maxWallClockMinutes || 45}" /></label>
               <label>Input alvo<input type="number" data-ado-setting="targetInputTokens" value="${executionSettings.targetInputTokens || 14000}" /></label>
               <label>Output alvo<input type="number" data-ado-setting="targetOutputTokens" value="${executionSettings.targetOutputTokens || 2500}" /></label>
               <label>Subtarefas máximas<input type="number" data-ado-setting="maxSubtasks" value="${executionSettings.maxSubtasks || 8}" /></label>
+              <label>Verificar objetivos a cada N passos<input type="number" min="1" max="10" data-ado-setting="goalCheckInterval" value="${executionSettings.goalCheckInterval || 3}" /></label>
               <label>Ferramentas MCP permitidas<input data-ado-setting="allowedMcpTools" value="${escapeHtml((executionSettings.allowedMcpTools || item.requiredMcpTools || []).join(', '))}" placeholder="project.read, requirements.read" /></label>
               <label class="checkline"><input type="checkbox" data-ado-setting="enableWebSearch" ${executionSettings.enableWebSearch !== false ? 'checked' : ''}> Pesquisa web</label>
-            </div><p class="ado-section-hint">Alterar perfil, limites por tarefa ou número de subtarefas exige uma nova versão do pedido. Orçamento e tempo aplicam-se à próxima tentativa.</p><button type="button" class="ado-action-ghost" data-ado-save-execution-settings>Guardar configuração</button></details>
+            </div><p class="ado-section-hint">No modo automático, modelos locais não param por tokens; ligações a modelos externos respeitam o limite configurado. O agente verifica objetivos por marcos e sempre antes de concluir.</p><button type="button" class="ado-action-ghost" data-ado-save-execution-settings>Guardar configuração</button></details>
             ${request?.diffSummary?.requestPromptDiff ? `<details class="ado-advanced-details"><summary>Diferenças do pedido</summary><pre>${escapeHtml(request.diffSummary.requestPromptDiff)}</pre></details>` : ''}
           </section>
         ` : ''}

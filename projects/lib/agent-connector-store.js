@@ -393,10 +393,13 @@ class AgentConnectorStore {
         insert.run(dispatchId, localEventId, JSON.stringify(event), nowIso(now));
       }
       const localStatus = normalizeConnectorStatus(input.status);
+      const acknowledgedAction = String(input.acknowledgedAction || '').trim();
       const status = leased.desired_action === 'cancel' && localStatus !== 'cancelled'
         ? 'cancel_requested'
         : localStatus;
       const desiredAction = (
+        (acknowledgedAction && acknowledgedAction === leased.desired_action)
+        ||
         (leased.desired_action === 'cancel' && localStatus === 'cancelled')
         || (leased.desired_action === 'pause' && localStatus === 'paused')
         || (leased.desired_action === 'resume' && localStatus !== 'paused')

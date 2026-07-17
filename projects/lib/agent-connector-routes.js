@@ -193,6 +193,7 @@ function registerAgentConnectorRoutes(app, deps) {
       );
       if (typeof onSync === 'function' && (
         before?.status !== dispatch.status
+        || before?.desiredAction !== dispatch.desiredAction
         || (Array.isArray(req.body?.events) && req.body.events.length)
       )) {
         await onSync(dispatch, req.body?.progress || {}, req.body?.events || []);

@@ -504,6 +504,11 @@ function registerAgentRuntimeRoutes(app, deps) {
             job.subtasksCompleted = Math.max(0, Number(progress.completed) || 0);
             job.subtasksTotal = Math.max(0, Number(progress.total) || 0);
             job.tokensUsed = Math.max(0, Number(progress.tokensUsed) || 0);
+            job.budget = {
+              ...(job.budget || {}),
+              maxTokens: Math.max(0, Number(progress.maxTokens) || 0),
+              maxWallClockMinutes: Math.max(0, Number(progress.maxWallClockMinutes) || 0),
+            };
             job.goalProgress = {
               met: Math.max(0, Number(progress.goalsMet) || 0),
               total: Math.max(0, Number(progress.goalsTotal) || 0),
@@ -525,7 +530,13 @@ function registerAgentRuntimeRoutes(app, deps) {
               lastMilestone: textOr(latest?.message, task.lastMilestone),
               currentAction: textOr(progress.currentStep)
                 ? `A executar: ${textOr(progress.currentStep)}`
-                : task.currentAction,
+                : dispatch.status === 'paused'
+                  ? textOr(latest?.message, 'Execução pausada num checkpoint seguro.')
+                  : dispatch.status === 'self_review'
+                    ? 'A verificar critérios e a preparar o resultado.'
+                    : dispatch.status === 'failed'
+                      ? textOr(progress.error, 'A execução falhou; consulte os registos.')
+                      : task.currentAction,
               updatedAt: nowIso(),
             }, { project })
             : entry));
@@ -1156,6 +1167,8 @@ function registerAgentRuntimeRoutes(app, deps) {
             current: Number(agentJob.subtasksCompleted) || 0,
             total: Number(agentJob.subtasksTotal) || 0,
             tokensUsed: Number(agentJob.tokensUsed) || 0,
+            maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
+            maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
           },
           runtimeMeta: {
             checkedAt: nowIso(),

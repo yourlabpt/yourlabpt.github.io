@@ -486,6 +486,33 @@ describe('secure outbound agent connector', () => {
     db.close();
   });
 
+  it('acknowledges resume even when the runtime immediately pauses again', () => {
+    const { db, store, connector } = fixture();
+    const queued = enqueue(store);
+    const claim = store.claim(connector.id);
+    store.ack(connector.id, queued.id, claim.leaseToken, 'local-budget-paused');
+    store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-budget-paused',
+      status: 'paused',
+    });
+    store.setDesiredAction(queued.id, 'resume');
+
+    const delivered = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-budget-paused',
+      status: 'paused',
+    });
+    assert.equal(delivered.desiredAction, 'resume');
+
+    const acknowledged = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-budget-paused',
+      status: 'paused',
+      acknowledgedAction: 'resume',
+    });
+    assert.equal(acknowledged.desiredAction, null);
+    assert.equal(acknowledged.status, 'paused');
+    db.close();
+  });
+
   it('keeps cancellation pending offline and delivers it after reconnect', () => {
     let clock = Date.now();
     const db = new Database(':memory:');
