@@ -149,13 +149,16 @@ function registerAgentConnectorRoutes(app, deps) {
     try {
       const dispatch = store.claim(req.agentConnector.id);
       if (!dispatch) return res.status(204).end();
-      await onAudit('agent_dispatch_claimed', {
+      const response = res.json({ dispatch });
+      void onAudit('agent_dispatch_claimed', {
         actorUserId: 'agent_connector',
         connectorId: req.agentConnector.id,
         dispatchId: dispatch.id,
         projectId: dispatch.projectId,
+      }).catch((error) => {
+        console.error('[agent-connector] Failed to audit claimed dispatch:', error.message);
       });
-      return res.json({ dispatch });
+      return response;
     } catch (error) {
       return res.status(409).json({ message: error.message });
     }
