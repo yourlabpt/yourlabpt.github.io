@@ -1,6 +1,7 @@
 'use strict';
 
 const VERSION = 2;
+const APP_BUILD = 9;
 const SECURITY_KEY = 'diarioTccSecurityV2';
 const VAULT_KEY = 'diarioTccVaultV2';
 const LEGACY_STORAGE_KEY = 'diarioTccEntriesV1';
@@ -21,10 +22,32 @@ let failedAttempts = Number(sessionStorage.getItem('diarioTccFailedAttempts') ||
 let lockoutUntil = Number(sessionStorage.getItem('diarioTccLockoutUntil') || 0);
 let autoLockSuspendCount = 0;
 let dailyBackupPromptShown = false;
+let otherDialogResolver = null;
+let otherDialogContext = null;
+let lastChipTapAt = 0;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-const state = { mood: '', triggers: [], actions: [] };
+const bind = (element, eventName, handler) => {
+  if (element) element.addEventListener(eventName, handler);
+};
+const state = {
+  mood: '',
+  triggers: [],
+  actions: [],
+  thoughts: [],
+  company: [],
+  sleep: '',
+  intimacy: ''
+};
+const otherText = {
+  mood: '',
+  triggers: '',
+  actions: '',
+  thoughts: '',
+  company: ''
+};
+const OTHER_MARKER = 'Outro';
 const SLIP_ACTION = 'Usei o atalho';
 const HEALTHY_ACTIONS = new Set([
   'Orei',
@@ -299,6 +322,7 @@ function showApp() {
   renderInsights();
   updateSecurityUi();
   updateBackupUi();
+  updateAppBuildUi();
   updateEntryDateLabel();
   window.scrollTo(0, 0);
   window.setTimeout(maybePromptDailyBackup, 450);
@@ -555,33 +579,234 @@ async function updateSecurityUi() {
 }
 
 function selectChip(button) {
+  handleChipPress(button);
+}
+
+function syncChipStateFromGroup(group) {
+  const name = group.dataset.name;
+  if (!name) return;
+  if (group.classList.contains('multi')) {
+    state[name] = [...group.querySelectorAll('.chip.selected')].map((chip) => chip.dataset.value);
+  }
+}
+
+function otherPreviewId(name) {
+  return name === 'mood' ? '#moodOtherPreview' : `#${name}OtherPreview`;
+}
+
+function updateOtherPreview(name) {
+  const preview = $(otherPreviewId(name));
+  if (!preview) return;
+  const text = String(otherText[name] || '').trim();
+  if (text) {
+    preview.textContent = `Outro: ${text}`;
+    preview.classList.remove('hidden');
+  } else {
+    preview.textContent = '';
+    preview.classList.add('hidden');
+  }
+}
+
+function setOtherText(name, value) {
+  otherText[name] = String(value || '').trim();
+  updateOtherPreview(name);
+}
+
+function moodLabel() {
+  if (state.mood === OTHER_MARKER && otherText.mood) return `Outro: ${otherText.mood}`;
+  return state.mood;
+}
+
+function openOtherInputDialog({ title, hint, label, placeholder, initial = '' }) {
+  return new Promise((resolve) => {
+    otherDialogResolver = resolve;
+    $('#otherInputTitle').textContent = title;
+    $('#otherInputHint').textContent = hint;
+    $('#otherInputLabel').textContent = label;
+    $('#otherInputValue').placeholder = placeholder;
+    $('#otherInputValue').value = initial;
+    setMessage($('#otherInputMessage'), '');
+    $('#otherInputDialog').showModal();
+    window.setTimeout(() => {
+      $('#otherInputValue').focus();
+      $('#otherInputValue').select();
+    }, 80);
+  });
+}
+
+function closeOtherInputDialog(result) {
+  const resolver = otherDialogResolver;
+  otherDialogResolver = null;
+  otherDialogContext = null;
+  $('#otherInputDialog').close();
+  if (resolver) resolver(result);
+}
+
+function handleChipPress(button) {
   const group = button.closest('[data-name]');
+  if (!group) return;
   const name = group.dataset.name;
   const value = button.dataset.value;
   const multi = group.classList.contains('multi');
+  const isOther = value === OTHER_MARKER;
+  const wasSelected = button.classList.contains('selected');
 
   if (multi) {
-    button.classList.toggle('selected');
-    const selected = [...group.querySelectorAll('.chip.selected')].map((chip) => chip.dataset.value);
-    state[name] = selected;
-    if (name === 'triggers') toggleOtherField('Outro', selected, '#triggerOther', '#triggerOtherLabel');
-    if (name === 'actions') {
-      toggleOtherField('Outro', selected, '#actionOther', '#actionOtherLabel');
-      updateSlipVisibility();
+    if (isOther && wasSelected) {
+      openOtherInputDialog({
+        title: otherDialogCopy(name).title,
+        hint: otherDialogCopy(name).hint,
+        label: otherDialogCopy(name).label,
+        placeholder: otherDialogCopy(name).placeholder,
+        initial: otherText[name]
+      }).then((text) => {
+        if (!text) {
+          button.classList.remove('selected');
+          setOtherText(name, '');
+        } else {
+          setOtherText(name, text);
+        }
+        syncChipStateFromGroup(group);
+        if (name === 'actions') updateSlipVisibility();
+      });
+      return;
     }
+
+    if (isOther && !wasSelected) {
+      otherDialogContext = { button, group, name, multi: true };
+      openOtherInputDialog({
+        title: otherDialogCopy(name).title,
+        hint: otherDialogCopy(name).hint,
+        label: otherDialogCopy(name).label,
+        placeholder: otherDialogCopy(name).placeholder,
+        initial: otherText[name]
+      }).then((text) => {
+        if (!text) return;
+        button.classList.add('selected');
+        setOtherText(name, text);
+        syncChipStateFromGroup(group);
+        if (name === 'actions') updateSlipVisibility();
+      });
+      return;
+    }
+
+    button.classList.toggle('selected');
+    syncChipStateFromGroup(group);
+    if (name === 'actions') updateSlipVisibility();
+    return;
+  }
+
+  if (isOther) {
+    if (wasSelected) {
+      openOtherInputDialog({
+        title: otherDialogCopy(name).title,
+        hint: otherDialogCopy(name).hint,
+        label: otherDialogCopy(name).label,
+        placeholder: otherDialogCopy(name).placeholder,
+        initial: otherText[name]
+      }).then((text) => {
+        if (!text) {
+          button.classList.remove('selected');
+          state[name] = '';
+          setOtherText(name, '');
+          return;
+        }
+        setOtherText(name, text);
+        state[name] = OTHER_MARKER;
+      });
+      return;
+    }
+
+    otherDialogContext = { button, group, name, multi: false };
+    openOtherInputDialog({
+      title: otherDialogCopy(name).title,
+      hint: otherDialogCopy(name).hint,
+      label: otherDialogCopy(name).label,
+      placeholder: otherDialogCopy(name).placeholder,
+      initial: otherText[name]
+    }).then((text) => {
+      if (!text) return;
+      group.querySelectorAll('.chip').forEach((chip) => chip.classList.remove('selected'));
+      button.classList.add('selected');
+      state[name] = OTHER_MARKER;
+      setOtherText(name, text);
+    });
     return;
   }
 
   group.querySelectorAll('.chip').forEach((chip) => chip.classList.remove('selected'));
   button.classList.add('selected');
   state[name] = value;
+  if (group.dataset.other) setOtherText(name, '');
+}
+
+function otherDialogCopy(name) {
+  const copy = {
+    mood: {
+      title: 'Como se sente?',
+      hint: 'Descreva o seu estado com as suas palavras.',
+      label: 'Estado de hoje',
+      placeholder: 'Ex.: inquieto, esperançoso, culpado…'
+    },
+    triggers: {
+      title: 'Outro gatilho',
+      hint: 'O que mais despertou a vontade hoje?',
+      label: 'Gatilho',
+      placeholder: 'Descreva o gatilho…'
+    },
+    actions: {
+      title: 'Outra resposta',
+      hint: 'O que fez diante da vontade?',
+      label: 'Resposta',
+      placeholder: 'Descreva o que fez…'
+    },
+    thoughts: {
+      title: 'Outro pensamento',
+      hint: 'Que pensamento automático apareceu?',
+      label: 'Pensamento',
+      placeholder: 'Descreva o pensamento…'
+    },
+    company: {
+      title: 'Com quem mais estava?',
+      hint: 'Descreva o contexto social.',
+      label: 'Pessoas / contexto',
+      placeholder: 'Ex.: colegas, sozinho no quarto…'
+    }
+  };
+  return copy[name] || {
+    title: 'Descreva',
+    hint: 'Escreva com as suas palavras.',
+    label: 'Descrição',
+    placeholder: 'O que sentiu ou aconteceu?'
+  };
+}
+
+function initChipDelegation() {
+  const root = document.body;
+  if (!root || root.dataset.chipsReady) return;
+  root.dataset.chipsReady = '1';
+
+  const onChipEvent = (event) => {
+    const button = event.target.closest('button.chip');
+    if (!button || !button.closest('#entryForm')) return;
+    const now = Date.now();
+    if (now - lastChipTapAt < 280) return;
+    lastChipTapAt = now;
+    if (event.cancelable) event.preventDefault();
+    handleChipPress(button);
+  };
+
+  root.addEventListener('click', onChipEvent, true);
+  root.addEventListener('touchend', onChipEvent, { capture: true, passive: false });
 }
 
 function toggleOtherField(marker, selected, inputSelector, labelSelector) {
   const show = selected.includes(marker);
-  $(inputSelector).classList.toggle('hidden', !show);
-  $(labelSelector).classList.toggle('hidden', !show);
-  if (!show) $(inputSelector).value = '';
+  const input = $(inputSelector);
+  const label = $(labelSelector);
+  if (input) input.classList.toggle('hidden', !show);
+  if (label) label.classList.toggle('hidden', !show);
+  if (!show && input) input.value = '';
 }
 
 function updateSlipVisibility() {
@@ -620,6 +845,22 @@ function entryActions(entry) {
 
 function entryMood(entry) {
   return entry.mood || entry.emotion || '';
+}
+
+function entryThoughts(entry) {
+  if (Array.isArray(entry.thoughts) && entry.thoughts.length) return entry.thoughts;
+  if (entry.thought) return [entry.thought];
+  return [];
+}
+
+function entryCompany(entry) {
+  if (Array.isArray(entry.company) && entry.company.length) return entry.company;
+  return [];
+}
+
+function resolvedMood() {
+  if (state.mood === OTHER_MARKER && otherText.mood) return `Outro: ${otherText.mood}`;
+  return state.mood;
 }
 
 function entryDayKey(entry) {
@@ -679,13 +920,19 @@ function buildEntryDetail(entry, index, showIndex) {
     line('Gatilhos', entryTriggers(entry).join('; ')),
     line('Horário da vontade', entry.urgeTime || ''),
     line('Respostas', entryActions(entry).join('; ')),
+    line('Pensamentos', entryThoughts(entry).join('; ')),
+    line('Onde estava', entry.locationNote),
+    line('Com quem estava', entryCompany(entry).join('; ')),
+    line('Sono', entry.sleep),
+    line('Proximidade conjugal', entry.intimacy),
     line('Antes do deslize', entry.slipBefore),
     line('Depois do deslize', entry.slipAfter),
     line('Próxima vez', entry.slipNext),
     line('Positivo do dia', entry.positiveAct),
     line('Gratidão', entry.gratitude),
-    line('Pessoa de apoio', entry.contact),
-    line('Nota', entry.note)
+    line('Meta para amanhã', entry.tomorrowGoal),
+    line('Nota livre', entry.freeNote || entry.note),
+    line('Pessoa de apoio', entry.contact)
   ].filter(Boolean);
   return lines.join('\n');
 }
@@ -799,7 +1046,7 @@ function downloadDailyReport() {
   setMessage($('#reportMessage'), 'Ficheiro .txt descarregado.', 'success');
 }
 
-function resolveListWithOther(selected, otherValue, marker = 'Outro') {
+function resolveListWithOther(selected, otherValue, marker = OTHER_MARKER) {
   return selected.map((item) => {
     if (item !== marker) return item;
     const detail = String(otherValue || '').trim();
@@ -816,25 +1063,34 @@ function switchView(viewId) {
   if (viewId === 'settings') {
     updateSecurityUi();
     updateBackupUi();
+    updateAppBuildUi();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function resetForm() {
-  $('#entryForm').reset();
+  const form = $('#entryForm');
+  if (form) form.reset();
   $('#urge').value = 3;
   $('#urgeValue').textContent = '3';
   $('#highRiskCard').classList.add('hidden');
   $('#slipCard').classList.add('hidden');
-  $('#triggerOther').classList.add('hidden');
-  $('#triggerOtherLabel').classList.add('hidden');
-  $('#actionOther').classList.add('hidden');
-  $('#actionOtherLabel').classList.add('hidden');
   state.mood = '';
   state.triggers = [];
   state.actions = [];
+  state.thoughts = [];
+  state.company = [];
+  state.sleep = '';
+  state.intimacy = '';
+  Object.keys(otherText).forEach((key) => { otherText[key] = ''; });
   $$('.chip.selected').forEach((chip) => chip.classList.remove('selected'));
+  Object.keys(otherText).forEach((name) => updateOtherPreview(name));
   updateEntryDateLabel();
+}
+
+function updateAppBuildUi() {
+  const label = $('#appBuildLabel');
+  if (label) label.textContent = String(APP_BUILD);
 }
 
 function formatDate(iso) {
@@ -870,10 +1126,16 @@ function renderHistory() {
     const extras = [
       entry.positiveAct ? `<p><strong>Positivo:</strong> ${escapeHtml(entry.positiveAct)}</p>` : '',
       entry.gratitude ? `<p><strong>Gratidão:</strong> ${escapeHtml(entry.gratitude)}</p>` : '',
+      entryThoughts(entry).length ? `<p><strong>Pensamentos:</strong> ${escapeHtml(entryThoughts(entry).join('; '))}</p>` : '',
+      entry.locationNote ? `<p><strong>Onde:</strong> ${escapeHtml(entry.locationNote)}</p>` : '',
+      entryCompany(entry).length ? `<p><strong>Com quem:</strong> ${escapeHtml(entryCompany(entry).join('; '))}</p>` : '',
+      entry.sleep ? `<p><strong>Sono:</strong> ${escapeHtml(entry.sleep)}</p>` : '',
+      entry.intimacy ? `<p><strong>Proximidade:</strong> ${escapeHtml(entry.intimacy)}</p>` : '',
+      entry.tomorrowGoal ? `<p><strong>Meta amanhã:</strong> ${escapeHtml(entry.tomorrowGoal)}</p>` : '',
       entry.slipBefore ? `<p><strong>Antes:</strong> ${escapeHtml(entry.slipBefore)}</p>` : '',
       entry.slipAfter ? `<p><strong>Depois:</strong> ${escapeHtml(entry.slipAfter)}</p>` : '',
       entry.slipNext ? `<p><strong>Próxima vez:</strong> ${escapeHtml(entry.slipNext)}</p>` : '',
-      entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''
+      (entry.freeNote || entry.note) ? `<p>${escapeHtml(entry.freeNote || entry.note)}</p>` : ''
     ].join('');
     return `
     <article class="entry">
@@ -1071,9 +1333,27 @@ $('#faceUnlockBtn').addEventListener('click', unlockWithFaceId);
 $('#lockBtn').addEventListener('click', () => lockApp({ autoFace: false }));
 $('#settingsLockNow').addEventListener('click', () => lockApp({ autoFace: false }));
 
-$$('.chip-grid .chip').forEach((button) => button.addEventListener('click', () => selectChip(button)));
+initChipDelegation();
 
-$('#urge').addEventListener('input', (event) => {
+bind($('#otherInputForm'), 'submit', (event) => {
+  event.preventDefault();
+  const text = $('#otherInputValue').value.trim();
+  if (!text) {
+    setMessage($('#otherInputMessage'), 'Escreva algumas palavras para guardar.', 'error');
+    return;
+  }
+  closeOtherInputDialog(text);
+});
+
+bind($('#cancelOtherInput'), 'click', () => {
+  closeOtherInputDialog(null);
+});
+
+$('#otherInputDialog')?.addEventListener('close', () => {
+  if (otherDialogResolver) closeOtherInputDialog(null);
+});
+
+bind($('#urge'), 'input', (event) => {
   const value = Number(event.target.value);
   $('#urgeValue').textContent = String(value);
   $('#highRiskCard').classList.toggle('hidden', value < 7);
@@ -1084,29 +1364,40 @@ $$('.tab').forEach((tab) => tab.addEventListener('click', () => switchView(tab.d
 $('#entryForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const urge = normalizeUrge($('#urge').value);
-  const triggers = resolveListWithOther(state.triggers, $('#triggerOther').value);
-  const actions = resolveListWithOther(state.actions, $('#actionOther').value);
+  const triggers = resolveListWithOther(state.triggers, otherText.triggers);
+  const actions = resolveListWithOther(state.actions, otherText.actions);
+  const thoughts = resolveListWithOther(state.thoughts, otherText.thoughts);
+  const company = resolveListWithOther(state.company, otherText.company);
   const hadSlip = actions.includes(SLIP_ACTION);
+  const mood = resolvedMood();
   const entry = {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     createdAt: new Date().toISOString(),
-    formVersion: 3,
+    formVersion: 4,
     urge,
-    mood: state.mood,
-    emotion: state.mood,
+    mood,
+    emotion: mood,
     triggers,
     trigger: triggers[0] || '',
     urgeTime: $('#urgeTime').value || '',
     actions,
     action: actions[0] || '',
+    thoughts,
+    thought: thoughts[0] || '',
+    locationNote: $('#locationNote').value.trim(),
+    company,
+    sleep: state.sleep,
+    intimacy: state.intimacy,
     hadSlip,
     slipBefore: hadSlip ? $('#slipBefore').value.trim() : '',
     slipAfter: hadSlip ? $('#slipAfter').value.trim() : '',
     slipNext: hadSlip ? $('#slipNext').value.trim() : '',
     positiveAct: $('#positiveAct').value.trim(),
     gratitude: $('#gratitude').value.trim(),
+    tomorrowGoal: $('#tomorrowGoal').value.trim(),
+    freeNote: $('#freeNote').value.trim(),
     contact: $('#contactName').value.trim(),
-    note: ''
+    note: $('#freeNote').value.trim()
   };
   entries.unshift(entry);
   try {
@@ -1154,36 +1445,36 @@ $('#clearFilters').addEventListener('click', () => {
   renderHistory();
 });
 
-$('#openDailyReport').addEventListener('click', () => openDailyReportDialog(todayKey()));
-$('#openDailyReportFromSettings').addEventListener('click', () => openDailyReportDialog(todayKey()));
-$('#reportDay').addEventListener('change', () => {
+bind($('#openDailyReport'), 'click', () => openDailyReportDialog(todayKey()));
+bind($('#openDailyReportFromSettings'), 'click', () => openDailyReportDialog(todayKey()));
+bind($('#reportDay'), 'change', () => {
   refreshDailyReportText();
 });
-$('#copyReport').addEventListener('click', () => {
+bind($('#copyReport'), 'click', () => {
   copyDailyReport();
 });
-$('#shareReport').addEventListener('click', () => {
+bind($('#shareReport'), 'click', () => {
   shareDailyReport();
 });
-$('#downloadReport').addEventListener('click', () => {
+bind($('#downloadReport'), 'click', () => {
   downloadDailyReport();
 });
-$('#closeDailyReport').addEventListener('click', () => {
+bind($('#closeDailyReport'), 'click', () => {
   $('#dailyReportDialog').close();
 });
 
-$('#exportEncrypted').addEventListener('click', () => {
+bind($('#exportEncrypted'), 'click', () => {
   downloadEncryptedBackup();
 });
 
-$('#backupAfterEntry').addEventListener('change', (event) => {
+bind($('#backupAfterEntry'), 'change', (event) => {
   const prefs = backupPrefs();
   prefs.afterEachEntry = event.target.checked;
   saveBackupPrefs(prefs);
   updateBackupUi();
 });
 
-$('#backupDaily').addEventListener('change', (event) => {
+bind($('#backupDaily'), 'change', (event) => {
   const prefs = backupPrefs();
   prefs.daily = event.target.checked;
   saveBackupPrefs(prefs);
@@ -1203,11 +1494,12 @@ $('#skipDailyBackup').addEventListener('click', () => {
   $('#dailyBackupDialog').close();
 });
 
-$('#exportCsv').addEventListener('click', () => {
+bind($('#exportCsv'), 'click', () => {
   if (!confirm('O CSV ficará legível e não será encriptado. Continuar?')) return;
   const headers = [
     'data_hora', 'estado', 'vontade_atalho', 'gatilhos', 'horario_vontade', 'respostas',
-    'deslize', 'antes', 'depois', 'proxima_vez', 'positivo', 'gratidao', 'contacto'
+    'pensamentos', 'onde', 'com_quem', 'sono', 'proximidade', 'deslize', 'antes', 'depois',
+    'proxima_vez', 'positivo', 'gratidao', 'meta_amanha', 'nota_livre', 'contacto'
   ];
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   const rows = entries.map((entry) => [
@@ -1217,12 +1509,19 @@ $('#exportCsv').addEventListener('click', () => {
     entryTriggers(entry).join(' | '),
     entry.urgeTime || '',
     entryActions(entry).join(' | '),
+    entryThoughts(entry).join(' | '),
+    entry.locationNote || '',
+    entryCompany(entry).join(' | '),
+    entry.sleep || '',
+    entry.intimacy || '',
     entry.hadSlip || entryActions(entry).includes(SLIP_ACTION) ? 'sim' : 'nao',
     entry.slipBefore || '',
     entry.slipAfter || '',
     entry.slipNext || '',
     entry.positiveAct || '',
     entry.gratitude || '',
+    entry.tomorrowGoal || '',
+    entry.freeNote || entry.note || '',
     entry.contact || ''
   ].map(quote).join(','));
   downloadFile(
@@ -1363,10 +1662,13 @@ if ('serviceWorker' in navigator) {
 }
 
 async function initialize() {
+  initChipDelegation();
+  updateAppBuildUi();
   if (!window.crypto?.subtle) {
     showSetup();
     setMessage($('#setupMessage'), 'Este navegador não suporta a encriptação necessária. Use o Safari atualizado.', 'error');
-    $('#createVaultBtn').disabled = true;
+    const createBtn = $('#createVaultBtn');
+    if (createBtn) createBtn.disabled = true;
     return;
   }
   if (securityMeta()) await showUnlock({ autoFace: true });
