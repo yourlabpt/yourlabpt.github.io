@@ -25,6 +25,7 @@
     detail: null,
     detailChildren: [],
     detailRequest: null,
+    detailExecution: null,
     suggestions: [],
     automationRules: [],
     selectedIds: new Set(),
@@ -34,6 +35,7 @@
     showCompleted: false,
     agentRequests: [],
     selectedRequest: null,
+    selectedRequestTasks: [],
     pendingConnectionTaskId: '',
     pendingConnectionAgentId: '',
     filtersOpen: false,
@@ -190,6 +192,14 @@
     if (!runId || state.selectedId !== taskId) return;
     try {
       const payload = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status`);
+      state.detailExecution = {
+        runId: payload.agentJob?.id || runId,
+        status: payload.dispatch?.status || payload.agentJob?.status || '',
+        events: payload.events || [],
+        createdAt: payload.agentJob?.createdAt || state.detailExecution?.createdAt || null,
+        updatedAt: payload.dispatch?.updatedAt || payload.agentJob?.updatedAt || null,
+      };
+      paintAgentExecution();
       const status = $('workItemEditor')?.querySelector('[data-ado-connection-status]');
       if (status) status.textContent = payload.agentJob?.status === 'pending_human_review' ? 'Resultado recebido. Precisa da sua revisão.' : payload.workItem?.currentAction || `Agente: ${payload.agentJob?.status || 'em execução'}.`;
       if (['pending_human_review', 'completed', 'failed', 'cancelled'].includes(payload.agentJob?.status)) {
@@ -389,6 +399,7 @@
     state.detail = payload.workItem;
     state.detailChildren = payload.children || [];
     state.detailRequest = payload.agentRequest || null;
+    state.detailExecution = payload.agentExecution || null;
     state.canManage = Boolean(payload.canManage);
     state.canPostUpdate = Boolean(payload.canPostUpdate);
     state.canEditUpdate = Boolean(payload.canEditUpdate);
@@ -636,6 +647,7 @@
     state.selectedId = null;
     state.detail = null;
     state.selectedRequest = null;
+    state.selectedRequestTasks = [];
     state.saveState = 'idle';
     state.lastSaveSnapshot = '';
     state.editingUpdateId = null;
@@ -768,18 +780,50 @@
   }
 
   async function startApprovedRequest(project, request) {
+    const tasks = state.selectedRequestTasks || [];
+    const task = state.pendingConnectionTaskId
+      ? tasks.find((entry) => entry.id === state.pendingConnectionTaskId)
+      : tasks.find((entry) => entry.taskRole === 'coordination' && entry.status === 'ready')
+        || tasks.find((entry) => entry.status === 'ready');
+    const taskId = state.pendingConnectionTaskId || task?.id;
+    if (!taskId) throw new Error('O plano foi aprovado, mas ainda não existe uma tarefa pronta para iniciar.');
     const payload = await apiRequest('/agent-runs', {
       method: 'POST',
-      body: { projectId: project.id, agentId: state.pendingConnectionAgentId || request.agentId, agentType: request.agentType, agentRequestId: request.id, workItemId: state.pendingConnectionTaskId || undefined },
+      body: { projectId: project.id, agentId: state.pendingConnectionAgentId || request.agentId, agentType: request.agentType, agentRequestId: request.id, workItemId: taskId },
     });
     if (payload.requiresApproval) throw new Error('O plano ainda precisa de aprovação.');
     await fetchList(project.id);
     await fetchAgentRequests(project.id).catch(() => []);
-    const taskId = state.pendingConnectionTaskId || payload.workItem?.id || (state.selectedRequestTasks || []).find((task) => task.status === 'ready')?.id;
+    const openedTaskId = payload.workItem?.id || taskId;
     state.pendingConnectionTaskId = '';
     state.pendingConnectionAgentId = '';
-    if (taskId) await openEditor(project, taskId);
+    if (openedTaskId) await openEditor(project, openedTaskId);
     showToast('O agente iniciou a primeira tarefa.', 'ok');
+  }
+
+  function renderAgentExecution() {
+    const execution = state.detailExecution;
+    if (!execution) return '<p class="ado-agent-log-empty">A execução ainda não produziu eventos.</p>';
+    const events = execution.events || [];
+    return `
+      <div class="ado-agent-log-head">
+        <span class="ado-agent-log-status">${escapeHtml(statusLabel(execution.status))}</span>
+        <small>${events.length} evento${events.length === 1 ? '' : 's'}</small>
+      </div>
+      <div class="ado-agent-log-list">
+        ${events.length ? events.map((event) => `
+          <article class="ado-agent-log-entry">
+            <time>${escapeHtml(formatWhen(event.timestamp || event.createdAt))}</time>
+            <div><strong>${escapeHtml(event.type || 'evento')}</strong><p>${escapeHtml(event.message || event.summary || event.detail || '')}</p></div>
+          </article>
+        `).join('') : '<p class="ado-agent-log-empty">O pedido está na fila; os eventos aparecerão quando o agente iniciar.</p>'}
+      </div>
+    `;
+  }
+
+  function paintAgentExecution() {
+    const host = $('workItemEditor')?.querySelector('[data-ado-agent-log]');
+    if (host) host.innerHTML = renderAgentExecution();
   }
 
   function paintEditor(project) {
@@ -951,6 +995,14 @@
             ${agentPairingGuidance}
             ${!isCoordination ? '<div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>' : ''}
             <div class="ado-manual-output-pane hidden" data-ado-manual-pane><label>Resultado obtido<textarea rows="10" data-ado-manual-raw placeholder="Cole aqui a resposta completa ou o JSON produzido…"></textarea></label><p class="ado-section-hint" data-ado-manual-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-manual>Validar e pré-visualizar</button><button type="button" class="ado-action-primary" data-ado-submit-manual disabled>Enviar para revisão</button></div></div>
+          </section>
+        ` : ''}
+
+        ${item.origin === 'agent' && state.detailExecution ? `
+          <section class="ado-editor-section ado-agent-log-section">
+            <h3 class="ado-section-title">Execução do agente</h3>
+            <p class="ado-section-hint">Eventos recebidos do runtime local, preservados no histórico desta tarefa.</p>
+            <div data-ado-agent-log>${renderAgentExecution()}</div>
           </section>
         ` : ''}
 

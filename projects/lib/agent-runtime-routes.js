@@ -725,8 +725,14 @@ function registerAgentRuntimeRoutes(app, deps) {
         if (requestedAgentRequestId && requestedAgentRequestId !== canonicalTask.agentRequestId) throw new Error('A tarefa nao pertence ao pedido de agente indicado.');
         const request = agentRequests.getAgentRequests(mutableProject).find((entry) => entry.id === canonicalTask.agentRequestId);
         if (!request) throw new Error('Pedido do agente nao encontrado.');
+        const tasks = workItems.getWorkItems(mutableProject).filter((task) => task.agentRequestId === request.id);
+        delegation = { request: agentRequests.requestSummary(request, tasks), tasks, created: false };
+        if (['awaiting_approval', 'revision_requested'].includes(delegation.request.status)) {
+          await notifyActionable(mutableStore, mutableProject, { type: 'plan_approval', request: delegation.request, title: 'Plano do agente aguarda aprovação', message: `${delegation.request.title} tem ${delegation.tasks.length} tarefa(s) para rever.` });
+          return;
+        }
         if (!['ready', 'running'].includes(request.status)) {
-          throw new Error('O pedido do agente nao esta aprovado e pronto para execucao.');
+          throw new Error(`O pedido do agente está no estado “${request.status}” e não pode iniciar uma nova execução.`);
         }
         ({ options, budget } = resolveExecutionConfig(
           connectionMode,
@@ -743,12 +749,6 @@ function registerAgentRuntimeRoutes(app, deps) {
           const advertised = manifests.find((entry) => entry.id === agentId)
             || manifests.find((entry) => ensureArray(entry.taskTypes).includes(platformAgentType));
           if (advertised?.id) agentId = advertised.id;
-        }
-        const tasks = workItems.getWorkItems(mutableProject).filter((task) => task.agentRequestId === request.id);
-        delegation = { request: agentRequests.requestSummary(request, tasks), tasks, created: false };
-        if (delegation.request.status === 'awaiting_approval' || delegation.request.status === 'revision_requested') {
-          await notifyActionable(mutableStore, mutableProject, { type: 'plan_approval', request: delegation.request, title: 'Plano do agente aguarda aprovação', message: `${delegation.request.title} tem ${delegation.tasks.length} tarefa(s) para rever.` });
-          return;
         }
         delegatedTask = delegation.tasks.find((task) => task.id === requestedWorkItemId) || null;
         if (!delegatedTask) throw new Error('Nao existe uma tarefa pronta para executar neste plano.');

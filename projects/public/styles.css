@@ -10588,6 +10588,78 @@ body.is-client-readonly [data-writes-only] {
   color: var(--heading);
 }
 
+.ado-agent-log-section {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
+}
+
+.ado-agent-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 8px;
+}
+
+.ado-agent-log-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  color: var(--heading);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ado-agent-log-head small,
+.ado-agent-log-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ado-agent-log-list {
+  display: flex;
+  max-height: 340px;
+  flex-direction: column;
+  gap: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.ado-agent-log-entry {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ado-agent-log-entry:last-child {
+  border-bottom: 0;
+}
+
+.ado-agent-log-entry time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ado-agent-log-entry strong {
+  color: var(--heading);
+  font-size: 12px;
+}
+
+.ado-agent-log-entry p {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ado-agent-log-empty {
+  margin: 0;
+  padding: 12px;
+}
+
 .ado-notification-strip {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;

@@ -438,11 +438,27 @@ function registerWorkItemRoutes(app, deps) {
     }
     const linkedRequest = item.agentRequestId ? agentRequests.getAgentRequests(project).find((entry) => entry.id === item.agentRequestId) || null : null;
     const safeRequest = linkedRequest ? Object.fromEntries(Object.entries(linkedRequest).filter(([key]) => !['inputSnapshot', 'configSnapshot'].includes(key))) : null;
+    const canManage = projectAccess.canManageWorkItems(user, project);
+    const agentJob = canManage ? workItems.ensureArray(project.agentJobs).find((job) => (
+      (item.agentJobId && job.id === item.agentJobId)
+      || (item.promptRunId && job.promptRunId === item.promptRunId)
+      || job.workItemId === item.id
+    )) || null : null;
+    const dispatch = agentJob && connectorStore
+      ? connectorStore.findDispatch(agentJob.dispatchId || agentJob.id || agentJob.promptRunId)
+      : null;
     return res.json({
       workItem: item,
       children: workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === item.id),
       agentRequest: safeRequest,
-      canManage: projectAccess.canManageWorkItems(user, project),
+      agentExecution: agentJob ? {
+        runId: agentJob.id,
+        status: dispatch?.status || agentJob.status,
+        events: dispatch && connectorStore ? connectorStore.events(dispatch.id) : [],
+        createdAt: agentJob.createdAt || null,
+        updatedAt: dispatch?.updatedAt || agentJob.updatedAt || null,
+      } : null,
+      canManage,
       canPostUpdate: projectAccess.canPostWorkItemUpdate(user, project, item),
       canEditUpdate: projectAccess.canEditWorkItemUpdate(user, project),
     });
