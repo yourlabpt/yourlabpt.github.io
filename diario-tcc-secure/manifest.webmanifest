@@ -2,7 +2,7 @@
   "id": "/diario-tcc-secure/",
   "name": "Diário TCC Privado",
   "short_name": "Diário TCC",
-  "description": "Registo rápido, privado, encriptado e instalável para acompanhar impulsos e gatilhos.",
+  "description": "Monitoramento diário privado e encriptado para hábitos, autocontrolo e proximidade.",
   "start_url": "/diario-tcc-secure/",
   "scope": "/diario-tcc-secure/",
   "display": "standalone",

@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'diario-tcc-v5';
+const CACHE = 'diario-tcc-v8';
 const BASE = '/diario-tcc-secure/';
 const INDEX_URL = `${BASE}index.html`;
 const ASSETS = [

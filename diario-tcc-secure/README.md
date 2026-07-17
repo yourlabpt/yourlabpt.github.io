@@ -1,6 +1,8 @@
 # Diário TCC Privado — PWA encriptada
 
-PWA móvel, sem dependências externas, para registos rápidos de impulsos. Os dados são encriptados no próprio dispositivo antes de serem guardados.
+PWA móvel, sem dependências externas, para monitoramento diário com linguagem discreta. Os dados são encriptados no próprio dispositivo antes de serem guardados.
+
+O formulário reforça hábitos, intimidade e autocontrolo (estado, vontade do “atalho”, gatilhos, respostas, deslize com aprendizagem, positivo e gratidão), em vez de focar só em punir recaídas.
 
 ## Segurança implementada
 
@@ -22,7 +24,7 @@ Nenhuma aplicação é “impossível de quebrar”. Esta versão protege bem co
 - o domínio e o alojamento HTTPS não serem comprometidos;
 - não exportar CSV para locais inseguros.
 
-Não existe recuperação do código mestre. Faça uma cópia encriptada regularmente.
+Não existe recuperação do código mestre. Faça uma cópia encriptada regularmente (a app pode descarregar automaticamente após cada registo e lembrar a cópia diária).
 
 ## Publicar no seu próprio link
 
@@ -66,9 +68,11 @@ O iPhone pode usar o código do próprio dispositivo quando o Face ID não estiv
 
 ## Cópias e exportações
 
-- **Cópia encriptada:** inclui o cofre e a configuração; precisa do código mestre da cópia.
-- **CSV legível:** serve para análise ou terapia, mas não é encriptado.
-- **Importar cópia:** aceita a cópia encriptada ou o JSON simples exportado pela versão anterior.
+- **Cópia após cada registo:** descarrega automaticamente a cópia encriptada quando guarda um registo (ativo por omissão; pode desligar em Dados).
+- **Lembrete diário:** ao desbloquear, pede uma cópia se ainda não descarregou hoje.
+- **Cópia encriptada:** inclui o cofre e a configuração; precisa do código mestre da cópia. Guarde-a fora do navegador (Ficheiros, iCloud, Drive).
+- **Relatório do dia:** em Histórico ou Dados, gera texto para enviar à terapeuta (resumo se houver vários registos no mesmo dia; copiar, partilhar ou .txt).
+- **Importar / recuperar cópia:** na primeira utilização use “Recuperar cópia encriptada”; com o diário já criado use Dados → “Recuperar / importar cópia”. Depois desbloqueie com o código mestre dessa cópia.
 
 ## Atualizar a aplicação
 

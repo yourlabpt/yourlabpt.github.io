@@ -4,6 +4,7 @@ const VERSION = 2;
 const SECURITY_KEY = 'diarioTccSecurityV2';
 const VAULT_KEY = 'diarioTccVaultV2';
 const LEGACY_STORAGE_KEY = 'diarioTccEntriesV1';
+const BACKUP_PREFS_KEY = 'diarioTccBackupPrefsV1';
 const PIN_ITERATIONS = 600000;
 const AUTO_LOCK_DELAY_MS = 30000;
 const MAX_FAILED_ATTEMPTS = 5;
@@ -19,10 +20,21 @@ let hiddenAt = 0;
 let failedAttempts = Number(sessionStorage.getItem('diarioTccFailedAttempts') || 0);
 let lockoutUntil = Number(sessionStorage.getItem('diarioTccLockoutUntil') || 0);
 let autoLockSuspendCount = 0;
+let dailyBackupPromptShown = false;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-const state = { emotion: '', trigger: '', thought: '', action: '' };
+const state = { mood: '', triggers: [], actions: [] };
+const SLIP_ACTION = 'Usei o atalho';
+const HEALTHY_ACTIONS = new Set([
+  'Orei',
+  'Conversei com a minha esposa',
+  'Saí para caminhar',
+  'Fiz exercício físico',
+  'Li algo edificante',
+  'Procurei um amigo de confiança',
+  'Investi em intimidade / proximidade'
+]);
 
 function randomBytes(length) {
   return crypto.getRandomValues(new Uint8Array(length));
@@ -61,6 +73,66 @@ function readJson(key) {
 
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function defaultBackupPrefs() {
+  return {
+    afterEachEntry: true,
+    daily: true,
+    lastBackupDay: null
+  };
+}
+
+function backupPrefs() {
+  const stored = readJson(BACKUP_PREFS_KEY);
+  return { ...defaultBackupPrefs(), ...(stored && typeof stored === 'object' ? stored : {}) };
+}
+
+function saveBackupPrefs(prefs) {
+  writeJson(BACKUP_PREFS_KEY, prefs);
+}
+
+function formatBackupDay(day) {
+  if (!day) return 'Ainda não descarregou nenhuma cópia neste dispositivo.';
+  try {
+    return `Última cópia: ${new Intl.DateTimeFormat('pt-PT', { dateStyle: 'medium' }).format(new Date(`${day}T12:00:00`))}.`;
+  } catch {
+    return `Última cópia: ${day}.`;
+  }
+}
+
+function updateBackupUi() {
+  const prefs = backupPrefs();
+  const afterEntry = $('#backupAfterEntry');
+  const daily = $('#backupDaily');
+  if (afterEntry) afterEntry.checked = Boolean(prefs.afterEachEntry);
+  if (daily) daily.checked = Boolean(prefs.daily);
+  const status = $('#backupStatus');
+  if (status) setMessage(status, formatBackupDay(prefs.lastBackupDay));
+}
+
+function markBackupDownloaded() {
+  const prefs = backupPrefs();
+  prefs.lastBackupDay = todayKey();
+  saveBackupPrefs(prefs);
+  updateBackupUi();
+}
+
+function needsDailyBackup() {
+  const prefs = backupPrefs();
+  return Boolean(prefs.daily) && prefs.lastBackupDay !== todayKey();
+}
+
+function maybePromptDailyBackup() {
+  if (dailyBackupPromptShown || !needsDailyBackup() || !masterCryptoKey) return;
+  const dialog = $('#dailyBackupDialog');
+  if (!dialog || dialog.open || $('#savedDialog')?.open) return;
+  dailyBackupPromptShown = true;
+  dialog.showModal();
 }
 
 function securityMeta() {
@@ -226,16 +298,22 @@ function showApp() {
   sessionStorage.removeItem('diarioTccLockoutUntil');
   renderInsights();
   updateSecurityUi();
+  updateBackupUi();
+  updateEntryDateLabel();
   window.scrollTo(0, 0);
+  window.setTimeout(maybePromptDailyBackup, 450);
 }
 
 function lockApp({ autoFace = false } = {}) {
   clearTimeout(backgroundLockTimer);
   backgroundLockTimer = null;
   clearUnlockedKey();
+  dailyBackupPromptShown = false;
   $('#historyList').innerHTML = '';
   $('#triggerBars').innerHTML = '';
   $('#emotionBars').innerHTML = '';
+  const actionBars = $('#actionBars');
+  if (actionBars) actionBars.innerHTML = '';
   resetForm();
   showUnlock({ autoFace });
 }
@@ -479,27 +557,284 @@ async function updateSecurityUi() {
 function selectChip(button) {
   const group = button.closest('[data-name]');
   const name = group.dataset.name;
+  const value = button.dataset.value;
+  const multi = group.classList.contains('multi');
+
+  if (multi) {
+    button.classList.toggle('selected');
+    const selected = [...group.querySelectorAll('.chip.selected')].map((chip) => chip.dataset.value);
+    state[name] = selected;
+    if (name === 'triggers') toggleOtherField('Outro', selected, '#triggerOther', '#triggerOtherLabel');
+    if (name === 'actions') {
+      toggleOtherField('Outro', selected, '#actionOther', '#actionOtherLabel');
+      updateSlipVisibility();
+    }
+    return;
+  }
+
   group.querySelectorAll('.chip').forEach((chip) => chip.classList.remove('selected'));
   button.classList.add('selected');
-  state[name] = button.dataset.value;
+  state[name] = value;
+}
+
+function toggleOtherField(marker, selected, inputSelector, labelSelector) {
+  const show = selected.includes(marker);
+  $(inputSelector).classList.toggle('hidden', !show);
+  $(labelSelector).classList.toggle('hidden', !show);
+  if (!show) $(inputSelector).value = '';
+}
+
+function updateSlipVisibility() {
+  const show = state.actions.includes(SLIP_ACTION);
+  $('#slipCard').classList.toggle('hidden', !show);
+}
+
+function updateEntryDateLabel() {
+  const label = $('#entryDateLabel');
+  if (!label) return;
+  label.textContent = new Intl.DateTimeFormat('pt-PT', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).format(new Date());
+}
+
+function normalizeUrge(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  if (number > 10) return Math.min(10, Math.round(number / 10));
+  return Math.max(0, Math.min(10, number));
+}
+
+function entryTriggers(entry) {
+  if (Array.isArray(entry.triggers) && entry.triggers.length) return entry.triggers;
+  if (entry.trigger) return [entry.trigger];
+  return [];
+}
+
+function entryActions(entry) {
+  if (Array.isArray(entry.actions) && entry.actions.length) return entry.actions;
+  if (entry.action) return [entry.action];
+  return [];
+}
+
+function entryMood(entry) {
+  return entry.mood || entry.emotion || '';
+}
+
+function entryDayKey(entry) {
+  const iso = entry?.createdAt;
+  if (!iso) return '';
+  return String(iso).slice(0, 10);
+}
+
+function entriesForDay(dayKey) {
+  return entries
+    .filter((entry) => entryDayKey(entry) === dayKey)
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function joinList(values, empty = '—') {
+  const list = uniqueValues(values);
+  return list.length ? list.join('; ') : empty;
+}
+
+function formatReportDay(dayKey) {
+  try {
+    return new Intl.DateTimeFormat('pt-PT', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(new Date(`${dayKey}T12:00:00`));
+  } catch {
+    return dayKey;
+  }
+}
+
+function formatEntryClock(entry) {
+  if (entry.urgeTime) return entry.urgeTime;
+  try {
+    return new Intl.DateTimeFormat('pt-PT', { hour: '2-digit', minute: '2-digit' }).format(new Date(entry.createdAt));
+  } catch {
+    return '—';
+  }
+}
+
+function line(label, value) {
+  const text = String(value || '').trim();
+  return text ? `${label}: ${text}` : null;
+}
+
+function buildEntryDetail(entry, index, showIndex) {
+  const prefix = showIndex ? `${index}) ` : '';
+  const lines = [
+    `${prefix}${formatEntryClock(entry)}`,
+    line('Estado', entryMood(entry)),
+    line('Vontade do atalho', `${normalizeUrge(entry.urge)}/10`),
+    line('Gatilhos', entryTriggers(entry).join('; ')),
+    line('Horário da vontade', entry.urgeTime || ''),
+    line('Respostas', entryActions(entry).join('; ')),
+    line('Antes do deslize', entry.slipBefore),
+    line('Depois do deslize', entry.slipAfter),
+    line('Próxima vez', entry.slipNext),
+    line('Positivo do dia', entry.positiveAct),
+    line('Gratidão', entry.gratitude),
+    line('Pessoa de apoio', entry.contact),
+    line('Nota', entry.note)
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+function buildDailyReport(dayKey) {
+  const dayEntries = entriesForDay(dayKey);
+  const title = `Relatório diário — ${formatReportDay(dayKey)}`;
+  if (!dayEntries.length) {
+    return `${title}\n\nSem registos neste dia.`;
+  }
+
+  const scores = dayEntries.map((entry) => normalizeUrge(entry.urge));
+  const avg = Math.round((scores.reduce((sum, value) => sum + value, 0) / scores.length) * 10) / 10;
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const slips = dayEntries.filter((entry) => entryActions(entry).includes(SLIP_ACTION) || entry.hadSlip).length;
+  const healthy = dayEntries.filter((entry) => entryActions(entry).some((action) => HEALTHY_ACTIONS.has(action))).length;
+  const multiple = dayEntries.length > 1;
+
+  const summary = [
+    'RESUMO DO DIA',
+    `Registos: ${dayEntries.length}`,
+    multiple
+      ? `Vontade do atalho: média ${avg}/10 (mín ${min}, máx ${max})`
+      : `Vontade do atalho: ${scores[0]}/10`,
+    `Estados: ${joinList(dayEntries.map(entryMood))}`,
+    `Gatilhos: ${joinList(dayEntries.flatMap(entryTriggers))}`,
+    `Respostas: ${joinList(dayEntries.flatMap(entryActions))}`,
+    `Respostas saudáveis (registos): ${healthy}`,
+    `Deslizes (registos): ${slips}`,
+    `Positivos: ${joinList(dayEntries.map((entry) => entry.positiveAct))}`,
+    `Gratidões: ${joinList(dayEntries.map((entry) => entry.gratitude))}`
+  ].join('\n');
+
+  const details = dayEntries
+    .map((entry, index) => buildEntryDetail(entry, index + 1, multiple))
+    .join('\n\n');
+
+  const footer = [
+    '',
+    '---',
+    'Nota: “atalho” e “deslize” são termos discretos do acompanhamento.',
+    'Foco do dia: reforçar hábitos, intimidade e autocontrolo.'
+  ].join('\n');
+
+  if (multiple) {
+    return `${title}\n\n${summary}\n\nDETALHE DOS REGISTOS\n\n${details}${footer}`;
+  }
+  return `${title}\n\n${summary}\n\nDETALHE\n\n${details}${footer}`;
+}
+
+function refreshDailyReportText() {
+  const dayKey = $('#reportDay')?.value || todayKey();
+  const text = buildDailyReport(dayKey);
+  $('#reportText').value = text;
+  const hasEntries = entriesForDay(dayKey).length > 0;
+  $('#copyReport').disabled = !hasEntries;
+  $('#shareReport').disabled = !hasEntries;
+  $('#downloadReport').disabled = !hasEntries;
+  if (!hasEntries) setMessage($('#reportMessage'), 'Não há registos neste dia.', 'warning');
+  else setMessage($('#reportMessage'), '');
+  return text;
+}
+
+function openDailyReportDialog(dayKey = todayKey()) {
+  $('#reportDay').value = dayKey;
+  refreshDailyReportText();
+  setMessage($('#reportMessage'), '');
+  $('#dailyReportDialog').showModal();
+  $('#shareReport').classList.toggle('hidden', typeof navigator.share !== 'function');
+}
+
+async function copyDailyReport() {
+  const text = $('#reportText').value;
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      $('#reportText').focus();
+      $('#reportText').select();
+      document.execCommand('copy');
+    }
+    setMessage($('#reportMessage'), 'Texto copiado. Pode colar na mensagem para a terapeuta.', 'success');
+  } catch {
+    setMessage($('#reportMessage'), 'Não foi possível copiar. Selecione o texto e copie manualmente.', 'error');
+  }
+}
+
+async function shareDailyReport() {
+  const text = $('#reportText').value;
+  const dayKey = $('#reportDay').value || todayKey();
+  if (!text || typeof navigator.share !== 'function') return;
+  try {
+    await withAutoLockSuspended(() => navigator.share({
+      title: `Relatório diário ${dayKey}`,
+      text
+    }));
+    setMessage($('#reportMessage'), 'Partilha concluída.', 'success');
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    setMessage($('#reportMessage'), 'Não foi possível partilhar. Use Copiar texto.', 'error');
+  }
+}
+
+function downloadDailyReport() {
+  const dayKey = $('#reportDay').value || todayKey();
+  const text = $('#reportText').value;
+  if (!text) return;
+  downloadFile(`relatorio-diario-${dayKey}.txt`, text, 'text/plain;charset=utf-8');
+  setMessage($('#reportMessage'), 'Ficheiro .txt descarregado.', 'success');
+}
+
+function resolveListWithOther(selected, otherValue, marker = 'Outro') {
+  return selected.map((item) => {
+    if (item !== marker) return item;
+    const detail = String(otherValue || '').trim();
+    return detail ? `Outro: ${detail}` : 'Outro';
+  });
 }
 
 function switchView(viewId) {
   $$('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.view === viewId));
   $$('.view').forEach((view) => view.classList.toggle('active', view.id === viewId));
+  if (viewId === 'quick') updateEntryDateLabel();
   if (viewId === 'history') renderHistory();
   if (viewId === 'insights') renderInsights();
-  if (viewId === 'settings') updateSecurityUi();
+  if (viewId === 'settings') {
+    updateSecurityUi();
+    updateBackupUi();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function resetForm() {
   $('#entryForm').reset();
-  $('#urge').value = 30;
-  $('#urgeValue').textContent = '30';
+  $('#urge').value = 3;
+  $('#urgeValue').textContent = '3';
   $('#highRiskCard').classList.add('hidden');
-  Object.keys(state).forEach((key) => { state[key] = ''; });
+  $('#slipCard').classList.add('hidden');
+  $('#triggerOther').classList.add('hidden');
+  $('#triggerOtherLabel').classList.add('hidden');
+  $('#actionOther').classList.add('hidden');
+  $('#actionOtherLabel').classList.add('hidden');
+  state.mood = '';
+  state.triggers = [];
+  state.actions = [];
   $$('.chip.selected').forEach((chip) => chip.classList.remove('selected'));
+  updateEntryDateLabel();
 }
 
 function formatDate(iso) {
@@ -525,22 +860,39 @@ function renderHistory() {
     list.innerHTML = '<div class="empty">Ainda não existem registos neste período.</div>';
     return;
   }
-  list.innerHTML = visibleEntries.map((entry) => `
+  list.innerHTML = visibleEntries.map((entry) => {
+    const mood = entryMood(entry) || 'Sem estado indicado';
+    const tags = [
+      ...entryTriggers(entry),
+      ...entryActions(entry),
+      entry.urgeTime ? `Horário ${entry.urgeTime}` : ''
+    ].filter(Boolean);
+    const extras = [
+      entry.positiveAct ? `<p><strong>Positivo:</strong> ${escapeHtml(entry.positiveAct)}</p>` : '',
+      entry.gratitude ? `<p><strong>Gratidão:</strong> ${escapeHtml(entry.gratitude)}</p>` : '',
+      entry.slipBefore ? `<p><strong>Antes:</strong> ${escapeHtml(entry.slipBefore)}</p>` : '',
+      entry.slipAfter ? `<p><strong>Depois:</strong> ${escapeHtml(entry.slipAfter)}</p>` : '',
+      entry.slipNext ? `<p><strong>Próxima vez:</strong> ${escapeHtml(entry.slipNext)}</p>` : '',
+      entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''
+    ].join('');
+    return `
     <article class="entry">
       <div class="entry-top">
-        <div><div class="entry-meta">${formatDate(entry.createdAt)}</div><strong>${escapeHtml(entry.emotion || 'Sem emoção selecionada')}</strong></div>
-        <div class="entry-score">${Number(entry.urge) || 0}</div>
+        <div><div class="entry-meta">${formatDate(entry.createdAt)}</div><strong>${escapeHtml(mood)}</strong></div>
+        <div class="entry-score">${normalizeUrge(entry.urge)}</div>
       </div>
       <div class="entry-tags">
-        ${[entry.trigger, entry.thought, entry.action].filter(Boolean).map((item) => `<span class="entry-tag">${escapeHtml(item)}</span>`).join('')}
+        ${tags.map((item) => `<span class="entry-tag">${escapeHtml(item)}</span>`).join('')}
       </div>
-      ${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''}
+      ${extras}
       <div class="entry-actions"><button type="button" data-delete="${escapeHtml(entry.id)}">Apagar</button></div>
-    </article>`).join('');
+    </article>`;
+  }).join('');
   list.querySelectorAll('[data-delete]').forEach((button) => button.addEventListener('click', async () => {
     entries = entries.filter((entry) => entry.id !== button.dataset.delete);
     await saveVault();
     renderHistory();
+    renderInsights();
   }));
 }
 
@@ -552,7 +904,22 @@ function countsBy(items, key) {
   }, {});
 }
 
+function countsByList(items, getter) {
+  return items.reduce((accumulator, item) => {
+    const values = getter(item);
+    if (!values.length) {
+      accumulator['Não indicado'] = (accumulator['Não indicado'] || 0) + 1;
+      return accumulator;
+    }
+    values.forEach((value) => {
+      accumulator[value] = (accumulator[value] || 0) + 1;
+    });
+    return accumulator;
+  }, {});
+}
+
 function renderBars(container, counts) {
+  if (!container) return;
   const sorted = Object.entries(counts).sort((left, right) => right[1] - left[1]).slice(0, 6);
   if (!sorted.length) {
     container.innerHTML = '<p class="muted">Sem dados suficientes.</p>';
@@ -564,14 +931,27 @@ function renderBars(container, counts) {
 }
 
 function renderInsights() {
-  const average = entries.length
-    ? Math.round(entries.reduce((sum, entry) => sum + Number(entry.urge || 0), 0) / entries.length)
+  const scores = entries.map((entry) => normalizeUrge(entry.urge));
+  const average = scores.length
+    ? Math.round((scores.reduce((sum, value) => sum + value, 0) / scores.length) * 10) / 10
     : 0;
+  const healthyCount = entries.filter((entry) => entryActions(entry).some((action) => HEALTHY_ACTIONS.has(action))).length;
+  const slips = entries.filter((entry) => entryActions(entry).includes(SLIP_ACTION) || entry.hadSlip).length;
+  const withGratitude = entries.filter((entry) => String(entry.gratitude || '').trim()).length;
+
   $('#statCount').textContent = String(entries.length);
   $('#statAverage').textContent = String(average);
-  $('#statHigh').textContent = String(entries.filter((entry) => Number(entry.urge) >= 61).length);
-  renderBars($('#triggerBars'), countsBy(entries, 'trigger'));
-  renderBars($('#emotionBars'), countsBy(entries, 'emotion'));
+  $('#statHigh').textContent = String(scores.filter((score) => score >= 7).length);
+  const habitsEl = $('#statHabits');
+  const slipsEl = $('#statSlips');
+  const gratitudeEl = $('#statGratitude');
+  if (habitsEl) habitsEl.textContent = String(healthyCount);
+  if (slipsEl) slipsEl.textContent = String(slips);
+  if (gratitudeEl) gratitudeEl.textContent = String(withGratitude);
+
+  renderBars($('#triggerBars'), countsByList(entries, entryTriggers));
+  renderBars($('#emotionBars'), countsBy(entries.map((entry) => ({ mood: entryMood(entry) })), 'mood'));
+  renderBars($('#actionBars'), countsByList(entries, entryActions));
 }
 
 function downloadFile(filename, content, type) {
@@ -596,10 +976,20 @@ function encryptedBackup() {
   };
 }
 
+function downloadEncryptedBackup() {
+  downloadFile(
+    `diario-tcc-encriptado-${todayKey()}.json`,
+    JSON.stringify(encryptedBackup(), null, 2),
+    'application/json'
+  );
+  markBackupDownloaded();
+}
+
 function validateEncryptedBackup(parsed) {
   return parsed?.format === 'diario-tcc-encrypted-backup'
-    && parsed?.version === VERSION
-    && parsed?.security?.pin?.wrap
+    && Number(parsed?.version) === VERSION
+    && parsed?.security?.pin?.wrap?.data
+    && parsed?.security?.pin?.wrap?.iv
     && parsed?.vault?.data
     && parsed?.vault?.iv;
 }
@@ -609,6 +999,15 @@ function restoreEncryptedBackup(parsed) {
   writeJson(SECURITY_KEY, parsed.security);
   writeJson(VAULT_KEY, parsed.vault);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
+  clearUnlockedKey();
+}
+
+function describeBackupError(error, rawText) {
+  if (error instanceof SyntaxError) return 'O ficheiro não é um JSON válido.';
+  if (String(rawText || '').includes('diario-tcc-encrypted-backup')) {
+    return 'Esta cópia parece antiga ou incompleta. Use uma exportação encriptada desta versão (v2).';
+  }
+  return 'Esta não é uma cópia encriptada válida. Escolha o ficheiro JSON exportado pela app.';
 }
 
 $('#setupForm').addEventListener('submit', async (event) => {
@@ -639,12 +1038,16 @@ $('#setupForm').addEventListener('submit', async (event) => {
 $('#restoreBackupAtSetup').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
+  let rawText = '';
   try {
-    const parsed = JSON.parse(await file.text());
+    rawText = await file.text();
+    const parsed = JSON.parse(rawText);
     restoreEncryptedBackup(parsed);
+    setMessage($('#setupMessage'), '');
     await showUnlock();
-  } catch {
-    setMessage($('#setupMessage'), 'Esta não é uma cópia encriptada válida.', 'error');
+    setMessage($('#unlockMessage'), 'Cópia recuperada. Introduza o código mestre desta cópia para desbloquear.', 'success');
+  } catch (error) {
+    setMessage($('#setupMessage'), describeBackupError(error, rawText), 'error');
   }
   event.target.value = '';
 });
@@ -668,37 +1071,69 @@ $('#faceUnlockBtn').addEventListener('click', unlockWithFaceId);
 $('#lockBtn').addEventListener('click', () => lockApp({ autoFace: false }));
 $('#settingsLockNow').addEventListener('click', () => lockApp({ autoFace: false }));
 
-$$('.chip-grid.single .chip').forEach((button) => button.addEventListener('click', () => selectChip(button)));
+$$('.chip-grid .chip').forEach((button) => button.addEventListener('click', () => selectChip(button)));
 
 $('#urge').addEventListener('input', (event) => {
   const value = Number(event.target.value);
   $('#urgeValue').textContent = String(value);
-  $('#highRiskCard').classList.toggle('hidden', value < 61);
+  $('#highRiskCard').classList.toggle('hidden', value < 7);
 });
 
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => switchView(tab.dataset.view)));
 
 $('#entryForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const urge = Number($('#urge').value);
+  const urge = normalizeUrge($('#urge').value);
+  const triggers = resolveListWithOther(state.triggers, $('#triggerOther').value);
+  const actions = resolveListWithOther(state.actions, $('#actionOther').value);
+  const hadSlip = actions.includes(SLIP_ACTION);
   const entry = {
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     createdAt: new Date().toISOString(),
+    formVersion: 3,
     urge,
-    emotion: state.emotion,
-    trigger: state.trigger,
-    thought: state.thought,
-    action: state.action,
-    alternative: $('#alternative').value,
-    note: $('#note').value.trim(),
-    contact: $('#contactName').value.trim()
+    mood: state.mood,
+    emotion: state.mood,
+    triggers,
+    trigger: triggers[0] || '',
+    urgeTime: $('#urgeTime').value || '',
+    actions,
+    action: actions[0] || '',
+    hadSlip,
+    slipBefore: hadSlip ? $('#slipBefore').value.trim() : '',
+    slipAfter: hadSlip ? $('#slipAfter').value.trim() : '',
+    slipNext: hadSlip ? $('#slipNext').value.trim() : '',
+    positiveAct: $('#positiveAct').value.trim(),
+    gratitude: $('#gratitude').value.trim(),
+    contact: $('#contactName').value.trim(),
+    note: ''
   };
   entries.unshift(entry);
   try {
     await saveVault();
-    $('#savedMessage').textContent = urge >= 61
-      ? 'Registo guardado. Agora execute a ação escolhida e procure apoio humano.'
-      : 'Fez uma pausa e criou espaço para escolher.';
+    if (hadSlip) {
+      $('#savedMessage').textContent = 'Registo guardado. O deslize não apaga o progresso — use o que aprendeu e volte aos hábitos que constroem intimidade e autocontrolo.';
+    } else if (urge >= 7) {
+      $('#savedMessage').textContent = 'Registo guardado. A vontade é forte; prefira proximidade, movimento ou apoio humano agora.';
+    } else if (entry.positiveAct || entry.gratitude) {
+      $('#savedMessage').textContent = 'Registo guardado. Cada hábito positivo e cada gratidão reforçam a vida que quer construir.';
+    } else {
+      $('#savedMessage').textContent = 'Registo guardado. Continuar a observar já é um passo de autocontrolo.';
+    }
+    const backupNote = $('#savedBackupNote');
+    if (backupPrefs().afterEachEntry) {
+      try {
+        downloadEncryptedBackup();
+        backupNote.textContent = 'Cópia encriptada descarregada. Guarde-a fora do navegador para poder recuperar noutro dispositivo.';
+        backupNote.classList.remove('hidden');
+      } catch {
+        backupNote.textContent = 'Não foi possível descarregar a cópia automática. Use Dados → Exportar cópia encriptada.';
+        backupNote.classList.remove('hidden');
+      }
+    } else {
+      backupNote.textContent = '';
+      backupNote.classList.add('hidden');
+    }
     $('#savedDialog').showModal();
   } catch {
     entries.shift();
@@ -719,24 +1154,79 @@ $('#clearFilters').addEventListener('click', () => {
   renderHistory();
 });
 
+$('#openDailyReport').addEventListener('click', () => openDailyReportDialog(todayKey()));
+$('#openDailyReportFromSettings').addEventListener('click', () => openDailyReportDialog(todayKey()));
+$('#reportDay').addEventListener('change', () => {
+  refreshDailyReportText();
+});
+$('#copyReport').addEventListener('click', () => {
+  copyDailyReport();
+});
+$('#shareReport').addEventListener('click', () => {
+  shareDailyReport();
+});
+$('#downloadReport').addEventListener('click', () => {
+  downloadDailyReport();
+});
+$('#closeDailyReport').addEventListener('click', () => {
+  $('#dailyReportDialog').close();
+});
+
 $('#exportEncrypted').addEventListener('click', () => {
-  downloadFile(
-    `diario-tcc-encriptado-${new Date().toISOString().slice(0, 10)}.json`,
-    JSON.stringify(encryptedBackup(), null, 2),
-    'application/json'
-  );
+  downloadEncryptedBackup();
+});
+
+$('#backupAfterEntry').addEventListener('change', (event) => {
+  const prefs = backupPrefs();
+  prefs.afterEachEntry = event.target.checked;
+  saveBackupPrefs(prefs);
+  updateBackupUi();
+});
+
+$('#backupDaily').addEventListener('change', (event) => {
+  const prefs = backupPrefs();
+  prefs.daily = event.target.checked;
+  saveBackupPrefs(prefs);
+  updateBackupUi();
+  if (prefs.daily) {
+    dailyBackupPromptShown = false;
+    maybePromptDailyBackup();
+  }
+});
+
+$('#confirmDailyBackup').addEventListener('click', () => {
+  downloadEncryptedBackup();
+  $('#dailyBackupDialog').close();
+});
+
+$('#skipDailyBackup').addEventListener('click', () => {
+  $('#dailyBackupDialog').close();
 });
 
 $('#exportCsv').addEventListener('click', () => {
   if (!confirm('O CSV ficará legível e não será encriptado. Continuar?')) return;
-  const headers = ['data_hora', 'impulso', 'emocao', 'gatilho', 'pensamento', 'acao', 'frase_realista', 'nota', 'contacto'];
+  const headers = [
+    'data_hora', 'estado', 'vontade_atalho', 'gatilhos', 'horario_vontade', 'respostas',
+    'deslize', 'antes', 'depois', 'proxima_vez', 'positivo', 'gratidao', 'contacto'
+  ];
   const quote = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   const rows = entries.map((entry) => [
-    entry.createdAt, entry.urge, entry.emotion, entry.trigger, entry.thought,
-    entry.action, entry.alternative, entry.note, entry.contact
+    entry.createdAt,
+    entryMood(entry),
+    normalizeUrge(entry.urge),
+    entryTriggers(entry).join(' | '),
+    entry.urgeTime || '',
+    entryActions(entry).join(' | '),
+    entry.hadSlip || entryActions(entry).includes(SLIP_ACTION) ? 'sim' : 'nao',
+    entry.slipBefore || '',
+    entry.slipAfter || '',
+    entry.slipNext || '',
+    entry.positiveAct || '',
+    entry.gratitude || '',
+    entry.contact || ''
   ].map(quote).join(','));
   downloadFile(
-    `diario-tcc-${new Date().toISOString().slice(0, 10)}.csv`,
+    `diario-tcc-${todayKey()}.csv`,
     `\ufeff${[headers.join(','), ...rows].join('\n')}`,
     'text/csv;charset=utf-8'
   );
@@ -745,23 +1235,27 @@ $('#exportCsv').addEventListener('click', () => {
 $('#importJson').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
+  let rawText = '';
   try {
-    const parsed = JSON.parse(await file.text());
+    rawText = await file.text();
+    const parsed = JSON.parse(rawText);
     if (Array.isArray(parsed)) {
       if (!confirm('Substituir os registos atuais pelos dados deste ficheiro?')) return;
       entries = parsed;
       await saveVault();
       renderInsights();
+      renderHistory();
       alert('Registos importados e encriptados com sucesso.');
     } else if (validateEncryptedBackup(parsed)) {
-      if (!confirm('Esta cópia substituirá a segurança e os registos atuais. Depois terá de usar o código da cópia. Continuar?')) return;
+      if (!confirm('Esta cópia substituirá a segurança e os registos atuais. Depois terá de usar o código mestre da cópia. Continuar?')) return;
       restoreEncryptedBackup(parsed);
       lockApp({ autoFace: false });
+      setMessage($('#unlockMessage'), 'Cópia recuperada. Introduza o código mestre desta cópia.', 'success');
     } else {
       throw new Error('Formato inválido');
     }
-  } catch {
-    alert('Não foi possível importar este ficheiro.');
+  } catch (error) {
+    alert(describeBackupError(error, rawText));
   } finally {
     event.target.value = '';
   }

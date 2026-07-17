@@ -14,7 +14,7 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
-  <meta name="description" content="Diário TCC privado, encriptado e instalável." />
+  <meta name="description" content="Diário TCC privado: monitoramento diário encriptado com linguagem discreta." />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -52,8 +52,8 @@
         </form>
 
         <div class="auth-divider"><span>ou</span></div>
-        <label class="secondary full file-label">Restaurar cópia encriptada<input id="restoreBackupAtSetup" type="file" accept="application/json" hidden /></label>
-        <p class="security-note">Não existe recuperação do código mestre. Guarde-o num gestor de palavras-passe.</p>
+        <label class="secondary full file-label">Recuperar cópia encriptada<input id="restoreBackupAtSetup" type="file" accept="application/json,.json" hidden /></label>
+        <p class="security-note">Se limpou a cache ou mudou de telemóvel, escolha o ficheiro JSON da cópia. Depois use o mesmo código mestre dessa cópia. Sem o código, não há recuperação.</p>
       </div>
 
       <div id="unlockPanel" class="auth-panel hidden">
@@ -99,100 +99,126 @@
     <main>
       <section id="quick" class="view active">
         <div class="hero-card">
-          <div>
-            <p class="muted">Agora</p>
-            <h2>Como está o impulso?</h2>
-          </div>
-          <div class="score-display"><span id="urgeValue">30</span><small>/100</small></div>
-          <input id="urge" type="range" min="0" max="100" step="1" value="30" aria-label="Intensidade do impulso" />
-          <div class="risk-scale">
-            <span>Baixo</span><span>Médio</span><span>Alto</span><span>Crítico</span>
-          </div>
+          <p class="muted" id="entryDateLabel">Hoje</p>
+          <h2>Monitoramento diário</h2>
+          <p class="hero-lead">Reforce hábitos, intimidade e autocontrolo — não apenas evite o atalho.</p>
         </div>
 
         <form id="entryForm" autocomplete="off">
           <section class="card compact-section">
             <div class="section-head">
-              <h3>O que mais combina com este momento?</h3>
-              <span class="step-chip">1 toque por grupo</span>
+              <h3>1. Como estou hoje?</h3>
             </div>
-
             <fieldset>
-              <legend>Emoção principal</legend>
-              <div class="chip-grid single" data-name="emotion">
-                <button type="button" class="chip" data-value="Ansiedade">Ansiedade</button>
-                <button type="button" class="chip" data-value="Solidão">Solidão</button>
-                <button type="button" class="chip" data-value="Stress">Stress</button>
-                <button type="button" class="chip" data-value="Tédio">Tédio</button>
-                <button type="button" class="chip" data-value="Vergonha">Vergonha</button>
-                <button type="button" class="chip" data-value="Tristeza">Tristeza</button>
-                <button type="button" class="chip" data-value="Raiva">Raiva</button>
-                <button type="button" class="chip" data-value="Excitação">Excitação</button>
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend>Gatilho principal</legend>
-              <div class="chip-grid single" data-name="trigger">
-                <button type="button" class="chip" data-value="Redes sociais">Redes sociais</button>
-                <button type="button" class="chip" data-value="Sozinho">Estar sozinho</button>
-                <button type="button" class="chip" data-value="Cansaço">Cansaço</button>
-                <button type="button" class="chip" data-value="Conflito">Conflito</button>
-                <button type="button" class="chip" data-value="Procrastinação">Procrastinação</button>
-                <button type="button" class="chip" data-value="Imagem ou perfil">Imagem/perfil</button>
-                <button type="button" class="chip" data-value="Insónia">Insónia</button>
-                <button type="button" class="chip" data-value="Não sei">Não sei</button>
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend>Pensamento automático</legend>
-              <div class="chip-grid single" data-name="thought">
-                <button type="button" class="chip" data-value="Só desta vez">Só desta vez</button>
-                <button type="button" class="chip" data-value="Depois paro">Depois paro</button>
-                <button type="button" class="chip" data-value="Preciso disto">Preciso disto</button>
-                <button type="button" class="chip" data-value="Ninguém vai saber">Ninguém vai saber</button>
-                <button type="button" class="chip" data-value="Não aguento">Não aguento</button>
-                <button type="button" class="chip" data-value="Já estraguei tudo">Já estraguei tudo</button>
+              <legend class="sr-only">Estado de hoje</legend>
+              <div class="chip-grid single" data-name="mood">
+                <button type="button" class="chip" data-value="Muito bem">Muito bem</button>
+                <button type="button" class="chip" data-value="Bem">Bem</button>
+                <button type="button" class="chip" data-value="Ansioso">Ansioso</button>
+                <button type="button" class="chip" data-value="Triste">Triste</button>
+                <button type="button" class="chip" data-value="Estressado">Estressado</button>
+                <button type="button" class="chip" data-value="Cansado">Cansado</button>
+                <button type="button" class="chip" data-value="Sozinho">Sozinho</button>
               </div>
             </fieldset>
           </section>
 
           <section class="card compact-section">
-            <h3>Escolha a saída mais fácil agora</h3>
+            <div class="section-head">
+              <h3>2. Intensidade da vontade do atalho</h3>
+            </div>
+            <div class="score-display compact-score"><span id="urgeValue">3</span><small>/10</small></div>
+            <input id="urge" type="range" min="0" max="10" step="1" value="3" aria-label="Intensidade da vontade do atalho" />
+            <div class="risk-scale">
+              <span>0</span><span>calma</span><span>forte</span><span>10</span>
+            </div>
+          </section>
+
+          <section class="card compact-section">
+            <div class="section-head">
+              <h3>3. Quais gatilhos apareceram?</h3>
+              <span class="step-chip">vários</span>
+            </div>
             <fieldset>
-              <legend>Ação imediata</legend>
-              <div class="chip-grid single" data-name="action">
-                <button type="button" class="chip" data-value="Sair do local">Sair do local</button>
-                <button type="button" class="chip" data-value="Afastar dispositivo">Afastar telemóvel</button>
-                <button type="button" class="chip" data-value="Caminhar 10 minutos">Caminhar 10 min</button>
-                <button type="button" class="chip" data-value="Tomar banho">Tomar banho</button>
-                <button type="button" class="chip" data-value="Ir para perto de alguém">Ir para perto de alguém</button>
-                <button type="button" class="chip" data-value="Ativar bloqueador">Ativar bloqueador</button>
+              <legend class="sr-only">Gatilhos</legend>
+              <div class="chip-grid multi" data-name="triggers">
+                <button type="button" class="chip" data-value="Solidão">Solidão</button>
+                <button type="button" class="chip" data-value="Estresse">Estresse</button>
+                <button type="button" class="chip" data-value="Ansiedade">Ansiedade</button>
+                <button type="button" class="chip" data-value="Conflito conjugal">Conflito conjugal</button>
+                <button type="button" class="chip" data-value="Tédio">Tédio</button>
+                <button type="button" class="chip" data-value="Redes sociais">Redes sociais</button>
+                <button type="button" class="chip" data-value="Insónia">Insónia</button>
+                <button type="button" class="chip" data-value="Curiosidade">Curiosidade</button>
+                <button type="button" class="chip" data-value="Outro">Outro</button>
               </div>
             </fieldset>
+            <label class="field-label hidden" for="triggerOther" id="triggerOtherLabel">Outro gatilho</label>
+            <input id="triggerOther" class="hidden" type="text" maxlength="120" placeholder="Descreva o gatilho" />
+          </section>
 
-            <label class="field-label" for="alternative">Frase realista</label>
-            <select id="alternative">
-              <option value="Esta urgência é forte, mas não é uma ordem.">Esta urgência é forte, mas não é uma ordem.</option>
-              <option value="A vontade sobe e desce; posso esperar sem obedecer.">A vontade sobe e desce; posso esperar sem obedecer.</option>
-              <option value="O conteúdo não resolve aquilo de que realmente preciso.">O conteúdo não resolve aquilo de que realmente preciso.</option>
-              <option value="O próximo passo certo é afastar-me, não discutir comigo.">O próximo passo certo é afastar-me, não discutir comigo.</option>
-            </select>
+          <section class="card compact-section">
+            <h3>4. Em qual horário a vontade apareceu?</h3>
+            <label class="field-label" for="urgeTime">Horário aproximado</label>
+            <input id="urgeTime" type="time" />
+            <p class="field-hint">Deixe em branco se não houve vontade hoje.</p>
+          </section>
 
-            <label class="field-label" for="note">Nota opcional</label>
-            <textarea id="note" rows="2" maxlength="240" placeholder="Só algumas palavras, se ajudar."></textarea>
+          <section class="card compact-section">
+            <div class="section-head">
+              <h3>5. O que fiz diante da vontade?</h3>
+              <span class="step-chip">vários</span>
+            </div>
+            <fieldset>
+              <legend class="sr-only">Respostas à vontade</legend>
+              <div class="chip-grid multi" data-name="actions">
+                <button type="button" class="chip" data-value="Orei">Orei</button>
+                <button type="button" class="chip" data-value="Conversei com a minha esposa">Conversei com a minha esposa</button>
+                <button type="button" class="chip" data-value="Saí para caminhar">Saí para caminhar</button>
+                <button type="button" class="chip" data-value="Fiz exercício físico">Fiz exercício físico</button>
+                <button type="button" class="chip" data-value="Li algo edificante">Li algo edificante</button>
+                <button type="button" class="chip" data-value="Procurei um amigo de confiança">Procurei um amigo de confiança</button>
+                <button type="button" class="chip" data-value="Investi em intimidade / proximidade">Investi em intimidade</button>
+                <button type="button" class="chip" data-value="Usei o atalho">Usei o atalho</button>
+                <button type="button" class="chip" data-value="Outro">Outro</button>
+              </div>
+            </fieldset>
+            <label class="field-label hidden" for="actionOther" id="actionOtherLabel">Outra resposta</label>
+            <input id="actionOther" class="hidden" type="text" maxlength="120" placeholder="O que fez?" />
+          </section>
+
+          <section class="card compact-section hidden" id="slipCard">
+            <h3>6. Se houve deslize</h3>
+            <p class="muted slip-intro">Use isto para aprender o padrão — não para se punir.</p>
+            <label class="field-label" for="slipBefore">O que aconteceu antes?</label>
+            <textarea id="slipBefore" rows="2" maxlength="400" placeholder="Contexto, local, emoção…"></textarea>
+            <label class="field-label" for="slipAfter">Como me senti depois?</label>
+            <textarea id="slipAfter" rows="2" maxlength="400" placeholder="Sensações e pensamentos…"></textarea>
+            <label class="field-label" for="slipNext">O que posso fazer diferente da próxima vez?</label>
+            <textarea id="slipNext" rows="2" maxlength="400" placeholder="Um passo concreto e realista…"></textarea>
+          </section>
+
+          <section class="card compact-section growth-card">
+            <h3>7. Algo positivo que fiz hoje</h3>
+            <label class="field-label" for="positiveAct">Hábito, cuidado ou proximidade</label>
+            <textarea id="positiveAct" rows="2" maxlength="400" placeholder="Ex.: conversa com a esposa, oração, exercício, presença…"></textarea>
+          </section>
+
+          <section class="card compact-section growth-card">
+            <h3>8. Gratidão do dia</h3>
+            <label class="field-label" for="gratitude">Pelo que sou grato hoje?</label>
+            <textarea id="gratitude" rows="2" maxlength="400" placeholder="Uma pessoa, momento ou detalhe…"></textarea>
           </section>
 
           <section class="card emergency-card hidden" id="highRiskCard">
-            <h3>Risco alto</h3>
-            <p>Saia do local, afaste o dispositivo e contacte alguém de confiança. Não fique sozinho com o acesso aberto.</p>
+            <h3>Vontade forte</h3>
+            <p>Afaste o dispositivo, mude de ambiente e ligue a alguém de confiança. Prefira proximidade a isolamento.</p>
             <label class="field-label" for="contactName">Pessoa de apoio</label>
             <input id="contactName" type="text" maxlength="100" placeholder="Nome ou contacto" />
           </section>
 
-          <button class="primary sticky-save" type="submit">Guardar registo</button>
-          <p class="privacy-note">Os registos são encriptados antes de serem guardados neste dispositivo.</p>
+          <button class="primary sticky-save" type="submit">Guardar registo do dia</button>
+          <p class="privacy-note">Linguagem discreta: “atalho” e “deslize” só têm o significado que você lhes dá. Os registos são encriptados neste dispositivo.</p>
         </form>
       </section>
 
@@ -201,12 +227,13 @@
           <div><p class="eyebrow">Registos</p><h2>Histórico</h2></div>
           <button id="clearFilters" class="ghost" type="button">Limpar filtro</button>
         </div>
-        <div class="filter-row">
+        <div class="filter-row history-actions">
           <select id="historyRange" aria-label="Período do histórico">
             <option value="7">Últimos 7 dias</option>
             <option value="30" selected>Últimos 30 dias</option>
             <option value="3650">Todos</option>
           </select>
+          <button id="openDailyReport" class="secondary compact-button" type="button">Relatório do dia</button>
         </div>
         <div id="historyList" class="entry-list"></div>
       </section>
@@ -216,16 +243,25 @@
         <h2>Padrões</h2>
         <div class="stats-grid">
           <article class="stat-card"><span id="statCount">0</span><small>registos</small></article>
-          <article class="stat-card"><span id="statAverage">0</span><small>impulso médio</small></article>
-          <article class="stat-card"><span id="statHigh">0</span><small>acima de 60</small></article>
+          <article class="stat-card"><span id="statAverage">0</span><small>atalho médio</small></article>
+          <article class="stat-card"><span id="statHigh">0</span><small>vontade ≥ 7</small></article>
+        </div>
+        <div class="stats-grid secondary-stats">
+          <article class="stat-card"><span id="statHabits">0</span><small>respostas saudáveis</small></article>
+          <article class="stat-card"><span id="statSlips">0</span><small>deslizes</small></article>
+          <article class="stat-card"><span id="statGratitude">0</span><small>com gratidão</small></article>
         </div>
         <section class="card">
           <h3>Gatilhos mais frequentes</h3>
           <div id="triggerBars" class="bars"></div>
         </section>
         <section class="card">
-          <h3>Emoções mais frequentes</h3>
+          <h3>Como tenho estado</h3>
           <div id="emotionBars" class="bars"></div>
+        </section>
+        <section class="card">
+          <h3>Respostas mais usadas</h3>
+          <div id="actionBars" class="bars"></div>
         </section>
       </section>
 
@@ -250,15 +286,47 @@
         </section>
 
         <h2 class="subheading">Os seus dados</h2>
+        <section class="card security-card">
+          <div class="setting-row">
+            <label class="check-row setting-check" for="backupAfterEntry">
+              <input id="backupAfterEntry" type="checkbox" checked />
+              <span>
+                <strong>Cópia após cada registo</strong>
+                <small>Descarrega automaticamente a cópia encriptada sempre que guardar.</small>
+              </span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <label class="check-row setting-check" for="backupDaily">
+              <input id="backupDaily" type="checkbox" checked />
+              <span>
+                <strong>Lembrete diário de cópia</strong>
+                <small>Pede uma cópia encriptada se ainda não descarregou hoje.</small>
+              </span>
+            </label>
+          </div>
+          <p id="backupStatus" class="form-message" role="status"></p>
+        </section>
         <section class="card action-stack">
           <button id="exportEncrypted" class="secondary" type="button">Exportar cópia encriptada</button>
           <button id="exportCsv" class="secondary" type="button">Exportar CSV legível</button>
-          <label class="secondary file-label">Importar cópia<input id="importJson" type="file" accept="application/json" hidden /></label>
+          <button id="openDailyReportFromSettings" class="secondary" type="button">Relatório do dia (texto)</button>
+          <label class="secondary file-label">Recuperar / importar cópia<input id="importJson" type="file" accept="application/json,.json" hidden /></label>
           <button id="deleteAll" class="danger" type="button">Apagar todos os registos</button>
         </section>
         <section class="card">
+          <h3>Como recuperar noutro dispositivo</h3>
+          <ol class="recover-steps">
+            <li>Guarde o ficheiro JSON da cópia encriptada (Ficheiros, iCloud, Drive).</li>
+            <li>Abra esta app no novo telemóvel (ou após limpar a cache).</li>
+            <li>Em “Criar diário”, escolha <strong>Recuperar cópia encriptada</strong>.</li>
+            <li>Desbloqueie com o <strong>mesmo código mestre</strong> da cópia.</li>
+          </ol>
+          <p class="muted">Também pode importar a cópia em Dados enquanto o diário estiver desbloqueado. Sem o código mestre da cópia, os dados não podem ser lidos.</p>
+        </section>
+        <section class="card">
           <h3>Privacidade</h3>
-          <p class="muted">A aplicação é local e não envia os registos para servidores. A cópia CSV é legível; guarde-a apenas num local seguro. A cópia encriptada precisa do código mestre.</p>
+          <p class="muted">A aplicação é local e não envia os registos para servidores. O formulário usa palavras discretas (“atalho”, “deslize”) para quem lê o ecrã sem contexto. Guarde as cópias encriptadas fora do navegador. A cópia CSV é legível; guarde-a apenas num local seguro.</p>
         </section>
       </section>
     </main>
@@ -269,9 +337,38 @@
       <div class="success-icon">✓</div>
       <h2>Registo guardado</h2>
       <p id="savedMessage">Fez uma pausa e criou espaço para escolher.</p>
+      <p id="savedBackupNote" class="muted backup-note hidden"></p>
       <div class="dialog-actions">
         <button id="newEntry" class="primary" type="button">Novo registo</button>
         <button id="closeDialog" class="ghost" type="button">Fechar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dailyBackupDialog">
+    <div class="dialog-content">
+      <h2>Cópia diária</h2>
+      <p class="muted">Ainda não descarregou a cópia encriptada de hoje. Guarde-a fora do navegador para não perder os dados se limpar a cache ou mudar de telemóvel.</p>
+      <div class="dialog-actions">
+        <button id="confirmDailyBackup" class="primary" type="button">Descarregar cópia</button>
+        <button id="skipDailyBackup" class="ghost" type="button">Mais tarde</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dailyReportDialog">
+    <div class="dialog-content report-dialog">
+      <h2>Relatório do dia</h2>
+      <p class="muted">Texto legível para enviar à terapeuta. Se houver vários registos no mesmo dia, inclui um resumo + detalhe.</p>
+      <label class="field-label" for="reportDay">Dia</label>
+      <input id="reportDay" type="date" />
+      <textarea id="reportText" class="report-text" rows="14" readonly aria-label="Texto do relatório"></textarea>
+      <p id="reportMessage" class="form-message" role="status"></p>
+      <div class="dialog-actions">
+        <button id="copyReport" class="primary" type="button">Copiar texto</button>
+        <button id="shareReport" class="secondary" type="button">Partilhar</button>
+        <button id="downloadReport" class="secondary" type="button">Descarregar .txt</button>
+        <button id="closeDailyReport" class="ghost" type="button">Fechar</button>
       </div>
     </div>
   </dialog>
