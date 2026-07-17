@@ -45,12 +45,14 @@
     editingUpdateId: null,
     saveState: 'idle',
     lastSaveSnapshot: '',
+    runtimeHealth: null,
   };
 
   let saveTimer = null;
   let draftTimer = null;
   let searchTimer = null;
   let connectionPollTimer = null;
+  let runtimeHealthTimer = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -104,6 +106,83 @@
 
   function showToast(message, type) {
     window.showToast?.(message, type);
+  }
+
+  function runtimeStatusMarkup() {
+    const configured = window.state?.config?.agentRuntime || {};
+    const health = state.runtimeHealth || {};
+    const connector = health.connector || configured.connector || null;
+    const mode = health.mode || configured.mode || (configured.enabled ? 'local_push' : 'disabled');
+    const online = health.runtimeReachable ?? connector?.online ?? false;
+    const agents = connector?.capabilities?.agents || connector?.advertisedAgents || [];
+    const agentCount = Array.isArray(agents) ? agents.length : 0;
+    const name = connector?.name || 'Agent Runtime';
+    const version = connector?.runtimeVersion || connector?.version || '';
+
+    let tone = 'checking';
+    let label = 'A verificar Agent Runtime…';
+    let detail = 'Actualizar estado';
+    if (mode === 'remote_pull' && connector && online) {
+      tone = 'online';
+      label = `${name} ligado`;
+      detail = `${agentCount} agente${agentCount === 1 ? '' : 's'}${version ? ` · v${version.replace(/^v/i, '')}` : ''}`;
+    } else if (mode === 'remote_pull' && connector) {
+      tone = 'offline';
+      label = `${name} offline`;
+      detail = 'Os pedidos ficam em fila até o runtime voltar';
+    } else if (mode === 'remote_pull') {
+      tone = 'offline';
+      label = 'Nenhum Agent Runtime emparelhado';
+      detail = 'Emparelhe um dispositivo nas Definições';
+    } else if (configured.enabled && online) {
+      tone = 'online';
+      label = 'Agent Runtime ligado';
+      detail = 'Ligação directa disponível';
+    } else if (configured.enabled) {
+      tone = 'offline';
+      label = 'Agent Runtime indisponível';
+      detail = 'Verifique o processo local';
+    } else {
+      tone = 'offline';
+      label = 'Agent Runtime desactivado';
+      detail = 'Active-o nas Definições';
+    }
+
+    return `
+      <div class="ado-runtime-status is-${tone}" role="status" aria-live="polite">
+        <span class="ado-runtime-dot" aria-hidden="true"></span>
+        <span class="ado-runtime-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(detail)}</small></span>
+        <button type="button" data-ado-refresh-runtime aria-label="Actualizar estado do Agent Runtime" title="Actualizar estado">↻</button>
+      </div>
+    `;
+  }
+
+  function paintRuntimeStatus() {
+    const current = $('workItemsToolbar')?.querySelector('.ado-runtime-status');
+    if (current) current.outerHTML = runtimeStatusMarkup();
+    else renderToolbar();
+  }
+
+  async function refreshRuntimeHealth(options = {}) {
+    try {
+      state.runtimeHealth = await apiRequest('/agent-runs/health');
+      paintRuntimeStatus();
+      if (options.announce) {
+        showToast(state.runtimeHealth.runtimeReachable ? 'Agent Runtime ligado' : 'Agent Runtime offline', state.runtimeHealth.runtimeReachable ? 'ok' : 'error');
+      }
+    } catch (err) {
+      if (options.announce) showToast(err.message, 'error');
+    }
+  }
+
+  function scheduleRuntimeHealthRefresh() {
+    clearTimeout(runtimeHealthTimer);
+    runtimeHealthTimer = setTimeout(async () => {
+      if (window.state?.activeTab === 'tarefas' && document.visibilityState !== 'hidden') {
+        await refreshRuntimeHealth();
+      }
+      scheduleRuntimeHealthRefresh();
+    }, 15000);
   }
 
   async function pollConnectedTask(project, runId, taskId) {
@@ -433,7 +512,7 @@
     if (!toolbar) return;
 
     if (state.mode === 'plan' && state.selectedRequest) {
-      toolbar.innerHTML = `<div class="ado-editor-bar"><button type="button" class="ado-back-btn" data-ado-close-plan>← Voltar às tarefas</button><span class="ado-plan-version">Plano v${state.selectedRequest.version || 1}</span></div>`;
+      toolbar.innerHTML = `<div class="ado-editor-bar"><button type="button" class="ado-back-btn" data-ado-close-plan>← Voltar às tarefas</button><span class="ado-plan-version">Plano v${state.selectedRequest.version || 1}</span></div>${runtimeStatusMarkup()}`;
       return;
     }
 
@@ -448,6 +527,7 @@
             ${state.canManage ? `<button type="button" class="ado-btn-save-inline" data-ado-save-now>${isNew ? 'Criar tarefa' : 'Guardar agora'}</button>` : ''}
           </div>
         </div>
+        ${runtimeStatusMarkup()}
       `;
       setSaveIndicator(state.saveState);
       return;
@@ -470,6 +550,7 @@
         </div>
         ${state.canManage ? '<button type="button" class="ado-btn-new" data-ado-new><span aria-hidden="true">+</span> Nova tarefa</button>' : ''}
       </div>
+      ${runtimeStatusMarkup()}
       ${notification ? `
         <aside class="ado-notification-strip" role="status" aria-label="Notificação de trabalho">
           <span class="ado-notification-icon" aria-hidden="true">!</span>
@@ -1146,6 +1227,10 @@
 
     root.addEventListener('click', async (event) => {
       project = window.state?.selectedProject || project;
+      if (event.target.closest('[data-ado-refresh-runtime]')) {
+        await refreshRuntimeHealth({ announce: true });
+        return;
+      }
       const notificationControl = event.target.closest('[data-ado-open-notification], [data-ado-dismiss-notification]');
       if (notificationControl) {
         const notificationId = notificationControl.dataset.adoOpenNotification || notificationControl.dataset.adoDismissNotification;
@@ -1661,6 +1746,8 @@
 
     syncModeLayout();
     renderToolbar();
+    void refreshRuntimeHealth();
+    scheduleRuntimeHealthRefresh();
 
     if (!state.loaded) {
       $('workItemsBoard').innerHTML = '<p class="ado-empty">A carregar tarefas…</p>';

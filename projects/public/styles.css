@@ -10508,6 +10508,86 @@ body.is-client-readonly [data-writes-only] {
   font-size: 13px;
 }
 
+.ado-runtime-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+}
+
+.ado-runtime-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #8b94a7;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #8b94a7 16%, transparent);
+}
+
+.ado-runtime-status.is-online {
+  border-color: color-mix(in srgb, #22a06b 38%, var(--line));
+}
+
+.ado-runtime-status.is-online .ado-runtime-dot {
+  background: #22a06b;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #22a06b 17%, transparent);
+}
+
+.ado-runtime-status.is-offline {
+  border-color: color-mix(in srgb, #d98e04 38%, var(--line));
+}
+
+.ado-runtime-status.is-offline .ado-runtime-dot {
+  background: #d98e04;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #d98e04 17%, transparent);
+}
+
+.ado-runtime-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ado-runtime-copy strong {
+  overflow: hidden;
+  color: var(--heading);
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ado-runtime-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.ado-runtime-status button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  margin-left: 3px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.ado-runtime-status button:hover {
+  background: var(--surface-3);
+  color: var(--heading);
+}
+
 .ado-notification-strip {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
