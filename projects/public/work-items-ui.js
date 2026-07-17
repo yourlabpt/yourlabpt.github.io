@@ -883,6 +883,7 @@
         ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
           ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
           ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
+          ${status === 'failed' ? '<button type="button" class="ado-action-primary" data-ado-run-control="retry">Retomar do último checkpoint</button>' : ''}
           ${['waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-focus-review>Avaliar resultado</button>' : ''}
           ${cancellable && desiredAction !== 'cancel' ? '<button type="button" class="ado-action-danger" data-ado-run-control="cancel">Cancelar execução</button>' : ''}
         </div>` : ''}
@@ -1365,7 +1366,15 @@
           await apiRequest(`/agent-runs/${encodeURIComponent(state.detailExecution.runId)}/${encodeURIComponent(action)}`, { method: 'POST', body: {} });
           await fetchDetail(project.id, state.detail.id);
           paintEditor(project);
-          showToast(action === 'pause' ? 'Pausa pedida.' : action === 'resume' ? 'Continuação pedida.' : action === 'finish-partial' ? 'O progresso será preparado para avaliação.' : 'Cancelamento pedido.', 'ok');
+          showToast(action === 'pause'
+            ? 'Pausa pedida.'
+            : action === 'resume'
+              ? 'Continuação pedida.'
+              : action === 'retry'
+                ? 'Recuperação pedida; o agente continuará do último checkpoint.'
+                : action === 'finish-partial'
+                  ? 'O progresso será preparado para avaliação.'
+                  : 'Cancelamento pedido.', 'ok');
           pollConnectedTask(project, state.detailExecution.runId, state.detail.id);
         } catch (err) {
           runControl.disabled = false;
