@@ -139,6 +139,15 @@ function resolveExecutionConfig(connectionMode, request, task, bodyOptions = {},
   };
 }
 
+function selectReadyAgentTask(tasks, requestedTaskId) {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const requested = list.find((task) => task.id === requestedTaskId);
+  if (requested?.status === 'ready') return requested;
+  return list.find((task) => task.taskRole !== 'coordination' && task.status === 'ready')
+    || list.find((task) => task.status === 'ready')
+    || null;
+}
+
 function registerAgentRuntimeRoutes(app, deps) {
   const {
     authMiddleware,
@@ -734,13 +743,6 @@ function registerAgentRuntimeRoutes(app, deps) {
         if (!['ready', 'running'].includes(request.status)) {
           throw new Error(`O pedido do agente está no estado “${request.status}” e não pode iniciar uma nova execução.`);
         }
-        ({ options, budget } = resolveExecutionConfig(
-          connectionMode,
-          request,
-          canonicalTask,
-          bodyOptions,
-          bodyBudget
-        ));
         agentId = bodyAgentId || request.agentId || runtime.mapPlatformType(request.agentType);
         platformAgentType = request.agentType || runtime.mapAgentId(agentId);
         if (connectionMode === 'remote_pull') {
@@ -750,11 +752,15 @@ function registerAgentRuntimeRoutes(app, deps) {
             || manifests.find((entry) => ensureArray(entry.taskTypes).includes(platformAgentType));
           if (advertised?.id) agentId = advertised.id;
         }
-        delegatedTask = delegation.tasks.find((task) => task.id === requestedWorkItemId) || null;
+        delegatedTask = selectReadyAgentTask(delegation.tasks, requestedWorkItemId);
         if (!delegatedTask) throw new Error('Nao existe uma tarefa pronta para executar neste plano.');
-        if (delegatedTask.status !== 'ready') {
-          throw new Error('A tarefa nao esta pronta; conclua as dependencias ou a revisao pendente primeiro.');
-        }
+        ({ options, budget } = resolveExecutionConfig(
+          connectionMode,
+          request,
+          delegatedTask,
+          bodyOptions,
+          bodyBudget
+        ));
         if (connectionMode === 'remote_pull') {
           const connector = connectorStore.activeConnector();
           const compatibility = assessCompatibility({
@@ -1579,4 +1585,5 @@ module.exports = {
   serviceAuthMiddleware,
   buildPromptForAgentType,
   resolveExecutionConfig,
+  selectReadyAgentTask,
 };

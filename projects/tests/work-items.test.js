@@ -6,6 +6,7 @@ const projectAccess = require('../lib/project-access');
 const taskSuggestions = require('../lib/task-suggestions');
 const agentRequests = require('../lib/agent-requests');
 const stageTransitions = require('../lib/stage-transition-requests');
+const { selectReadyAgentTask } = require('../lib/agent-runtime-routes');
 
 function task(overrides = {}) {
   return { title: 'Task', descriptionMarkdown: 'Body', complexity: 'low', deliveryStageId: 'requirements', ...overrides };
@@ -117,6 +118,17 @@ describe('work item synchronization', () => {
 });
 
 describe('agent requests and visible plans', () => {
+  it('falls forward from a blocked requested task to the next executable subtask', () => {
+    const tasks = [
+      { id: 'coordination', taskRole: 'coordination', status: 'ready' },
+      { id: 'first', taskRole: 'execution', status: 'ready' },
+      { id: 'blocked-request', taskRole: 'execution', status: 'planned' },
+    ];
+    assert.equal(selectReadyAgentTask(tasks, 'blocked-request').id, 'first');
+    assert.equal(selectReadyAgentTask(tasks, 'first').id, 'first');
+    assert.equal(selectReadyAgentTask(tasks.map((task) => ({ ...task, status: 'planned' })), 'blocked-request'), null);
+  });
+
   it('creates all tasks before execution and requires approval for multi-task work', () => {
     const project = { workItems: [], requirements: [] };
     const result = agentRequests.createAgentRequest(project, {

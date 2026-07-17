@@ -781,11 +781,14 @@
 
   async function startApprovedRequest(project, request) {
     const tasks = state.selectedRequestTasks || [];
-    const task = state.pendingConnectionTaskId
+    const requestedTask = state.pendingConnectionTaskId
       ? tasks.find((entry) => entry.id === state.pendingConnectionTaskId)
-      : tasks.find((entry) => entry.taskRole === 'coordination' && entry.status === 'ready')
+      : null;
+    const task = requestedTask?.status === 'ready'
+      ? requestedTask
+      : tasks.find((entry) => entry.taskRole !== 'coordination' && entry.status === 'ready')
         || tasks.find((entry) => entry.status === 'ready');
-    const taskId = state.pendingConnectionTaskId || task?.id;
+    const taskId = task?.id;
     if (!taskId) throw new Error('O plano foi aprovado, mas ainda não existe uma tarefa pronta para iniciar.');
     const payload = await apiRequest('/agent-runs', {
       method: 'POST',
