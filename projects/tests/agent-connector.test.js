@@ -460,6 +460,32 @@ describe('secure outbound agent connector', () => {
     db.close();
   });
 
+  it('delivers pause, resume and partial-review controls through durable sync', () => {
+    const { db, store, connector } = fixture();
+    const queued = enqueue(store);
+    assert.throws(() => store.setDesiredAction(queued.id, 'pause'), /ainda está na fila/);
+    const claim = store.claim(connector.id);
+    store.ack(connector.id, queued.id, claim.leaseToken, 'local-controlled');
+
+    store.setDesiredAction(queued.id, 'pause');
+    let synced = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-controlled', status: 'executing',
+    });
+    assert.equal(synced.desiredAction, 'pause');
+    synced = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-controlled', status: 'paused',
+    });
+    assert.equal(synced.status, 'paused');
+    assert.equal(synced.desiredAction, null);
+
+    store.setDesiredAction(queued.id, 'finish_partial');
+    synced = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-controlled', status: 'self_review',
+    });
+    assert.equal(synced.desiredAction, null);
+    db.close();
+  });
+
   it('keeps cancellation pending offline and delivers it after reconnect', () => {
     let clock = Date.now();
     const db = new Database(':memory:');

@@ -23,6 +23,7 @@ function registerAgentConnectorRoutes(app, deps) {
     verifyPassword,
     onResult,
     onValidateResult,
+    onSync,
   } = deps;
   const onAudit = typeof deps.onAudit === 'function' ? deps.onAudit : async () => {};
   const store = deps.connectorStore || new AgentConnectorStore(sqliteStore.getDb());
@@ -190,6 +191,12 @@ function registerAgentConnectorRoutes(app, deps) {
         lease(req),
         req.body || {}
       );
+      if (typeof onSync === 'function' && (
+        before?.status !== dispatch.status
+        || (Array.isArray(req.body?.events) && req.body.events.length)
+      )) {
+        await onSync(dispatch, req.body?.progress || {}, req.body?.events || []);
+      }
       if (before?.status !== 'cancelled' && dispatch.status === 'cancelled') {
         await onAudit('agent_dispatch_cancelled', {
           actorUserId: 'agent_connector',

@@ -73,6 +73,9 @@ function createAgentRuntimeClient() {
     cancelJob(jobId) {
       return request('POST', `/v1/jobs/${encodeURIComponent(jobId)}/cancel`, {});
     },
+    pauseJob(jobId) {
+      return request('POST', `/v1/jobs/${encodeURIComponent(jobId)}/pause`, {});
+    },
     resumeJob(jobId, payload) {
       return request('POST', `/v1/jobs/${encodeURIComponent(jobId)}/resume`, payload || {});
     },

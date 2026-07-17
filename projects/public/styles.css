@@ -10600,6 +10600,82 @@ body.is-client-readonly [data-writes-only] {
   margin: 12px 0 8px;
 }
 
+.ado-agent-command-center {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface-2));
+}
+
+.ado-agent-command-center .ado-agent-log-head {
+  margin: 0 0 10px;
+}
+
+.ado-agent-progress {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.ado-agent-progress div,
+.ado-agent-goals {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.ado-agent-progress progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  accent-color: var(--accent);
+}
+
+.ado-agent-goals {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ado-agent-control-pending,
+.ado-agent-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #d98e04 10%, var(--surface));
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.ado-agent-error {
+  background: color-mix(in srgb, #d64545 10%, var(--surface));
+  color: #d64545;
+}
+
+.ado-agent-controls {
+  margin-top: 12px;
+}
+
+.ado-action-danger {
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, #d64545 45%, var(--line));
+  border-radius: 8px;
+  background: transparent;
+  color: #d64545;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ado-action-danger:hover {
+  background: color-mix(in srgb, #d64545 9%, var(--surface));
+}
+
 .ado-agent-log-status {
   padding: 4px 8px;
   border-radius: 999px;
@@ -10624,6 +10700,7 @@ body.is-client-readonly [data-writes-only] {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-2);
+  margin-top: 10px;
 }
 
 .ado-agent-log-entry {

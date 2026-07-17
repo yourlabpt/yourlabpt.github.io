@@ -195,7 +195,12 @@
       state.detailExecution = {
         runId: payload.agentJob?.id || runId,
         status: payload.dispatch?.status || payload.agentJob?.status || '',
+        desiredAction: payload.dispatch?.desiredAction || null,
         events: payload.events || [],
+        progressCurrent: payload.progress?.current ?? payload.agentJob?.subtasksCompleted ?? 0,
+        progressTotal: payload.progress?.total ?? payload.agentJob?.subtasksTotal ?? 0,
+        tokensUsed: payload.progress?.tokensUsed ?? payload.agentJob?.tokensUsed ?? 0,
+        error: payload.agentJob?.error || null,
         createdAt: payload.agentJob?.createdAt || state.detailExecution?.createdAt || null,
         updatedAt: payload.dispatch?.updatedAt || payload.agentJob?.updatedAt || null,
       };
@@ -808,16 +813,85 @@
     const execution = state.detailExecution;
     if (!execution) return '<p class="ado-agent-log-empty">A execução ainda não produziu eventos.</p>';
     const events = execution.events || [];
+    const status = execution.status || 'queued';
+    const desiredAction = execution.desiredAction || '';
+    const current = Number(execution.progressCurrent) || 0;
+    const total = Number(execution.progressTotal) || 0;
+    const progress = total ? Math.min(100, Math.round((current / total) * 100)) : 0;
+    const latestGoal = [...events].reverse().find((event) => event.type === 'goal_check');
+    const goalMet = Number(latestGoal?.data?.met) || 0;
+    const goalTotal = Number(latestGoal?.data?.total) || 0;
+    const active = ['claimed', 'running', 'planning', 'executing', 'self_review', 'verifying'].includes(status);
+    const cancellable = !['completed', 'failed', 'cancelled', 'waiting_review', 'pending_human_review'].includes(status);
+    const statusLabels = {
+      queued: 'Na fila', claimed: 'Recebida pelo runtime', running: 'Em execução',
+      planning: 'A planear', executing: 'A executar', self_review: 'Em verificação',
+      verifying: 'Em verificação', paused: 'Em pausa', cancel_requested: 'A cancelar',
+      connection_lost: 'Ligação perdida', waiting_review: 'Aguarda avaliação',
+      pending_human_review: 'Aguarda avaliação', completed: 'Concluída',
+      failed: 'Falhou', cancelled: 'Cancelada',
+    };
+    const eventLabels = {
+      planning: 'Plano de execução', info: 'Actualização', goal_set: 'Critérios de sucesso',
+      subtask_started: 'Passo iniciado', subtask_done: 'Passo concluído',
+      goal_check: 'Verificação dos critérios', goal_gap: 'Correcção planeada',
+      replanning: 'Replaneamento', token_usage: 'Consumo actualizado',
+      llm_request: 'Modelo iniciado', llm_response: 'Modelo respondeu',
+      peer_review: 'Revisão independente', paused: 'Execução pausada',
+      failed: 'Falha', completed: 'Execução concluída', review_ready: 'Pronto para avaliação',
+      wave_started: 'Fase iniciada', wave_done: 'Fase concluída',
+    };
+    const describeEvent = (event) => {
+      const data = event.data || {};
+      if (event.type === 'goal_check') {
+        return `${data.met ?? '?'} de ${data.total ?? '?'} critérios satisfeitos${data.feedback ? ` — ${data.feedback}` : ''}`;
+      }
+      if (event.type === 'goal_set' && Array.isArray(data.goals)) {
+        return data.goals.map((goal) => goal.title).filter(Boolean).join(' · ');
+      }
+      if (['subtask_started', 'subtask_done'].includes(event.type)) {
+        const position = data.step && data.total ? `Passo ${data.step}/${data.total}: ` : '';
+        const tokens = event.type === 'subtask_done' && data.tokens
+          ? ` · ${Number(data.tokens).toLocaleString('pt-PT')} tokens`
+          : '';
+        return `${position}${event.message || 'Passo do plano'}${tokens}`;
+      }
+      if (event.type === 'planning' && Array.isArray(data.tasks)) {
+        return `${data.tasks.length} passos: ${data.tasks.join(' → ')}`;
+      }
+      if (event.type === 'token_usage') {
+        return `${Number(data.tokensUsed || data.tokens || 0).toLocaleString('pt-PT')} tokens utilizados`;
+      }
+      if (event.type === 'llm_request') {
+        return `A processar com ${data.tier || 'modelo'}${data.model ? ` / ${data.model}` : ''}`;
+      }
+      if (event.type === 'llm_response') {
+        return `Resposta recebida${data.tokens ? ` · ${Number(data.tokens).toLocaleString('pt-PT')} tokens` : ''}${data.summary ? ` — ${data.summary}` : ''}`;
+      }
+      return event.message || event.summary || event.detail || '';
+    };
     return `
-      <div class="ado-agent-log-head">
-        <span class="ado-agent-log-status">${escapeHtml(statusLabel(execution.status))}</span>
-        <small>${events.length} evento${events.length === 1 ? '' : 's'}</small>
+      <div class="ado-agent-command-center">
+        <div class="ado-agent-log-head">
+          <span class="ado-agent-log-status">${escapeHtml(statusLabels[status] || status)}</span>
+          <small>${events.length} evento${events.length === 1 ? '' : 's'} · ${Number(execution.tokensUsed || 0).toLocaleString('pt-PT')} tokens</small>
+        </div>
+        ${total ? `<div class="ado-agent-progress"><div><span>Progresso</span><strong>${current}/${total} passos · ${progress}%</strong></div><progress max="100" value="${progress}"></progress></div>` : ''}
+        ${goalTotal ? `<div class="ado-agent-goals"><span>Critérios verificados</span><strong>${goalMet}/${goalTotal}</strong></div>` : ''}
+        ${desiredAction ? `<p class="ado-agent-control-pending">Comando pendente: ${escapeHtml(({ pause: 'pausar', resume: 'continuar', cancel: 'cancelar', finish_partial: 'enviar progresso para avaliação' })[desiredAction] || desiredAction)}</p>` : ''}
+        ${execution.error ? `<p class="ado-agent-error">${escapeHtml(execution.error)}</p>` : ''}
+        ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
+          ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
+          ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
+          ${['waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-focus-review>Avaliar resultado</button>' : ''}
+          ${cancellable && desiredAction !== 'cancel' ? '<button type="button" class="ado-action-danger" data-ado-run-control="cancel">Cancelar execução</button>' : ''}
+        </div>` : ''}
       </div>
       <div class="ado-agent-log-list">
         ${events.length ? events.map((event) => `
           <article class="ado-agent-log-entry">
             <time>${escapeHtml(formatWhen(event.timestamp || event.createdAt))}</time>
-            <div><strong>${escapeHtml(event.type || 'evento')}</strong><p>${escapeHtml(event.message || event.summary || event.detail || '')}</p></div>
+            <div><strong>${escapeHtml(eventLabels[event.type] || event.type || 'Evento')}</strong><p>${escapeHtml(describeEvent(event))}</p></div>
           </article>
         `).join('') : '<p class="ado-agent-log-empty">O pedido está na fila; os eventos aparecerão quando o agente iniciar.</p>'}
       </div>
@@ -1282,6 +1356,27 @@
 
     root.addEventListener('click', async (event) => {
       project = window.state?.selectedProject || project;
+      const runControl = event.target.closest('[data-ado-run-control]');
+      if (runControl && state.detailExecution?.runId) {
+        const action = runControl.dataset.adoRunControl;
+        if (action === 'cancel' && !window.confirm('Cancelar esta execução do agente? O trabalho já concluído continuará no histórico.')) return;
+        runControl.disabled = true;
+        try {
+          await apiRequest(`/agent-runs/${encodeURIComponent(state.detailExecution.runId)}/${encodeURIComponent(action)}`, { method: 'POST', body: {} });
+          await fetchDetail(project.id, state.detail.id);
+          paintEditor(project);
+          showToast(action === 'pause' ? 'Pausa pedida.' : action === 'resume' ? 'Continuação pedida.' : action === 'finish-partial' ? 'O progresso será preparado para avaliação.' : 'Cancelamento pedido.', 'ok');
+          pollConnectedTask(project, state.detailExecution.runId, state.detail.id);
+        } catch (err) {
+          runControl.disabled = false;
+          showToast(err.message, 'error');
+        }
+        return;
+      }
+      if (event.target.closest('[data-ado-focus-review]')) {
+        $('workItemEditor')?.querySelector('.ado-decision-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
       if (event.target.closest('[data-ado-refresh-runtime]')) {
         await refreshRuntimeHealth({ announce: true });
         return;

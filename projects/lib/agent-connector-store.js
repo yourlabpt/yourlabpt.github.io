@@ -398,7 +398,9 @@ class AgentConnectorStore {
         : localStatus;
       const desiredAction = (
         (leased.desired_action === 'cancel' && localStatus === 'cancelled')
+        || (leased.desired_action === 'pause' && localStatus === 'paused')
         || (leased.desired_action === 'resume' && localStatus !== 'paused')
+        || (leased.desired_action === 'finish_partial' && localStatus !== 'paused')
       ) ? null : leased.desired_action;
       this.db.prepare(`
         UPDATE agent_dispatches
@@ -413,6 +415,17 @@ class AgentConnectorStore {
   setDesiredAction(runId, action) {
     const dispatch = this.findDispatch(runId);
     if (!dispatch) return null;
+    if (!['cancel', 'pause', 'resume', 'finish_partial'].includes(action)) {
+      throw new Error('Acao de controlo do agente invalida');
+    }
+    if (action === 'pause' && ['queued', 'paused'].includes(dispatch.status)) {
+      throw new Error(dispatch.status === 'queued'
+        ? 'A execução ainda está na fila; cancele-a ou aguarde que o agente inicie.'
+        : 'A execução já está em pausa.');
+    }
+    if (['resume', 'finish_partial'].includes(action) && dispatch.status !== 'paused') {
+      throw new Error('A execução tem de estar em pausa para continuar ou enviar o progresso.');
+    }
     const cancelImmediately = action === 'cancel' && dispatch.status === 'queued';
     const status = cancelImmediately ? 'cancelled'
       : action === 'cancel' ? 'cancel_requested' : dispatch.status;

@@ -112,7 +112,8 @@ function buildPromptForAgentType(project, agentType, body = {}) {
 }
 
 const RUNTIME_ACTIVE_STATUSES = new Set([
-  'dispatching', 'running', 'queued', 'planning', 'executing', 'self_review', 'paused',
+  'dispatching', 'queued', 'claimed', 'running', 'planning', 'executing',
+  'self_review', 'verifying', 'paused', 'cancel_requested', 'connection_lost',
 ]);
 
 const STALE_DISPATCH_MS = 120000;
@@ -491,6 +492,45 @@ function registerAgentRuntimeRoutes(app, deps) {
         true
       ),
       onValidateResult: validateAgentOutput,
+      onSync: async (dispatch, progress = {}, events = []) => {
+        await updateStore(async (store) => {
+          const project = store.projects.find((entry) => entry.id === dispatch.projectId);
+          if (!project) return;
+          const job = ensureArray(project.agentJobs).find((entry) => (
+            entry.id === dispatch.agentJobId || entry.dispatchId === dispatch.id
+          ));
+          if (job) {
+            job.status = dispatch.status;
+            job.subtasksCompleted = Math.max(0, Number(progress.completed) || 0);
+            job.subtasksTotal = Math.max(0, Number(progress.total) || 0);
+            job.tokensUsed = Math.max(0, Number(progress.tokensUsed) || 0);
+            job.goalProgress = {
+              met: Math.max(0, Number(progress.goalsMet) || 0),
+              total: Math.max(0, Number(progress.goalsTotal) || 0),
+              iteration: Math.max(0, Number(progress.goalIteration) || 0),
+            };
+            job.error = textOr(progress.error, job.error || '');
+            job.updatedAt = nowIso();
+          }
+          const task = workItems.findWorkItem(project, dispatch.workItemId);
+          if (!task) return;
+          const latest = ensureArray(events).at(-1);
+          const list = workItems.getWorkItems(project);
+          workItems.setWorkItems(project, list.map((entry) => entry.id === task.id
+            ? workItems.normalizeWorkItem({
+              ...task,
+              agentStatus: dispatch.status,
+              progressCurrent: Math.max(0, Number(progress.completed) || 0),
+              progressTotal: Math.max(0, Number(progress.total) || 0),
+              lastMilestone: textOr(latest?.message, task.lastMilestone),
+              currentAction: textOr(progress.currentStep)
+                ? `A executar: ${textOr(progress.currentStep)}`
+                : task.currentAction,
+              updatedAt: nowIso(),
+            }, { project })
+            : entry));
+        });
+      },
       onAudit: async (action, details = {}) => {
         await updateStore(async (store) => {
           appendActivity(store, {
@@ -1070,6 +1110,10 @@ function registerAgentRuntimeRoutes(app, deps) {
                 ? (projectedStatus === 'connection_lost'
                   ? 'Ligação perdida; o cancelamento continua pendente até o agente voltar a ligar.'
                   : 'Cancelamento pedido; aguarda confirmação do agente.')
+                : dispatch.desiredAction === 'pause'
+                  ? 'Pausa pedida; o agente vai parar no próximo checkpoint seguro.'
+                  : dispatch.desiredAction === 'finish_partial'
+                    ? 'A preparar o progresso actual para avaliação humana.'
                 : projectedStatus === 'queued'
                 ? `Na fila — aguarda ligação de ${connector?.name || 'um Agent Runtime'}.`
                 : projectedStatus === 'connection_lost'
@@ -1108,6 +1152,11 @@ function registerAgentRuntimeRoutes(app, deps) {
             ) : null,
           dispatch: publicDispatch(dispatch),
           events,
+          progress: {
+            current: Number(agentJob.subtasksCompleted) || 0,
+            total: Number(agentJob.subtasksTotal) || 0,
+            tokensUsed: Number(agentJob.tokensUsed) || 0,
+          },
           runtimeMeta: {
             checkedAt: nowIso(),
             reachable: Boolean(connector?.online),
@@ -1339,6 +1388,87 @@ function registerAgentRuntimeRoutes(app, deps) {
     }
   });
 
+  app.post('/api/projects/agent-runs/:runId/pause', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+    try {
+      const runId = req.params.runId;
+      const store = await readStore();
+      const agentJob = store.projects
+        .flatMap((entry) => ensureArray(entry.agentJobs))
+        .find((job) => job.promptRunId === runId || job.id === runId);
+      if (!agentJob) return res.status(404).json({ message: 'Agent run nao encontrado.' });
+      if (connectionMode === 'disabled') return res.status(503).json({ message: 'Execucao por agente desativada.' });
+
+      if (connectionMode === 'remote_pull') {
+        const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'pause');
+        if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
+        await updateStore(async (mutableStore) => {
+          const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
+          const task = workItems.findWorkItem(mutableProject, agentJob.workItemId);
+          if (task) {
+            const list = workItems.getWorkItems(mutableProject);
+            workItems.setWorkItems(mutableProject, list.map((entry) => entry.id === task.id
+              ? workItems.normalizeWorkItem({
+                ...task,
+                currentAction: 'Pausa pedida; o agente vai parar no próximo checkpoint seguro.',
+                updatedAt: nowIso(),
+              }, { project: mutableProject })
+              : entry));
+          }
+          appendActivity(mutableStore, {
+            actorUserId: req.auth.user.id,
+            projectId: agentJob.projectId,
+            action: 'agent_dispatch_pause_requested',
+            details: { dispatchId: dispatch.id, agentJobId: agentJob.id },
+          });
+        });
+        return res.status(202).json({ agentJob, dispatch: publicDispatch(dispatch) });
+      }
+
+      if (!agentJob.yarJobId) return res.status(400).json({ message: 'Job YAR nao encontrado.' });
+      const paused = await runtime.pauseJob(agentJob.yarJobId);
+      return res.status(202).json({ agentJob, yarJob: paused?.job || paused });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/agent-runs/:runId/finish-partial', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+    try {
+      const runId = req.params.runId;
+      const store = await readStore();
+      const agentJob = store.projects
+        .flatMap((entry) => ensureArray(entry.agentJobs))
+        .find((job) => job.promptRunId === runId || job.id === runId);
+      if (!agentJob) return res.status(404).json({ message: 'Agent run nao encontrado.' });
+
+      if (connectionMode === 'remote_pull') {
+        const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'finish_partial');
+        if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
+        await updateStore(async (mutableStore) => {
+          const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
+          const task = workItems.findWorkItem(mutableProject, agentJob.workItemId);
+          if (task) {
+            const list = workItems.getWorkItems(mutableProject);
+            workItems.setWorkItems(mutableProject, list.map((entry) => entry.id === task.id
+              ? workItems.normalizeWorkItem({
+                ...task,
+                currentAction: 'A preparar o progresso actual para avaliação humana.',
+                updatedAt: nowIso(),
+              }, { project: mutableProject })
+              : entry));
+          }
+        });
+        return res.status(202).json({ agentJob, dispatch: publicDispatch(dispatch) });
+      }
+
+      if (!agentJob.yarJobId) return res.status(400).json({ message: 'Job YAR nao encontrado.' });
+      const resumed = await runtime.resumeJob(agentJob.yarJobId, { finishPartial: true });
+      return res.status(202).json({ agentJob, yarJob: resumed?.job || resumed });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
   app.post('/api/projects/agent-runs/:runId/resume', authMiddleware, requireAgentProjectEditor, async (req, res) => {
     try {
       const runId = req.params.runId;
@@ -1364,6 +1494,21 @@ function registerAgentRuntimeRoutes(app, deps) {
       if (connectionMode === 'remote_pull') {
         const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'resume');
         if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
+        await updateStore(async (mutableStore) => {
+          const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
+          const task = workItems.findWorkItem(mutableProject, agentJob.workItemId);
+          if (task) {
+            const list = workItems.getWorkItems(mutableProject);
+            workItems.setWorkItems(mutableProject, list.map((entry) => entry.id === task.id
+              ? workItems.normalizeWorkItem({
+                ...task,
+                status: 'in_progress',
+                currentAction: 'Continuação pedida; aguarda confirmação do Agent Runtime.',
+                updatedAt: nowIso(),
+              }, { project: mutableProject })
+              : entry));
+          }
+        });
         return res.json({
           agentJob: { ...agentJob, status: dispatch.status },
           dispatch: publicDispatch(dispatch),
