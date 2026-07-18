@@ -173,7 +173,10 @@ function registerAgentConnectorRoutes(app, deps) {
         lease(req),
         String(req.body?.localJobId || '')
       );
-      return res.json({ dispatch: publicDispatch(dispatch) });
+      return res.json({
+        dispatch: publicDispatch(dispatch),
+        acknowledgedEventId: store.lastEventId(dispatch.id),
+      });
     } catch (error) {
       return res.status(409).json({ message: error.message });
     }
@@ -206,7 +209,10 @@ function registerAgentConnectorRoutes(app, deps) {
           projectId: dispatch.projectId,
         });
       }
-      return res.json({ dispatch: publicDispatch(dispatch) });
+      return res.json({
+        dispatch: publicDispatch(dispatch),
+        acknowledgedEventId: store.lastEventId(dispatch.id),
+      });
     } catch (error) {
       return res.status(409).json({ message: error.message });
     }

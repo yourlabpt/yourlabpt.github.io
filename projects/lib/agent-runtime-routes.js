@@ -1150,8 +1150,11 @@ function registerAgentRuntimeRoutes(app, deps) {
           });
           agentJob = { ...agentJob, status: projectedStatus, updatedAt: nowIso() };
         }
+        const hasEventCursor = req.query.afterEventId !== undefined;
         const afterId = Number(req.query.afterEventId || 0);
-        const events = connectorStore.events(dispatch.id, afterId);
+        const events = hasEventCursor
+          ? connectorStore.events(dispatch.id, afterId)
+          : connectorStore.recentEvents(dispatch.id, 200);
         const connector = dispatch.connectorId ? connectorStore.getConnector(dispatch.connectorId) : connectorStore.activeConnector();
         return res.json({
           agentJob,

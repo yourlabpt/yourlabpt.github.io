@@ -442,7 +442,7 @@ class AgentConnectorStore {
     const previous = this.findDispatch(runId);
     if (!previous) return null;
     const attempt = Number(previous.attempt || 1) + 1;
-    return this.enqueue({
+    const retried = this.enqueue({
       projectId: previous.projectId,
       workItemId: previous.workItemId,
       agentRequestId: previous.agentRequestId,
@@ -453,6 +453,14 @@ class AgentConnectorStore {
       attempt,
       previousDispatchId: previous.id,
     });
+    this.db.prepare(`
+      INSERT OR IGNORE INTO agent_dispatch_events
+        (dispatch_id, local_event_id, event_json, created_at)
+      SELECT ?, local_event_id, event_json, created_at
+      FROM agent_dispatch_events
+      WHERE dispatch_id = ?
+    `).run(retried.id, previous.id);
+    return retried;
   }
 
   compatibility(dispatchId, connectorId) {
@@ -514,6 +522,28 @@ class AgentConnectorStore {
       WHERE dispatch_id = ? AND local_event_id > ?
       ORDER BY local_event_id ASC LIMIT 500
     `).all(dispatchId, afterId).map((row) => json(row.event_json, {}));
+  }
+
+  recentEvents(dispatchId, limit = 200) {
+    return this.db.prepare(`
+      SELECT event_json FROM (
+        SELECT local_event_id, event_json
+        FROM agent_dispatch_events
+        WHERE dispatch_id = ?
+        ORDER BY local_event_id DESC LIMIT ?
+      )
+      ORDER BY local_event_id ASC
+    `).all(dispatchId, Math.max(1, Math.min(500, Number(limit) || 200)))
+      .map((row) => json(row.event_json, {}));
+  }
+
+  lastEventId(dispatchId) {
+    const row = this.db.prepare(`
+      SELECT MAX(local_event_id) AS last_event_id
+      FROM agent_dispatch_events
+      WHERE dispatch_id = ?
+    `).get(dispatchId);
+    return Math.max(0, Number(row?.last_event_id) || 0);
   }
 
   toDispatch(row) {

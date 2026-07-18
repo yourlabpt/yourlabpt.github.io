@@ -191,12 +191,26 @@
     clearTimeout(connectionPollTimer);
     if (!runId || state.selectedId !== taskId) return;
     try {
-      const payload = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status`);
+      const priorEvents = state.detailExecution?.events || [];
+      const afterEventId = priorEvents.reduce(
+        (max, entry) => Math.max(max, Number(entry.id || entry._id) || 0),
+        0
+      );
+      const eventQuery = afterEventId ? `?afterEventId=${encodeURIComponent(afterEventId)}` : '';
+      const payload = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status${eventQuery}`);
+      const eventMap = new Map();
+      [...priorEvents, ...(payload.events || [])].forEach((entry) => {
+        const id = Number(entry.id || entry._id) || 0;
+        eventMap.set(id || `${entry.timestamp || ''}:${entry.type || ''}:${entry.message || ''}`, entry);
+      });
+      const mergedEvents = [...eventMap.values()]
+        .sort((a, b) => (Number(a.id || a._id) || 0) - (Number(b.id || b._id) || 0))
+        .slice(-200);
       state.detailExecution = {
         runId: payload.agentJob?.id || runId,
         status: payload.dispatch?.status || payload.agentJob?.status || '',
         desiredAction: payload.dispatch?.desiredAction || null,
-        events: payload.events || [],
+        events: mergedEvents,
         progressCurrent: payload.progress?.current ?? payload.agentJob?.subtasksCompleted ?? 0,
         progressTotal: payload.progress?.total ?? payload.agentJob?.subtasksTotal ?? 0,
         tokensUsed: payload.progress?.tokensUsed ?? payload.agentJob?.tokensUsed ?? 0,
@@ -212,9 +226,9 @@
       if (['pending_human_review', 'completed', 'failed', 'cancelled'].includes(payload.agentJob?.status)) {
         await fetchDetail(project.id, taskId); paintEditor(project); await fetchList(project.id); return;
       }
-      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 2500);
+      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 1500);
     } catch {
-      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 5000);
+      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 4000);
     }
   }
 
@@ -876,7 +890,7 @@
       <div class="ado-agent-command-center">
         <div class="ado-agent-log-head">
           <span class="ado-agent-log-status">${escapeHtml(statusLabels[status] || status)}</span>
-          <small>${events.length} evento${events.length === 1 ? '' : 's'} · ${Number(execution.tokensUsed || 0).toLocaleString('pt-PT')} tokens · ${Number(execution.maxTokens) > 0 ? `limite ${Number(execution.maxTokens).toLocaleString('pt-PT')}` : 'tokens locais sem limite'}</small>
+          <small>${events.length} evento${events.length === 1 ? '' : 's'} recentes · ${Number(execution.tokensUsed || 0).toLocaleString('pt-PT')} tokens · ${Number(execution.maxTokens) > 0 ? `limite ${Number(execution.maxTokens).toLocaleString('pt-PT')}` : 'tokens locais sem limite'}${execution.updatedAt ? ` · sync ${escapeHtml(formatWhen(execution.updatedAt))}` : ''}</small>
         </div>
         ${total ? `<div class="ado-agent-progress"><div><span>Progresso</span><strong>${current}/${total} passos · ${progress}%</strong></div><progress max="100" value="${progress}"></progress></div>` : ''}
         ${goalTotal ? `<div class="ado-agent-goals"><span>Critérios verificados</span><strong>${goalMet}/${goalTotal}</strong></div>` : ''}

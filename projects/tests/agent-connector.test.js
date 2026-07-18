@@ -210,6 +210,18 @@ describe('secure outbound agent connector', () => {
       events: [{ id: 1, type: 'planning' }, { id: 1, type: 'planning' }],
     });
     assert.equal(store.events(claim.id).length, 1);
+    for (let start = 2; start <= 202; start += 100) {
+      const end = Math.min(202, start + 99);
+      store.sync(connector.id, claim.id, claim.leaseToken, {
+        status: 'running',
+        events: Array.from(
+          { length: end - start + 1 },
+          (_, offset) => ({ id: start + offset, type: 'info' })
+        ),
+      });
+    }
+    assert.equal(store.lastEventId(claim.id), 202);
+    assert.deepEqual(store.recentEvents(claim.id, 3).map((event) => event.id), [200, 201, 202]);
     const first = store.complete(connector.id, claim.id, claim.leaseToken, {
       packageHash: claim.packageHash,
       rawOutput: '{"ok":true}',
@@ -550,6 +562,7 @@ describe('secure outbound agent connector', () => {
     assert.equal(retry.attempt, 2);
     assert.equal(retry.packageHash, original.packageHash);
     assert.deepEqual(retry.package, original.package);
+    assert.equal(store.lastEventId(retry.id), store.lastEventId(original.id));
 
     const claim = store.claim(connector.id);
     store.ack(connector.id, claim.id, claim.leaseToken, 'local-result');

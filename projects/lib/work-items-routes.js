@@ -455,7 +455,7 @@ function registerWorkItemRoutes(app, deps) {
         runId: agentJob.id,
         status: dispatch?.status || agentJob.status,
         desiredAction: dispatch?.desiredAction || null,
-        events: dispatch && connectorStore ? connectorStore.events(dispatch.id) : [],
+        events: dispatch && connectorStore ? connectorStore.recentEvents(dispatch.id, 200) : [],
         progressCurrent: Number(agentJob.subtasksCompleted) || 0,
         progressTotal: Number(agentJob.subtasksTotal) || 0,
         tokensUsed: Number(agentJob.tokensUsed) || 0,
