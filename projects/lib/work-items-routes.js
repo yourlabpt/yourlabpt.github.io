@@ -461,6 +461,8 @@ function registerWorkItemRoutes(app, deps) {
         tokensUsed: Number(agentJob.tokensUsed) || 0,
         maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
         maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
+        bestEffort: agentJob.bestEffort === true,
+        qualityWarnings: ensureArray(agentJob.qualityWarnings),
         error: agentJob.error || null,
         createdAt: agentJob.createdAt || null,
         updatedAt: dispatch?.updatedAt || agentJob.updatedAt || null,

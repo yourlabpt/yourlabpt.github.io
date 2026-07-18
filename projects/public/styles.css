@@ -10656,6 +10656,21 @@ body.is-client-readonly [data-writes-only] {
   color: #d64545;
 }
 
+.ado-agent-quality-warning {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #d98e04 35%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, #d98e04 8%, var(--surface));
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.ado-agent-quality-warning p,
+.ado-agent-quality-warning ul {
+  margin: 5px 0 0;
+}
+
 .ado-agent-controls {
   margin-top: 12px;
 }
@@ -11866,7 +11881,8 @@ body.is-client-readonly [data-writes-only] {
   border-top: 1px solid var(--line);
 }
 
-.ado-editor-result h4 {
+.ado-editor-result h4,
+.ado-editor-result h3 {
   margin: 0 0 10px;
   font-size: 12px;
   font-weight: 700;

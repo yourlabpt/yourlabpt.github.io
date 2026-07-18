@@ -216,6 +216,8 @@
         tokensUsed: payload.progress?.tokensUsed ?? payload.agentJob?.tokensUsed ?? 0,
         maxTokens: payload.progress?.maxTokens ?? payload.agentJob?.budget?.maxTokens ?? 0,
         maxWallClockMinutes: payload.progress?.maxWallClockMinutes ?? payload.agentJob?.budget?.maxWallClockMinutes ?? 0,
+        bestEffort: payload.progress?.bestEffort === true || payload.agentJob?.bestEffort === true,
+        qualityWarnings: payload.progress?.qualityWarnings || payload.agentJob?.qualityWarnings || [],
         error: payload.agentJob?.error || null,
         createdAt: payload.agentJob?.createdAt || state.detailExecution?.createdAt || null,
         updatedAt: payload.dispatch?.updatedAt || payload.agentJob?.updatedAt || null,
@@ -894,6 +896,7 @@
         </div>
         ${total ? `<div class="ado-agent-progress"><div><span>Progresso</span><strong>${current}/${total} passos · ${progress}%</strong></div><progress max="100" value="${progress}"></progress></div>` : ''}
         ${goalTotal ? `<div class="ado-agent-goals"><span>Critérios verificados</span><strong>${goalMet}/${goalTotal}</strong></div>` : ''}
+        ${execution.bestEffort ? `<div class="ado-agent-quality-warning"><strong>Resultado disponível para decisão humana</strong><p>O agente atingiu o limite de correções e enviou o melhor resultado produzido. Reveja os avisos antes de aprovar.</p>${(execution.qualityWarnings || []).length ? `<ul>${execution.qualityWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : ''}</div>` : ''}
         ${desiredAction ? `<p class="ado-agent-control-pending">Comando pendente: ${escapeHtml(({ pause: 'pausar', resume: 'continuar', cancel: 'cancelar', finish_partial: 'enviar progresso para avaliação' })[desiredAction] || desiredAction)}</p>` : ''}
         ${execution.error ? `<p class="ado-agent-error">${escapeHtml(execution.error)}</p>` : ''}
         ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
@@ -1106,6 +1109,14 @@
 
         ${item.executionPackage?.promptDiff ? `<section class="ado-editor-section"><details class="ado-advanced-details"><summary>O que mudou neste subprompt</summary><pre>${escapeHtml(item.executionPackage.promptDiff)}</pre></details></section>` : ''}
 
+        ${item.origin === 'agent' && item.resultSummaryMarkdown ? `
+          <section class="ado-editor-section ado-editor-result">
+            <h3 class="ado-section-title">Resultado entregue pelo agente</h3>
+            ${state.detailExecution?.bestEffort ? '<p class="ado-section-hint">Resultado best-effort: pode ser aprovado, devolvido com alterações ou rejeitado.</p>' : ''}
+            <details open class="ado-advanced-details"><summary>Pré-visualizar resultado</summary><pre class="ado-result-body">${escapeHtml(item.resultSummaryMarkdown)}</pre></details>
+          </section>
+        ` : ''}
+
         ${reviewRef && state.canManage ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Decisão da revisão</h3><p class="ado-section-hint">A decisão e a evidência permanecem ligadas à revisão; o estado desta tarefa é sincronizado.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-decision="approved" data-domain-id="${escapeHtml(reviewRef.id)}">Aprovar revisão</button><button type="button" class="ado-action-ghost" data-ado-review-decision="changes_requested" data-domain-id="${escapeHtml(reviewRef.id)}">Pedir alterações</button></div></section>` : ''}
         ${approvalRef && (state.canManage || state.canPostUpdate) ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Decisão da aprovação</h3><p class="ado-section-hint">Registe a decisão sem sair da tarefa.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-approval-decision="approved" data-domain-id="${escapeHtml(approvalRef.id)}">Aprovar entrega</button><button type="button" class="ado-action-ghost" data-ado-approval-decision="rejected" data-domain-id="${escapeHtml(approvalRef.id)}">Rejeitar</button></div></section>` : ''}
 
@@ -1134,13 +1145,6 @@
             ${renderUpdatesTimeline(item)}
           </div>
         </section>
-
-        ${item.origin === 'agent' && item.resultSummaryMarkdown ? `
-          <section class="ado-editor-result">
-            <h4>Resultado do agente</h4>
-            <div class="ado-result-body">${escapeHtml(item.resultSummaryMarkdown)}</div>
-          </section>
-        ` : ''}
 
         <input type="hidden" name="status" value="${escapeHtml(item.status)}" data-ado-status-input />
         ${item.suggestionId ? `<input type="hidden" name="suggestionId" value="${escapeHtml(item.suggestionId)}" />` : ''}

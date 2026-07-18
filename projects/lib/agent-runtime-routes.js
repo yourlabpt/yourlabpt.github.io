@@ -514,6 +514,11 @@ function registerAgentRuntimeRoutes(app, deps) {
               total: Math.max(0, Number(progress.goalsTotal) || 0),
               iteration: Math.max(0, Number(progress.goalIteration) || 0),
             };
+            job.bestEffort = progress.bestEffort === true;
+            job.qualityWarnings = ensureArray(progress.qualityWarnings)
+              .map((warning) => textOr(warning))
+              .filter(Boolean)
+              .slice(-10);
             job.error = textOr(progress.error, job.error || '');
             job.updatedAt = nowIso();
           }
@@ -1172,6 +1177,8 @@ function registerAgentRuntimeRoutes(app, deps) {
             tokensUsed: Number(agentJob.tokensUsed) || 0,
             maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
             maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
+            bestEffort: agentJob.bestEffort === true,
+            qualityWarnings: ensureArray(agentJob.qualityWarnings),
           },
           runtimeMeta: {
             checkedAt: nowIso(),
