@@ -24,3 +24,11 @@ test('idea guidance question mode asks for one unknown without filling it', () =
   assert.match(prompt, /faz UMA pergunta clara/);
   assert.match(prompt, /Não tentes preencher a lacuna/);
 });
+
+test('idea section acceptance survives vision normalization and ignores unknown fields', () => {
+  const vision = deliveryOs.normalizeVision({
+    mainIdeaMarkdown: 'Uma ideia validada.',
+    acceptedSections: ['mainIdeaMarkdown', 'targetUsers', 'unknownField', 'mainIdeaMarkdown'],
+  });
+  assert.deepEqual(vision.acceptedSections, ['mainIdeaMarkdown', 'targetUsers']);
+});

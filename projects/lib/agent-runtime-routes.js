@@ -484,6 +484,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         workItemId: agentJob?.workItemId,
         promptRunId: runId,
         resultSummaryMarkdown: summary,
+        rawOutput,
         waitingReview: deferApply,
       });
       const request = ensureArray(project.agentRequests).find((entry) => entry.id === agentJob?.agentRequestId);
@@ -1802,6 +1803,16 @@ function registerAgentRuntimeRoutes(app, deps) {
         && agentJob.yarJobId
         && RUNTIME_ACTIVE_STATUSES.has(agentJob.status)) {
         try { await runtime.cancelJob(agentJob.yarJobId); } catch { /* ignore */ }
+      }
+      if (connectionMode === 'remote_pull' && connectorStore) {
+        const dispatch = connectorStore.findDispatch(agentJob.dispatchId || agentJob.id || runId);
+        if (dispatch?.status === 'waiting_review') {
+          connectorStore.markReviewed(dispatch.id, 'rejected');
+        } else if (dispatch && !['completed', 'failed', 'cancelled'].includes(dispatch.status)) {
+          connectorStore.setDesiredAction(dispatch.id, 'cancel', {
+            idempotencyKey: `dismiss:${agentJob.id}:cancel`,
+          });
+        }
       }
 
       await updateStore(async (mutableStore) => {

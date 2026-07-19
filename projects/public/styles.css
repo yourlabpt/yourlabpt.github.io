@@ -6296,6 +6296,22 @@ body.help-drawer-open {
   padding-top: 20px;
 }
 
+.idea-understanding-section.is-accepted {
+  border-top-color: color-mix(in srgb, var(--success, #2f9e62) 55%, var(--line));
+}
+
+.idea-section-accepted {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--success, #2f9e62);
+  background: color-mix(in srgb, var(--success, #2f9e62) 12%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
 .idea-understanding-section h4 {
   margin: 0 0 10px;
 }

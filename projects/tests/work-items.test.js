@@ -7,6 +7,7 @@ const taskSuggestions = require('../lib/task-suggestions');
 const agentRequests = require('../lib/agent-requests');
 const stageTransitions = require('../lib/stage-transition-requests');
 const { selectReadyAgentTask } = require('../lib/agent-runtime-routes');
+const { filterAcceptedWorkItems } = require('../lib/work-items-routes');
 
 function task(overrides = {}) {
   return { title: 'Task', descriptionMarkdown: 'Body', complexity: 'low', deliveryStageId: 'requirements', ...overrides };
@@ -133,14 +134,61 @@ describe('work item synchronization', () => {
     assert.equal(project.workItems[0].deliveryStageId, 'implementation');
   });
 
-  it('links one task to each pending review and synchronizes completion', () => {
+  it('never creates domain tasks implicitly and only syncs an explicitly created bridge', () => {
     const project = { workItems: [], humanReviews: [{ id: 'r1', title: 'Review', status: 'pending', stageId: 'architecture' }] };
     workItemsSync.syncDomainTasks(project);
+    assert.equal(project.workItems.length, 0);
+    workItemsSync.syncDomainTasks(project, { createMissing: true });
     workItemsSync.syncDomainTasks(project);
     assert.equal(project.workItems.length, 1);
     project.humanReviews[0].status = 'approved';
     workItemsSync.syncDomainTasks(project);
     assert.equal(project.workItems[0].status, 'completed');
+  });
+
+  it('keeps a deleted historical agent task deleted when legacy migration runs', () => {
+    const job = {
+      id: 'job_deleted',
+      status: 'pending_human_review',
+      agentId: 'idea-to-requirements',
+      promptRunId: 'run_deleted',
+    };
+    const project = { workItems: [], agentJobs: [job], agentRequests: [] };
+    const deleted = workItems.normalizeWorkItem(task({
+      id: 'old_task',
+      origin: 'agent',
+      executorMode: 'agent',
+      agentJobId: job.id,
+      promptRunId: job.promptRunId,
+      externalRefs: [{ source: 'agent_job', jobId: job.id, promptRunId: job.promptRunId }],
+    }), { project });
+    workItems.addWorkItemTombstone(project, deleted, { deletedBy: 'u1' });
+    agentRequests.migrateAgentRequests(project);
+    assert.equal(project.workItems.length, 0);
+    assert.equal(project.agentRequestsSchemaVersion, 1);
+  });
+
+  it('persists the complete agent output on the review attempt', () => {
+    const project = {
+      workItems: [workItems.normalizeWorkItem(task({
+        id: 'w_review',
+        origin: 'agent',
+        executorMode: 'agent',
+        reviewRequired: true,
+        attempts: [{ id: 'attempt_1', number: 1, status: 'running' }],
+      }))],
+    };
+    const rawOutput = 'complete review output '.repeat(300);
+    workItemsSync.onAgentRunComplete(project, {
+      workItemId: 'w_review',
+      promptRunId: 'run_review',
+      resultSummaryMarkdown: 'Short summary',
+      rawOutput,
+      waitingReview: true,
+    });
+    assert.equal(project.workItems[0].status, 'waiting_review');
+    assert.equal(project.workItems[0].attempts[0].rawOutput, rawOutput);
+    assert.equal(project.workItems[0].attempts[0].promptRunId, 'run_review');
   });
 });
 
@@ -170,6 +218,24 @@ describe('agent requests and visible plans', () => {
     assert.equal(project.workItems.length, 2);
     assert.equal(project.workItems.every((item) => item.agentRequestId === result.request.id), true);
     assert.equal(project.workItems.some((item) => item.status === 'in_progress'), false);
+  });
+
+  it('keeps unapproved agent plans out of the canonical task list projection', () => {
+    const project = {
+      agentRequests: [
+        { id: 'proposed', status: 'awaiting_approval' },
+        { id: 'accepted', status: 'ready' },
+      ],
+      workItems: [
+        task({ id: 'w_proposed', agentRequestId: 'proposed' }),
+        task({ id: 'w_accepted', agentRequestId: 'accepted' }),
+        task({ id: 'w_human' }),
+      ],
+    };
+    assert.deepEqual(
+      filterAcceptedWorkItems(project).map((item) => item.id),
+      ['w_accepted', 'w_human'],
+    );
   });
 
   it('approves a plan and only makes dependency-free tasks ready', () => {
@@ -276,14 +342,14 @@ describe('contextual task suggestions', () => {
     assert.equal(project.workItems.length, 0);
   });
 
-  it('auto-creates only for an explicitly enabled rule', () => {
+  it('never promotes a suggestion without explicit human acceptance', () => {
     const project = { workItems: [], approvals: [{ id: 'a1', stageId: 'delivery', status: 'pending' }] };
     taskSuggestions.evaluateProject(project);
     assert.equal(taskSuggestions.applyConfiguredAutomations(project).length, 0);
     project.taskAutomationRules = [{ ruleId: 'pending_approval', enabled: true, autoCreate: true }];
     const created = taskSuggestions.applyConfiguredAutomations(project);
-    assert.equal(created.length, 1);
-    assert.equal(created[0].automationRuleId, 'pending_approval');
-    assert.equal(project.taskSuggestions[0].status, 'accepted');
+    assert.equal(created.length, 0);
+    assert.equal(project.workItems.length, 0);
+    assert.equal(project.taskSuggestions[0].status, 'proposed');
   });
 });

@@ -70,7 +70,9 @@ function domainStatusToTaskStatus(status) {
 }
 
 function syncDomainTasks(project, options = {}) {
-  const createMissing = options.createMissing !== false;
+  // Domain records can suggest work, but a read/sync must never promote them
+  // into the canonical task list without an explicit human acceptance.
+  const createMissing = options.createMissing === true;
   const next = workItems.getWorkItems(project);
   const domains = [
     ...ensureArray(project?.humanReviews).map((record) => ({ type: 'review', record, title: textOr(record.title, 'Revisao humana'), stageId: textOr(record.deliveryStageId || record.stageId, workItems.UNCLASSIFIED_STAGE_ID), responsible: textOr(record.reviewerUserId) })),
@@ -275,9 +277,20 @@ function onAgentRunComplete(project, context = {}) {
 
   const failed = context.failed === true;
   const waitingReview = !failed && (context.waitingReview === true || item.reviewRequired === true);
+  const rawOutput = context.rawOutput === null || context.rawOutput === undefined
+    ? ''
+    : String(context.rawOutput);
   const completedAt = new Date().toISOString();
   const attempts = ensureArray(item.attempts).map((attempt, index, all) => index === all.length - 1
-    ? { ...attempt, status: failed ? 'failed' : 'completed', promptRunId: promptRunId || attempt.promptRunId, resultSummaryMarkdown: summary, completedAt, updatedAt: completedAt }
+    ? {
+      ...attempt,
+      status: failed ? 'failed' : 'completed',
+      promptRunId: promptRunId || attempt.promptRunId,
+      rawOutput: rawOutput || attempt.rawOutput,
+      resultSummaryMarkdown: summary,
+      completedAt,
+      updatedAt: completedAt,
+    }
     : attempt);
   const patched = workItems.normalizeWorkItem({
     ...item,

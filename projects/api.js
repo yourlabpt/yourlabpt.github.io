@@ -3905,6 +3905,8 @@ function registerRequirementsPlatform(app, options) {
     sendProjectEmail,
     normalizeRequirementRecord,
     connectorStore,
+    agentConnectionMode,
+    runtime: createAgentRuntimeClient(),
   });
 
   registerAgentRuntimeRoutes(app, {

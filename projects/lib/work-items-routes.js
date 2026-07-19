@@ -9,6 +9,11 @@ const agentRequests = require('./agent-requests');
 const deliveryOs = require('./delivery-os');
 const stageTransitions = require('./stage-transition-requests');
 
+const ACTIVE_AGENT_STATUSES = new Set([
+  'queued', 'claimed', 'running', 'planning', 'researching', 'executing',
+  'self_review', 'verifying', 'paused', 'connection_lost', 'cancel_requested',
+]);
+
 function textOr(value, fallback = '') {
   const v = value === null || value === undefined ? '' : String(value).trim();
   return v || fallback;
@@ -20,6 +25,14 @@ function safeTransitionPreview(preview) {
     baselineRequest: baselineRequest ? { id: baselineRequest.id, title: baselineRequest.title, status: baselineRequest.status, version: baselineRequest.version, updatedAt: baselineRequest.updatedAt } : null,
     tasks: workItems.ensureArray(preview?.tasks).map(({ instruction, ...task }) => task),
   };
+}
+
+function filterAcceptedWorkItems(project, items = workItems.getWorkItems(project)) {
+  const pendingRequestIds = new Set(agentRequests.getAgentRequests(project)
+    .filter((request) => ['awaiting_approval', 'revision_requested'].includes(request.status))
+    .map((request) => request.id));
+  return workItems.ensureArray(items)
+    .filter((item) => !item.agentRequestId || !pendingRequestIds.has(item.agentRequestId));
 }
 
 function applyListFilters(items, query) {
@@ -69,11 +82,66 @@ function registerWorkItemRoutes(app, deps) {
     updateStore,
     appendActivity,
     connectorStore,
+    agentConnectionMode,
+    runtime,
     ensureArray,
     nowIso,
     sendProjectEmail,
     normalizeRequirementRecord,
   } = deps;
+
+  async function cancelLinkedExecution(project, item) {
+    const agentJob = workItems.ensureArray(project?.agentJobs).find((job) => (
+      (item.agentJobId && job.id === item.agentJobId)
+      || (item.promptRunId && job.promptRunId === item.promptRunId)
+      || job.workItemId === item.id
+    )) || null;
+    if (!agentJob) return { requested: false, status: 'not_linked' };
+
+    if (agentConnectionMode === 'remote_pull' && connectorStore) {
+      const runId = agentJob.dispatchId || agentJob.id || agentJob.promptRunId;
+      const current = connectorStore.findDispatch(runId);
+      if (!current) return { requested: false, status: 'dispatch_not_found', agentJobId: agentJob.id };
+      if (current.status === 'waiting_review') {
+        const dispatch = connectorStore.markReviewed(current.id, 'rejected');
+        return { requested: true, status: dispatch?.status || 'failed', dispatchId: current.id, agentJobId: agentJob.id };
+      }
+      if (['completed', 'failed', 'cancelled'].includes(current.status)) {
+        return { requested: false, status: current.status, dispatchId: current.id, agentJobId: agentJob.id };
+      }
+      const dispatch = connectorStore.setDesiredAction(current.id, 'cancel', {
+        idempotencyKey: `task:${item.id}:cancel`,
+      });
+      return { requested: true, status: dispatch?.status || 'cancel_requested', dispatchId: current.id, agentJobId: agentJob.id };
+    }
+
+    if (agentConnectionMode === 'local_push' && runtime && agentJob.yarJobId
+      && ACTIVE_AGENT_STATUSES.has(String(agentJob.status || ''))) {
+      await runtime.cancelJob(agentJob.yarJobId);
+      return { requested: true, status: 'cancelled', agentJobId: agentJob.id };
+    }
+    return { requested: false, status: agentJob.status || 'inactive', agentJobId: agentJob.id };
+  }
+
+  function markLinkedExecutionCancelled(project, item, cancellation, actorUserId, at) {
+    const job = workItems.ensureArray(project.agentJobs).find((entry) => entry.id === cancellation?.agentJobId);
+    if (job && !['completed', 'failed', 'cancelled'].includes(job.status)) {
+      job.status = ['cancelled', 'failed'].includes(cancellation?.status) ? 'cancelled' : 'cancel_requested';
+      job.cancelReason = 'cancelled_from_task';
+      job.cancelledBy = actorUserId;
+      job.updatedAt = at;
+    }
+    const request = workItems.ensureArray(project.agentRequests).find((entry) => entry.id === item.agentRequestId);
+    if (request && !['completed', 'cancelled', 'superseded'].includes(request.status)) {
+      const remaining = workItems.getWorkItems(project).filter((entry) => (
+        entry.id !== item.id
+        && entry.agentRequestId === request.id
+        && !workItems.isTerminalStatus(entry.status)
+      ));
+      request.status = item.taskRole === 'coordination' || !remaining.length ? 'cancelled' : 'ready';
+      request.updatedAt = at;
+    }
+  }
 
   async function notifyActionable(store, project, payload = {}) {
     const task = payload.task || null;
@@ -120,13 +188,16 @@ function registerWorkItemRoutes(app, deps) {
   }
 
   function visibleItems(project, user) {
-    workItems.migrateProjectWorkItems(project);
-    agentRequests.migrateAgentRequests(project);
-    stageTransitions.migrateStageTransitionRequests(project, { nowIso });
-    workItemsSync.syncImplementationTasks(project);
-    workItemsSync.syncDomainTasks(project);
     const all = workItems.getWorkItems(project);
     return projectAccess.filterWorkItemsForViewer(all, user, project);
+  }
+
+  function acceptedItems(project) {
+    return filterAcceptedWorkItems(project);
+  }
+
+  function acceptedVisibleItems(project, user) {
+    return projectAccess.filterWorkItemsForViewer(acceptedItems(project), user, project);
   }
 
   function assertClientAssignmentVisibility(project, record) {
@@ -135,24 +206,12 @@ function registerWorkItemRoutes(app, deps) {
   }
 
   app.get('/api/projects/projects/:projectId/work-items/meta', authMiddleware, loadProjectLiteForUser, async (req, res) => {
-    let project = req.loadedProject;
+    const project = req.loadedProject;
     const user = req.auth.user;
-    try {
-      await updateStore(async (store) => {
-        const stored = store.projects.find((entry) => entry.id === req.params.projectId);
-        if (!stored) return;
-        const migrated = workItems.migrateProjectWorkItems(stored);
-        const agentMigration = agentRequests.migrateAgentRequests(stored);
-        const transitionMigration = stageTransitions.migrateStageTransitionRequests(stored, { nowIso });
-        const implementation = workItemsSync.syncImplementationTasks(stored);
-        const domains = workItemsSync.syncDomainTasks(stored);
-        if (migrated.changed || agentMigration.changed || transitionMigration.changed || implementation.synced || domains.synced) stored.updatedAt = nowIso();
-        project = stored;
-      });
-    } catch { /* keep read available */ }
     const all = workItems.getWorkItems(project);
-    const visible = projectAccess.filterWorkItemsForViewer(all, user, project);
-    const counts = workItems.computeMetaCounts(projectAccess.canManageWorkItems(user, project) ? all : visible);
+    const visible = acceptedVisibleItems(project, user);
+    const accepted = acceptedItems(project);
+    const counts = workItems.computeMetaCounts(projectAccess.canManageWorkItems(user, project) ? accepted : visible);
     const canManage = projectAccess.canManageWorkItems(user, project);
     const tabVisible = projectAccess.canViewWorkItemsTab(user, project, all);
     const hasAssigned = projectAccess.viewerHasAssignedHumanWorkItems(user, project, all);
@@ -171,7 +230,7 @@ function registerWorkItemRoutes(app, deps) {
   app.get('/api/projects/projects/:projectId/work-items', authMiddleware, loadProjectLiteForUser, (req, res) => {
     const project = req.loadedProject;
     const user = req.auth.user;
-    let list = visibleItems(project, user);
+    let list = acceptedVisibleItems(project, user);
     list = applyListFilters(list, req.query || {});
     if (req.query?.showCompleted !== 'true') list = list.filter((item) => !workItems.isTerminalStatus(item.status));
     if (req.query?.view === 'prioritized' || !req.query?.view) list = workItems.sortPrioritized(list);
@@ -191,7 +250,7 @@ function registerWorkItemRoutes(app, deps) {
   });
 
   app.get('/api/projects/projects/:projectId/work-items/relevant', authMiddleware, loadProjectLiteForUser, (req, res) => {
-    const relevant = workItems.relevantWorkItems(visibleItems(req.loadedProject, req.auth.user), {
+    const relevant = workItems.relevantWorkItems(acceptedVisibleItems(req.loadedProject, req.auth.user), {
       deliveryStageId: req.query?.deliveryStageId || req.query?.stage,
       planPhaseId: req.query?.planPhaseId,
       limit: req.query?.limit,
@@ -215,11 +274,9 @@ function registerWorkItemRoutes(app, deps) {
         workItemsSync.syncImplementationTasks(project);
         workItemsSync.syncDomainTasks(project, { createMissing: false });
         suggestions = taskSuggestions.evaluateProject(project, { now: nowIso() });
-        const automated = taskSuggestions.applyConfiguredAutomations(project, { now: nowIso() });
         suggestions = project.taskSuggestions;
         project.updatedAt = nowIso();
-        automated.forEach((task) => appendActivity(store, { actorUserId: 'automation', projectId: req.params.projectId, action: 'work_item_auto_created', details: { workItemId: task.id, ruleId: task.automationRuleId, sourceRefs: task.sourceRefs } }));
-        appendActivity(store, { actorUserId: req.auth.user.id, projectId: req.params.projectId, action: 'task_suggestions_evaluated', details: { proposed: suggestions.filter((entry) => entry.status === 'proposed').length, automated: automated.length } });
+        appendActivity(store, { actorUserId: req.auth.user.id, projectId: req.params.projectId, action: 'task_suggestions_evaluated', details: { proposed: suggestions.filter((entry) => entry.status === 'proposed').length, automated: 0 } });
       });
       return res.json({ suggestions, automationRules: workItems.ensureArray(req.loadedProject.taskAutomationRules) });
     } catch (error) { return res.status(400).json({ message: error.message }); }
@@ -264,22 +321,9 @@ function registerWorkItemRoutes(app, deps) {
   });
 
   app.patch('/api/projects/projects/:projectId/work-items/automations', authMiddleware, loadProjectLiteForUser, requireProjectEditor, async (req, res) => {
-    try {
-      const ruleId = textOr(req.body?.ruleId);
-      if (!taskSuggestions.RULE_IDS.has(ruleId)) throw new Error('Regra de automacao desconhecida.');
-      let rules = [];
-      await updateStore(async (store) => {
-        const project = store.projects.find((entry) => entry.id === req.params.projectId);
-        if (!project) throw new Error('Projeto nao encontrado.');
-        const current = workItems.ensureArray(project.taskAutomationRules).filter((rule) => rule?.ruleId !== ruleId);
-        current.push({ ruleId, enabled: req.body?.enabled === true, autoCreate: req.body?.enabled === true, updatedAt: nowIso(), updatedBy: req.auth.user.id });
-        project.taskAutomationRules = current;
-        project.updatedAt = nowIso();
-        rules = current;
-        appendActivity(store, { actorUserId: req.auth.user.id, projectId: req.params.projectId, action: 'task_automation_updated', details: { ruleId, enabled: req.body?.enabled === true } });
-      });
-      return res.json({ automationRules: rules });
-    } catch (error) { return res.status(400).json({ message: error.message }); }
+    return res.status(409).json({
+      message: 'A criação automática foi desativada. Reveja a sugestão e confirme “Rever e criar” para a transformar numa tarefa real.',
+    });
   });
 
   app.post('/api/projects/projects/:projectId/work-items/notifications/:notificationId/read', authMiddleware, loadProjectLiteForUser, async (req, res) => {
@@ -297,7 +341,6 @@ function registerWorkItemRoutes(app, deps) {
 
   app.get('/api/projects/projects/:projectId/work-items/agent-requests', authMiddleware, loadProjectLiteForUser, (req, res) => {
     const project = req.loadedProject;
-    agentRequests.migrateAgentRequests(project);
     const visibleIds = new Set(visibleItems(project, req.auth.user).map((item) => item.id));
     const requests = agentRequests.getAgentRequests(project).map((request) => {
       const tasks = workItems.getWorkItems(project).filter((item) => item.agentRequestId === request.id && visibleIds.has(item.id));
@@ -447,6 +490,21 @@ function registerWorkItemRoutes(app, deps) {
     const dispatch = agentJob && connectorStore
       ? connectorStore.findDispatch(agentJob.dispatchId || agentJob.id || agentJob.promptRunId)
       : null;
+    const promptRun = workItems.ensureArray(project.promptRuns).find((run) => (
+      (item.promptRunId && run.id === item.promptRunId)
+      || (agentJob?.promptRunId && run.id === agentJob.promptRunId)
+    )) || null;
+    const latestAttempt = [...workItems.ensureArray(item.attempts)].reverse()
+      .find((attempt) => attempt.rawOutput || attempt.resultSummaryMarkdown) || null;
+    const humanReview = workItems.ensureArray(project.humanReviews).find((review) => (
+      (promptRun?.id && review.promptRunId === promptRun.id)
+      || (promptRun?.id && review.sourceType === 'prompt_run' && review.sourceId === promptRun.id)
+    )) || null;
+    const reviewRawOutput = textOr(
+      latestAttempt?.rawOutput
+      || promptRun?.rawOutput
+      || humanReview?.suggestedChanges?.rawOutput,
+    );
     return res.json({
       workItem: item,
       children: workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === item.id),
@@ -455,10 +513,18 @@ function registerWorkItemRoutes(app, deps) {
         runId: agentJob.id,
         status: dispatch?.status || agentJob.status,
         desiredAction: dispatch?.desiredAction || null,
+        latestCommand: dispatch?.latestCommand || null,
         events: dispatch && connectorStore ? connectorStore.recentEvents(dispatch.id, 200) : [],
-        progressCurrent: Number(agentJob.subtasksCompleted) || 0,
-        progressTotal: Number(agentJob.subtasksTotal) || 0,
+        checkpoint: dispatch?.checkpoint || {},
+        reviewPacket: dispatch?.reviewPacket || {},
+        progressCurrent: Number(dispatch?.progress?.currentStep ?? agentJob.subtasksCompleted) || 0,
+        progressTotal: Number(dispatch?.progress?.totalSteps ?? agentJob.subtasksTotal) || 0,
         tokensUsed: Number(agentJob.tokensUsed) || 0,
+        localTokensUsed: Number(dispatch?.progress?.localTokensUsed) || 0,
+        externalTokensUsed: Number(dispatch?.progress?.externalTokensUsed) || 0,
+        externalMaxTokens: Math.max(0, Number(dispatch?.progress?.externalMaxTokens) || 0),
+        costUsed: Math.max(0, Number(dispatch?.progress?.costUsed) || 0),
+        maxCost: Math.max(0, Number(dispatch?.progress?.maxCost) || 0),
         maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
         maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
         bestEffort: agentJob.bestEffort === true,
@@ -466,6 +532,18 @@ function registerWorkItemRoutes(app, deps) {
         error: agentJob.error || null,
         createdAt: agentJob.createdAt || null,
         updatedAt: dispatch?.updatedAt || agentJob.updatedAt || null,
+      } : null,
+      reviewTarget: (item.status === 'waiting_review' || reviewRawOutput || humanReview) ? {
+        promptRunId: promptRun?.id || item.promptRunId || '',
+        humanReviewId: humanReview?.id || '',
+        status: humanReview?.status || item.status,
+        title: humanReview?.title || `Resultado: ${item.title}`,
+        summaryMarkdown: humanReview?.summaryMarkdown || item.resultSummaryMarkdown || '',
+        bodyMarkdown: humanReview?.bodyMarkdown || '',
+        rawOutput: reviewRawOutput,
+        parsedOutput: promptRun?.parsedOutput || null,
+        attemptId: latestAttempt?.id || '',
+        resultHash: promptRun?.resultHash || dispatch?.resultHash || '',
       } : null,
       canManage,
       canPostUpdate: projectAccess.canPostWorkItemUpdate(user, project, item),
@@ -534,6 +612,12 @@ function registerWorkItemRoutes(app, deps) {
       const projectId = req.params.projectId;
       const workItemId = req.params.workItemId;
       const patch = req.body || {};
+      const loadedItem = workItems.findWorkItem(req.loadedProject, workItemId);
+      const cancelling = loadedItem && workItems.normalizeStatus(patch.status) === 'cancelled'
+        && loadedItem.status !== 'cancelled';
+      const cancellation = cancelling
+        ? await cancelLinkedExecution(req.loadedProject, loadedItem)
+        : null;
 
       let updated = null;
       await updateStore(async (store) => {
@@ -567,6 +651,7 @@ function registerWorkItemRoutes(app, deps) {
         workItems.validateHierarchy(record, next);
         workItems.validateDependencies(record, next);
         workItems.setWorkItems(project, next);
+        if (cancelling) markLinkedExecutionCancelled(project, existing, cancellation, req.auth.user.id, record.updatedAt);
         project.updatedAt = nowIso();
         updated = workItems.findWorkItem(project, workItemId);
 
@@ -822,6 +907,18 @@ function registerWorkItemRoutes(app, deps) {
           taskActivity: [...item.taskActivity, { type: `review_${action}`, message: action === 'approved' ? 'Resultado aprovado.' : action === 'changes_requested' ? `Alteracoes pedidas: ${feedback}` : `Resultado rejeitado: ${feedback}`, actorType: 'human', actorId: req.auth.user.id, createdAt: at }],
           updatedAt: at, updatedBy: req.auth.user.id,
         }, { project });
+        const linkedReview = ensureArray(project.humanReviews).find((review) => (
+          connectorRunId
+          && (review.promptRunId === connectorRunId
+            || (review.sourceType === 'prompt_run' && review.sourceId === connectorRunId))
+        ));
+        if (linkedReview) {
+          linkedReview.status = action === 'approved' ? 'approved'
+            : action === 'changes_requested' ? 'changes_requested' : 'rejected';
+          linkedReview.resolutionNotes = feedback;
+          linkedReview.resolvedAt = at;
+          linkedReview.resolvedBy = req.auth.user.id;
+        }
         let next = list.map((entry) => entry.id === item.id ? updated : entry);
         if (action === 'approved') {
           next = next.map((entry) => entry.status === 'planned' && entry.dependencyTaskIds.includes(item.id)
@@ -830,6 +927,7 @@ function registerWorkItemRoutes(app, deps) {
             : entry);
         }
         workItems.setWorkItems(project, next);
+        taskSuggestions.evaluateProject(project, { now: at });
         project.updatedAt = at;
         appendActivity(store, { actorUserId: req.auth.user.id, projectId: project.id, action: `work_item_review_${action}`, details: { workItemId: item.id } });
       });
@@ -860,6 +958,9 @@ function registerWorkItemRoutes(app, deps) {
     try {
       const projectId = req.params.projectId;
       const workItemId = req.params.workItemId;
+      const loadedItem = workItems.findWorkItem(req.loadedProject, workItemId);
+      if (!loadedItem) throw new Error('Tarefa nao encontrada.');
+      const cancellation = await cancelLinkedExecution(req.loadedProject, loadedItem);
 
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === projectId);
@@ -868,9 +969,6 @@ function registerWorkItemRoutes(app, deps) {
         const list = workItems.getWorkItems(project);
         const existing = list.find((item) => item.id === workItemId);
         if (!existing) throw new Error('Tarefa nao encontrada.');
-        if (existing.origin === 'agent' && existing.agentStatus === 'running') {
-          throw new Error('Nao e possivel remover tarefa de agente em execucao.');
-        }
         if (list.some((item) => item.parentTaskId === workItemId)) throw new Error('Remova ou reatribua as subtarefas antes de remover a tarefa-pai.');
 
         const tombstone = workItems.addWorkItemTombstone(project, existing, {
@@ -878,6 +976,7 @@ function registerWorkItemRoutes(app, deps) {
           deletedBy: req.auth.user.id,
           reason: textOr(req.body?.reason, 'deleted_from_tasks'),
         });
+        markLinkedExecutionCancelled(project, existing, cancellation, req.auth.user.id, nowIso());
         workItems.setWorkItems(project, list.filter((item) => item.id !== workItemId));
         project.updatedAt = nowIso();
 
@@ -885,11 +984,16 @@ function registerWorkItemRoutes(app, deps) {
           actorUserId: req.auth.user.id,
           projectId,
           action: 'work_item_deleted',
-          details: { workItemId, tombstoneId: tombstone?.id || '' },
+          details: {
+            workItemId,
+            tombstoneId: tombstone?.id || '',
+            agentCancellationStatus: cancellation.status,
+            dispatchId: cancellation.dispatchId || '',
+          },
         });
       });
 
-      return res.json({ ok: true });
+      return res.json({ ok: true, cancellation });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
@@ -1057,4 +1161,4 @@ function registerWorkItemRoutes(app, deps) {
   });
 }
 
-module.exports = { registerWorkItemRoutes };
+module.exports = { registerWorkItemRoutes, filterAcceptedWorkItems };

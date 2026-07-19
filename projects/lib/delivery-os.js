@@ -766,6 +766,13 @@ function normalizeTitledList(list) {
 
 function normalizeVision(raw, project) {
   const src = raw && typeof raw === 'object' ? raw : {};
+  const validSectionFields = new Set([
+    'mainIdeaMarkdown',
+    'problemMarkdown',
+    'targetUsers',
+    'valuePropositionMarkdown',
+    'consequentIdeas',
+  ]);
   const targetUsers = ensureArray(src.targetUsers)
     .map((u) => textOr(typeof u === 'string' ? u : (u?.name || u?.text)))
     .filter(Boolean);
@@ -782,6 +789,9 @@ function normalizeVision(raw, project) {
     valuePropositionMarkdown: textOr(src.valuePropositionMarkdown || src.businessValue),
     principles: normalizeTitledList(src.principles),
     consequentIdeas: normalizeTitledList(src.consequentIdeas || src.derivedIdeas),
+    acceptedSections: [...new Set(ensureArray(src.acceptedSections)
+      .map((field) => textOr(field))
+      .filter((field) => validSectionFields.has(field)))],
     updatedAt: textOr(src.updatedAt),
   };
 }

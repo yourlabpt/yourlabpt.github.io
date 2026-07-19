@@ -239,6 +239,11 @@ function requestPlanRevision(project, requestId, feedbackMarkdown, actorUserId, 
 }
 function migrateAgentRequests(project) {
   if (!project || typeof project !== 'object') return { changed: false, requests: [] };
+  // This is a one-time legacy migration, not a synchronizer. Re-running it on
+  // page reads can reconstruct deliberately deleted historical tasks.
+  if (Number(project.agentRequestsSchemaVersion) >= 1) {
+    return { changed: false, requests: getAgentRequests(project) };
+  }
   const before = JSON.stringify(ensureArray(project.agentRequests));
   let tasks = workItems.getWorkItems(project);
   let tasksChanged = false;
@@ -258,7 +263,7 @@ function migrateAgentRequests(project) {
       ? (job.status === 'pending_human_review' ? 'waiting_review' : 'completed')
       : ['failed', 'cancelled'].includes(textOr(job.status)) ? 'failed'
         : ['paused'].includes(textOr(job.status)) ? 'waiting_input' : 'in_progress';
-    tasks.push(workItems.normalizeWorkItem({
+    const candidate = workItems.normalizeWorkItem({
       id: `witem_migrated_${hash(job.id)}`, origin: 'agent', executorMode: 'agent',
       title: `Execucao: ${textOr(job.agentType || job.agentId, 'agente')}`,
       descriptionMarkdown: 'Tarefa reconstruida a partir de uma execucao historica do agente.',
@@ -270,7 +275,9 @@ function migrateAgentRequests(project) {
       sourceRefs: [{ type: 'agent_job', id: job.id, label: 'Execucao historica' }, { type: 'agent_request', id: requestId, label: 'Execucao historica' }],
       reviewRequired: job.status === 'pending_human_review', createdAt: job.createdAt, updatedAt: job.updatedAt,
       createdBy: textOr(job.createdBy, 'migration'), updatedBy: 'migration',
-    }, { project }));
+    }, { project });
+    if (workItems.isWorkItemTombstoned(project, candidate)) continue;
+    tasks.push(candidate);
     tasksChanged = true;
   }
   if (tasksChanged) workItems.setWorkItems(project, tasks.slice(0, 2000));

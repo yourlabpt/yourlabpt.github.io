@@ -1337,6 +1337,7 @@
       scheduleVChainCardHydrate(project);
     } else if (stageId === 'idea') {
       hydrateIdeaStage(project);
+      wireIdeaStageEvents(project);
     } else if (stageId === 'discovery') {
       hydrateDiscoveryStage(project);
     } else if (stageId === 'roadmap') {
@@ -1439,6 +1440,7 @@
       valuePropositionMarkdown: v.valuePropositionMarkdown || '',
       principles: Array.isArray(v.principles) ? v.principles : [],
       consequentIdeas: Array.isArray(v.consequentIdeas) ? v.consequentIdeas : [],
+      acceptedSections: Array.isArray(v.acceptedSections) ? v.acceptedSections : [],
     };
   }
 
@@ -1466,11 +1468,14 @@
           ['interpret', 'Interpretar a minha ideia'],
           ['question', 'Fazer uma pergunta útil'],
         ];
-    const section = (title, field, markdownKey, content, extra = '') => content ? `
-      <section class="idea-understanding-section" data-idea-section="${escapeHtml(field)}">
-        <header><h4>${escapeHtml(title)}</h4>${canEdit ? `<div class="pdos-card-actions"><button type="button" class="btn tiny ghost" data-idea-accept="${escapeHtml(field)}">Aceitar</button><button type="button" class="btn tiny ghost" data-idea-edit="${escapeHtml(field)}">Editar</button><button type="button" class="btn tiny ghost" data-idea-reject="${escapeHtml(field)}">Rejeitar</button></div>` : ''}</header>
+    const section = (title, field, markdownKey, content, extra = '') => {
+      const accepted = v.acceptedSections.includes(field);
+      return content ? `
+      <section class="idea-understanding-section ${accepted ? 'is-accepted' : ''}" data-idea-section="${escapeHtml(field)}">
+        <header><h4>${escapeHtml(title)}${accepted ? ' <span class="idea-section-accepted">Aceite</span>' : ''}</h4>${canEdit ? `<div class="pdos-card-actions"><button type="button" class="btn tiny ghost" data-idea-accept="${escapeHtml(field)}" ${accepted ? 'disabled' : ''}>${accepted ? 'Aceite' : 'Aceitar'}</button><button type="button" class="btn tiny ghost" data-idea-edit="${escapeHtml(field)}">Editar</button><button type="button" class="btn tiny ghost" data-idea-reject="${escapeHtml(field)}">Rejeitar</button></div>` : ''}</header>
         ${markdownKey ? `<div class="idea-md" data-idea-md="${escapeHtml(markdownKey)}"></div>` : extra}
       </section>` : '';
+    };
     const usersHtml = v.targetUsers.length
       ? `<div class="idea-users">${v.targetUsers.map((user) => `<span class="idea-user-chip">${escapeHtml(user)}</span>`).join('')}</div>`
       : '';
@@ -1558,7 +1563,23 @@
     });
 
     root.querySelectorAll('[data-idea-accept]').forEach((button) => {
-      button.addEventListener('click', () => showToast('Compreensão aceite.', 'ok'));
+      button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        try {
+          const field = button.dataset.ideaAccept;
+          const nextVision = { ...(project.vision || {}) };
+          nextVision.acceptedSections = [...new Set([
+            ...ensureArray(nextVision.acceptedSections),
+            field,
+          ])];
+          nextVision.updatedAt = new Date().toISOString();
+          await patchIdea(project, { vision: nextVision }, 'Compreensão aceite.');
+        } catch (error) {
+          button.disabled = false;
+          showToast(error.message, 'error');
+        }
+      });
     });
     root.querySelectorAll('[data-idea-edit]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -1579,6 +1600,9 @@
             if (field === 'targetUsers') nextVision[field] = value.split(',').map((item) => item.trim()).filter(Boolean);
             else if (field === 'consequentIdeas') nextVision[field] = value.split('\n').map((title) => title.trim()).filter(Boolean).map((title) => ({ title, descriptionMarkdown: '' }));
             else nextVision[field] = value;
+            nextVision.acceptedSections = ensureArray(nextVision.acceptedSections)
+              .filter((acceptedField) => acceptedField !== field);
+            nextVision.updatedAt = new Date().toISOString();
             const patch = { vision: nextVision };
             if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = value;
             await patchIdea(project, patch);
@@ -1593,6 +1617,9 @@
           const field = button.dataset.ideaReject;
           const nextVision = { ...(project.vision || {}) };
           nextVision[field] = ['targetUsers', 'consequentIdeas'].includes(field) ? [] : '';
+          nextVision.acceptedSections = ensureArray(nextVision.acceptedSections)
+            .filter((acceptedField) => acceptedField !== field);
+          nextVision.updatedAt = new Date().toISOString();
           const patch = { vision: nextVision };
           if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = '';
           await patchIdea(project, patch, 'Secção removida.');

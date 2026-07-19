@@ -26,6 +26,7 @@
     detailChildren: [],
     detailRequest: null,
     detailExecution: null,
+    detailReview: null,
     suggestions: [],
     automationRules: [],
     selectedIds: new Set(),
@@ -476,6 +477,7 @@
     state.detailChildren = payload.children || [];
     state.detailRequest = payload.agentRequest || null;
     state.detailExecution = payload.agentExecution || null;
+    state.detailReview = payload.reviewTarget || null;
     state.canManage = Boolean(payload.canManage);
     state.canPostUpdate = Boolean(payload.canPostUpdate);
     state.canEditUpdate = Boolean(payload.canEditUpdate);
@@ -559,8 +561,9 @@
     if (!el) return;
     el.classList.toggle('hidden', !state.canManage);
     if (!state.canManage) return;
-    const enabled = new Set(state.automationRules.filter((rule) => rule.enabled && rule.autoCreate).map((rule) => rule.ruleId));
-    const labels = { pending_human_review: 'Revisões pendentes', pending_approval: 'Aprovações pendentes', unplanned_functional_requirements: 'Requisitos sem trabalho', missing_phase_deliverables: 'Entregáveis sem trabalho', resolve_stage_blockers: 'Bloqueios da etapa' };
+    const proposedPlans = state.agentRequests.filter((request) =>
+      ['awaiting_approval', 'revision_requested'].includes(request.status)
+    );
     el.innerHTML = `
       <div class="ado-suggestions-head">
         <div>
@@ -586,11 +589,23 @@
           `).join('')}
         </div>
       ` : '<p class="ado-suggestions-empty">Não existem sugestões úteis para o estado actual do projecto.</p>'}
-      <details class="ado-automation-settings">
-        <summary>Configurar criação automática</summary>
-        <p class="muted-text">Regras activadas podem criar tarefas automaticamente e deixam sempre um registo de auditoria.</p>
-        ${Object.entries(labels).map(([ruleId, label]) => `<label class="checkline"><input type="checkbox" data-ado-automation-rule="${ruleId}" ${enabled.has(ruleId) ? 'checked' : ''} /> ${escapeHtml(label)}</label>`).join('')}
-      </details>
+      ${proposedPlans.length ? `
+        <div class="ado-suggestions-head ado-agent-plan-proposals">
+          <div>
+            <span class="ado-suggestions-eyebrow">AINDA NÃO SÃO TAREFAS ACEITES</span>
+            <div class="ado-suggestions-title-row"><strong>Planos propostos por agentes</strong><span class="ado-suggestions-count">${proposedPlans.length}</span></div>
+            <small>Ficam fora da lista principal até rever e aprovar o plano.</small>
+          </div>
+        </div>
+        <div class="ado-suggestion-list">
+          ${proposedPlans.map((request) => `
+            <article class="ado-suggestion-card">
+              <div><strong>${escapeHtml(request.title)}</strong><p>${escapeHtml(request.desiredOutcomeMarkdown || request.requestMarkdown || 'Plano de trabalho proposto pelo agente.')}</p></div>
+              <div><button type="button" class="btn tiny primary" data-ado-open-agent-plan="${escapeHtml(request.id)}">Rever plano</button></div>
+            </article>
+          `).join('')}
+        </div>
+      ` : ''}
     `;
   }
 
@@ -1204,6 +1219,16 @@
           <div class="ado-md-editor" data-ado-md-mount="description"></div>
         </section>
 
+        ${item.origin === 'agent' && item.status === 'waiting_review' && !reviewRef && state.canManage ? `
+          <section class="ado-editor-section ado-editor-result ado-decision-section">
+            <span class="ado-suggestions-eyebrow">AÇÃO NECESSÁRIA</span>
+            <h3 class="ado-section-title">Conteúdo a rever</h3>
+            <p class="ado-section-hint">${state.detailReview?.resultHash ? `Resultado rastreável ${escapeHtml(state.detailReview.resultHash.slice(0, 12))}. ` : ''}A resposta completa e a decisão ficam ligadas à mesma tentativa.</p>
+            <details open class="ado-advanced-details"><summary>Ver resposta completa</summary><pre class="ado-result-body">${escapeHtml(state.detailReview?.rawOutput || state.detailReview?.bodyMarkdown || item.resultSummaryMarkdown || 'O runtime não enviou conteúdo para esta tentativa.')}</pre></details>
+            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-task-review="approved">Aprovar e aplicar</button><button type="button" class="ado-action-ghost" data-ado-task-review="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-task-review="rejected">Rejeitar</button></div>
+          </section>
+        ` : ''}
+
         ${item.origin === 'agent' && !isCoordination ? `
           <section class="ado-editor-section ado-agent-actions">
             <div><h3 class="ado-section-title">Execução manual</h3><p class="ado-section-hint">Use as mesmas instruções fora da plataforma e mantenha o resultado ligado à tarefa.</p></div>
@@ -1226,18 +1251,17 @@
 
         ${item.executionPackage?.promptDiff ? `<section class="ado-editor-section"><details class="ado-advanced-details"><summary>O que mudou neste subprompt</summary><pre>${escapeHtml(item.executionPackage.promptDiff)}</pre></details></section>` : ''}
 
-        ${item.origin === 'agent' && item.resultSummaryMarkdown ? `
+        ${item.origin === 'agent' && item.status !== 'waiting_review' && (state.detailReview?.rawOutput || state.detailReview?.bodyMarkdown || item.resultSummaryMarkdown) ? `
           <section class="ado-editor-section ado-editor-result">
-            <h3 class="ado-section-title">Resultado entregue pelo agente</h3>
+            <h3 class="ado-section-title">${item.status === 'waiting_review' ? 'Conteúdo a rever' : 'Resultado entregue pelo agente'}</h3>
             ${state.detailExecution?.bestEffort ? '<p class="ado-section-hint">Resultado best-effort: pode ser aprovado, devolvido com alterações ou rejeitado.</p>' : ''}
-            <details open class="ado-advanced-details"><summary>Pré-visualizar resultado</summary><pre class="ado-result-body">${escapeHtml(item.resultSummaryMarkdown)}</pre></details>
+            <p class="ado-section-hint">${state.detailReview?.resultHash ? `Resultado rastreável ${escapeHtml(state.detailReview.resultHash.slice(0, 12))}. ` : ''}A resposta completa permanece ligada a esta tentativa.</p>
+            <details open class="ado-advanced-details"><summary>Ver resposta completa</summary><pre class="ado-result-body">${escapeHtml(state.detailReview?.rawOutput || state.detailReview?.bodyMarkdown || item.resultSummaryMarkdown)}</pre></details>
           </section>
         ` : ''}
 
         ${reviewRef && state.canManage ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Decisão da revisão</h3><p class="ado-section-hint">A decisão e a evidência permanecem ligadas à revisão; o estado desta tarefa é sincronizado.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-decision="approved" data-domain-id="${escapeHtml(reviewRef.id)}">Aprovar revisão</button><button type="button" class="ado-action-ghost" data-ado-review-decision="changes_requested" data-domain-id="${escapeHtml(reviewRef.id)}">Pedir alterações</button></div></section>` : ''}
         ${approvalRef && (state.canManage || state.canPostUpdate) ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Decisão da aprovação</h3><p class="ado-section-hint">Registe a decisão sem sair da tarefa.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-approval-decision="approved" data-domain-id="${escapeHtml(approvalRef.id)}">Aprovar entrega</button><button type="button" class="ado-action-ghost" data-ado-approval-decision="rejected" data-domain-id="${escapeHtml(approvalRef.id)}">Rejeitar</button></div></section>` : ''}
-
-        ${item.status === 'waiting_review' && !reviewRef && state.canManage ? `<section class="ado-editor-section ado-decision-section"><h3 class="ado-section-title">Rever resultado</h3><p class="ado-section-hint">Confirme o resultado ou devolva feedback ao mesmo histórico de trabalho.</p><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-task-review="approved">Aprovar e aplicar</button><button type="button" class="ado-action-ghost" data-ado-task-review="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-task-review="rejected">Rejeitar</button></div></section>` : ''}
 
         <section class="ado-editor-section">
           <h3 class="ado-section-title">Critérios de aceitação</h3>
@@ -1543,6 +1567,11 @@
             else if (notificationControl.dataset.requestId) await openRequestPlan(project, notificationControl.dataset.requestId);
           }
         } catch (err) { showToast(err.message, 'error'); }
+        return;
+      }
+      const proposedPlanControl = event.target.closest('[data-ado-open-agent-plan]');
+      if (proposedPlanControl) {
+        await openRequestPlan(project, proposedPlanControl.dataset.adoOpenAgentPlan);
         return;
       }
       const viewBtn = event.target.closest('[data-ado-view]');
@@ -1899,9 +1928,11 @@
       }
 
       if (event.target.closest('[data-ado-delete]') && state.detail?.id && state.detail.id !== '__new__') {
-        if (!window.confirm('Remover esta tarefa?')) return;
+        if (!window.confirm(state.detail.origin === 'agent'
+          ? 'Remover esta tarefa? A plataforma também cancelará a execução ligada no Agent Runtime.'
+          : 'Remover esta tarefa?')) return;
         try {
-          await apiRequest(
+          const payload = await apiRequest(
             `/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}`,
             { method: 'DELETE' },
           );
@@ -1909,7 +1940,9 @@
           leaveEditorMode();
           refreshBoardView();
           fetchMeta(project.id);
-          showToast('Tarefa removida.', 'ok');
+          showToast(payload.cancellation?.requested
+            ? `Tarefa removida; cancelamento do agente ${payload.cancellation.status === 'cancelled' ? 'confirmado' : 'pedido'}.`
+            : 'Tarefa removida.', 'ok');
         } catch (err) {
           showToast(err.message, 'error');
         }
@@ -1922,18 +1955,6 @@
         state.showCompleted = event.target.checked;
         await fetchList(project.id);
         refreshBoardView();
-        return;
-      }
-      const automationRule = event.target.closest('[data-ado-automation-rule]');
-      if (automationRule) {
-        try {
-          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/automations`, { method: 'PATCH', body: { ruleId: automationRule.dataset.adoAutomationRule, enabled: automationRule.checked } });
-          state.automationRules = payload.automationRules || [];
-          showToast('Automação actualizada.', 'ok');
-        } catch (err) {
-          automationRule.checked = !automationRule.checked;
-          showToast(err.message, 'error');
-        }
         return;
       }
       const filter = event.target.closest('[data-ado-filter]');

@@ -234,34 +234,11 @@ function acceptSuggestion(project, suggestionId, taskId, now = new Date().toISOS
 }
 
 function applyConfiguredAutomations(project, options = {}) {
-  const now = options.now || new Date().toISOString();
-  const configured = new Set(ensureArray(project?.taskAutomationRules)
-    .filter((rule) => rule?.enabled === true && rule?.autoCreate === true)
-    .map((rule) => textOr(rule.ruleId))
-    .filter(Boolean));
-  if (!configured.size) return [];
-  const items = workItems.getWorkItems(project);
-  const created = [];
-  ensureArray(project.taskSuggestions).forEach((raw) => {
-    const suggestion = normalizeSuggestion(raw, now);
-    if (suggestion.status !== 'proposed' || !configured.has(suggestion.ruleId)) return;
-    const record = workItems.normalizeWorkItem({
-      ...suggestion.proposedTask,
-      id: `witem_${crypto.randomUUID()}`,
-      origin: suggestion.proposedTask.executorMode === 'agent' ? 'agent' : 'platform',
-      createdAt: now,
-      updatedAt: now,
-      createdBy: 'automation',
-      updatedBy: 'automation',
-      automationRuleId: suggestion.ruleId,
-    }, { project });
-    if (workItems.isWorkItemTombstoned(project, record)) return;
-    items.unshift(record);
-    created.push(record);
-    acceptSuggestion(project, suggestion.id, record.id, now);
-  });
-  if (created.length) workItems.setWorkItems(project, items);
-  return created;
+  // Kept as a compatibility adapter for older callers. Suggestions are
+  // proposals only and become tasks exclusively through acceptSuggestion.
+  void project;
+  void options;
+  return [];
 }
 
 module.exports = {
