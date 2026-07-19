@@ -1538,9 +1538,175 @@
   }
 
   async function patchIdea(project, patch, successMessage = 'Ideia actualizada.') {
-    await apiRequest(`/projects/${encodeURIComponent(project.id)}`, { method: 'PATCH', body: patch });
+    const response = await apiRequest(`/projects/${encodeURIComponent(project.id)}`, {
+      method: 'PATCH',
+      body: patch,
+    });
+    const updated = response?.project;
+    if (updated && window.applyProjectPatch) {
+      window.applyProjectPatch(updated, {
+        tab: 'deliveryos',
+        renderDelivery: true,
+        renderTab: false,
+        renderList: false,
+      });
+    } else if (updated) {
+      window.state.selectedProject = updated;
+      renderAll(updated);
+    } else {
+      await reloadProject(project.id);
+    }
     showToast(successMessage, 'ok');
-    await reloadProject(project.id);
+    return updated || window.state?.selectedProject || project;
+  }
+
+  function ideaActionProject() {
+    return window.state?.selectedProject || null;
+  }
+
+  function setIdeaSectionBusy(sectionEl, message) {
+    if (!sectionEl) return;
+    sectionEl.classList.add('is-busy');
+    sectionEl.querySelectorAll('[data-idea-accept], [data-idea-edit], [data-idea-reject]')
+      .forEach((button) => { button.disabled = true; });
+    let status = sectionEl.querySelector('[data-idea-action-status]');
+    if (!status) {
+      status = document.createElement('span');
+      status.dataset.ideaActionStatus = '';
+      status.className = 'idea-action-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      sectionEl.querySelector('header')?.appendChild(status);
+    }
+    status.textContent = message;
+  }
+
+  function resetIdeaSection(project) {
+    if (project) renderCardFeed(project);
+  }
+
+  function openIdeaInlineEditor(sectionEl, project, field) {
+    if (!sectionEl || sectionEl.querySelector('[data-idea-inline-editor]')) return;
+    const vision = ideaVision(project);
+    let current = vision[field];
+    if (field === 'targetUsers') current = ensureArray(current).join(', ');
+    if (field === 'consequentIdeas') {
+      current = ensureArray(current)
+        .map((item) => item.title || item.descriptionMarkdown || '')
+        .filter(Boolean)
+        .join('\n');
+    }
+    sectionEl.classList.add('is-editing');
+    sectionEl.querySelector('header')?.insertAdjacentHTML(
+      'afterend',
+      `<div class="idea-inline-editor" data-idea-inline-editor>
+        <label>Editar conteúdo<textarea rows="5">${escapeHtml(String(current || ''))}</textarea></label>
+        <div class="pdos-card-actions">
+          <button type="button" class="btn tiny primary" data-idea-inline-save>Guardar alterações</button>
+          <button type="button" class="btn tiny ghost" data-idea-inline-cancel>Cancelar</button>
+        </div>
+      </div>`
+    );
+    const editor = sectionEl.querySelector('[data-idea-inline-editor]');
+    const close = () => {
+      sectionEl.classList.remove('is-editing');
+      editor?.remove();
+    };
+    editor?.querySelector('[data-idea-inline-cancel]')?.addEventListener('click', close);
+    editor?.querySelector('[data-idea-inline-save]')?.addEventListener('click', async (event) => {
+      const saveButton = event.currentTarget;
+      const value = editor.querySelector('textarea').value.trim();
+      saveButton.disabled = true;
+      saveButton.textContent = 'A guardar…';
+      setIdeaSectionBusy(sectionEl, 'A guardar alterações…');
+      try {
+        const latestProject = ideaActionProject() || project;
+        const nextVision = { ...(latestProject.vision || {}) };
+        if (field === 'targetUsers') {
+          nextVision[field] = value.split(',').map((item) => item.trim()).filter(Boolean);
+        } else if (field === 'consequentIdeas') {
+          nextVision[field] = value.split('\n')
+            .map((title) => title.trim())
+            .filter(Boolean)
+            .map((title) => ({ title, descriptionMarkdown: '' }));
+        } else {
+          nextVision[field] = value;
+        }
+        nextVision.acceptedSections = ensureArray(nextVision.acceptedSections)
+          .filter((acceptedField) => acceptedField !== field);
+        nextVision.updatedAt = new Date().toISOString();
+        const patch = { vision: nextVision };
+        if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = value;
+        await patchIdea(latestProject, patch);
+      } catch (error) {
+        showToast(error.message, 'error');
+        resetIdeaSection(ideaActionProject() || project);
+      }
+    });
+    editor?.querySelector('textarea')?.focus();
+    editor?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function wireIdeaActionDelegation() {
+    const feed = $('pdosCardFeed');
+    if (!feed || feed.dataset.ideaActionsWired) return;
+    feed.dataset.ideaActionsWired = '1';
+    feed.addEventListener('click', async (event) => {
+      const button = event.target.closest(
+        '[data-idea-accept], [data-idea-edit], [data-idea-reject]'
+      );
+      if (!button || !feed.contains(button) || button.disabled) return;
+      const project = ideaActionProject();
+      const sectionEl = button.closest('[data-idea-section]');
+      if (!project || !sectionEl) return;
+
+      if (button.matches('[data-idea-edit]')) {
+        event.preventDefault();
+        openIdeaInlineEditor(sectionEl, project, button.dataset.ideaEdit);
+        return;
+      }
+
+      if (button.matches('[data-idea-accept]')) {
+        event.preventDefault();
+        const field = button.dataset.ideaAccept;
+        sectionEl.classList.add('is-accepted');
+        button.textContent = 'A aceitar…';
+        setIdeaSectionBusy(sectionEl, 'A guardar aceitação…');
+        try {
+          const nextVision = { ...(project.vision || {}) };
+          nextVision.acceptedSections = [...new Set([
+            ...ensureArray(nextVision.acceptedSections),
+            field,
+          ])];
+          nextVision.updatedAt = new Date().toISOString();
+          await patchIdea(project, { vision: nextVision }, 'Compreensão aceite.');
+        } catch (error) {
+          showToast(error.message, 'error');
+          resetIdeaSection(ideaActionProject() || project);
+        }
+        return;
+      }
+
+      event.preventDefault();
+      if (!window.confirm('Remover esta parte da compreensão actual?')) return;
+      const field = button.dataset.ideaReject;
+      button.textContent = 'A rejeitar…';
+      sectionEl.classList.add('is-rejecting');
+      setIdeaSectionBusy(sectionEl, 'A remover esta secção…');
+      try {
+        const nextVision = { ...(project.vision || {}) };
+        nextVision[field] = ['targetUsers', 'consequentIdeas'].includes(field) ? [] : '';
+        nextVision.acceptedSections = ensureArray(nextVision.acceptedSections)
+          .filter((acceptedField) => acceptedField !== field);
+        nextVision.updatedAt = new Date().toISOString();
+        const patch = { vision: nextVision };
+        if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = '';
+        await patchIdea(project, patch, 'Secção removida.');
+      } catch (error) {
+        showToast(error.message, 'error');
+        resetIdeaSection(ideaActionProject() || project);
+      }
+    });
   }
 
   function wireIdeaStageEvents(project) {
@@ -1561,71 +1727,6 @@
       try {
         await patchIdea(project, { originalIdeaText: root.querySelector('[data-idea-original-input]')?.value || '' }, 'Ideia original guardada.');
       } catch (error) { showToast(error.message, 'error'); }
-    });
-
-    root.querySelectorAll('[data-idea-accept]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        if (button.disabled) return;
-        button.disabled = true;
-        try {
-          const field = button.dataset.ideaAccept;
-          const nextVision = { ...(project.vision || {}) };
-          nextVision.acceptedSections = [...new Set([
-            ...ensureArray(nextVision.acceptedSections),
-            field,
-          ])];
-          nextVision.updatedAt = new Date().toISOString();
-          await patchIdea(project, { vision: nextVision }, 'Compreensão aceite.');
-        } catch (error) {
-          button.disabled = false;
-          showToast(error.message, 'error');
-        }
-      });
-    });
-    root.querySelectorAll('[data-idea-edit]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const field = button.dataset.ideaEdit;
-        const sectionEl = button.closest('[data-idea-section]');
-        if (!sectionEl || sectionEl.querySelector('[data-idea-inline-editor]')) return;
-        const vision = ideaVision(project);
-        let current = vision[field];
-        if (field === 'targetUsers') current = ensureArray(current).join(', ');
-        if (field === 'consequentIdeas') current = ensureArray(current).map((item) => item.title || item.descriptionMarkdown || '').filter(Boolean).join('\n');
-        sectionEl.insertAdjacentHTML('beforeend', `<div class="idea-inline-editor" data-idea-inline-editor><textarea rows="5">${escapeHtml(String(current || ''))}</textarea><div class="pdos-card-actions"><button type="button" class="btn tiny primary" data-idea-inline-save>Guardar</button><button type="button" class="btn tiny ghost" data-idea-inline-cancel>Cancelar</button></div></div>`);
-        const editor = sectionEl.querySelector('[data-idea-inline-editor]');
-        editor.querySelector('[data-idea-inline-cancel]').addEventListener('click', () => editor.remove());
-        editor.querySelector('[data-idea-inline-save]').addEventListener('click', async () => {
-          try {
-            const value = editor.querySelector('textarea').value.trim();
-            const nextVision = { ...(project.vision || {}) };
-            if (field === 'targetUsers') nextVision[field] = value.split(',').map((item) => item.trim()).filter(Boolean);
-            else if (field === 'consequentIdeas') nextVision[field] = value.split('\n').map((title) => title.trim()).filter(Boolean).map((title) => ({ title, descriptionMarkdown: '' }));
-            else nextVision[field] = value;
-            nextVision.acceptedSections = ensureArray(nextVision.acceptedSections)
-              .filter((acceptedField) => acceptedField !== field);
-            nextVision.updatedAt = new Date().toISOString();
-            const patch = { vision: nextVision };
-            if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = value;
-            await patchIdea(project, patch);
-          } catch (error) { showToast(error.message, 'error'); }
-        });
-      });
-    });
-    root.querySelectorAll('[data-idea-reject]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        if (!confirm('Remover esta parte da compreensão actual?')) return;
-        try {
-          const field = button.dataset.ideaReject;
-          const nextVision = { ...(project.vision || {}) };
-          nextVision[field] = ['targetUsers', 'consequentIdeas'].includes(field) ? [] : '';
-          nextVision.acceptedSections = ensureArray(nextVision.acceptedSections)
-            .filter((acceptedField) => acceptedField !== field);
-          nextVision.updatedAt = new Date().toISOString();
-          const patch = { vision: nextVision };
-          if (field === 'mainIdeaMarkdown') patch.ideaBriefMarkdown = '';
-          await patchIdea(project, patch, 'Secção removida.');
-        } catch (error) { showToast(error.message, 'error'); }
-      });
     });
 
     const requestGuidance = async (mode, userMessage = '') => {
@@ -5198,6 +5299,7 @@
   }
 
   function wirePdosEvents() {
+    wireIdeaActionDelegation();
     $('pdosAddInfoForm')?.addEventListener('submit', submitAddInfo);
     $('pdosAddInfoCancel')?.addEventListener('click', closeAddInfoModal);
     $('pdosPromptClose')?.addEventListener('click', closePromptWorkbench);

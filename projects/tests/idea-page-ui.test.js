@@ -20,6 +20,27 @@ test('Idea page wires section actions after rendering the workspace', () => {
   assert.match(source, /data-idea-reject/);
 });
 
+test('Idea section actions use a stable delegated controller with visible feedback', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),
+    'utf8',
+  );
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'index.html'),
+    'utf8',
+  );
+
+  assert.match(source, /function wireIdeaActionDelegation\(\)/);
+  assert.match(source, /feed\.dataset\.ideaActionsWired = '1'/);
+  assert.match(source, /feed\.addEventListener\('click'/);
+  assert.match(source, /setIdeaSectionBusy\(sectionEl, 'A guardar aceitação…'\)/);
+  assert.match(source, /openIdeaInlineEditor\(sectionEl, project, button\.dataset\.ideaEdit\)/);
+  assert.match(source, /setIdeaSectionBusy\(sectionEl, 'A remover esta secção…'\)/);
+  assert.match(source, /window\.applyProjectPatch\(updated/);
+  assert.match(html, /styles\.css\?v=83/);
+  assert.match(html, /delivery-os-ui\.js\?v=65/);
+});
+
 test('runtime monitoring is idempotent across Idea page re-renders', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),

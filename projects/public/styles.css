@@ -6298,6 +6298,51 @@ body.help-drawer-open {
 
 .idea-understanding-section.is-accepted {
   border-top-color: color-mix(in srgb, var(--success, #2f9e62) 55%, var(--line));
+  background: color-mix(in srgb, var(--success, #2f9e62) 5%, transparent);
+  border-radius: 10px;
+  padding-inline: 12px;
+}
+
+.idea-understanding-section.is-busy {
+  cursor: progress;
+}
+
+.idea-understanding-section.is-rejecting {
+  opacity: 0.58;
+}
+
+.idea-understanding-section.is-editing {
+  border-top-color: var(--accent);
+}
+
+.idea-action-status {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.idea-inline-editor {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent) 8%);
+}
+
+.idea-inline-editor label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.idea-understanding-section button:disabled {
+  cursor: progress;
+  opacity: 0.55;
 }
 
 .idea-section-accepted {
