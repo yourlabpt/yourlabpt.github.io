@@ -265,6 +265,7 @@
         maxWallClockMinutes: payload.progress?.maxWallClockMinutes ?? payload.agentJob?.budget?.maxWallClockMinutes ?? 0,
         phase: payload.progress?.phase || '',
         checkpointBoundary: payload.progress?.checkpointBoundary || '',
+        hardwareSafety: payload.progress?.hardwareSafety || payload.agentJob?.hardwareSafety || {},
         checkpoint: payload.checkpoint || {},
         reviewPacket: payload.reviewPacket || {},
         bestEffort: payload.progress?.bestEffort === true || payload.agentJob?.bestEffort === true,
@@ -943,6 +944,12 @@
     const cancellable = !['completed', 'failed', 'cancelled', 'waiting_review', 'pending_human_review'].includes(status);
     const reviewPacket = execution.reviewPacket || {};
     const checkpoint = execution.checkpoint || {};
+    const hardware = execution.hardwareSafety || checkpoint.budgetState?.hardwareSafety || {};
+    const hardwareAssessment = hardware.assessment || {};
+    const hardwareSnapshot = hardwareAssessment.snapshot || {};
+    const hardwareReasons = Array.isArray(hardwareAssessment.reasons)
+      ? hardwareAssessment.reasons
+      : [];
     const reviewChecklist = Array.isArray(reviewPacket.acceptanceChecklist)
       ? reviewPacket.acceptanceChecklist
       : [];
@@ -990,6 +997,9 @@
       run_waiting_review: 'Pronto para revisão humana',
       run_budget_exhausted: 'Limite atingido com checkpoint',
       worker_failed: 'Worker encontrou uma falha',
+      hardware_assessed: 'Segurança do Mac verificada',
+      resource_guard_paused: 'Pausa de proteção do Mac',
+      provider_timeout: 'Modelo excedeu o tempo seguro',
     };
     const describeEvent = (event) => {
       const data = event.data || {};
@@ -1018,6 +1028,13 @@
       if (event.type === 'llm_response') {
         return `Resposta recebida${data.tokens ? ` · ${Number(data.tokens).toLocaleString('pt-PT')} tokens` : ''}${data.summary ? ` — ${data.summary}` : ''}`;
       }
+      if (event.type === 'hardware_assessed') {
+        const snapshot = data.snapshot || {};
+        return `${data.safe === false ? 'Execução local bloqueada' : 'Recursos disponíveis'} · memória ${Number(snapshot.availableMemoryPercent || 0).toFixed(0)}% · térmico ${snapshot.thermalState || 'desconhecido'}${data.reasons?.length ? ` — ${data.reasons.join('; ')}` : ''}`;
+      }
+      if (event.type === 'resource_guard_paused' || event.type === 'provider_timeout') {
+        return data.message || 'A execução foi interrompida e guardada num checkpoint seguro.';
+      }
       return event.message || event.summary || event.detail || '';
     };
     return `
@@ -1031,6 +1048,7 @@
           <span>Uso externo <strong>${Number(execution.externalTokensUsed || 0).toLocaleString('pt-PT')}${execution.externalMaxTokens ? ` / ${Number(execution.externalMaxTokens).toLocaleString('pt-PT')}` : ''}</strong></span>
           <span>Custo <strong>€${Number(execution.costUsed || 0).toFixed(2)}${execution.maxCost ? ` / €${Number(execution.maxCost).toFixed(2)}` : ''}</strong></span>
         </div>
+        ${hardwareSnapshot.capturedAt ? `<section class="${hardwareAssessment.safe === false ? 'ado-agent-quality-warning' : 'ado-advanced-details'}"><strong>Proteção do Mac · ${hardwareAssessment.safe === false ? 'execução pausada' : 'recursos seguros'}</strong><p>${escapeHtml(hardwareSnapshot.model || 'Apple Silicon')} · memória disponível ${Number(hardwareSnapshot.availableMemoryPercent || 0).toFixed(0)}% · térmico ${escapeHtml(hardwareSnapshot.thermalState || 'desconhecido')}${hardwareAssessment.estimatedInputTokens ? ` · contexto estimado ${Number(hardwareAssessment.estimatedInputTokens).toLocaleString('pt-PT')} tokens` : ''}</p>${hardwareReasons.length ? `<ul>${hardwareReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}${hardware.cooldownUntil ? `<small>Cooldown até ${escapeHtml(formatWhen(hardware.cooldownUntil))}.</small>` : ''}</section>` : ''}
         ${total ? `<div class="ado-agent-progress"><div><span>Progresso</span><strong>${current}/${total} passos · ${progress}%</strong></div><progress max="100" value="${progress}"></progress></div>` : ''}
         ${goalTotal ? `<div class="ado-agent-goals"><span>Critérios verificados</span><strong>${goalMet}/${goalTotal}</strong></div>` : ''}
         ${Object.keys(checkpoint).length ? `<details class="ado-advanced-details"><summary>Último checkpoint${execution.checkpointBoundary ? ` · ${escapeHtml(execution.checkpointBoundary)}` : ''}</summary><p>${escapeHtml(checkpoint.contextSummary || checkpoint.boundary || 'Estado persistido e pronto para continuação.')}</p>${Array.isArray(checkpoint.completedStepIds) ? `<small>${checkpoint.completedStepIds.length} passo(s) persistidos.</small>` : ''}</details>` : ''}

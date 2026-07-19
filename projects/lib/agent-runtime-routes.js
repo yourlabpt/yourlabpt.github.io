@@ -595,6 +595,11 @@ function registerAgentRuntimeRoutes(app, deps) {
             job.costUsed = Math.max(0, Number(progress.costUsed) || 0);
             job.currentPhase = textOr(progress.phase);
             job.checkpointBoundary = textOr(progress.checkpointBoundary);
+            job.hardwareSafety = progress.hardwareSafety
+              && typeof progress.hardwareSafety === 'object'
+              && !Array.isArray(progress.hardwareSafety)
+              ? progress.hardwareSafety
+              : job.hardwareSafety || {};
             job.budget = {
               ...(job.budget || {}),
               maxTokens: Math.max(0, Number(progress.maxTokens) || 0),
@@ -1285,6 +1290,7 @@ function registerAgentRuntimeRoutes(app, deps) {
             maxWallClockMinutes: Math.max(0, Number(dispatch.progress?.maxWallClockMinutes ?? agentJob.budget?.maxWallClockMinutes) || 0),
             phase: textOr(dispatch.progress?.phase ?? agentJob.currentPhase),
             checkpointBoundary: textOr(dispatch.progress?.checkpointBoundary ?? agentJob.checkpointBoundary),
+            hardwareSafety: dispatch.progress?.hardwareSafety || agentJob.hardwareSafety || {},
             bestEffort: agentJob.bestEffort === true,
             qualityWarnings: ensureArray(agentJob.qualityWarnings),
           },

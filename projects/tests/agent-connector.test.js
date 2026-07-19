@@ -221,8 +221,27 @@ describe('secure outbound agent connector', () => {
     store.sync(connector.id, claim.id, claim.leaseToken, {
       status: 'running',
       events: [{ id: 1, type: 'planning' }, { id: 1, type: 'planning' }],
+      progress: {
+        completed: 0,
+        total: 2,
+        hardwareSafety: {
+          enabled: true,
+          assessment: {
+            safe: true,
+            snapshot: {
+              model: 'Mac16,7',
+              availableMemoryPercent: 62,
+              thermalState: 'nominal',
+            },
+          },
+        },
+      },
     });
     assert.equal(store.events(claim.id).length, 1);
+    assert.equal(
+      store.getDispatch(claim.id).progress.hardwareSafety.assessment.snapshot.model,
+      'Mac16,7'
+    );
     for (let start = 2; start <= 202; start += 100) {
       const end = Math.min(202, start + 99);
       store.sync(connector.id, claim.id, claim.leaseToken, {
