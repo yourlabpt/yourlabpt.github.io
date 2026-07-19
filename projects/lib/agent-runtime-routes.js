@@ -117,7 +117,15 @@ const RUNTIME_ACTIVE_STATUSES = new Set([
 ]);
 
 const STALE_DISPATCH_MS = 120000;
-const BUDGET_FIELDS = ['maxTokens', 'maxWallClockMinutes', 'maxSubtasks'];
+const BUDGET_FIELDS = [
+  'maxTokens',
+  'externalMaxTokens',
+  'maxCost',
+  'maxWallClockMinutes',
+  'maxSubtasks',
+  'planningWaveSize',
+  'maxTotalSteps',
+];
 
 function resolveExecutionConfig(connectionMode, request, task, bodyOptions = {}, bodyBudget = {}) {
   const requestOptions = request?.runtimeConfig?.options || {};
@@ -128,14 +136,23 @@ function resolveExecutionConfig(connectionMode, request, task, bodyOptions = {},
       budget: { ...requestBudget, ...(bodyBudget || {}) },
     };
   }
-  const approvedSettings = task?.executionSettings || {};
+  const approvedSettings = workItems.normalizeExecutionSettings({
+    ...requestOptions,
+    ...(task?.executionSettings && typeof task.executionSettings === 'object'
+      ? task.executionSettings
+      : {}),
+  });
   const budget = { ...requestBudget };
   for (const key of BUDGET_FIELDS) {
     const value = Number(approvedSettings[key]);
-    if (Number.isFinite(value) && value > 0) budget[key] = value;
+    if (Number.isFinite(value) && value >= 0) budget[key] = value;
   }
   return {
-    options: { ...requestOptions, ...approvedSettings },
+    options: {
+      ...requestOptions,
+      ...approvedSettings,
+      executionSettings: approvedSettings,
+    },
     budget,
   };
 }
@@ -288,6 +305,69 @@ function registerAgentRuntimeRoutes(app, deps) {
     } catch (error) { return res.status(401).json({ message: error.message }); }
   });
 
+  app.get('/api/projects/projects/:projectId/knowledge-references', authMiddleware, loadProjectForUser, (req, res) => (
+    res.json({ references: ensureArray(req.loadedProject?.knowledgeReferences) })
+  ));
+
+  function persistOfficialReferences(project, parsed, provenance = {}) {
+    if (!parsed || typeof parsed !== 'object') return [];
+    const candidates = [
+      ...ensureArray(parsed.references),
+      ...ensureArray(parsed.sources),
+      ...ensureArray(parsed.documentationReferences),
+      ...ensureArray(parsed.officialSources),
+      ...ensureArray(parsed.research?.references),
+    ];
+    const accepted = candidates.map((entry) => {
+      const source = typeof entry === 'string' ? { url: entry } : entry;
+      const url = textOr(source?.url);
+      if (!/^https:\/\//i.test(url)) return null;
+      let hostname = '';
+      try { hostname = new URL(url).hostname.toLowerCase(); } catch { return null; }
+      const official = source?.official === true
+        || hostname.endsWith('.gov')
+        || hostname.endsWith('.europa.eu')
+        || /(^|\.)docs?\.|(^|\.)developer\.|w3\.org$|ietf\.org$|rfc-editor\.org$|iso\.org$|ecma-international\.org$/.test(hostname);
+      if (!official) return null;
+      const excerpt = textOr(source.excerpt || source.snippet).slice(0, 8000);
+      return {
+        id: textOr(source.id, `kref_${crypto.randomUUID()}`),
+        url,
+        title: textOr(source.title, hostname),
+        publisher: textOr(source.publisher, hostname),
+        version: textOr(source.version),
+        retrievedAt: textOr(source.retrievedAt, nowIso()),
+        contentHash: textOr(
+          source.contentHash,
+          crypto.createHash('sha256').update(`${url}\n${excerpt}`).digest('hex')
+        ),
+        excerpt,
+        technology: textOr(source.technology),
+        scope: textOr(source.scope),
+        confidence: Math.max(0, Math.min(1, Number(source.confidence) || 0.8)),
+        sourceType: textOr(source.sourceType, 'vendor_documentation'),
+        official: true,
+        provenance: {
+          promptRunId: textOr(provenance.promptRunId),
+          workItemId: textOr(provenance.workItemId),
+          agentId: textOr(provenance.agentId),
+        },
+        createdAt: nowIso(),
+      };
+    }).filter(Boolean);
+    if (!accepted.length) return [];
+    const existing = ensureArray(project.knowledgeReferences);
+    const byKey = new Map(existing.map((entry) => [`${entry.url}:${entry.version || ''}`, entry]));
+    accepted.forEach((entry) => byKey.set(`${entry.url}:${entry.version || ''}`, {
+      ...byKey.get(`${entry.url}:${entry.version || ''}`),
+      ...entry,
+    }));
+    project.knowledgeReferences = [...byKey.values()]
+      .sort((a, b) => String(b.retrievedAt).localeCompare(String(a.retrievedAt)))
+      .slice(0, 1000);
+    return accepted;
+  }
+
   async function acceptAgentOutput(projectId, runId, rawInput, deferApply = true) {
     const parsedFromRaw = deliveryOs.parseAgentJsonOutput(String(rawInput || ''));
     const parsed = parsedFromRaw.parsed;
@@ -304,6 +384,11 @@ function registerAgentRuntimeRoutes(app, deps) {
       if (run.resultHash === resultHash && run.status === 'pending_review') return;
       const agentJob = ensureArray(project.agentJobs).find((entry) => entry.promptRunId === runId);
       const delegatedTask = workItems.findWorkItem(project, agentJob?.workItemId || run.workItemId);
+      const persistedReferences = persistOfficialReferences(project, parsed, {
+        promptRunId: runId,
+        workItemId: delegatedTask?.id,
+        agentId: agentJob?.agentId,
+      });
 
       if (delegatedTask?.taskRole === 'coordination') {
         const checked = stageTransitions.validateBundle(project, delegatedTask, parsed || rawOutput);
@@ -377,7 +462,7 @@ function registerAgentRuntimeRoutes(app, deps) {
           actorUserId: 'agent_runtime',
           projectId,
           action: 'agent_runtime_bundle_submitted',
-          details: { promptRunId: runId, parentTaskId: delegatedTask.id, taskIds: checked.tasks.map((task) => task.id) },
+          details: { promptRunId: runId, parentTaskId: delegatedTask.id, taskIds: checked.tasks.map((task) => task.id), referenceCount: persistedReferences.length },
         });
         return;
       }
@@ -423,7 +508,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         actorUserId: 'agent_runtime',
         projectId,
         action: 'agent_runtime_output_submitted',
-        details: { promptRunId: runId, deferApply },
+        details: { promptRunId: runId, deferApply, referenceCount: persistedReferences.length },
       });
     });
 
@@ -504,9 +589,16 @@ function registerAgentRuntimeRoutes(app, deps) {
             job.subtasksCompleted = Math.max(0, Number(progress.completed) || 0);
             job.subtasksTotal = Math.max(0, Number(progress.total) || 0);
             job.tokensUsed = Math.max(0, Number(progress.tokensUsed) || 0);
+            job.localTokensUsed = Math.max(0, Number(progress.localTokensUsed) || 0);
+            job.externalTokensUsed = Math.max(0, Number(progress.externalTokensUsed) || 0);
+            job.costUsed = Math.max(0, Number(progress.costUsed) || 0);
+            job.currentPhase = textOr(progress.phase);
+            job.checkpointBoundary = textOr(progress.checkpointBoundary);
             job.budget = {
               ...(job.budget || {}),
               maxTokens: Math.max(0, Number(progress.maxTokens) || 0),
+              externalMaxTokens: Math.max(0, Number(progress.externalMaxTokens) || 0),
+              maxCost: Math.max(0, Number(progress.maxCost) || 0),
               maxWallClockMinutes: Math.max(0, Number(progress.maxWallClockMinutes) || 0),
             };
             job.goalProgress = {
@@ -939,6 +1031,14 @@ function registerAgentRuntimeRoutes(app, deps) {
           completionPolicy: {
             maxNoProgressIterations: Number(options.maxNoProgressIterations) || 3,
           },
+          executionSettings: workItems.normalizeExecutionSettings(options.executionSettings || options),
+          objective: {
+            statement: delegatedTask.executionPackage?.objective
+              || delegatedTask.descriptionMarkdown,
+            acceptanceCriteria: delegatedTask.acceptanceCriteriaMarkdown
+              || delegatedTask.executionPackage?.acceptanceCriteriaMarkdown,
+            expectedArtifacts: ensureArray(delegatedTask.expectedOutputs),
+          },
           budget: budget || {},
           frozenAt: nowIso(),
         });
@@ -1172,14 +1272,23 @@ function registerAgentRuntimeRoutes(app, deps) {
           dispatch: publicDispatch(dispatch),
           events,
           progress: {
-            current: Number(agentJob.subtasksCompleted) || 0,
-            total: Number(agentJob.subtasksTotal) || 0,
-            tokensUsed: Number(agentJob.tokensUsed) || 0,
-            maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
-            maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
+            current: Number(dispatch.progress?.completed ?? agentJob.subtasksCompleted) || 0,
+            total: Number(dispatch.progress?.total ?? agentJob.subtasksTotal) || 0,
+            tokensUsed: Number(dispatch.progress?.tokensUsed ?? agentJob.tokensUsed) || 0,
+            localTokensUsed: Number(dispatch.progress?.localTokensUsed ?? agentJob.localTokensUsed) || 0,
+            externalTokensUsed: Number(dispatch.progress?.externalTokensUsed ?? agentJob.externalTokensUsed) || 0,
+            costUsed: Number(dispatch.progress?.costUsed ?? agentJob.costUsed) || 0,
+            maxTokens: Math.max(0, Number(dispatch.progress?.maxTokens ?? agentJob.budget?.maxTokens) || 0),
+            externalMaxTokens: Math.max(0, Number(dispatch.progress?.externalMaxTokens ?? agentJob.budget?.externalMaxTokens) || 0),
+            maxCost: Math.max(0, Number(dispatch.progress?.maxCost ?? agentJob.budget?.maxCost) || 0),
+            maxWallClockMinutes: Math.max(0, Number(dispatch.progress?.maxWallClockMinutes ?? agentJob.budget?.maxWallClockMinutes) || 0),
+            phase: textOr(dispatch.progress?.phase ?? agentJob.currentPhase),
+            checkpointBoundary: textOr(dispatch.progress?.checkpointBoundary ?? agentJob.checkpointBoundary),
             bestEffort: agentJob.bestEffort === true,
             qualityWarnings: ensureArray(agentJob.qualityWarnings),
           },
+          checkpoint: dispatch.checkpoint || {},
+          reviewPacket: dispatch.reviewPacket || {},
           runtimeMeta: {
             checkedAt: nowIso(),
             reachable: Boolean(connector?.online),
@@ -1354,7 +1463,11 @@ function registerAgentRuntimeRoutes(app, deps) {
       }
 
       if (connectionMode === 'remote_pull') {
-        const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'cancel');
+        const dispatch = connectorStore?.setDesiredAction(
+          agentJob.dispatchId || agentJob.id || runId,
+          'cancel',
+          { idempotencyKey: textOr(req.headers['idempotency-key'], `cancel:${runId}:${nowIso()}`) }
+        );
         if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
         const status = dispatch.status === 'cancelled' ? 'cancelled' : 'cancel_requested';
         await updateStore(async (mutableStore) => {
@@ -1422,7 +1535,11 @@ function registerAgentRuntimeRoutes(app, deps) {
       if (connectionMode === 'disabled') return res.status(503).json({ message: 'Execucao por agente desativada.' });
 
       if (connectionMode === 'remote_pull') {
-        const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'pause');
+        const dispatch = connectorStore?.setDesiredAction(
+          agentJob.dispatchId || agentJob.id || runId,
+          'pause',
+          { idempotencyKey: textOr(req.headers['idempotency-key'], `pause:${runId}:${nowIso()}`) }
+        );
         if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
         await updateStore(async (mutableStore) => {
           const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
@@ -1465,7 +1582,11 @@ function registerAgentRuntimeRoutes(app, deps) {
       if (!agentJob) return res.status(404).json({ message: 'Agent run nao encontrado.' });
 
       if (connectionMode === 'remote_pull') {
-        const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'finish_partial');
+        const dispatch = connectorStore?.setDesiredAction(
+          agentJob.dispatchId || agentJob.id || runId,
+          'finish_partial',
+          { idempotencyKey: textOr(req.headers['idempotency-key'], `finish_partial:${runId}:${nowIso()}`) }
+        );
         if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
         await updateStore(async (mutableStore) => {
           const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
@@ -1515,7 +1636,14 @@ function registerAgentRuntimeRoutes(app, deps) {
       }
 
       if (connectionMode === 'remote_pull') {
-        const dispatch = connectorStore?.setDesiredAction(agentJob.dispatchId || agentJob.id || runId, 'resume');
+        const dispatch = connectorStore?.setDesiredAction(
+          agentJob.dispatchId || agentJob.id || runId,
+          'resume',
+          {
+            idempotencyKey: textOr(req.headers['idempotency-key'], `resume:${runId}:${nowIso()}`),
+            settingsPatch: req.body?.settings,
+          }
+        );
         if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
         await updateStore(async (mutableStore) => {
           const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
@@ -1567,6 +1695,86 @@ function registerAgentRuntimeRoutes(app, deps) {
     } catch (error) {
       return res.status(500).json({ message: error.message });
     }
+  });
+
+  app.post('/api/projects/agent-runs/:runId/sync-now', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+    try {
+      const runId = req.params.runId;
+      const store = await readStore();
+      const agentJob = store.projects
+        .flatMap((entry) => ensureArray(entry.agentJobs))
+        .find((job) => job.promptRunId === runId || job.id === runId);
+      if (!agentJob) return res.status(404).json({ message: 'Agent run nao encontrado.' });
+      if (connectionMode !== 'remote_pull') {
+        return res.status(400).json({ message: 'A sincronizacao imediata aplica-se ao conector remoto.' });
+      }
+      const dispatch = connectorStore?.setDesiredAction(
+        agentJob.dispatchId || agentJob.id || runId,
+        'sync_now',
+        { idempotencyKey: textOr(req.headers['idempotency-key'], `sync_now:${runId}:${nowIso()}`) }
+      );
+      if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
+      await updateStore(async (mutableStore) => {
+        const mutableProject = mutableStore.projects.find((entry) => entry.id === agentJob.projectId);
+        const task = workItems.findWorkItem(mutableProject, agentJob.workItemId);
+        if (!task) return;
+        const list = workItems.getWorkItems(mutableProject);
+        workItems.setWorkItems(mutableProject, list.map((entry) => entry.id === task.id
+          ? workItems.normalizeWorkItem({
+            ...task,
+            currentAction: 'Sincronizacao imediata pedida ao Agent Runtime.',
+            updatedAt: nowIso(),
+          }, { project: mutableProject })
+          : entry));
+      });
+      return res.status(202).json({
+        pending: true,
+        offline: !connectorStore.activeConnector()?.online,
+        dispatch: publicDispatch(dispatch),
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/projects/agent-runs/:runId/events/stream', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+    const runId = req.params.runId;
+    const store = await readStore();
+    const agentJob = store.projects
+      .flatMap((entry) => ensureArray(entry.agentJobs))
+      .find((job) => job.promptRunId === runId || job.id === runId);
+    if (!agentJob) return res.status(404).json({ message: 'Agent run nao encontrado.' });
+    const dispatch = connectorStore?.findDispatch(agentJob.dispatchId || agentJob.id || runId);
+    if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    let cursor = Math.max(0, Number(req.query.afterEventId) || 0);
+    let closed = false;
+    const close = () => { closed = true; clearInterval(interval); clearTimeout(timeout); res.end(); };
+    const publish = () => {
+      if (closed) return;
+      const current = connectorStore.findDispatch(dispatch.id);
+      if (!current) return close();
+      const events = connectorStore.events(dispatch.id, cursor);
+      if (events.length) cursor = Math.max(cursor, ...events.map((event) => Number(event.id) || 0));
+      if (events.length || current.commandVersion !== current.acknowledgedCommandVersion) {
+        res.write(`event: progress\ndata: ${JSON.stringify({
+          dispatch: publicDispatch(current),
+          events,
+          cursor,
+        })}\n\n`);
+      } else {
+        res.write(`: keepalive ${Date.now()}\n\n`);
+      }
+      if (['waiting_review', 'completed', 'failed', 'cancelled'].includes(current.status)) close();
+    };
+    const interval = setInterval(publish, 500);
+    const timeout = setTimeout(close, 25_000);
+    req.on('close', close);
+    publish();
+    return undefined;
   });
 
   app.delete('/api/projects/agent-runs/:runId', authMiddleware, requireAgentProjectEditor, async (req, res) => {

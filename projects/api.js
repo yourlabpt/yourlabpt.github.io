@@ -1025,6 +1025,7 @@ function registerRequirementsPlatform(app, options) {
       meetingImpactScopes: deliveryOs.MEETING_IMPACT_SCOPES,
       traceNodeTypes: deliveryOs.TRACE_NODE_TYPES,
       agentModelProfiles: require('./lib/execution-plans').MODEL_PROFILES,
+      agentRoleRouting: require('./lib/execution-plans').ROLE_MODEL_PROFILES,
       defaultAdminEmail: process.env.REQ_PLATFORM_SUPER_ADMIN_EMAIL || 'admin@yourlab.local',
       note: 'Se for primeiro acesso, use a password definida em REQ_PLATFORM_SUPER_ADMIN_PASSWORD ou change-me-now.',
       agentRuntime: {

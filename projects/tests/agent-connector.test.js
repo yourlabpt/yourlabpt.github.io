@@ -109,9 +109,12 @@ describe('secure outbound agent connector', () => {
       { maxTokens: 999_999 }
     );
     assert.deepEqual(remote.budget, {
-      maxTokens: 120_000,
+      maxTokens: 0,
+      externalMaxTokens: 120_000,
       maxWallClockMinutes: 45,
       maxSubtasks: 8,
+      planningWaveSize: 8,
+      maxTotalSteps: 0,
     });
     assert.equal(remote.options.modelProfileId, 'large');
     assert.equal(remote.options.enableWebSearch, false);
@@ -350,9 +353,11 @@ describe('secure outbound agent connector', () => {
       'context',
       'contextSnapshotHash',
       'contract',
+      'execution',
       'frozenAt',
       'identifiers',
       'instructions',
+      'objective',
       'outputContract',
       'requirements',
       'taskGraph',
@@ -383,7 +388,7 @@ describe('secure outbound agent connector', () => {
       name: 'Portable Runtime',
       publicKey: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       capabilities: {
-        protocol: { id: CONTRACT_ID, versions: [1] },
+        protocol: { id: CONTRACT_ID, versions: [1, 2] },
         runtime: { kind: 'custom-agent-platform', version: '2.0.0' },
         agents: [{
           id: 'implementation-agent',
@@ -495,6 +500,35 @@ describe('secure outbound agent connector', () => {
       localJobId: 'local-controlled', status: 'self_review',
     });
     assert.equal(synced.desiredAction, null);
+    db.close();
+  });
+
+  it('versions and idempotently acknowledges immediate sync commands', () => {
+    const { db, store, connector } = fixture();
+    const queued = enqueue(store);
+    const claim = store.claim(connector.id);
+    store.ack(connector.id, queued.id, claim.leaseToken, 'local-sync');
+    const first = store.setDesiredAction(queued.id, 'sync_now', {
+      idempotencyKey: 'sync-command-1',
+      settingsPatch: { tokenPolicy: { external: { maxTokens: 250000 } } },
+    });
+    const replay = store.setDesiredAction(queued.id, 'sync_now', {
+      idempotencyKey: 'sync-command-1',
+    });
+    assert.equal(first.commandVersion, 1);
+    assert.equal(first.latestCommand.settingsPatch.tokenPolicy.external.maxTokens, 250000);
+    assert.equal(replay.commandVersion, 1);
+    const synced = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-sync',
+      status: 'executing',
+      acknowledgedCommandVersion: 1,
+      progress: { completed: 2, total: 4 },
+      checkpoint: { boundary: 'step_completed' },
+    });
+    assert.equal(synced.desiredAction, null);
+    assert.equal(synced.acknowledgedCommandVersion, 1);
+    assert.deepEqual(synced.progress, { completed: 2, total: 4 });
+    assert.equal(store.commands(queued.id)[0].status, 'acknowledged');
     db.close();
   });
 

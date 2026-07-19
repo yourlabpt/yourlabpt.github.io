@@ -54,6 +54,8 @@
   let draftTimer = null;
   let searchTimer = null;
   let connectionPollTimer = null;
+  let connectionStreamAbort = null;
+  let connectionStreamKey = '';
   let runtimeHealthTimer = null;
 
   function $(id) {
@@ -104,6 +106,43 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.message || 'Pedido falhou.');
     return data;
+  }
+
+  async function openRunEventStream(project, runId, taskId) {
+    const key = `${runId}:${taskId}`;
+    if (connectionStreamKey === key && connectionStreamAbort) return;
+    connectionStreamAbort?.abort();
+    connectionStreamAbort = new AbortController();
+    connectionStreamKey = key;
+    const token = window.state?.token || localStorage.getItem('requirements_platform_token');
+    try {
+      const response = await fetch(`${API}/agent-runs/${encodeURIComponent(runId)}/events/stream`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: connectionStreamAbort.signal,
+      });
+      if (!response.ok || !response.body) throw new Error('Event stream unavailable');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (state.selectedId === taskId && connectionStreamKey === key) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+        if (blocks.some((block) => block.includes('event: progress'))) {
+          clearTimeout(connectionPollTimer);
+          connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 0);
+        }
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    } finally {
+      if (connectionStreamKey === key && state.selectedId === taskId) {
+        connectionStreamAbort = null;
+        setTimeout(() => openRunEventStream(project, runId, taskId), 1000);
+      }
+    }
   }
 
   function showToast(message, type) {
@@ -190,6 +229,7 @@
   async function pollConnectedTask(project, runId, taskId) {
     clearTimeout(connectionPollTimer);
     if (!runId || state.selectedId !== taskId) return;
+    void openRunEventStream(project, runId, taskId);
     try {
       const priorEvents = state.detailExecution?.events || [];
       const afterEventId = priorEvents.reduce(
@@ -210,12 +250,22 @@
         runId: payload.agentJob?.id || runId,
         status: payload.dispatch?.status || payload.agentJob?.status || '',
         desiredAction: payload.dispatch?.desiredAction || null,
+        latestCommand: payload.dispatch?.latestCommand || null,
         events: mergedEvents,
         progressCurrent: payload.progress?.current ?? payload.agentJob?.subtasksCompleted ?? 0,
         progressTotal: payload.progress?.total ?? payload.agentJob?.subtasksTotal ?? 0,
         tokensUsed: payload.progress?.tokensUsed ?? payload.agentJob?.tokensUsed ?? 0,
+        localTokensUsed: payload.progress?.localTokensUsed ?? 0,
+        externalTokensUsed: payload.progress?.externalTokensUsed ?? 0,
+        costUsed: payload.progress?.costUsed ?? 0,
         maxTokens: payload.progress?.maxTokens ?? payload.agentJob?.budget?.maxTokens ?? 0,
+        externalMaxTokens: payload.progress?.externalMaxTokens ?? payload.agentJob?.budget?.externalMaxTokens ?? 0,
+        maxCost: payload.progress?.maxCost ?? payload.agentJob?.budget?.maxCost ?? 0,
         maxWallClockMinutes: payload.progress?.maxWallClockMinutes ?? payload.agentJob?.budget?.maxWallClockMinutes ?? 0,
+        phase: payload.progress?.phase || '',
+        checkpointBoundary: payload.progress?.checkpointBoundary || '',
+        checkpoint: payload.checkpoint || {},
+        reviewPacket: payload.reviewPacket || {},
         bestEffort: payload.progress?.bestEffort === true || payload.agentJob?.bestEffort === true,
         qualityWarnings: payload.progress?.qualityWarnings || payload.agentJob?.qualityWarnings || [],
         error: payload.agentJob?.error || null,
@@ -226,9 +276,12 @@
       const status = $('workItemEditor')?.querySelector('[data-ado-connection-status]');
       if (status) status.textContent = payload.agentJob?.status === 'pending_human_review' ? 'Resultado recebido. Precisa da sua revisão.' : payload.workItem?.currentAction || `Agente: ${payload.agentJob?.status || 'em execução'}.`;
       if (['pending_human_review', 'completed', 'failed', 'cancelled'].includes(payload.agentJob?.status)) {
+        connectionStreamAbort?.abort();
+        connectionStreamAbort = null;
+        connectionStreamKey = '';
         await fetchDetail(project.id, taskId); paintEditor(project); await fetchList(project.id); return;
       }
-      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 1500);
+      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 5000);
     } catch {
       connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 4000);
     }
@@ -831,8 +884,18 @@
     const execution = state.detailExecution;
     if (!execution) return '<p class="ado-agent-log-empty">A execução ainda não produziu eventos.</p>';
     const events = execution.events || [];
-    const status = execution.status || 'queued';
-    const desiredAction = execution.desiredAction || '';
+    const rawStatus = String(execution.status || 'queued').toLowerCase();
+    const desiredAction = String(execution.desiredAction || '').toLowerCase();
+    const latestAction = String(execution.latestCommand?.action || '').toLowerCase();
+    const activeStatuses = new Set(['claimed', 'running', 'planning', 'researching', 'executing', 'self_review', 'verifying']);
+    const status = desiredAction === 'pause'
+      || (latestAction === 'pause' && activeStatuses.has(rawStatus))
+      ? 'pausing'
+      : desiredAction === 'cancel'
+        ? 'cancel_requested'
+        : desiredAction === 'resume' && rawStatus === 'paused'
+          ? 'reconnecting'
+          : rawStatus;
     const current = Number(execution.progressCurrent) || 0;
     const total = Number(execution.progressTotal) || 0;
     const progress = total ? Math.min(100, Math.round((current / total) * 100)) : 0;
@@ -841,10 +904,28 @@
     const goalTotal = Number(latestGoal?.data?.total) || 0;
     const active = ['claimed', 'running', 'planning', 'executing', 'self_review', 'verifying'].includes(status);
     const cancellable = !['completed', 'failed', 'cancelled', 'waiting_review', 'pending_human_review'].includes(status);
+    const reviewPacket = execution.reviewPacket || {};
+    const checkpoint = execution.checkpoint || {};
+    const reviewChecklist = Array.isArray(reviewPacket.acceptanceChecklist)
+      ? reviewPacket.acceptanceChecklist
+      : [];
+    const reviewExceptions = reviewChecklist.filter((criterion) =>
+      !['passed', 'waived'].includes(String(criterion.status || '').toLowerCase())
+    );
+    const reviewScopeCount = Array.isArray(reviewPacket.scopeCompleted)
+      ? reviewPacket.scopeCompleted.length
+      : Number(reviewPacket.scopeCompleted || 0);
+    const reviewArtifacts = Array.isArray(reviewPacket.artifacts)
+      ? reviewPacket.artifacts.length
+      : 0;
+    const reviewVerifications = Array.isArray(reviewPacket.verificationResults)
+      ? reviewPacket.verificationResults.length
+      : 0;
     const statusLabels = {
       queued: 'Na fila', claimed: 'Recebida pelo runtime', running: 'Em execução',
       planning: 'A planear', executing: 'A executar', self_review: 'Em verificação',
-      verifying: 'Em verificação', paused: 'Em pausa', cancel_requested: 'A cancelar',
+      researching: 'Em investigação', verifying: 'Em verificação', pausing: 'A pausar',
+      paused: 'Em pausa', cancel_requested: 'A cancelar', reconnecting: 'A retomar',
       connection_lost: 'Ligação perdida', waiting_review: 'Aguarda avaliação',
       pending_human_review: 'Aguarda avaliação', completed: 'Concluída',
       failed: 'Falhou', cancelled: 'Cancelada',
@@ -858,6 +939,20 @@
       peer_review: 'Revisão independente', paused: 'Execução pausada',
       failed: 'Falha', completed: 'Execução concluída', review_ready: 'Pronto para avaliação',
       wave_started: 'Fase iniciada', wave_done: 'Fase concluída',
+      run_created: 'Execução durável criada', attempt_claimed: 'Worker assumiu a execução',
+      provider_request_started: 'Modelo iniciou o passo',
+      provider_response_received: 'Modelo terminou o passo',
+      action_proposed: 'Próxima ação delimitada',
+      checkpoint_committed: 'Checkpoint persistido',
+      tool_call_completed: 'Ferramenta concluída',
+      side_effect_started: 'Alteração preparada',
+      side_effect_committed: 'Alteração confirmada',
+      artifact_created: 'Artefacto produzido',
+      criterion_evaluated: 'Critério avaliado',
+      step_completed: 'Passo durável concluído',
+      run_waiting_review: 'Pronto para revisão humana',
+      run_budget_exhausted: 'Limite atingido com checkpoint',
+      worker_failed: 'Worker encontrou uma falha',
     };
     const describeEvent = (event) => {
       const data = event.data || {};
@@ -894,16 +989,24 @@
           <span class="ado-agent-log-status">${escapeHtml(statusLabels[status] || status)}</span>
           <small>${events.length} evento${events.length === 1 ? '' : 's'} recentes · ${Number(execution.tokensUsed || 0).toLocaleString('pt-PT')} tokens · ${Number(execution.maxTokens) > 0 ? `limite ${Number(execution.maxTokens).toLocaleString('pt-PT')}` : 'tokens locais sem limite'}${execution.updatedAt ? ` · sync ${escapeHtml(formatWhen(execution.updatedAt))}` : ''}</small>
         </div>
+        <div class="ado-agent-goals">
+          <span>Uso local <strong>${Number(execution.localTokensUsed || 0).toLocaleString('pt-PT')}</strong></span>
+          <span>Uso externo <strong>${Number(execution.externalTokensUsed || 0).toLocaleString('pt-PT')}${execution.externalMaxTokens ? ` / ${Number(execution.externalMaxTokens).toLocaleString('pt-PT')}` : ''}</strong></span>
+          <span>Custo <strong>€${Number(execution.costUsed || 0).toFixed(2)}${execution.maxCost ? ` / €${Number(execution.maxCost).toFixed(2)}` : ''}</strong></span>
+        </div>
         ${total ? `<div class="ado-agent-progress"><div><span>Progresso</span><strong>${current}/${total} passos · ${progress}%</strong></div><progress max="100" value="${progress}"></progress></div>` : ''}
         ${goalTotal ? `<div class="ado-agent-goals"><span>Critérios verificados</span><strong>${goalMet}/${goalTotal}</strong></div>` : ''}
+        ${Object.keys(checkpoint).length ? `<details class="ado-advanced-details"><summary>Último checkpoint${execution.checkpointBoundary ? ` · ${escapeHtml(execution.checkpointBoundary)}` : ''}</summary><p>${escapeHtml(checkpoint.contextSummary || checkpoint.boundary || 'Estado persistido e pronto para continuação.')}</p>${Array.isArray(checkpoint.completedStepIds) ? `<small>${checkpoint.completedStepIds.length} passo(s) persistidos.</small>` : ''}</details>` : ''}
+        ${Object.keys(reviewPacket).length ? `<section class="ado-agent-quality-warning"><strong>Pacote de revisão · ${reviewExceptions.length ? `${reviewExceptions.length} exceção(ões)` : 'sem exceções'}</strong><p>${escapeHtml(reviewPacket.outcomeSummary || 'Resultado preparado para avaliação.')}</p>${reviewExceptions.length ? `<ul>${reviewExceptions.slice(0, 5).map((criterion) => `<li><strong>${escapeHtml(criterion.description || criterion.id || 'Critério')}</strong> — ${escapeHtml(criterion.detail || criterion.status || 'sem evidência')}</li>`).join('')}</ul>` : ''}<small>${reviewScopeCount} passo(s) · ${reviewChecklist.length} critério(s) · ${reviewArtifacts} artefacto(s) · ${reviewVerifications} verificação(ões)${Array.isArray(reviewPacket.risksAndUncertainties) ? ` · ${reviewPacket.risksAndUncertainties.length} risco(s)` : ''}</small></section>` : ''}
         ${execution.bestEffort ? `<div class="ado-agent-quality-warning"><strong>Resultado disponível para decisão humana</strong><p>O agente atingiu o limite de correções e enviou o melhor resultado produzido. Reveja os avisos antes de aprovar.</p>${(execution.qualityWarnings || []).length ? `<ul>${execution.qualityWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : ''}</div>` : ''}
-        ${desiredAction ? `<p class="ado-agent-control-pending">Comando pendente: ${escapeHtml(({ pause: 'pausar', resume: 'continuar', cancel: 'cancelar', finish_partial: 'enviar progresso para avaliação' })[desiredAction] || desiredAction)}</p>` : ''}
+        ${desiredAction ? `<p class="ado-agent-control-pending">Comando pendente: ${escapeHtml(({ pause: 'pausar', resume: 'continuar', cancel: 'cancelar', finish_partial: 'enviar progresso para avaliação', sync_now: 'sincronizar agora' })[desiredAction] || desiredAction)}</p>` : ''}
         ${execution.error ? `<p class="ado-agent-error">${escapeHtml(execution.error)}</p>` : ''}
         ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
           ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
           ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
           ${status === 'failed' ? '<button type="button" class="ado-action-primary" data-ado-run-control="retry">Retomar do último checkpoint</button>' : ''}
           ${['waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-focus-review>Avaliar resultado</button>' : ''}
+          ${!desiredAction && !['completed', 'cancelled'].includes(status) ? '<button type="button" class="ado-action-ghost" data-ado-run-control="sync-now">Sincronizar agora</button>' : ''}
           ${cancellable && desiredAction !== 'cancel' ? '<button type="button" class="ado-action-danger" data-ado-run-control="cancel">Cancelar execução</button>' : ''}
         </div>` : ''}
       </div>
@@ -951,6 +1054,31 @@
     const agentPairingGuidance = agentUnavailableReason
       ? `<p class="ado-section-hint">${escapeHtml(agentUnavailableReason)}</p>`
       : '';
+    const executionSettingsMarkup = (item.executorMode === 'agent' || item.executorMode === 'both' || item.origin === 'agent') ? `
+      <details class="ado-advanced-details ado-execution-settings">
+        <summary>Configuração da execução do agente</summary>
+        <div class="ado-advanced-grid">
+          <label>Agente preferido<input data-ado-setting="agentId" value="${escapeHtml(executionSettings.agentId || item.agentId || '')}" /></label>
+          <label>Perfil do modelo<select data-ado-setting="modelProfileId"><option value="small" ${executionSettings.modelProfileId === 'small' ? 'selected' : ''}>small</option><option value="medium" ${!executionSettings.modelProfileId || executionSettings.modelProfileId === 'medium' ? 'selected' : ''}>medium</option><option value="large" ${executionSettings.modelProfileId === 'large' ? 'selected' : ''}>large</option><option value="high" ${executionSettings.modelProfileId === 'high' ? 'selected' : ''}>high</option><option value="max" ${executionSettings.modelProfileId === 'max' ? 'selected' : ''}>max</option><option value="long_context" ${executionSettings.modelProfileId === 'long_context' ? 'selected' : ''}>long_context</option></select></label>
+          <label>Tokens locais<select data-ado-setting="tokenBudgetMode"><option value="auto" ${executionSettings.tokenBudgetMode !== 'limited' ? 'selected' : ''}>Sem limite</option><option value="limited" ${executionSettings.tokenBudgetMode === 'limited' ? 'selected' : ''}>Com limite</option></select></label>
+          <label>Limite local<input type="number" min="0" data-ado-setting="maxTokens" value="${executionSettings.maxTokens || 0}" /></label>
+          <label>Tokens externos<select data-ado-setting="externalTokenBudgetMode"><option value="limited" ${executionSettings.externalTokenBudgetMode !== 'unlimited' ? 'selected' : ''}>Com limite</option><option value="unlimited" ${executionSettings.externalTokenBudgetMode === 'unlimited' ? 'selected' : ''}>Sem limite</option></select></label>
+          <label>Limite externo<input type="number" min="0" data-ado-setting="externalMaxTokens" value="${executionSettings.externalMaxTokens || 120000}" /></label>
+          <label>Custo máximo (EUR, 0 = sem limite)<input type="number" min="0" step="0.01" data-ado-setting="maxCost" value="${executionSettings.costPolicy?.maxCost || 0}" /></label>
+          <label>Tempo máximo (min, 0 = sem limite)<input type="number" min="0" data-ado-setting="maxWallClockMinutes" value="${executionSettings.maxWallClockMinutes || 0}" /></label>
+          <label>Input alvo<input type="number" data-ado-setting="targetInputTokens" value="${executionSettings.targetInputTokens || 14000}" /></label>
+          <label>Output alvo<input type="number" data-ado-setting="targetOutputTokens" value="${executionSettings.targetOutputTokens || 2500}" /></label>
+          <label>Passos por vaga<input type="number" min="1" data-ado-setting="planningWaveSize" value="${executionSettings.planningWaveSize || executionSettings.maxSubtasks || 8}" /></label>
+          <label>Máximo total de passos (0 = sem limite)<input type="number" min="0" data-ado-setting="maxTotalSteps" value="${executionSettings.maxTotalSteps || 0}" /></label>
+          <label>Checkpoint a cada (seg)<input type="number" min="10" data-ado-setting="checkpointIntervalSeconds" value="${executionSettings.checkpointPolicy?.intervalSeconds || 30}" /></label>
+          <label>Verificar objetivos a cada N passos<input type="number" min="1" max="10" data-ado-setting="goalCheckInterval" value="${executionSettings.goalCheckInterval || 3}" /></label>
+          <label>Ferramentas permitidas<input data-ado-setting="allowedMcpTools" value="${escapeHtml((executionSettings.allowedMcpTools || item.requiredMcpTools || []).join(', '))}" placeholder="project.read, docs.search, repo.patch" /></label>
+          <label class="checkline"><input type="checkbox" data-ado-setting="enableWebSearch" ${executionSettings.enableWebSearch !== false ? 'checked' : ''}> Pesquisa web</label>
+        </div>
+        <p class="ado-section-hint">A configuração fica congelada por tentativa. Alterações durante uma pausa aplicam-se à continuação ou à próxima tentativa.</p>
+        ${state.canManage ? '<button type="button" class="ado-action-ghost" data-ado-save-execution-settings>Guardar configuração</button>' : ''}
+      </details>
+    ` : '';
 
     const assigneeOptions = members.map((m) => {
       const u = users.find((entry) => entry.id === m.userId);
@@ -989,22 +1117,11 @@
             <div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>
             <div class="ado-manual-output-pane hidden" data-ado-bundle-pane><label>Pacote JSON completo<textarea rows="14" data-ado-bundle-raw placeholder='{"requestId":"…","requestVersion":1,"taskOutputs":[…]}'></textarea></label><p class="ado-section-hint" data-ado-bundle-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-bundle>Validar pacote</button><button type="button" class="ado-action-primary" data-ado-submit-bundle disabled>Enviar tudo para revisão</button></div></div>
             ${children.some((child) => child.status === 'waiting_review') && state.canManage ? `<div class="ado-bundle-review"><strong>Resultados prontos para decisão</strong><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-bundle="approved">Aprovar e aplicar todos</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="rejected">Rejeitar</button></div></div>` : ''}
-            <details class="ado-advanced-details ado-execution-settings"><summary>Configuração da execução do agente</summary><div class="ado-advanced-grid">
-              <label>Agente preferido<input data-ado-setting="agentId" value="${escapeHtml(executionSettings.agentId || item.agentId || '')}" /></label>
-              <label>Perfil do modelo<select data-ado-setting="modelProfileId"><option value="small" ${executionSettings.modelProfileId === 'small' ? 'selected' : ''}>small</option><option value="medium" ${!executionSettings.modelProfileId || executionSettings.modelProfileId === 'medium' ? 'selected' : ''}>medium</option><option value="large" ${executionSettings.modelProfileId === 'large' ? 'selected' : ''}>large</option><option value="long_context" ${executionSettings.modelProfileId === 'long_context' ? 'selected' : ''}>long_context</option></select></label>
-              <label>Política de tokens<select data-ado-setting="tokenBudgetMode"><option value="auto" ${executionSettings.tokenBudgetMode !== 'limited' ? 'selected' : ''}>Automática — ilimitado local</option><option value="limited" ${executionSettings.tokenBudgetMode === 'limited' ? 'selected' : ''}>Aplicar limite</option></select></label>
-              <label>Limite de tokens externos<input type="number" min="1" data-ado-setting="maxTokens" value="${executionSettings.maxTokens || 120000}" /></label>
-              <label>Tempo máximo (min)<input type="number" data-ado-setting="maxWallClockMinutes" value="${executionSettings.maxWallClockMinutes || 45}" /></label>
-              <label>Input alvo<input type="number" data-ado-setting="targetInputTokens" value="${executionSettings.targetInputTokens || 14000}" /></label>
-              <label>Output alvo<input type="number" data-ado-setting="targetOutputTokens" value="${executionSettings.targetOutputTokens || 2500}" /></label>
-              <label>Subtarefas máximas<input type="number" data-ado-setting="maxSubtasks" value="${executionSettings.maxSubtasks || 8}" /></label>
-              <label>Verificar objetivos a cada N passos<input type="number" min="1" max="10" data-ado-setting="goalCheckInterval" value="${executionSettings.goalCheckInterval || 3}" /></label>
-              <label>Ferramentas MCP permitidas<input data-ado-setting="allowedMcpTools" value="${escapeHtml((executionSettings.allowedMcpTools || item.requiredMcpTools || []).join(', '))}" placeholder="project.read, requirements.read" /></label>
-              <label class="checkline"><input type="checkbox" data-ado-setting="enableWebSearch" ${executionSettings.enableWebSearch !== false ? 'checked' : ''}> Pesquisa web</label>
-            </div><p class="ado-section-hint">No modo automático, modelos locais não param por tokens; ligações a modelos externos respeitam o limite configurado. O agente verifica objetivos por marcos e sempre antes de concluir.</p><button type="button" class="ado-action-ghost" data-ado-save-execution-settings>Guardar configuração</button></details>
+            ${executionSettingsMarkup}
             ${request?.diffSummary?.requestPromptDiff ? `<details class="ado-advanced-details"><summary>Diferenças do pedido</summary><pre>${escapeHtml(request.diffSummary.requestPromptDiff)}</pre></details>` : ''}
           </section>
         ` : ''}
+        ${!isCoordination ? executionSettingsMarkup : ''}
 
         <div class="ado-task-meta">
           <div class="ado-meta-status-row">
@@ -1396,6 +1513,8 @@
                 ? 'Recuperação pedida; o agente continuará do último checkpoint.'
                 : action === 'finish-partial'
                   ? 'O progresso será preparado para avaliação.'
+                  : action === 'sync-now'
+                    ? 'Sincronização imediata pedida.'
                   : 'Cancelamento pedido.', 'ok');
           pollConnectedTask(project, state.detailExecution.runId, state.detail.id);
         } catch (err) {

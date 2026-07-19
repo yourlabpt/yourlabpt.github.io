@@ -91,14 +91,16 @@ function syncDomainTasks(project, options = {}) {
       continue;
     }
     if (!createMissing || domain.record.status !== 'pending') continue;
-    next.push(workItems.normalizeWorkItem({
+    const candidate = workItems.normalizeWorkItem({
       id: `witem_${crypto.randomUUID()}`, origin: 'platform', executorMode: 'human', title: domain.title,
       descriptionMarkdown: domain.type === 'review' ? 'Analisar a revisao e registar a decisao e evidencia.' : 'Analisar a entrega e registar a decisao de aprovacao.',
       acceptanceCriteriaMarkdown: 'A decisao foi registada e a tarefa ficou concluida.', complexity: 'medium', priority: 'high',
       status, deliveryStageId: domain.stageId, assigneeUserId: domain.responsible, approverUserId: domain.responsible,
       clientVisible: domain.type === 'approval' && Boolean(domain.responsible), sourceRefs: [{ ...ref, label: domain.title }],
       createdBy: 'system', updatedBy: 'system',
-    }, { project }));
+    }, { project });
+    if (workItems.isWorkItemTombstoned(project, candidate)) continue;
+    next.push(candidate);
     synced += 1;
   }
   if (synced) workItems.setWorkItems(project, next);
@@ -112,7 +114,7 @@ function syncImplementationTasks(project) {
   legacy.forEach((task, index) => {
     const legacyId = textOr(task?.id, `legacy_${index + 1}`);
     if (workItems.findBySourceRef(next, { type: 'implementation_task', id: legacyId })) return;
-    next.push(workItems.normalizeWorkItem({
+    const candidate = workItems.normalizeWorkItem({
       id: `witem_${crypto.randomUUID()}`, origin: textOr(task?.agentType || task?.agentId) ? 'agent' : 'human',
       executorMode: textOr(task?.agentType || task?.agentId) ? 'agent' : 'human', title: textOr(task?.title, 'Tarefa de implementacao'),
       descriptionMarkdown: textOr(task?.descriptionMarkdown || task?.description, task?.title || 'Tarefa migrada da fase de implementacao.'),
@@ -122,7 +124,9 @@ function syncImplementationTasks(project) {
       assigneeUserId: textOr(task?.assigneeUserId || task?.assignedTo), agentId: textOr(task?.agentId || task?.agentType),
       linkedRequirementIds: ensureArray(task?.linkedRequirementIds || task?.requirementIds), sourceRefs: [{ type: 'implementation_task', id: legacyId }],
       resultSummaryMarkdown: textOr(task?.resultMarkdown), createdAt: textOr(task?.createdAt), updatedAt: textOr(task?.updatedAt), createdBy: textOr(task?.createdBy, 'migration'), updatedBy: textOr(task?.updatedBy, 'migration'),
-    }, { project }));
+    }, { project });
+    if (workItems.isWorkItemTombstoned(project, candidate)) return;
+    next.push(candidate);
     synced += 1;
   });
   workItems.setWorkItems(project, next);
@@ -133,7 +137,9 @@ function syncImplementationTasks(project) {
 
 function syncWorkItemsFromExecutionPlan(project, plan) {
   const list = workItems.getWorkItems(project);
-  const tasks = ensureArray(plan?.tasks);
+  const tasks = ensureArray(plan?.tasks).filter((task) => (
+    !workItems.isWorkItemTombstoned(project, buildWorkItemFromExecutionPlanTask(plan, task, project))
+  ));
   const existingPlanTasks = list.filter((item) => item.executionPlanId === plan?.id
     || ensureArray(item.sourceRefs).some((ref) => ref.type === 'execution_plan_task' && ref.id.startsWith(`${plan?.id}:`)));
   if (!existingPlanTasks.length && tasks.length) {
@@ -183,8 +189,10 @@ function syncWorkItemsFromExecutionPlan(project, plan) {
       }, { project });
       synced += 1;
     } else {
-      updated.push(built);
-      synced += 1;
+      if (!workItems.isWorkItemTombstoned(project, built)) {
+        updated.push(built);
+        synced += 1;
+      }
     }
   }
 

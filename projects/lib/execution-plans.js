@@ -28,6 +28,22 @@ const MODEL_PROFILES = {
     maxTasks: 20,
     responseGuidance: 'Pode resolver tarefas mais ambíguas, mantendo decisões e IDs explícitos.',
   },
+  high: {
+    id: 'high',
+    label: 'High',
+    targetInputTokens: 48000,
+    targetOutputTokens: 7000,
+    maxTasks: 20,
+    responseGuidance: 'Modelo competente para investigação, arquitectura e implementação delimitada.',
+  },
+  max: {
+    id: 'max',
+    label: 'Max',
+    targetInputTokens: 120000,
+    targetOutputTokens: 12000,
+    maxTasks: 12,
+    responseGuidance: 'Revisão crítica independente, com evidência e sem alterações ao artefacto.',
+  },
   long_context: {
     id: 'long_context',
     label: 'Long context',
@@ -36,6 +52,16 @@ const MODEL_PROFILES = {
     maxTasks: 32,
     responseGuidance: 'Apto para contexto longo; ainda assim devolver JSON bounded e verificável.',
   },
+};
+
+const ROLE_MODEL_PROFILES = {
+  classifier: 'small',
+  goalSetter: 'medium',
+  planner: 'medium',
+  requirements: 'medium',
+  researcher: 'high',
+  coder: 'high',
+  reviewer: 'max',
 };
 
 const STAGE_TRANSITION_TASKS = {
@@ -1570,6 +1596,7 @@ function getGateCheckAgentForTransition(fromStageId, toStageId) {
 
 module.exports = {
   MODEL_PROFILES,
+  ROLE_MODEL_PROFILES,
   STAGE_TRANSITION_TASKS,
   estimateTokens,
   resolveModelProfile,

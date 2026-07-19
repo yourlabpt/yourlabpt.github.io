@@ -148,7 +148,16 @@ function registerAgentConnectorRoutes(app, deps) {
 
   app.post('/api/projects/agent-connectors/claim', connectorAuth, async (req, res) => {
     try {
-      const dispatch = store.claim(req.agentConnector.id);
+      const waitMs = Math.max(
+        0,
+        Math.min(25_000, Number(req.body?.waitSeconds) * 1000 || 0)
+      );
+      const deadline = Date.now() + waitMs;
+      let dispatch = store.claim(req.agentConnector.id);
+      while (!dispatch && Date.now() < deadline && !req.destroyed) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        dispatch = store.claim(req.agentConnector.id);
+      }
       if (!dispatch) return res.status(204).end();
       const response = res.json({ dispatch });
       void onAudit('agent_dispatch_claimed', {

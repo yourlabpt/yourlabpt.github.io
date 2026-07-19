@@ -1,7 +1,7 @@
 /** Tasks — canonical project work model. */
 const crypto = require('crypto');
 
-const WORK_ITEMS_SCHEMA_VERSION = 4;
+const WORK_ITEMS_SCHEMA_VERSION = 5;
 const UNCLASSIFIED_STAGE_ID = 'unclassified';
 const ORIGINS = new Set(['human', 'agent', 'platform']);
 const EXECUTOR_MODES = new Set(['human', 'agent', 'both']);
@@ -146,21 +146,148 @@ function normalizeTaskActivity(raw, options = {}) {
 function normalizeStringList(raw) {
   return [...new Set(ensureArray(raw).map(String).map((entry) => entry.trim()).filter(Boolean))];
 }
+function normalizeLimitPolicy(raw, defaults = {}) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const mode = src.mode === 'limited' ? 'limited' : (src.mode === 'unlimited' ? 'unlimited' : defaults.mode || 'unlimited');
+  const maxTokens = Math.max(0, Number(src.maxTokens ?? defaults.maxTokens) || 0);
+  return { mode, ...(mode === 'limited' ? { maxTokens } : {}) };
+}
 function normalizeExecutionSettings(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
+  const legacyTokenMode = src.tokenBudgetMode === 'limited' ? 'limited' : 'unlimited';
+  const tokenPolicy = {
+    local: normalizeLimitPolicy(src.tokenPolicy?.local, {
+      mode: legacyTokenMode,
+      maxTokens: src.maxTokens,
+    }),
+    external: normalizeLimitPolicy(src.tokenPolicy?.external, {
+      mode: src.externalTokenBudgetMode === 'unlimited' ? 'unlimited' : 'limited',
+      maxTokens: src.externalMaxTokens || src.maxTokens || 120000,
+    }),
+  };
+  const maxWallClockMinutes = Math.max(
+    0,
+    Number(src.timePolicy?.maxWallClockMinutes ?? src.maxWallClockMinutes) || 0
+  );
+  const timeMode = src.timePolicy?.mode === 'unlimited' || maxWallClockMinutes === 0
+    ? 'unlimited'
+    : 'limited';
+  const planningWaveSize = Math.max(1, Number(src.planningWaveSize || src.maxSubtasks) || 8);
+  const checkpointIntervalSeconds = Math.max(
+    10,
+    Math.min(3600, Number(src.checkpointPolicy?.intervalSeconds ?? src.checkpointIntervalSeconds) || 30)
+  );
+  const maxCost = Math.max(0, Number(src.costPolicy?.maxCost ?? src.maxCost) || 0);
   return {
+    schemaVersion: 2,
     version: Math.max(1, Number(src.version) || 1), agentId: textOr(src.agentId),
     modelProfileId: textOr(src.modelProfileId, 'medium'),
     targetInputTokens: Math.max(0, Number(src.targetInputTokens) || 0),
     targetOutputTokens: Math.max(0, Number(src.targetOutputTokens) || 0),
-    tokenBudgetMode: src.tokenBudgetMode === 'limited' ? 'limited' : 'auto',
+    tokenPolicy,
+    tokenBudgetMode: tokenPolicy.local.mode === 'limited' ? 'limited' : 'auto',
+    externalTokenBudgetMode: tokenPolicy.external.mode,
+    externalMaxTokens: tokenPolicy.external.mode === 'limited' ? tokenPolicy.external.maxTokens : 0,
+    costPolicy: {
+      mode: src.costPolicy?.mode === 'limited' || maxCost > 0 ? 'limited' : 'unlimited',
+      maxCost,
+      currency: textOr(src.costPolicy?.currency, 'EUR'),
+      onLimit: 'checkpoint_pause',
+    },
+    timePolicy: {
+      mode: timeMode,
+      ...(timeMode === 'limited' ? { maxWallClockMinutes } : {}),
+      onLimit: 'checkpoint_pause',
+    },
+    checkpointPolicy: {
+      intervalSeconds: checkpointIntervalSeconds,
+      onStep: src.checkpointPolicy?.onStep !== false,
+      beforeSideEffect: src.checkpointPolicy?.beforeSideEffect !== false,
+    },
+    resumePolicy: {
+      autoOnRestart: src.resumePolicy?.autoOnRestart !== false,
+      autoOnReconnect: src.resumePolicy?.autoOnReconnect !== false,
+      autoAfterWindow: src.resumePolicy?.autoAfterWindow === true,
+      requireApprovalForRisk: src.resumePolicy?.requireApprovalForRisk !== false,
+    },
+    goalPolicy: {
+      checkEverySteps: Math.max(1, Math.min(10, Number(src.goalPolicy?.checkEverySteps || src.goalCheckInterval) || 3)),
+      maxNoProgressIterations: Math.max(1, Math.min(20, Number(src.goalPolicy?.maxNoProgressIterations) || 3)),
+      stopWhenAcceptanceSatisfied: src.goalPolicy?.stopWhenAcceptanceSatisfied !== false,
+    },
+    providerRouting: src.providerRouting && typeof src.providerRouting === 'object'
+      ? src.providerRouting
+      : {
+        classifier: 'small',
+        goalSetter: 'medium',
+        planner: 'medium',
+        requirements: 'medium',
+        researcher: 'high',
+        coder: 'high',
+        reviewer: 'max',
+      },
+    planningWaveSize,
+    maxTotalSteps: Math.max(0, Number(src.maxTotalSteps) || 0),
     goalCheckInterval: Math.max(1, Math.min(10, Number(src.goalCheckInterval) || 3)),
-    maxTokens: Math.max(0, Number(src.maxTokens) || 0),
-    maxWallClockMinutes: Math.max(0, Number(src.maxWallClockMinutes) || 0),
-    maxSubtasks: Math.max(1, Number(src.maxSubtasks) || 8),
+    maxTokens: tokenPolicy.local.mode === 'limited' ? tokenPolicy.local.maxTokens : 0,
+    maxWallClockMinutes: timeMode === 'limited' ? maxWallClockMinutes : 0,
+    maxSubtasks: planningWaveSize,
     enableWebSearch: src.enableWebSearch !== false,
     allowedMcpTools: normalizeStringList(src.allowedMcpTools),
   };
+}
+function stableKeysForWorkItem(item) {
+  if (!item) return [];
+  return [...new Set([
+    item.id ? `work_item:${item.id}` : '',
+    ...ensureArray(item.sourceRefs).map((ref) => `source:${sourceRefKey(ref)}`),
+    ...ensureArray(item.externalRefs).map((ref) => `external:${externalRefKey(ref)}`),
+  ].filter((key) => key && !key.endsWith(':')))];
+}
+function normalizeWorkItemTombstone(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const keys = normalizeStringList(src.keys);
+  if (!keys.length) return null;
+  return {
+    id: textOr(src.id, `wtomb_${crypto.randomUUID()}`),
+    workItemId: textOr(src.workItemId),
+    keys,
+    title: textOr(src.title),
+    deletedAt: textOr(src.deletedAt, new Date().toISOString()),
+    deletedBy: textOr(src.deletedBy),
+    reason: textOr(src.reason),
+  };
+}
+function getWorkItemTombstones(project) {
+  return ensureArray(project?.workItemTombstones)
+    .map(normalizeWorkItemTombstone)
+    .filter(Boolean);
+}
+function isWorkItemTombstoned(project, item) {
+  const keys = new Set(stableKeysForWorkItem(item));
+  return keys.size > 0 && getWorkItemTombstones(project)
+    .some((tombstone) => tombstone.keys.some((key) => keys.has(key)));
+}
+function addWorkItemTombstone(project, item, options = {}) {
+  const tombstone = normalizeWorkItemTombstone({
+    workItemId: item?.id,
+    keys: stableKeysForWorkItem(item),
+    title: item?.title,
+    deletedAt: options.deletedAt,
+    deletedBy: options.deletedBy,
+    reason: options.reason,
+  });
+  if (!tombstone) return null;
+  const current = getWorkItemTombstones(project)
+    .filter((entry) => !entry.keys.some((key) => tombstone.keys.includes(key)));
+  project.workItemTombstones = [tombstone, ...current].slice(0, 5000);
+  return tombstone;
+}
+function restoreWorkItemTombstone(project, tombstoneId) {
+  const before = getWorkItemTombstones(project);
+  const restored = before.find((entry) => entry.id === tombstoneId) || null;
+  project.workItemTombstones = before.filter((entry) => entry.id !== tombstoneId);
+  return restored;
 }
 function syncDenormalizedAgentFields(item) {
   const planRef = ensureArray(item.externalRefs).find((ref) => ref.source === 'execution_plan');
@@ -375,10 +502,18 @@ function relevantWorkItems(items, options = {}) {
 function migrateProjectWorkItems(project) {
   if (!project || typeof project !== 'object') return { changed: false, workItems: [] };
   const oldVersion = Number(project.workItemsSchemaVersion || 0);
-  const before = JSON.stringify(ensureArray(project.workItems));
+  const before = JSON.stringify({
+    workItems: ensureArray(project.workItems),
+    tombstones: ensureArray(project.workItemTombstones),
+  });
   project.workItems = normalizeWorkItems(project.workItems, { project });
+  project.workItemTombstones = getWorkItemTombstones(project);
   project.workItemsSchemaVersion = WORK_ITEMS_SCHEMA_VERSION;
-  return { changed: oldVersion !== WORK_ITEMS_SCHEMA_VERSION || before !== JSON.stringify(project.workItems), workItems: project.workItems };
+  const after = JSON.stringify({
+    workItems: project.workItems,
+    tombstones: project.workItemTombstones,
+  });
+  return { changed: oldVersion !== WORK_ITEMS_SCHEMA_VERSION || before !== after, workItems: project.workItems };
 }
 function addWorkItemUpdate(item, bodyMarkdown, options = {}) {
   const update = normalizeUpdate({ bodyMarkdown }, options);
@@ -405,5 +540,7 @@ module.exports = {
   validateHierarchy, validateDependencies, relevantWorkItems, sortPrioritized, priorityRank,
   isTerminalStatus, deriveContainerStatus, deriveParentStatuses, normalizeStatus,
   normalizeExecutionSettings,
+  stableKeysForWorkItem, normalizeWorkItemTombstone, getWorkItemTombstones,
+  isWorkItemTombstoned, addWorkItemTombstone, restoreWorkItemTombstone,
   migrateProjectWorkItems, addWorkItemUpdate, patchWorkItemUpdate, findWorkItemUpdate, textOr, ensureArray,
 };

@@ -48,7 +48,7 @@ function publicConnector(row, now = Date.now()) {
     createdAt: row.created_at,
     lastSeenAt: row.last_seen_at || null,
     revokedAt: row.revoked_at || null,
-    online: row.status === 'active' && lastSeenMs > now - 30_000,
+    online: row.status === 'active' && lastSeenMs > now - 150_000,
   };
 }
 
@@ -98,6 +98,11 @@ class AgentConnectorStore {
         package_hash TEXT NOT NULL,
         status TEXT NOT NULL,
         desired_action TEXT,
+        command_version INTEGER NOT NULL DEFAULT 0,
+        acknowledged_command_version INTEGER NOT NULL DEFAULT 0,
+        progress_json TEXT NOT NULL DEFAULT '{}',
+        checkpoint_json TEXT NOT NULL DEFAULT '{}',
+        review_packet_json TEXT NOT NULL DEFAULT '{}',
         connector_id TEXT,
         lease_hash TEXT,
         lease_expires_at TEXT,
@@ -116,11 +121,34 @@ class AgentConnectorStore {
         created_at TEXT NOT NULL,
         PRIMARY KEY (dispatch_id, local_event_id)
       );
+      CREATE TABLE IF NOT EXISTS agent_dispatch_commands (
+        dispatch_id TEXT NOT NULL,
+        command_version INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        settings_patch_json TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL,
+        requested_at TEXT NOT NULL,
+        acknowledged_at TEXT,
+        PRIMARY KEY (dispatch_id, command_version),
+        UNIQUE (dispatch_id, idempotency_key)
+      );
       CREATE INDEX IF NOT EXISTS idx_agent_dispatch_queue
         ON agent_dispatches(status, created_at);
       CREATE INDEX IF NOT EXISTS idx_agent_dispatch_platform_run
         ON agent_dispatches(platform_run_id);
     `);
+    const dispatchColumns = this.db.prepare('PRAGMA table_info(agent_dispatches)').all();
+    const ensureColumn = (name, sql) => {
+      if (!dispatchColumns.some((column) => column.name === name)) {
+        this.db.exec(`ALTER TABLE agent_dispatches ADD COLUMN ${sql}`);
+      }
+    };
+    ensureColumn('command_version', 'command_version INTEGER NOT NULL DEFAULT 0');
+    ensureColumn('acknowledged_command_version', 'acknowledged_command_version INTEGER NOT NULL DEFAULT 0');
+    ensureColumn('progress_json', "progress_json TEXT NOT NULL DEFAULT '{}'");
+    ensureColumn('checkpoint_json', "checkpoint_json TEXT NOT NULL DEFAULT '{}'");
+    ensureColumn('review_packet_json', "review_packet_json TEXT NOT NULL DEFAULT '{}'");
   }
 
   createPairingCode(createdBy) {
@@ -394,10 +422,18 @@ class AgentConnectorStore {
       }
       const localStatus = normalizeConnectorStatus(input.status);
       const acknowledgedAction = String(input.acknowledgedAction || '').trim();
+      const acknowledgedCommandVersion = Math.max(
+        0,
+        Number(input.acknowledgedCommandVersion) || 0
+      );
+      const commandAcknowledged = acknowledgedCommandVersion > 0
+        && acknowledgedCommandVersion >= Number(leased.command_version || 0);
       const status = leased.desired_action === 'cancel' && localStatus !== 'cancelled'
         ? 'cancel_requested'
         : localStatus;
       const desiredAction = (
+        commandAcknowledged
+        ||
         (acknowledgedAction && acknowledgedAction === leased.desired_action)
         ||
         (leased.desired_action === 'cancel' && localStatus === 'cancelled')
@@ -408,17 +444,42 @@ class AgentConnectorStore {
       this.db.prepare(`
         UPDATE agent_dispatches
         SET status = ?, desired_action = ?,
+            acknowledged_command_version = CASE
+              WHEN ? > acknowledged_command_version THEN ?
+              ELSE acknowledged_command_version
+            END,
+            progress_json = ?,
+            checkpoint_json = ?,
+            review_packet_json = ?,
             lease_expires_at = ?, updated_at = ?
         WHERE id = ?
-      `).run(status, desiredAction, nowIso(now + LEASE_TTL_MS), nowIso(now), dispatchId);
+      `).run(
+        status,
+        desiredAction,
+        acknowledgedCommandVersion,
+        acknowledgedCommandVersion,
+        JSON.stringify(input.progress && typeof input.progress === 'object' ? input.progress : {}),
+        JSON.stringify(input.checkpoint && typeof input.checkpoint === 'object' ? input.checkpoint : {}),
+        JSON.stringify(input.reviewPacket && typeof input.reviewPacket === 'object' ? input.reviewPacket : {}),
+        nowIso(now + LEASE_TTL_MS),
+        nowIso(now),
+        dispatchId
+      );
+      if (commandAcknowledged) {
+        this.db.prepare(`
+          UPDATE agent_dispatch_commands
+          SET status = 'acknowledged', acknowledged_at = ?
+          WHERE dispatch_id = ? AND command_version <= ? AND status = 'requested'
+        `).run(nowIso(now), dispatchId, acknowledgedCommandVersion);
+      }
     })();
     return this.getDispatch(dispatchId);
   }
 
-  setDesiredAction(runId, action) {
+  setDesiredAction(runId, action, options = {}) {
     const dispatch = this.findDispatch(runId);
     if (!dispatch) return null;
-    if (!['cancel', 'pause', 'resume', 'finish_partial'].includes(action)) {
+    if (!['cancel', 'pause', 'resume', 'finish_partial', 'sync_now'].includes(action)) {
       throw new Error('Acao de controlo do agente invalida');
     }
     if (action === 'pause' && ['queued', 'paused'].includes(dispatch.status)) {
@@ -429,13 +490,60 @@ class AgentConnectorStore {
     if (['resume', 'finish_partial'].includes(action) && dispatch.status !== 'paused') {
       throw new Error('A execução tem de estar em pausa para continuar ou enviar o progresso.');
     }
+    const idempotencyKey = String(
+      options.idempotencyKey || `${dispatch.id}:${action}:${this.now()}`
+    );
+    const existingCommand = this.db.prepare(`
+      SELECT * FROM agent_dispatch_commands
+      WHERE dispatch_id = ? AND idempotency_key = ?
+    `).get(dispatch.id, idempotencyKey);
+    if (existingCommand) return this.getDispatch(dispatch.id);
+    const commandVersion = Number(dispatch.commandVersion || 0) + 1;
     const cancelImmediately = action === 'cancel' && dispatch.status === 'queued';
     const status = cancelImmediately ? 'cancelled'
       : action === 'cancel' ? 'cancel_requested' : dispatch.status;
-    this.db.prepare(`
-      UPDATE agent_dispatches SET desired_action = ?, status = ?, updated_at = ? WHERE id = ?
-    `).run(cancelImmediately ? null : action, status, nowIso(this.now()), dispatch.id);
+    const at = nowIso(this.now());
+    this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO agent_dispatch_commands (
+          dispatch_id, command_version, action, idempotency_key,
+          settings_patch_json, status, requested_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        dispatch.id,
+        commandVersion,
+        action,
+        idempotencyKey,
+        JSON.stringify(options.settingsPatch && typeof options.settingsPatch === 'object'
+          ? options.settingsPatch
+          : {}),
+        cancelImmediately ? 'acknowledged' : 'requested',
+        at
+      );
+      this.db.prepare(`
+        UPDATE agent_dispatches
+        SET desired_action = ?, status = ?, command_version = ?, updated_at = ?
+        WHERE id = ?
+      `).run(cancelImmediately ? null : action, status, commandVersion, at, dispatch.id);
+    })();
     return this.getDispatch(dispatch.id);
+  }
+
+  commands(dispatchId) {
+    return this.db.prepare(`
+      SELECT * FROM agent_dispatch_commands
+      WHERE dispatch_id = ?
+      ORDER BY command_version ASC
+    `).all(dispatchId).map((row) => ({
+      dispatchId: row.dispatch_id,
+      version: Number(row.command_version),
+      action: row.action,
+      idempotencyKey: row.idempotency_key,
+      settingsPatch: json(row.settings_patch_json, {}),
+      status: row.status,
+      requestedAt: row.requested_at,
+      acknowledgedAt: row.acknowledged_at || null,
+    }));
   }
 
   retry(runId) {
@@ -550,6 +658,11 @@ class AgentConnectorStore {
     if (sha256(row.package_json) !== row.package_hash) {
       throw new Error(`Integridade do pacote congelado invalida para ${row.id}`);
     }
+    const latestCommand = this.db.prepare(`
+      SELECT * FROM agent_dispatch_commands
+      WHERE dispatch_id = ?
+      ORDER BY command_version DESC LIMIT 1
+    `).get(row.id);
     return {
       id: row.id,
       projectId: row.project_id,
@@ -562,6 +675,19 @@ class AgentConnectorStore {
       packageHash: row.package_hash,
       status: row.status,
       desiredAction: row.desired_action || null,
+      commandVersion: Number(row.command_version || 0),
+      acknowledgedCommandVersion: Number(row.acknowledged_command_version || 0),
+      latestCommand: latestCommand ? {
+        version: Number(latestCommand.command_version),
+        action: latestCommand.action,
+        status: latestCommand.status,
+        settingsPatch: json(latestCommand.settings_patch_json, {}),
+        requestedAt: latestCommand.requested_at,
+        acknowledgedAt: latestCommand.acknowledged_at || null,
+      } : null,
+      progress: json(row.progress_json, {}),
+      checkpoint: json(row.checkpoint_json, {}),
+      reviewPacket: json(row.review_packet_json, {}),
       connectorId: row.connector_id || null,
       localJobId: row.local_job_id || null,
       attempt: row.attempt,

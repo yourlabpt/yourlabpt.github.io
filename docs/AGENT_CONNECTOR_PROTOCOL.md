@@ -10,7 +10,7 @@ provider, or a specific agent framework.
 The connection is always initiated by the local runtime:
 
 1. A user approves a canonical agent task in Projects.
-2. Projects freezes and hashes a `yourlab.agent-dispatch/v1` package in SQLite.
+2. Projects freezes and hashes a `yourlab.agent-dispatch/v2` package in SQLite.
 3. A paired runtime polls Projects over HTTPS and claims compatible work.
 4. The runtime executes locally and sends signed progress and a signed result.
 5. Projects validates the frozen-package hash and output contract.
@@ -35,7 +35,7 @@ wire protocol:
 {
   "protocol": {
     "id": "yourlab.agent-dispatch",
-    "versions": [1]
+    "versions": [1, 2]
   },
   "runtime": {
     "kind": "yourlab-agent-runtime",
@@ -59,7 +59,13 @@ wire protocol:
   "skills": [],
   "tools": [],
   "models": [],
-  "features": ["durable_checkpoints"],
+  "features": [
+    "durable_checkpoints",
+    "execution_settings_v2",
+    "versioned_commands",
+    "manual_sync",
+    "review_packets"
+  ],
   "extensions": {
     "vendor.example/custom-setting": true
   }
@@ -77,13 +83,13 @@ contract version are compatible.
 
 ## Frozen task package
 
-New runtimes should consume the namespaced v1 fields:
+New runtimes should consume the namespaced v2 fields:
 
 ```json
 {
   "contract": {
     "id": "yourlab.agent-dispatch",
-    "version": 1
+    "version": 2
   },
   "identifiers": {
     "projectId": "prj_...",
@@ -108,6 +114,26 @@ New runtimes should consume the namespaced v1 fields:
     "tools": ["repo.read", "repo.write", "tests.run"]
   },
   "budget": {},
+  "execution": {
+    "settingsVersion": 1,
+    "settings": {
+      "schemaVersion": 2,
+      "tokenPolicy": {
+        "local": { "mode": "unlimited" },
+        "external": { "mode": "limited", "maxTokens": 120000 }
+      },
+      "checkpointPolicy": {
+        "intervalSeconds": 30,
+        "onStep": true,
+        "beforeSideEffect": true
+      },
+      "planningWaveSize": 8
+    }
+  },
+  "objective": {
+    "statement": "Deliver the approved implementation unit.",
+    "acceptanceCriteria": ["All approved criteria have evidence."]
+  },
   "outputContract": {
     "targetOutput": "implementation_tasks_v1",
     "acceptanceCriteria": "All approved criteria pass with linked evidence.",
@@ -183,13 +209,26 @@ POST /api/projects/agent-connectors/dispatches/:dispatchId/result
 ```
 
 `ack` binds one non-empty `localJobId` permanently to the dispatch. `sync`
-should continue sending that ID, the current status, and up to 100 idempotent
-events per batch:
+should continue sending that ID, the current status, current progress,
+checkpoint, review packet when available, and up to 100 idempotent events per
+batch:
 
 ```json
 {
   "localJobId": "local-job-123",
   "status": "executing",
+  "acknowledgedCommandVersion": 4,
+  "progress": {
+    "completed": 2,
+    "total": 4,
+    "localTokensUsed": 45000,
+    "externalTokensUsed": 0,
+    "phase": "running"
+  },
+  "checkpoint": {
+    "boundary": "step_completed",
+    "completedStepIds": ["step-1", "step-2"]
+  },
   "events": [
     {
       "id": 7,
@@ -206,9 +245,12 @@ and renews the same 60-second lease. Sync also renews it.
 Valid runtime statuses are `claimed`, `running`, `planning`, `executing`,
 `self_review`, `verifying`, `paused`, `cancelled`, and `failed`.
 
-The response may contain `desiredAction: "cancel"` or
-`desiredAction: "resume"`. A runtime must keep synchronizing until it reports
-the resulting state. Event IDs are idempotent within a dispatch.
+The response may contain the next monotonic `commandVersion` and
+`desiredAction`: `pause`, `resume`, `cancel`, `finish_partial`, or `sync_now`.
+Commands have idempotency keys and may carry a settings patch when continuing
+from a paused checkpoint. A runtime acknowledges the exact command version
+only after applying it or reaching the requested safe boundary. Event IDs are
+idempotent within a dispatch; duplicate events are ignored.
 
 Submit a result with:
 
@@ -239,8 +281,8 @@ declared result artifact intentionally contains them.
 
 ## Compatibility policy
 
-- Additive fields may be introduced within v1.
-- Existing fields cannot change meaning within v1.
+- Additive fields may be introduced within a contract version.
+- Existing fields cannot change meaning within the same contract version.
 - Breaking changes require a new contract version.
 - Runtimes advertise all supported versions during heartbeat.
 - The Platform does not dispatch a package to an incompatible runtime.

@@ -255,6 +255,7 @@ function applyConfiguredAutomations(project, options = {}) {
       updatedBy: 'automation',
       automationRuleId: suggestion.ruleId,
     }, { project });
+    if (workItems.isWorkItemTombstoned(project, record)) return;
     items.unshift(record);
     created.push(record);
     acceptSuggestion(project, suggestion.id, record.id, now);

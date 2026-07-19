@@ -1,5 +1,5 @@
 const CONTRACT_ID = 'yourlab.agent-dispatch';
-const CONTRACT_VERSION = 1;
+const CONTRACT_VERSION = 2;
 
 const CONNECTOR_STATUSES = new Set([
   'claimed',
@@ -55,7 +55,7 @@ function normalizeCapabilities(value = {}) {
   return {
     protocol: {
       id: text(protocol.id, CONTRACT_ID),
-      versions: stringList(protocol.versions || raw.contractVersions || [CONTRACT_VERSION])
+      versions: stringList(protocol.versions || raw.contractVersions || [1, CONTRACT_VERSION])
         .map(Number)
         .filter((entry) => Number.isInteger(entry) && entry > 0),
     },
@@ -168,6 +168,15 @@ function buildFrozenTaskPackage(input = {}) {
           : {}),
       },
     },
+    execution: {
+      settingsVersion: Math.max(1, Number(input.executionSettings?.version) || 1),
+      settings: input.executionSettings && typeof input.executionSettings === 'object'
+        ? input.executionSettings
+        : {},
+    },
+    objective: input.objective && typeof input.objective === 'object'
+      ? input.objective
+      : {},
     contextSnapshotHash: text(input.contextSnapshotHash),
     frozenAt: text(input.frozenAt),
   };
@@ -186,11 +195,17 @@ function publicDispatch(dispatch) {
     packageHash: dispatch.packageHash,
     status: dispatch.status,
     desiredAction: dispatch.desiredAction,
+    commandVersion: dispatch.commandVersion,
+    acknowledgedCommandVersion: dispatch.acknowledgedCommandVersion,
+    latestCommand: dispatch.latestCommand || null,
     connectorId: dispatch.connectorId,
     localJobId: dispatch.localJobId,
     attempt: dispatch.attempt,
     previousDispatchId: dispatch.previousDispatchId,
     resultHash: dispatch.resultHash,
+    progress: dispatch.progress || {},
+    checkpoint: dispatch.checkpoint || {},
+    reviewPacket: dispatch.reviewPacket || {},
     createdAt: dispatch.createdAt,
     updatedAt: dispatch.updatedAt,
     leaseExpiresAt: dispatch.leaseExpiresAt,

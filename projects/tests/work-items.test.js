@@ -28,6 +28,21 @@ describe('work items model', () => {
     assert.equal(project.workItems[0].deliveryStageId, 'unclassified');
   });
 
+  it('normalizes execution settings v2 with unlimited local tokens by default', () => {
+    const settings = workItems.normalizeExecutionSettings({
+      externalMaxTokens: 50000,
+      maxWallClockMinutes: 90,
+      maxSubtasks: 6,
+    });
+    assert.equal(settings.schemaVersion, 2);
+    assert.equal(settings.tokenPolicy.local.mode, 'unlimited');
+    assert.equal(settings.maxTokens, 0);
+    assert.equal(settings.tokenPolicy.external.mode, 'limited');
+    assert.equal(settings.externalMaxTokens, 50000);
+    assert.equal(settings.timePolicy.mode, 'limited');
+    assert.equal(settings.planningWaveSize, 6);
+  });
+
   it('returns slim cards without descriptions and counts executors', () => {
     const item = workItems.normalizeWorkItem(task({ id: 'w1', resultSummaryMarkdown: 'Done' }));
     assert.equal(workItems.toSlimCard(item).descriptionMarkdown, undefined);
@@ -96,6 +111,18 @@ describe('work item synchronization', () => {
     workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
     assert.equal(project.workItems.length, 1);
     assert.equal(project.workItems[0].executorMode, 'agent');
+  });
+
+  it('does not recreate an execution-plan task after it is tombstoned', () => {
+    const project = { workItems: [], requirements: [] };
+    const plan = { id: 'p_deleted', toStageId: 'architecture', tasks: [{ id: 't1', title: 'Diagram' }] };
+    workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
+    const deleted = project.workItems[0];
+    workItems.addWorkItemTombstone(project, deleted, { deletedBy: 'u1' });
+    project.workItems = [];
+    workItemsSync.syncWorkItemsFromExecutionPlan(project, plan);
+    assert.equal(project.workItems.length, 0);
+    assert.equal(project.workItemTombstones.length, 1);
   });
 
   it('migrates implementation tasks once and removes the duplicate queue', () => {

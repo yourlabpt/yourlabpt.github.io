@@ -680,18 +680,42 @@ function registerWorkItemRoutes(app, deps) {
       let result = null;
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === req.params.projectId); const item = workItems.findWorkItem(project, req.params.workItemId);
-        if (!item || item.taskRole !== 'coordination') throw new Error('Configure a execução a partir da tarefa-pai.');
-        const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === item.agentRequestId); if (!request) throw new Error('Pedido do agente nao encontrado.');
+        if (!item) throw new Error('Tarefa nao encontrada.');
+        const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === item.agentRequestId) || null;
         const current = workItems.normalizeExecutionSettings(item.executionSettings); const proposed = workItems.normalizeExecutionSettings({ ...current, ...(req.body?.settings || {}) });
         const shaping = ['modelProfileId', 'targetInputTokens', 'targetOutputTokens', 'maxSubtasks']; const requiresRevision = shaping.some((key) => String(current[key]) !== String(proposed[key]));
-        if (requiresRevision && req.body?.revisePlan !== true) { const error = new Error('Estas alterações mudam os prompts e a divisão das tarefas.'); error.code = 'REQUIRES_REVISION'; throw error; }
-        if (requiresRevision) {
+        const revisesCoordinationPlan = item.taskRole === 'coordination' && requiresRevision;
+        if (revisesCoordinationPlan && req.body?.revisePlan !== true) { const error = new Error('Estas alterações mudam os prompts e a divisão das tarefas.'); error.code = 'REQUIRES_REVISION'; throw error; }
+        if (revisesCoordinationPlan) {
+          if (!request) throw new Error('Pedido do agente nao encontrado.');
           const match = request.transitionKey.match(/^(.+)->(.+):(forward|backward)$/); if (!match) throw new Error('Este pedido nao possui uma transição versionada.');
           const created = stageTransitions.createRequest(project, { fromStageId: match[1], toStageId: match[2], direction: match[3], regenerationMode: 'full', config: { ...request.configSnapshot, ...proposed }, idempotencyKey: `settings-revision:${request.id}:${nowIso()}` }, { actorUserId: req.auth.user.id, nowIso, deliveryOs });
           result = { revised: true, agentRequest: created.request, parentTaskId: created.request.parentTaskId, workItems: created.tasks };
         } else {
-          const at = nowIso(); const next = workItems.getWorkItems(project).map((task) => task.id === item.id || task.parentTaskId === item.id ? workItems.normalizeWorkItem({ ...task, executionSettings: { ...proposed, version: (current.version || 1) + 1 }, agentId: proposed.agentId || task.agentId, updatedAt: at, updatedBy: req.auth.user.id }, { project }) : task);
-          workItems.setWorkItems(project, next); result = { revised: false, workItem: workItems.findWorkItem(project, item.id), children: workItems.getWorkItems(project).filter((task) => task.parentTaskId === item.id) };
+          const at = nowIso();
+          const targetsTree = item.taskRole === 'coordination';
+          const nextSettings = { ...proposed, version: (current.version || 1) + 1 };
+          const next = workItems.getWorkItems(project).map((task) => (
+            task.id === item.id || (targetsTree && task.parentTaskId === item.id)
+              ? workItems.normalizeWorkItem({
+                ...task,
+                executionSettings: nextSettings,
+                agentId: proposed.agentId || task.agentId,
+                updatedAt: at,
+                updatedBy: req.auth.user.id,
+              }, { project })
+              : task
+          ));
+          workItems.setWorkItems(project, next);
+          result = {
+            revised: false,
+            appliesTo: targetsTree ? 'tree' : 'task',
+            appliesOnNextAttempt: ['in_progress', 'waiting_input'].includes(item.status),
+            workItem: workItems.findWorkItem(project, item.id),
+            children: targetsTree
+              ? workItems.getWorkItems(project).filter((task) => task.parentTaskId === item.id)
+              : [],
+          };
         }
         project.updatedAt = nowIso();
       });
@@ -849,6 +873,11 @@ function registerWorkItemRoutes(app, deps) {
         }
         if (list.some((item) => item.parentTaskId === workItemId)) throw new Error('Remova ou reatribua as subtarefas antes de remover a tarefa-pai.');
 
+        const tombstone = workItems.addWorkItemTombstone(project, existing, {
+          deletedAt: nowIso(),
+          deletedBy: req.auth.user.id,
+          reason: textOr(req.body?.reason, 'deleted_from_tasks'),
+        });
         workItems.setWorkItems(project, list.filter((item) => item.id !== workItemId));
         project.updatedAt = nowIso();
 
@@ -856,11 +885,33 @@ function registerWorkItemRoutes(app, deps) {
           actorUserId: req.auth.user.id,
           projectId,
           action: 'work_item_deleted',
-          details: { workItemId },
+          details: { workItemId, tombstoneId: tombstone?.id || '' },
         });
       });
 
       return res.json({ ok: true });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/projects/projects/:projectId/work-item-tombstones/:tombstoneId/restore', authMiddleware, loadProjectLiteForUser, requireProjectEditor, async (req, res) => {
+    try {
+      let restored = null;
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === req.params.projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+        restored = workItems.restoreWorkItemTombstone(project, req.params.tombstoneId);
+        if (!restored) throw new Error('Registo de tarefa eliminada nao encontrado.');
+        project.updatedAt = nowIso();
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId: project.id,
+          action: 'work_item_tombstone_restored',
+          details: { tombstoneId: restored.id, workItemId: restored.workItemId },
+        });
+      });
+      return res.json({ restored });
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
