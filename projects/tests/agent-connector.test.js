@@ -10,7 +10,10 @@ const {
   buildFrozenTaskPackage,
   publicDispatch,
 } = require('../lib/agent-connector-contract');
-const { registerAgentConnectorRoutes } = require('../lib/agent-connector-routes');
+const {
+  connectorClaimWaitMs,
+  registerAgentConnectorRoutes,
+} = require('../lib/agent-connector-routes');
 const { resolveExecutionConfig } = require('../lib/agent-runtime-routes');
 
 function signed(store, connectorId, privateKey, body = '{}', overrides = {}) {
@@ -63,6 +66,13 @@ async function runRouteHandlers(handlers, req, res, index = 0) {
 }
 
 describe('secure outbound agent connector', () => {
+  it('bounds connector claim waits below hosted proxy timeouts', () => {
+    assert.equal(connectorClaimWaitMs(undefined), 0);
+    assert.equal(connectorClaimWaitMs(0), 0);
+    assert.equal(connectorClaimWaitMs(1.25), 1250);
+    assert.equal(connectorClaimWaitMs(20), 5000);
+  });
+
   it('enforces production pull mode and loopback-only local push', () => {
     assert.equal(validateAgentConnectionConfig({ NODE_ENV: 'production' }), 'remote_pull');
     assert.throws(() => validateAgentConnectionConfig({

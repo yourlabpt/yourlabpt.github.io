@@ -70,6 +70,7 @@
     lastRuntimePoll: null,
     lastRuntimeEvents: [],
     lastRuntimeSubtasks: [],
+    terminalRuntimeRuns: new Set(),
   };
 
   function nextPromptLoadToken() {
@@ -3204,7 +3205,11 @@
 
   function getActiveRuntimeJob(project) {
     return getRuntimeJobs(project).find(
-      (j) => RUNTIME_ACTIVE_STATUSES.has(j.status) || RUNTIME_PAUSED_STATUSES.has(j.status)
+      (j) => {
+        const runId = j.promptRunId || j.id;
+        return !pdosState.terminalRuntimeRuns.has(runId)
+          && (RUNTIME_ACTIVE_STATUSES.has(j.status) || RUNTIME_PAUSED_STATUSES.has(j.status));
+      }
     ) || null;
   }
 
@@ -3385,10 +3390,27 @@
     }
     if (pdosState.activeRuntimeRun) {
       pdosState.activeRuntimeRun.intervalId = null;
+      pdosState.activeRuntimeRun.monitoring = false;
     }
   }
 
-  function startAgentRuntimeMonitor(runId, projectId, { openPanel = false, pollMs = 12000, fastPollMs = 5000, fastForMs = 0 } = {}) {
+  function startAgentRuntimeMonitor(runId, projectId, {
+    openPanel = false,
+    pollMs = 12000,
+    fastPollMs = 5000,
+    fastForMs = 0,
+    force = false,
+  } = {}) {
+    if (!runId || !projectId) return false;
+    if (pdosState.terminalRuntimeRuns.has(runId) && !force) return false;
+    if (
+      pdosState.activeRuntimeRun?.runId === runId
+      && pdosState.activeRuntimeRun.monitoring
+    ) {
+      if (openPanel) openYourlabAgentPanel();
+      return true;
+    }
+    if (force) pdosState.terminalRuntimeRuns.delete(runId);
     stopAgentRuntimeMonitor();
     pdosState.activeRuntimeRun = {
       runId,
@@ -3398,7 +3420,13 @@
       agentType: null,
       pollErrors: 0,
       fastUntil: Date.now() + Math.max(0, Number(fastForMs) || 0),
+      monitoring: true,
     };
+    const monitorState = pdosState.activeRuntimeRun;
+    const isCurrentMonitor = () => (
+      pdosState.activeRuntimeRun === monitorState
+      && monitorState.monitoring
+    );
     const log = $('pdosAgentRuntimeLog');
     if (log) log.innerHTML = '';
     pdosState.lastRuntimeEvents = [];
@@ -3406,32 +3434,36 @@
     if (openPanel) openYourlabAgentPanel();
 
     const scheduleNext = () => {
-      if (!pdosState.activeRuntimeRun || pdosState.activeRuntimeRun.runId !== runId) return;
-      const fast = Date.now() < (pdosState.activeRuntimeRun.fastUntil || 0);
+      if (!isCurrentMonitor()) return;
+      const fast = Date.now() < (monitorState.fastUntil || 0);
       const delay = fast ? Math.max(3000, Number(fastPollMs) || 5000) : Math.max(10000, Number(pollMs) || 12000);
-      pdosState.activeRuntimeRun.intervalId = setTimeout(tick, delay);
+      monitorState.intervalId = setTimeout(tick, delay);
     };
 
     const tick = async () => {
-      if (!pdosState.activeRuntimeRun || pdosState.activeRuntimeRun.runId !== runId) return;
+      if (!isCurrentMonitor()) return;
       try {
-        const after = pdosState.activeRuntimeRun.lastEventId || 0;
+        const after = monitorState.lastEventId || 0;
         const status = await apiRequest(
           `/agent-runs/${encodeURIComponent(runId)}/status?afterEventId=${after}`
         );
+        // A user may select, pause or replace a run while this request is in
+        // flight. Never let the old response mutate or stop the new monitor.
+        if (!isCurrentMonitor()) return;
         if (status.agentJob?.agentType) {
-          pdosState.activeRuntimeRun.agentType = status.agentJob.agentType;
+          monitorState.agentType = status.agentJob.agentType;
         }
         updateAgentRuntimePanel(status);
         const yarStatus = status.yarJob?.status || status.agentJob?.status;
 
         if (status.yarError && !status.yarJob) {
-          pdosState.activeRuntimeRun.pollErrors = (pdosState.activeRuntimeRun.pollErrors || 0) + 1;
+          monitorState.pollErrors = (monitorState.pollErrors || 0) + 1;
         } else {
-          pdosState.activeRuntimeRun.pollErrors = 0;
+          monitorState.pollErrors = 0;
         }
 
         if (RUNTIME_DONE_STATUSES.has(yarStatus)) {
+          pdosState.terminalRuntimeRuns.add(runId);
           stopAgentRuntimeMonitor();
           showToast('YourLab Agent concluído — revise o resultado na revisão humana');
           const project = await reloadProject(projectId);
@@ -3439,6 +3471,7 @@
           return;
         }
         if (RUNTIME_ERROR_STATUSES.has(yarStatus)) {
+          pdosState.terminalRuntimeRuns.add(runId);
           stopAgentRuntimeMonitor();
           showToast(status.yarJob?.error || status.agentJob?.error || status.yarError || `YourLab Agent: ${yarStatus}`, 'error');
           const project = await reloadProject(projectId);
@@ -3446,6 +3479,7 @@
           return;
         }
       } catch (err) {
+        if (!isCurrentMonitor()) return;
         const progress = $('pdosAgentRuntimeProgress');
         if (progress) progress.textContent = `Erro ao actualizar: ${err.message}`;
       }
@@ -3453,6 +3487,7 @@
     };
 
     tick();
+    return true;
   }
 
   async function runYourlabAgent(agentType, project, runConfig = {}) {
@@ -3486,7 +3521,7 @@
       const runId = res.agentJob?.promptRunId || res.promptRun?.id;
       openYourlabAgentPanel();
       updateAgentRuntimePanel({ agentJob: res.agentJob, yarJob: res.yarJob, events: [], subtasks: [] });
-      startAgentRuntimeMonitor(runId, project.id, { fastForMs: 45000 });
+      startAgentRuntimeMonitor(runId, project.id, { fastForMs: 45000, force: true });
       showToast('YourLab Agent iniciado');
       const updated = await reloadProject(project.id);
       renderAgentRuntimeHistory(updated || project);
@@ -3499,11 +3534,16 @@
   }
 
   async function selectRuntimeHistoryRun(runId, project) {
+    stopAgentRuntimeMonitor();
     pdosState.activeRuntimeRun = {
-      ...pdosState.activeRuntimeRun,
       runId,
       projectId: project.id,
       lastEventId: 0,
+      intervalId: null,
+      monitoring: false,
+      agentType: null,
+      pollErrors: 0,
+      fastUntil: 0,
     };
     const log = $('pdosAgentRuntimeLog');
     if (log) log.innerHTML = '';
@@ -3516,6 +3556,7 @@
       if (RUNTIME_ACTIVE_STATUSES.has(yarStatus) || RUNTIME_PAUSED_STATUSES.has(yarStatus)) {
         startAgentRuntimeMonitor(runId, project.id);
       } else {
+        pdosState.terminalRuntimeRuns.add(runId);
         stopAgentRuntimeMonitor();
       }
     } catch (err) {
@@ -3529,6 +3570,8 @@
       const cancelled = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST', body: {} });
       const pending = cancelled.agentJob?.status === 'cancel_requested'
         || cancelled.dispatch?.status === 'cancel_requested';
+      if (pending) pdosState.terminalRuntimeRuns.delete(runId);
+      else pdosState.terminalRuntimeRuns.add(runId);
       showToast(pending ? 'Cancelamento pedido — aguarda confirmação do agente' : 'YourLab Agent parado');
       const project = await reloadProject(projectId);
       const status = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status`);
@@ -3554,7 +3597,7 @@
       });
       closeAgentContinueModal();
       showToast(finishPartial ? 'YourLab Agent a concluir parcialmente' : 'YourLab Agent retomado');
-      startAgentRuntimeMonitor(runId, projectId, { fastForMs: 45000 });
+      startAgentRuntimeMonitor(runId, projectId, { fastForMs: 45000, force: true });
       await reloadProject(projectId);
     } catch (err) {
       showToast(err.message, 'error');
@@ -3632,7 +3675,11 @@
           body: { options: opts || {} },
         });
         showToast('Execução reiniciada', 'ok');
-        startAgentRuntimeMonitor(res.promptRunId || runId, project.id, { openPanel: true, fastForMs: 45000 });
+        startAgentRuntimeMonitor(res.promptRunId || runId, project.id, {
+          openPanel: true,
+          fastForMs: 45000,
+          force: true,
+        });
         await reloadProject(project.id);
         return res;
       } catch {
@@ -3913,7 +3960,10 @@
     const active = getActiveRuntimeJob(project);
     if (!active) return;
     const runId = active.promptRunId || active.id;
-    if (!pdosState.activeRuntimeRun?.intervalId) {
+    if (
+      pdosState.activeRuntimeRun?.runId !== runId
+      || !pdosState.activeRuntimeRun.monitoring
+    ) {
       startAgentRuntimeMonitor(runId, project.id);
     }
   }

@@ -15,6 +15,14 @@ function createWindowLimiter({ limit, windowMs }) {
   };
 }
 
+function connectorClaimWaitMs(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  // Stay below common hosted reverse-proxy request limits. Connector clients
+  // poll again after a 204, so dispatch responsiveness is preserved.
+  return Math.min(5_000, Math.floor(seconds * 1000));
+}
+
 function registerAgentConnectorRoutes(app, deps) {
   const {
     authMiddleware,
@@ -148,10 +156,7 @@ function registerAgentConnectorRoutes(app, deps) {
 
   app.post('/api/projects/agent-connectors/claim', connectorAuth, async (req, res) => {
     try {
-      const waitMs = Math.max(
-        0,
-        Math.min(25_000, Number(req.body?.waitSeconds) * 1000 || 0)
-      );
+      const waitMs = connectorClaimWaitMs(req.body?.waitSeconds);
       const deadline = Date.now() + waitMs;
       let dispatch = store.claim(req.agentConnector.id);
       while (!dispatch && Date.now() < deadline && !req.destroyed) {
@@ -271,4 +276,8 @@ function registerAgentConnectorRoutes(app, deps) {
   return store;
 }
 
-module.exports = { createWindowLimiter, registerAgentConnectorRoutes };
+module.exports = {
+  connectorClaimWaitMs,
+  createWindowLimiter,
+  registerAgentConnectorRoutes,
+};
