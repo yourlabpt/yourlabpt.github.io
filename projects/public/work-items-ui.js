@@ -563,6 +563,7 @@
     if (!state.canManage) return;
     const proposedPlans = state.agentRequests.filter((request) =>
       ['awaiting_approval', 'revision_requested'].includes(request.status)
+      && request.requestKind !== 'stage_transition'
     );
     el.innerHTML = `
       <div class="ado-suggestions-head">
@@ -752,6 +753,27 @@
       editor.innerHTML = '';
     }
     setTaskRoute();
+  }
+
+  function resetBrowseFilters() {
+    Object.keys(state.filters).forEach((key) => { state.filters[key] = ''; });
+    state.showCompleted = false;
+    state.selectedIds.clear();
+  }
+
+  async function refreshTasks(project, options = {}) {
+    if (!project?.id) return;
+    state.projectId = project.id;
+    if (options.resetFilters) resetBrowseFilters();
+    state.loaded = false;
+    await fetchList(project.id);
+    await Promise.all([
+      fetchMeta(project.id).catch(() => null),
+      fetchAgentRequests(project.id).catch(() => []),
+      fetchSuggestions(project.id).catch(() => []),
+    ]);
+    refreshBoardView();
+    if (options.openTaskId) await openEditor(project, options.openTaskId);
   }
 
   async function openEditor(project, workItemId, seedDetail) {
@@ -1694,10 +1716,16 @@
         if (form && state.canManage) {
           const snapshot = formSnapshot(form);
           if (snapshot !== state.lastSaveSnapshot && state.selectedId !== '__new__') {
-            await persistEditor(project, { silent: true });
+            const saved = await persistEditor(project, { silent: true });
+            if (!saved) {
+              showToast('Não foi possível guardar a tarefa. Corrija o erro antes de voltar.', 'error');
+              return;
+            }
           }
         }
         leaveEditorMode();
+        await fetchList(project.id);
+        await fetchAgentRequests(project.id).catch(() => []);
         refreshBoardView();
         return;
       }
@@ -2102,5 +2130,6 @@
     openFiltered(project, filters = {}) { return open(project, filters); },
     openRequestPlan(project, requestId) { return openRequestPlan(project, requestId); },
     openTask(project, taskId) { return openEditor(project, taskId); },
+    refreshTasks(project, options = {}) { return refreshTasks(project, options); },
   };
 })();

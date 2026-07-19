@@ -84,8 +84,18 @@ function promptDiff(previous, current) {
   return lines.join('\n').slice(0, 12000);
 }
 function baselineFor(project, key) {
-  return agentRequests.getAgentRequests(project).find((request) => request.requestKind === 'stage_transition' && request.transitionKey === key && request.status !== 'superseded')
-    || agentRequests.getAgentRequests(project).find((request) => request.requestKind === 'stage_transition' && request.transitionKey === key) || null;
+  const backedRequestIds = new Set(
+    workItems.getWorkItems(project).map((task) => task.agentRequestId).filter(Boolean)
+  );
+  const requests = agentRequests.getAgentRequests(project)
+    .filter((request) => (
+      request.requestKind === 'stage_transition'
+      && request.transitionKey === key
+      && backedRequestIds.has(request.id)
+    ));
+  return requests.find((request) => request.status !== 'superseded')
+    || requests[0]
+    || null;
 }
 function groupTasks(tasks, maximum) {
   if (tasks.length <= maximum) return tasks;

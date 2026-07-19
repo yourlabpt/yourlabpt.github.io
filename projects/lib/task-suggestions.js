@@ -76,7 +76,8 @@ function buildCandidate({ ruleId, stageId, planPhaseId, title, reason, evidence,
 }
 
 function hasTaskForSources(project, refs) {
-  const items = workItems.getWorkItems(project);
+  const items = workItems.getWorkItems(project)
+    .filter((item) => !['cancelled', 'failed'].includes(item.status));
   return ensureArray(refs).some((ref) => workItems.findBySourceRef(items, ref));
 }
 
@@ -116,7 +117,8 @@ function evaluateCandidates(project) {
       }));
     });
 
-  const existingTasks = workItems.getWorkItems(project);
+  const existingTasks = workItems.getWorkItems(project)
+    .filter((item) => !['cancelled', 'failed'].includes(item.status));
   const uncoveredRequirements = ensureArray(project?.requirements)
     .filter((requirement) => String(requirement?.type || '').toLowerCase() === 'functional')
     .filter((requirement) => !existingTasks.some((task) => ensureArray(task.sourceRefs)
@@ -161,6 +163,7 @@ function evaluateCandidates(project) {
     const sourceRefs = blocked.map((item) => ({ type: 'task', id: item.id, label: item.title }));
     const evidence = blocked.map((item) => ({ type: 'task', id: item.id, state: 'blocked', label: item.title }));
     const existingUnblock = workItems.getWorkItems(project).some((item) => !workItems.isTerminalStatus(item.status)
+      && item.status !== 'failed'
       && ensureArray(item.sourceRefs).some((ref) => ref.type === 'task' && blocked.some((b) => b.id === ref.id)));
     if (existingUnblock) return;
     candidates.push(buildCandidate({

@@ -220,6 +220,22 @@ describe('agent requests and visible plans', () => {
     assert.equal(project.workItems.some((item) => item.status === 'in_progress'), false);
   });
 
+  it('does not reuse an orphaned request that has no backing tasks', () => {
+    const project = { workItems: [], agentRequests: [] };
+    const input = {
+      idempotencyKey: 'same-request',
+      agentType: 'reverse_idea',
+      requestMarkdown: 'Clarify the idea.',
+    };
+    const first = agentRequests.createAgentRequest(project, input, { actorUserId: 'u1' });
+    project.workItems = [];
+    const second = agentRequests.createAgentRequest(project, input, { actorUserId: 'u1' });
+    assert.equal(first.created, true);
+    assert.equal(second.created, true);
+    assert.notEqual(second.request.id, first.request.id);
+    assert.equal(project.workItems.length, 1);
+  });
+
   it('keeps unapproved agent plans out of the canonical task list projection', () => {
     const project = {
       agentRequests: [
@@ -235,6 +251,23 @@ describe('agent requests and visible plans', () => {
     assert.deepEqual(
       filterAcceptedWorkItems(project).map((item) => item.id),
       ['w_accepted', 'w_human'],
+    );
+  });
+
+  it('shows explicitly created stage-transition tasks while execution approval is pending', () => {
+    const project = {
+      agentRequests: [
+        { id: 'transition', requestKind: 'stage_transition', status: 'awaiting_approval' },
+        { id: 'agent-proposal', status: 'awaiting_approval' },
+      ],
+      workItems: [
+        task({ id: 'w_transition', agentRequestId: 'transition', deliveryStageId: 'discovery' }),
+        task({ id: 'w_proposal', agentRequestId: 'agent-proposal' }),
+      ],
+    };
+    assert.deepEqual(
+      filterAcceptedWorkItems(project).map((item) => item.id),
+      ['w_transition'],
     );
   });
 
@@ -286,6 +319,10 @@ describe('stage transition requests through Tasks', () => {
     assert.equal(children.length, 2);
     assert.equal(created.request.parentTaskId, parent.id);
     assert.ok(children.every((item) => item.executionPackage?.instructions));
+    assert.deepEqual(
+      filterAcceptedWorkItems(data).map((item) => item.id).sort(),
+      data.workItems.map((item) => item.id).sort(),
+    );
   });
 
   it('validates a complete task-keyed bundle and rejects stale package versions', () => {
@@ -322,6 +359,24 @@ describe('stage transition requests through Tasks', () => {
     assert.equal(data.workItems.filter((item) => item.taskRole === 'coordination').length, 1);
     assert.equal(data.workItems.filter((item) => item.parentTaskId).length, 1);
   });
+
+  it('ignores orphaned transition metadata when no backing task exists', () => {
+    const data = project();
+    data.agentRequests = [{
+      id: 'areq_orphan',
+      requestKind: 'stage_transition',
+      transitionKey: 'idea->discovery:forward',
+      status: 'awaiting_approval',
+      taskIds: ['missing-task'],
+    }];
+    const preview = stageTransitions.buildPreview(data, {
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      config: { userRequest: 'Research the idea' },
+    });
+    assert.equal(preview.baselineRequest, null);
+  });
 });
 
 describe('contextual task suggestions', () => {
@@ -351,5 +406,18 @@ describe('contextual task suggestions', () => {
     assert.equal(created.length, 0);
     assert.equal(project.workItems.length, 0);
     assert.equal(project.taskSuggestions[0].status, 'proposed');
+  });
+
+  it('does not let a cancelled task suppress a still-needed suggestion', () => {
+    const project = {
+      workItems: [task({
+        id: 'cancelled-review',
+        status: 'cancelled',
+        sourceRefs: [{ type: 'review', id: 'review-1' }],
+      })],
+      humanReviews: [{ id: 'review-1', title: 'Review result', status: 'pending', stageId: 'discovery' }],
+    };
+    const suggestions = taskSuggestions.evaluateProject(project);
+    assert.equal(suggestions.some((entry) => entry.ruleId === 'pending_human_review'), true);
   });
 });

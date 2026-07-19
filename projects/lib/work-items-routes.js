@@ -29,7 +29,13 @@ function safeTransitionPreview(preview) {
 
 function filterAcceptedWorkItems(project, items = workItems.getWorkItems(project)) {
   const pendingRequestIds = new Set(agentRequests.getAgentRequests(project)
-    .filter((request) => ['awaiting_approval', 'revision_requested'].includes(request.status))
+    .filter((request) => (
+      ['awaiting_approval', 'revision_requested'].includes(request.status)
+      // A stage-transition request is created by an explicit human action
+      // after its task preview. Its tasks are therefore real accepted work,
+      // even though agent execution may still require a separate approval.
+      && request.requestKind !== 'stage_transition'
+    ))
     .map((request) => request.id));
   return workItems.ensureArray(items)
     .filter((item) => !item.agentRequestId || !pendingRequestIds.has(item.agentRequestId));

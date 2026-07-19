@@ -109,8 +109,11 @@ function createAgentRequest(project, input = {}, options = {}) {
     actorUserId, agentType: input.agentType, request: input.requestMarkdown || input.request || input.prompt,
     stage: input.deliveryStageId || input.stageId, tasks: planTasks.map((task) => [task.id, task.title]),
   })));
-  const existingRequest = getAgentRequests(project).find((entry) => entry.idempotencyKey === idempotencyKey
-    && !['completed', 'failed', 'cancelled'].includes(entry.status));
+  const existingRequest = getAgentRequests(project).find((entry) => (
+    entry.idempotencyKey === idempotencyKey
+    && !['completed', 'failed', 'cancelled'].includes(entry.status)
+    && workItems.getWorkItems(project).some((item) => item.agentRequestId === entry.id)
+  ));
   if (existingRequest) {
     const tasks = workItems.getWorkItems(project).filter((item) => item.agentRequestId === existingRequest.id);
     return { request: requestSummary(existingRequest, tasks), tasks, created: false };

@@ -1051,7 +1051,14 @@
         const transition = directionValues();
         const res = await apiRequest(`/projects/${project.id}/work-items/stage-transitions/requests`, { method: 'POST', body: { ...transition, regenerationMode: $('pdosTransitionRegeneration').value, config: readConfig(), idempotencyKey: `transition:${project.id}:${Date.now()}` } });
         closeTransitionModal(); window.switchToTab?.('tarefas');
-        if (res.parentTaskId) await window.WorkItemsUI?.openTask?.(project, res.parentTaskId);
+        if (window.WorkItemsUI?.refreshTasks) {
+          await window.WorkItemsUI.refreshTasks(project, {
+            resetFilters: true,
+            openTaskId: res.parentTaskId || res.workItems?.[0]?.id || '',
+          });
+        } else if (res.parentTaskId) {
+          await window.WorkItemsUI?.openTask?.(project, res.parentTaskId);
+        }
         showToast('Pedido criado. Os prompts e resultados ficam agora nas tarefas.', 'ok');
       } catch (error) { showToast(error.message, 'error'); }
       finally { button.disabled = false; button.textContent = 'Criar pedido e tarefas'; }
