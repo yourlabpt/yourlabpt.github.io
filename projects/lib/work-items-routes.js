@@ -28,6 +28,10 @@ function safeTransitionPreview(preview) {
 }
 
 function filterAcceptedWorkItems(project, items = workItems.getWorkItems(project)) {
+  const activeTaskIds = new Set(workItems.ensureArray(project?.agentJobs)
+    .filter((job) => ACTIVE_AGENT_STATUSES.has(textOr(job.status)))
+    .flatMap((job) => [textOr(job.workItemId), textOr(job.id)])
+    .filter(Boolean));
   const pendingRequestIds = new Set(agentRequests.getAgentRequests(project)
     .filter((request) => (
       ['awaiting_approval', 'revision_requested'].includes(request.status)
@@ -38,7 +42,12 @@ function filterAcceptedWorkItems(project, items = workItems.getWorkItems(project
     ))
     .map((request) => request.id));
   return workItems.ensureArray(items)
-    .filter((item) => !item.agentRequestId || !pendingRequestIds.has(item.agentRequestId));
+    .filter((item) => (
+      activeTaskIds.has(item.id)
+      || activeTaskIds.has(item.agentJobId)
+      || !item.agentRequestId
+      || !pendingRequestIds.has(item.agentRequestId)
+    ));
 }
 
 function applyListFilters(items, query) {
@@ -95,6 +104,88 @@ function registerWorkItemRoutes(app, deps) {
     sendProjectEmail,
     normalizeRequirementRecord,
   } = deps;
+
+  function linkedExecution(project, item, attempts = item?.attempts || []) {
+    const latest = attempts[attempts.length - 1] || null;
+    const promptRunId = textOr(item?.promptRunId || latest?.promptRunId);
+    const job = workItems.ensureArray(project?.agentJobs).find((entry) => (
+      (item?.agentJobId && entry.id === item.agentJobId)
+      || (promptRunId && entry.promptRunId === promptRunId)
+      || entry.workItemId === item?.id
+    )) || null;
+    const run = workItems.ensureArray(project?.promptRuns).find((entry) => (
+      (promptRunId && entry.id === promptRunId)
+      || (job?.promptRunId && entry.id === job.promptRunId)
+      || entry.workItemId === item?.id
+    )) || null;
+    return {
+      latest,
+      job,
+      run,
+      promptRunId: textOr(run?.id || job?.promptRunId || promptRunId),
+      connectorRunId: textOr(job?.dispatchId || run?.id || job?.id || promptRunId),
+    };
+  }
+
+  function applyApprovedOutput(project, item, attempts, actorUserId, at) {
+    const linked = linkedExecution(project, item, attempts);
+    const parsed = linked.run?.parsedOutput
+      || deliveryOs.parseAgentJsonOutput(linked.latest?.rawOutput || '').parsed;
+    if (parsed) {
+      const beforeArtifactIds = new Set(workItems.ensureArray(project.artifacts).map((artifact) => artifact.id));
+      const applyRun = linked.run || {
+        id: linked.promptRunId || `task_result_${item.id}`,
+        agentType: item.agentType,
+        stageId: item.deliveryStageId,
+        workItemId: item.id,
+        agentRequestId: item.agentRequestId,
+        createdAt: linked.latest?.createdAt || at,
+      };
+      deliveryOs.applyPromptRunOutput(project, applyRun, parsed, actorUserId, { normalizeRequirementRecord });
+      project.artifacts = workItems.ensureArray(project.artifacts).map((artifact) => (
+        beforeArtifactIds.has(artifact.id)
+          ? artifact
+          : {
+            ...artifact,
+            status: artifact.status || 'approved',
+            stageId: artifact.stageId || item.deliveryStageId,
+            provenance: {
+              ...(artifact.provenance || {}),
+              taskId: item.id,
+              agentRequestId: item.agentRequestId,
+              attemptId: linked.latest?.id,
+              executor: linked.latest?.source || 'runtime',
+            },
+          }
+      ));
+      if (linked.run) {
+        linked.run.status = 'applied';
+        linked.run.reviewedAt = at;
+        linked.run.reviewedBy = actorUserId;
+      }
+    }
+    return linked;
+  }
+
+  function refreshRequestProgress(project, requestId, at) {
+    const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === requestId);
+    if (!request) return null;
+    const tasks = workItems.getWorkItems(project)
+      .filter((entry) => entry.agentRequestId === request.id && entry.taskRole !== 'coordination');
+    if (tasks.length && tasks.every((entry) => workItems.isTerminalStatus(entry.status))) {
+      request.status = tasks.some((entry) => entry.status === 'failed') ? 'failed' : 'completed';
+    } else if (tasks.some((entry) => entry.status === 'waiting_review')) {
+      request.status = 'waiting_review';
+    } else if (tasks.some((entry) => ['in_progress', 'waiting_input'].includes(entry.status))) {
+      request.status = 'running';
+    } else {
+      request.status = 'ready';
+    }
+    request.updatedAt = at;
+    project.agentRequests = agentRequests.getAgentRequests(project)
+      .map((entry) => entry.id === request.id ? request : entry);
+    return request;
+  }
 
   async function cancelLinkedExecution(project, item) {
     const agentJob = workItems.ensureArray(project?.agentJobs).find((job) => (
@@ -878,6 +969,9 @@ function registerWorkItemRoutes(app, deps) {
       if (action !== 'approved' && !feedback) throw new Error('O feedback e obrigatorio ao pedir alteracoes ou rejeitar.');
       let updated = null;
       let connectorRunId = '';
+      let reviewRunId = '';
+      let nextWorkItem = null;
+      let updatedRequest = null;
       await updateStore(async (store) => {
         const project = store.projects.find((entry) => entry.id === req.params.projectId);
         if (!project) throw new Error('Projeto nao encontrado.');
@@ -888,14 +982,12 @@ function registerWorkItemRoutes(app, deps) {
         const at = nowIso();
         const nextStatus = action === 'approved' ? 'completed' : action === 'changes_requested' ? 'ready' : 'failed';
         const attempts = item.attempts.map((attempt, index, all) => index === all.length - 1 && feedback ? { ...attempt, feedbackMarkdown: feedback, updatedAt: at } : attempt);
-        connectorRunId = item.promptRunId || attempts[attempts.length - 1]?.promptRunId || '';
+        const linked = linkedExecution(project, item, attempts);
+        connectorRunId = linked.connectorRunId;
+        reviewRunId = linked.promptRunId;
         if (action === 'approved') {
           const latest = attempts[attempts.length - 1];
-          const linkedRun = item.promptRunId ? ensureArray(project.promptRuns).find((run) => run.id === item.promptRunId) : null;
-          if (linkedRun?.parsedOutput) {
-            deliveryOs.applyPromptRunOutput(project, linkedRun, linkedRun.parsedOutput, req.auth.user.id, { normalizeRequirementRecord });
-            linkedRun.status = 'applied'; linkedRun.reviewedAt = at; linkedRun.reviewedBy = req.auth.user.id;
-          }
+          applyApprovedOutput(project, item, attempts, req.auth.user.id, at);
           project.artifacts = ensureArray(project.artifacts);
           const existingArtifact = project.artifacts.find((artifact) => artifact.provenance?.taskId === item.id && artifact.provenance?.attemptId === latest?.id);
           if (!existingArtifact && latest?.rawOutput) project.artifacts.unshift({
@@ -906,6 +998,11 @@ function registerWorkItemRoutes(app, deps) {
             createdAt: at, updatedAt: at, createdBy: req.auth.user.id,
           });
         }
+        if (linked.job) {
+          linked.job.status = action === 'approved' ? 'completed'
+            : action === 'changes_requested' ? 'revision_requested' : 'failed';
+          linked.job.updatedAt = at;
+        }
         updated = workItems.normalizeWorkItem({
           ...item, status: nextStatus,
           agentStatus: action === 'approved' ? 'completed' : action === 'changes_requested' ? 'revision_requested' : 'rejected',
@@ -915,9 +1012,9 @@ function registerWorkItemRoutes(app, deps) {
           updatedAt: at, updatedBy: req.auth.user.id,
         }, { project });
         const linkedReview = ensureArray(project.humanReviews).find((review) => (
-          connectorRunId
-          && (review.promptRunId === connectorRunId
-            || (review.sourceType === 'prompt_run' && review.sourceId === connectorRunId))
+          reviewRunId
+          && (review.promptRunId === reviewRunId
+            || (review.sourceType === 'prompt_run' && review.sourceId === reviewRunId))
         ));
         if (linkedReview) {
           linkedReview.status = action === 'approved' ? 'approved'
@@ -934,12 +1031,32 @@ function registerWorkItemRoutes(app, deps) {
             : entry);
         }
         workItems.setWorkItems(project, next);
+        updatedRequest = refreshRequestProgress(project, item.agentRequestId, at);
+        nextWorkItem = action === 'approved'
+          ? workItems.getWorkItems(project).find((entry) => (
+            entry.agentRequestId === item.agentRequestId
+            && entry.taskRole !== 'coordination'
+            && entry.status === 'ready'
+          )) || null
+          : null;
         taskSuggestions.evaluateProject(project, { now: at });
         project.updatedAt = at;
         appendActivity(store, { actorUserId: req.auth.user.id, projectId: project.id, action: `work_item_review_${action}`, details: { workItemId: item.id } });
       });
-      if (connectorRunId && connectorStore) connectorStore.markReviewed(connectorRunId, action);
-      return res.json({ workItem: updated });
+      let connectorDispatch = null;
+      if (connectorRunId && connectorStore) {
+        const current = connectorStore.findDispatch(connectorRunId);
+        connectorDispatch = current?.status === 'waiting_review'
+          ? connectorStore.markReviewed(current.id, action)
+          : current;
+      }
+      return res.json({
+        workItem: updated,
+        agentRequest: updatedRequest,
+        nextWorkItem,
+        connectorReleased: !connectorRunId
+          || ['completed', 'failed', 'cancelled'].includes(connectorDispatch?.status),
+      });
     } catch (error) { return res.status(400).json({ message: error.message }); }
   });
 

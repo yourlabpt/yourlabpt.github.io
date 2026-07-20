@@ -32,6 +32,7 @@ function registerAgentConnectorRoutes(app, deps) {
     onResult,
     onValidateResult,
     onSync,
+    onValidateDispatch,
   } = deps;
   const onAudit = typeof deps.onAudit === 'function' ? deps.onAudit : async () => {};
   const store = deps.connectorStore || new AgentConnectorStore(sqliteStore.getDb());
@@ -164,6 +165,13 @@ function registerAgentConnectorRoutes(app, deps) {
         dispatch = store.claim(req.agentConnector.id);
       }
       if (!dispatch) return res.status(204).end();
+      if (typeof onValidateDispatch === 'function') {
+        await onValidateDispatch(dispatch);
+        dispatch = {
+          ...store.getDispatch(dispatch.id),
+          leaseToken: dispatch.leaseToken,
+        };
+      }
       const response = res.json({ dispatch });
       void onAudit('agent_dispatch_claimed', {
         actorUserId: 'agent_connector',
@@ -202,12 +210,16 @@ function registerAgentConnectorRoutes(app, deps) {
         return res.status(413).json({ message: 'Lote de eventos demasiado grande.' });
       }
       const before = store.getDispatch(req.params.dispatchId);
-      const dispatch = store.sync(
+      let dispatch = store.sync(
         req.agentConnector.id,
         req.params.dispatchId,
         lease(req),
         req.body || {}
       );
+      if (typeof onValidateDispatch === 'function') {
+        await onValidateDispatch(dispatch);
+        dispatch = store.getDispatch(dispatch.id);
+      }
       if (typeof onSync === 'function' && (
         before?.status !== dispatch.status
         || before?.desiredAction !== dispatch.desiredAction

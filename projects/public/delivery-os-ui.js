@@ -1790,6 +1790,20 @@
 
   function discoveryData(project) {
     const d = project.discovery && typeof project.discovery === 'object' ? project.discovery : {};
+    const stageArtifacts = ensureArray(project.artifacts)
+      .filter((artifact) => artifact.stageId === 'discovery' && artifact.status !== 'rejected');
+    const readableArtifacts = stageArtifacts.filter((artifact) => {
+      const body = String(artifact.bodyMarkdown || artifact.descriptionMarkdown || artifact.description || '').trim();
+      return body && !body.startsWith('{') && !body.startsWith('[');
+    });
+    const approvedDeliverables = (readableArtifacts.length ? readableArtifacts : stageArtifacts)
+      .filter((artifact, index, rows) => rows.findIndex((candidate) => (
+        (candidate.id && candidate.id === artifact.id)
+        || (
+          (candidate.name || candidate.title) === (artifact.name || artifact.title)
+          && (candidate.bodyMarkdown || candidate.description) === (artifact.bodyMarkdown || artifact.description)
+        )
+      )) === index);
     return {
       marketSummaryMarkdown: d.marketSummaryMarkdown || '',
       marketSizing: d.marketSizing || { tam: '', sam: '', som: '', notesMarkdown: '' },
@@ -1800,6 +1814,7 @@
       swot: d.swot || { strengths: [], weaknesses: [], opportunities: [], threats: [] },
       goToMarketMarkdown: d.goToMarketMarkdown || '',
       assumptions: Array.isArray(d.assumptions) ? d.assumptions : [],
+      approvedDeliverables,
     };
   }
 
@@ -1810,6 +1825,7 @@
       d.marketSummaryMarkdown || d.marketSizing.tam || d.marketSizing.sam || d.marketSizing.som
       || d.segments.length || d.competitors.length || d.commercialImpact.objectivesMarkdown
       || d.commercialImpact.kpis.length || d.goToMarketMarkdown || d.assumptions.length
+      || d.approvedDeliverables.length
       || bm.revenueStreams.length || bm.costStructure.length || bm.channels.length || bm.keyPartners.length
       || sw.strengths.length || sw.weaknesses.length || sw.opportunities.length || sw.threats.length
     );
@@ -1930,6 +1946,20 @@
         </section>`
       : '';
 
+    const approvedDeliverables = d.approvedDeliverables.length
+      ? `<section class="idea-block">
+          <h4 class="idea-block-title">Entregáveis aprovados da descoberta</h4>
+          <div class="disc-grid">
+            ${d.approvedDeliverables.map((artifact, index) => `
+              <article class="disc-card">
+                <h5>${escapeHtml(artifact.name || artifact.title || `Entregável ${index + 1}`)}</h5>
+                <div class="idea-md" data-disc-md="artifact-${index}"></div>
+              </article>
+            `).join('')}
+          </div>
+        </section>`
+      : '';
+
     return `
       <article class="pdos-card idea-canvas discovery-canvas">
         <header class="idea-hero">
@@ -1940,6 +1970,7 @@
           </div>
         </header>
         <div class="idea-md idea-main" data-disc-md="summary"></div>
+        ${approvedDeliverables}
         ${sizingTiles ? `<section class="idea-block"><h4 class="idea-block-title">Dimensão de mercado</h4>${sizingTiles}</section>` : ''}
         ${segments}
         ${competitors}
@@ -1962,6 +1993,9 @@
     fill('sizing-notes', d.marketSizing.notesMarkdown);
     fill('impact-obj', d.commercialImpact.objectivesMarkdown);
     fill('gtm', d.goToMarketMarkdown);
+    d.approvedDeliverables.forEach((artifact, index) => {
+      fill(`artifact-${index}`, artifact.bodyMarkdown || artifact.descriptionMarkdown || artifact.description || '');
+    });
     d.segments.forEach((s, i) => fill(`segment-${i}`, s.descriptionMarkdown));
     d.competitors.forEach((c, i) => fill(`competitor-${i}`, c.descriptionMarkdown));
   }
@@ -4357,6 +4391,10 @@
   }
 
   async function runAgent(agentType, project) {
+    if (agentType === 'discovery_research') {
+      openTransitionPicker('idea', 'discovery', project);
+      return undefined;
+    }
     if (agentType === 'requirements_to_architecture') {
       return runArchitecturePackGeneration(project);
     }
@@ -4722,6 +4760,43 @@
     const project = window.state?.selectedProject;
     if (!project) return;
     try {
+      const review = ensureArray(project.humanReviews).find((entry) => entry.id === reviewId);
+      const promptRun = ensureArray(project.promptRuns).find((entry) => (
+        entry.id === review?.promptRunId || entry.id === review?.sourceId
+      ));
+      const linkedTask = ensureArray(project.workItems).find((entry) => (
+        entry.id === promptRun?.workItemId
+        || entry.promptRunId === promptRun?.id
+      ));
+      if (linkedTask?.status === 'waiting_review' && ['approved', 'changes_requested', 'rejected'].includes(status)) {
+        const canonical = await apiRequest(`/projects/${project.id}/work-items/${linkedTask.id}/review`, {
+          method: 'POST',
+          body: {
+            action: status,
+            feedbackMarkdown: extra.notes || '',
+          },
+        });
+        closeDrawer();
+        await reloadProject(project.id);
+        if (status === 'approved' && canonical.nextWorkItem) {
+          const next = canonical.nextWorkItem;
+          await apiRequest('/agent-runs', {
+            method: 'POST',
+            body: {
+              projectId: project.id,
+              agentType: next.agentType,
+              agentRequestId: next.agentRequestId,
+              workItemId: next.id,
+              options: { stageId: next.deliveryStageId },
+            },
+          });
+          await reloadProject(project.id);
+          showToast(`Revisão aplicada. A próxima subtarefa “${next.title}” foi iniciada.`, 'ok');
+        } else {
+          showToast(status === 'approved' ? 'Revisão aprovada e aplicada ao projecto.' : 'Revisão actualizada.', 'ok');
+        }
+        return;
+      }
       const res = await apiRequest(`/projects/${project.id}/human-reviews/${reviewId}/resolve`, {
         method: 'POST',
         body: {

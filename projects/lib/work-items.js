@@ -362,6 +362,26 @@ function deriveContainerStatus(children) {
   if (list.some((item) => item.status === 'in_progress' || isTerminalStatus(item.status))) return 'in_progress';
   return 'ready';
 }
+function executionDrivenStatus(item) {
+  if (!item.agentJobId) return '';
+  const status = textOr(item.agentStatus).toLowerCase();
+  if (['paused', 'waiting_input', 'waiting_approval', 'budget_exhausted'].includes(status)) {
+    return 'waiting_input';
+  }
+  if (['waiting_review', 'pending_human_review', 'self_review'].includes(status)) {
+    return 'waiting_review';
+  }
+  if (['failed', 'blocked'].includes(status)) return 'failed';
+  if (['cancelled', 'canceled'].includes(status)) return 'cancelled';
+  if (
+    ['dispatching', 'queued', 'claimed', 'running', 'planning', 'researching',
+      'executing', 'verifying', 'replanning', 'goal_setting', 'goal_check']
+      .includes(status)
+  ) {
+    return 'in_progress';
+  }
+  return '';
+}
 function deriveParentStatuses(items) {
   const list = ensureArray(items).map((item) => ({ ...item }));
   const children = new Map();
@@ -373,7 +393,7 @@ function deriveParentStatuses(items) {
   list.forEach((item) => {
     const descendants = children.get(item.id) || [];
     if (item.executorMode === 'both' || descendants.length) {
-      item.status = deriveContainerStatus(descendants);
+      item.status = executionDrivenStatus(item) || deriveContainerStatus(descendants);
       item.childTaskCount = descendants.length;
       item.completedChildTaskCount = descendants.filter((child) => isTerminalStatus(child.status)).length;
     }

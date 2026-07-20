@@ -6,11 +6,19 @@ const projectAccess = require('../lib/project-access');
 const taskSuggestions = require('../lib/task-suggestions');
 const agentRequests = require('../lib/agent-requests');
 const stageTransitions = require('../lib/stage-transition-requests');
-const { selectReadyAgentTask } = require('../lib/agent-runtime-routes');
-const { filterAcceptedWorkItems } = require('../lib/work-items-routes');
+const {
+  selectReadyAgentTask,
+  reconcileActiveAgentJobs,
+} = require('../lib/agent-runtime-routes');
+const { filterAcceptedWorkItems, registerWorkItemRoutes } = require('../lib/work-items-routes');
 
 function task(overrides = {}) {
   return { title: 'Task', descriptionMarkdown: 'Body', complexity: 'low', deliveryStageId: 'requirements', ...overrides };
+}
+
+async function runHandlers(handlers, req, res, index = 0) {
+  if (!handlers[index]) return;
+  await handlers[index](req, res, () => runHandlers(handlers, req, res, index + 1));
 }
 
 describe('work items model', () => {
@@ -63,6 +71,25 @@ describe('work items model', () => {
     assert.equal(items.find((item) => item.id === 'parent').status, 'in_progress');
     assert.equal(items.find((item) => item.id === 'parent').childTaskCount, 2);
     assert.throws(() => workItems.validateHierarchy({ id: 'parent', parentTaskId: 'agent' }, items), /ciclos/);
+  });
+
+  it('keeps a coordination task aligned with its live agent execution', () => {
+    const base = [
+      task({
+        id: 'parent',
+        executorMode: 'agent',
+        taskRole: 'coordination',
+        agentJobId: 'job_live',
+        agentStatus: 'paused',
+      }),
+      task({ id: 'child', parentTaskId: 'parent', status: 'ready' }),
+    ];
+    let items = workItems.normalizeWorkItems(base);
+    assert.equal(items.find((item) => item.id === 'parent').status, 'waiting_input');
+    items = workItems.normalizeWorkItems(items.map((item) => (
+      item.id === 'parent' ? { ...item, agentStatus: 'executing' } : item
+    )));
+    assert.equal(items.find((item) => item.id === 'parent').status, 'in_progress');
   });
 
   it('ranks blocked and review tasks for phase summaries', () => {
@@ -193,6 +220,100 @@ describe('work item synchronization', () => {
 });
 
 describe('agent requests and visible plans', () => {
+  it('repairs an already-approved task whose connector was left waiting for review', () => {
+    const project = {
+      workItems: [workItems.normalizeWorkItem(task({
+        id: 'approved_task',
+        origin: 'agent',
+        executorMode: 'agent',
+        status: 'completed',
+        agentJobId: 'approved_job',
+        promptRunId: 'approved_run',
+      }))],
+      agentJobs: [{
+        id: 'approved_job',
+        workItemId: 'approved_task',
+        promptRunId: 'approved_run',
+        dispatchId: 'approved_dispatch',
+        status: 'pending_human_review',
+      }],
+    };
+    let dispatchStatus = 'waiting_review';
+    const connectorStore = {
+      findDispatch: () => ({ id: 'approved_dispatch', status: dispatchStatus }),
+      markReviewed: (id, action) => {
+        assert.equal(id, 'approved_dispatch');
+        assert.equal(action, 'approved');
+        dispatchStatus = 'completed';
+        return { id, status: dispatchStatus };
+      },
+    };
+    const result = reconcileActiveAgentJobs(project, {
+      connectorStore,
+      connectionMode: 'remote_pull',
+      nowIso: () => '2026-07-20T10:00:00.000Z',
+    });
+    assert.equal(result.blocking, null);
+    assert.equal(dispatchStatus, 'completed');
+    assert.equal(project.agentJobs[0].status, 'completed');
+  });
+
+  it('cancels an orphaned execution and does not let it block a new task', () => {
+    const commands = [];
+    const dispatch = {
+      id: 'dispatch_orphan',
+      status: 'paused',
+      agentJobId: 'job_orphan',
+    };
+    const connectorStore = {
+      findDispatch: () => dispatch,
+      setDesiredAction: (_id, action, options) => {
+        commands.push({ action, options });
+        return { ...dispatch, status: 'cancel_requested', desiredAction: action };
+      },
+    };
+    const project = {
+      workItems: [],
+      agentJobs: [{
+        id: 'job_orphan',
+        dispatchId: dispatch.id,
+        workItemId: 'deleted_task',
+        status: 'paused',
+      }],
+    };
+    const result = reconcileActiveAgentJobs(project, {
+      connectorStore,
+      connectionMode: 'remote_pull',
+      nowIso: () => '2026-07-19T23:00:00.000Z',
+    });
+    assert.equal(result.blocking, null);
+    assert.equal(result.orphaned.length, 1);
+    assert.equal(project.agentJobs[0].status, 'cancel_requested');
+    assert.equal(project.agentJobs[0].cancelReason, 'orphaned_execution');
+    assert.equal(commands[0].action, 'cancel');
+    assert.equal(commands[0].options.idempotencyKey, 'orphan:dispatch_orphan:cancel');
+  });
+
+  it('keeps a visible paused execution controllable and blocking', () => {
+    const project = {
+      workItems: [workItems.normalizeWorkItem(task({ id: 'visible_task' }))],
+      agentJobs: [{
+        id: 'job_visible',
+        workItemId: 'visible_task',
+        dispatchId: 'dispatch_visible',
+        status: 'paused',
+      }],
+    };
+    const result = reconcileActiveAgentJobs(project, {
+      connectionMode: 'remote_pull',
+      connectorStore: {
+        findDispatch: () => ({ id: 'dispatch_visible', status: 'paused' }),
+      },
+    });
+    assert.equal(result.blocking.id, 'job_visible');
+    assert.equal(result.orphaned.length, 0);
+  });
+
   it('falls forward from a blocked requested task to the next executable subtask', () => {
     const tasks = [
       { id: 'coordination', taskRole: 'coordination', status: 'ready' },
@@ -271,6 +392,29 @@ describe('agent requests and visible plans', () => {
     );
   });
 
+  it('never hides a task that has an active agent execution', () => {
+    const project = {
+      agentRequests: [{ id: 'pending', status: 'awaiting_approval' }],
+      agentJobs: [{
+        id: 'job_active',
+        workItemId: 'w_active',
+        status: 'paused',
+      }],
+      workItems: [
+        task({
+          id: 'w_active',
+          agentRequestId: 'pending',
+          agentJobId: 'job_active',
+          agentStatus: 'paused',
+        }),
+      ],
+    };
+    assert.deepEqual(
+      filterAcceptedWorkItems(project).map((item) => item.id),
+      ['w_active'],
+    );
+  });
+
   it('approves a plan and only makes dependency-free tasks ready', () => {
     const project = { workItems: [] };
     const created = agentRequests.createAgentRequest(project, {
@@ -306,6 +450,138 @@ describe('stage transition requests through Tasks', () => {
       ], capabilities: [], diagramArtifacts: [], documents: [], phases: [],
     };
   }
+
+  it('applies an approved subtask, releases its connector and exposes the next task', async () => {
+    const data = project();
+    data.name = 'Black Adam App';
+    data.ideaBriefMarkdown = 'Converter música em partituras e novamente em música.';
+    data.members = [{ userId: 'editor', role: 'partner' }];
+    data.artifacts = [];
+    data.promptRuns = [];
+    data.agentJobs = [];
+    const created = stageTransitions.createRequest(data, {
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      config: { maxSubtasks: 8 },
+      idempotencyKey: 'review-chain',
+    }, { actorUserId: 'editor' });
+    const children = workItems.getWorkItems(data)
+      .filter((entry) => entry.agentRequestId === created.request.id && entry.taskRole !== 'coordination');
+    const first = children[0];
+    const second = children[1];
+    const rawOutput = JSON.stringify({
+      transitionSummaryMarkdown: 'Visão e proposta de valor validadas.',
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      artifacts: [{
+        type: 'context',
+        name: 'Visão aprovada',
+        bodyMarkdown: '## Proposta de valor\nUma experiência musical bidirecional.',
+        stageId: 'discovery',
+      }],
+      requirements: [],
+    });
+    const promptRunId = 'run_review_chain';
+    const jobId = 'job_review_chain';
+    const dispatchId = 'dispatch_review_chain';
+    data.promptRuns = [{
+      id: promptRunId,
+      agentType: 'stage_transition',
+      workItemId: first.id,
+      agentRequestId: created.request.id,
+      rawOutput,
+      parsedOutput: JSON.parse(rawOutput),
+      status: 'pending_review',
+      createdAt: new Date().toISOString(),
+    }];
+    data.agentJobs = [{
+      id: jobId,
+      agentId: 'delivery-os-full',
+      promptRunId,
+      dispatchId,
+      workItemId: first.id,
+      agentRequestId: created.request.id,
+      status: 'pending_human_review',
+    }];
+    workItems.setWorkItems(data, workItems.getWorkItems(data).map((entry) => (
+      entry.id === first.id
+        ? workItems.normalizeWorkItem({
+          ...entry,
+          status: 'waiting_review',
+          agentStatus: 'pending_human_review',
+          agentJobId: jobId,
+          promptRunId,
+          attempts: [{
+            id: 'attempt_review_chain',
+            number: 1,
+            source: 'runtime',
+            status: 'completed',
+            agentJobId: jobId,
+            promptRunId,
+            rawOutput,
+            resultSummaryMarkdown: 'Visão concluída.',
+          }],
+        }, { project: data })
+        : entry
+    )));
+    created.request.status = 'waiting_review';
+
+    const routes = new Map();
+    const app = {};
+    for (const method of ['get', 'post', 'patch', 'delete']) {
+      app[method] = (path, ...handlers) => routes.set(`${method}:${path}`, handlers);
+    }
+    let dispatchStatus = 'waiting_review';
+    const connectorStore = {
+      findDispatch: (id) => id === dispatchId ? { id: dispatchId, status: dispatchStatus } : null,
+      markReviewed: (id, action) => {
+        assert.equal(id, dispatchId);
+        assert.equal(action, 'approved');
+        dispatchStatus = 'completed';
+        return { id, status: dispatchStatus };
+      },
+    };
+    const store = { projects: [data], users: [] };
+    registerWorkItemRoutes(app, {
+      authMiddleware: (req, res, next) => next(),
+      requireProjectEditor: (req, res, next) => next(),
+      ensureProjectLoadedLite: async () => data,
+      canAccessProject: () => true,
+      updateStore: async (mutate) => mutate(store),
+      appendActivity: () => {},
+      connectorStore,
+      agentConnectionMode: 'remote_pull',
+      runtime: null,
+      ensureArray: (value) => Array.isArray(value) ? value : [],
+      nowIso: () => new Date().toISOString(),
+      normalizeRequirementRecord: (value) => value,
+    });
+    const handlers = routes.get('post:/api/projects/projects/:projectId/work-items/:workItemId/review');
+    let responseBody = null;
+    const req = {
+      params: { projectId: data.id, workItemId: first.id },
+      body: { action: 'approved' },
+      auth: { user: { id: 'editor', role: 'partner' } },
+    };
+    const res = {
+      status() { return this; },
+      json(payload) { responseBody = payload; return payload; },
+    };
+    await runHandlers(handlers, req, res);
+
+    assert.equal(workItems.findWorkItem(data, first.id).status, 'completed');
+    assert.equal(workItems.findWorkItem(data, second.id).status, 'ready');
+    assert.equal(data.agentRequests.find((entry) => entry.id === created.request.id).status, 'ready');
+    assert.equal(data.agentJobs[0].status, 'completed');
+    assert.equal(data.promptRuns[0].status, 'applied');
+    assert.equal(dispatchStatus, 'completed');
+    assert.equal(responseBody.connectorReleased, true);
+    assert.equal(responseBody.nextWorkItem.id, second.id);
+    assert.equal(data.artifacts[0].name, 'Visão aprovada');
+    assert.equal(data.artifacts[0].provenance.taskId, first.id);
+  });
 
   it('creates a coordination parent and never truncates children silently', () => {
     const data = project();

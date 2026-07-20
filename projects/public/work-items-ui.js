@@ -58,6 +58,7 @@
   let connectionStreamAbort = null;
   let connectionStreamKey = '';
   let runtimeHealthTimer = null;
+  let taskBoardRefreshTimer = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -225,6 +226,42 @@
       }
       scheduleRuntimeHealthRefresh();
     }, 15000);
+  }
+
+  function taskBoardSignature(items = state.items) {
+    return JSON.stringify((items || []).map((item) => [
+      item.id,
+      item.status,
+      item.agentStatus,
+      item.currentAction,
+      item.lastMilestone,
+      item.progressCurrent,
+      item.progressTotal,
+      item.updatedAt,
+    ]));
+  }
+
+  function scheduleTaskBoardRefresh() {
+    clearTimeout(taskBoardRefreshTimer);
+    taskBoardRefreshTimer = setTimeout(async () => {
+      if (
+        window.state?.activeTab === 'tarefas'
+        && document.visibilityState !== 'hidden'
+        && state.loaded
+        && state.projectId
+      ) {
+        const before = taskBoardSignature();
+        try {
+          await fetchList(state.projectId);
+          if (before !== taskBoardSignature() && state.mode === 'browse') {
+            refreshBoardView();
+          }
+        } catch {
+          // Keep the current board stable during a transient sync failure.
+        }
+      }
+      scheduleTaskBoardRefresh();
+    }, 2000);
   }
 
   async function pollConnectedTask(project, runId, taskId) {
@@ -1873,10 +1910,40 @@
         const action = taskReview.dataset.adoTaskReview;
         const feedbackMarkdown = action === 'approved' ? '' : window.prompt(action === 'rejected' ? 'Porque rejeita este resultado?' : 'Que alterações são necessárias?')?.trim();
         if (action !== 'approved' && !feedbackMarkdown) return;
+        taskReview.disabled = true;
         try {
           const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/review`, { method: 'POST', body: { action, feedbackMarkdown } });
-          state.detail = payload.workItem; paintEditor(project); await fetchList(project.id); showToast('Decisão registada.', 'ok');
-        } catch (err) { showToast(err.message, 'error'); }
+          state.detail = payload.workItem;
+          paintEditor(project);
+          await fetchList(project.id);
+          if (action === 'approved') {
+            await window.PdosUI?.reloadProject?.(project.id);
+          }
+          if (action === 'approved' && payload.nextWorkItem) {
+            const next = payload.nextWorkItem;
+            const run = await apiRequest('/agent-runs', {
+              method: 'POST',
+              body: {
+                projectId: project.id,
+                agentType: next.agentType,
+                agentRequestId: next.agentRequestId,
+                workItemId: next.id,
+                options: { stageId: next.deliveryStageId },
+              },
+            });
+            await fetchList(project.id);
+            await openEditor(project, next.id);
+            showToast(`Resultado aplicado. A próxima subtarefa “${next.title}” foi iniciada.`, 'ok');
+            pollConnectedTask(project, run.agentJob?.id || run.promptRun?.id, next.id);
+          } else {
+            showToast(action === 'approved' ? 'Resultado aprovado e aplicado ao projecto.' : 'Decisão registada.', 'ok');
+          }
+        } catch (err) {
+          showToast(err.message, 'error');
+          await fetchList(project.id).catch(() => {});
+        } finally {
+          taskReview.disabled = false;
+        }
         return;
       }
 
@@ -2115,6 +2182,7 @@
     renderToolbar();
     void refreshRuntimeHealth();
     scheduleRuntimeHealthRefresh();
+    scheduleTaskBoardRefresh();
 
     if (!state.loaded) {
       $('workItemsBoard').innerHTML = '<p class="ado-empty">A carregar tarefas…</p>';

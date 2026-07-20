@@ -617,6 +617,65 @@ describe('secure outbound agent connector', () => {
     db.close();
   });
 
+  it('returns an orphan-cancellation command in the same claim response', async () => {
+    const { db, store, keys, connector } = fixture();
+    const queued = enqueue(store);
+    const routes = [];
+    const app = {
+      use() {},
+      get(path, ...handlers) { routes.push({ method: 'GET', path, handlers }); },
+      post(path, ...handlers) { routes.push({ method: 'POST', path, handlers }); },
+    };
+    registerAgentConnectorRoutes(app, {
+      authMiddleware: (_req, _res, next) => next(),
+      requireRole: () => (_req, _res, next) => next(),
+      sqliteStore: { getDb: () => db },
+      connectorStore: store,
+      verifyPassword: () => true,
+      onResult: async () => {},
+      onValidateDispatch: async (dispatch) => {
+        store.setDesiredAction(dispatch.id, 'cancel', {
+          idempotencyKey: `orphan:${dispatch.id}:cancel`,
+        });
+      },
+    });
+    const route = routes.find((entry) => (
+      entry.path === '/api/projects/agent-connectors/claim'
+    ));
+    const path = '/api/projects/agent-connectors/claim';
+    const rawBody = '{}';
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = crypto.randomBytes(18).toString('base64url');
+    const canonical = ['POST', path, timestamp, nonce, sha256(rawBody)].join('\n');
+    const signature = crypto.sign(null, Buffer.from(canonical), keys.privateKey).toString('base64url');
+    const req = {
+      method: 'POST',
+      originalUrl: path,
+      ip: '127.0.0.1',
+      headers: {
+        'x-yl-connector-id': connector.id,
+        'x-yl-timestamp': timestamp,
+        'x-yl-nonce': nonce,
+        'x-yl-signature': signature,
+      },
+      rawBody,
+      body: {},
+      destroyed: false,
+    };
+    let response = {};
+    const res = {
+      status(code) { response.code = code; return this; },
+      json(body) { response.body = body; return this; },
+      end() { return this; },
+    };
+    await runRouteHandlers(route.handlers, req, res);
+    assert.equal(response.body.dispatch.id, queued.id);
+    assert.equal(response.body.dispatch.status, 'cancel_requested');
+    assert.equal(response.body.dispatch.desiredAction, 'cancel');
+    assert.ok(response.body.dispatch.leaseToken);
+    db.close();
+  });
+
   it('retries with an unchanged frozen package and rejects a different second result', () => {
     const { db, store, connector } = fixture();
     const original = enqueue(store, { package: { version: 1, immutable: { value: true } } });
