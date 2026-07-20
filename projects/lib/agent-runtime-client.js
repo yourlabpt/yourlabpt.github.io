@@ -2,6 +2,7 @@ const crypto = require('crypto');
 
 const AGENT_ID_TO_PLATFORM_TYPE = {
   'idea-to-requirements': 'reverse_idea',
+  'discovery-research': 'discovery_research',
   'requirements-to-architecture': 'requirements_to_architecture',
   'architecture-to-roadmap': 'roadmap_plan',
   'roadmap-to-implementation': 'implementation_tasks',

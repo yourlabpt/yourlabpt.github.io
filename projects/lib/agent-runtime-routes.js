@@ -10,8 +10,8 @@ const { registerAgentConnectorRoutes } = require('./agent-connector-routes');
 const {
   CONTRACT_ID,
   CONTRACT_VERSION,
-  assessCompatibility,
   buildFrozenTaskPackage,
+  findCompatibleAgent,
   publicDispatch,
 } = require('./agent-connector-contract');
 const LEGACY_AGENT_MANIFESTS = {
@@ -59,7 +59,7 @@ function buildPromptForAgentType(project, agentType, body = {}) {
   if (agentType === 'discovery_research') {
     return {
       fullPrompt: deliveryOs.buildDiscoveryPrompt(project),
-      targetOutput: 'discovery_v1',
+      targetOutput: 'discovery_v2',
       contextPack: {},
     };
   }
@@ -954,8 +954,28 @@ function registerAgentRuntimeRoutes(app, deps) {
         return { id, name: textOr(raw.name || raw.label, id), taskTypes, skills, mcpTools: tools, compatible, legacyManifest };
       }).filter((row) => row.id);
       const compatible = agents.filter((row) => row.compatible); const preferred = task.executionSettings?.agentId || request?.configSnapshot?.preferredAgentId || task.agentId;
-      const selected = compatible.find((row) => row.id === preferred) || compatible[0] || null;
-      return res.json({ reachable: connectionMode === 'remote_pull' ? Boolean(health.connector?.online) : true, queuedWhenOffline: connectionMode === 'remote_pull', health, task: workItems.toSlimCard(task), requestId: request?.id || '', requiredSkills, requiredMcpTools: requiredTools, agents, selectedAgentId: selected?.id || '', settings: task.executionSettings, scope: task.taskRole === 'coordination' ? 'tree' : 'task', contextSummary: task.taskRole === 'coordination' ? `Pedido completo com ${workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === task.id).length} subtarefas e contexto autorizado do projecto.` : 'Contexto congelado e autorizado para esta tarefa.' });
+      let selected = compatible.find((row) => row.id === preferred) || compatible[0] || null;
+      let compatibilityPendingReasons = [];
+      if (connectionMode === 'remote_pull') {
+        const match = findCompatibleAgent({
+          contract: { id: CONTRACT_ID, version: CONTRACT_VERSION },
+          agentId: preferred,
+          agentType: request?.agentType,
+          requiredSkills,
+          allowedMcpTools: requiredTools,
+        }, health.connector?.capabilities, { preferredAgentId: preferred });
+        if (match.compatible && match.agent?.id) {
+          selected = agents.find((row) => row.id === match.agent.id) || selected;
+        } else {
+          selected = selected
+            || agents.find((row) => row.id === preferred)
+            || agents.find((row) => row.taskTypes.includes(request?.agentType))
+            || agents[0]
+            || null;
+          compatibilityPendingReasons = match.reasons;
+        }
+      }
+      return res.json({ reachable: connectionMode === 'remote_pull' ? Boolean(health.connector?.online) : true, queuedWhenOffline: connectionMode === 'remote_pull', health, task: workItems.toSlimCard(task), requestId: request?.id || '', requiredSkills, requiredMcpTools: requiredTools, agents, selectedAgentId: selected?.id || preferred || '', compatibilityPending: compatibilityPendingReasons.length > 0, compatibilityPendingReasons, settings: task.executionSettings, scope: task.taskRole === 'coordination' ? 'tree' : 'task', contextSummary: task.taskRole === 'coordination' ? `Pedido completo com ${workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === task.id).length} subtarefas e contexto autorizado do projecto.` : 'Contexto congelado e autorizado para esta tarefa.' });
     } catch (error) { return res.status(503).json({ message: `Agent Runtime indisponivel: ${error.message}`, reachable: false }); }
   });
 
@@ -1010,6 +1030,7 @@ function registerAgentRuntimeRoutes(app, deps) {
       let built = buildPromptForAgentType(project, platformAgentType, promptBody);
       let delegation = null;
       let delegatedTask = null;
+      let compatibilityPendingReasons = [];
       await updateStore(async (mutableStore) => {
         const mutableProject = mutableStore.projects.find((entry) => entry.id === projectId);
         workItems.migrateProjectWorkItems(mutableProject);
@@ -1052,10 +1073,14 @@ function registerAgentRuntimeRoutes(app, deps) {
         platformAgentType = request.agentType || runtime.mapAgentId(agentId);
         if (connectionMode === 'remote_pull') {
           const connector = connectorStore.activeConnector();
-          const manifests = ensureArray(connector?.capabilities?.agents);
-          const advertised = manifests.find((entry) => entry.id === agentId)
-            || manifests.find((entry) => ensureArray(entry.taskTypes).includes(platformAgentType));
-          if (advertised?.id) agentId = advertised.id;
+          const match = findCompatibleAgent({
+            contract: { id: CONTRACT_ID, version: CONTRACT_VERSION },
+            agentId,
+            agentType: platformAgentType,
+            requiredSkills: canonicalTask.requiredSkills,
+            allowedMcpTools: canonicalTask.requiredMcpTools,
+          }, connector?.capabilities, { preferredAgentId: agentId });
+          if (match.compatible && match.agent?.id) agentId = match.agent.id;
         }
         delegatedTask = selectReadyAgentTask(delegation.tasks, requestedWorkItemId);
         if (!delegatedTask) throw new Error('Nao existe uma tarefa pronta para executar neste plano.');
@@ -1068,14 +1093,23 @@ function registerAgentRuntimeRoutes(app, deps) {
         ));
         if (connectionMode === 'remote_pull') {
           const connector = connectorStore.activeConnector();
-          const compatibility = assessCompatibility({
+          const match = findCompatibleAgent({
             contract: { id: CONTRACT_ID, version: CONTRACT_VERSION },
             agentId,
+            agentType: platformAgentType,
             requiredSkills: delegatedTask.requiredSkills,
             allowedMcpTools: delegatedTask.requiredMcpTools,
-          }, connector?.capabilities);
-          if (!compatibility.compatible) {
-            throw new Error(`O runtime emparelhado nao suporta esta tarefa: ${compatibility.reasons.join(', ')}`);
+          }, connector?.capabilities, { preferredAgentId: agentId });
+          if (match.compatible && match.agent?.id) {
+            agentId = match.agent.id;
+          } else {
+            const fatalReasons = match.reasons.filter((reason) => (
+              reason.startsWith('protocol:') || reason.startsWith('contract-version:')
+            ));
+            if (fatalReasons.length) {
+              throw new Error(`O runtime emparelhado usa um protocolo incompatível: ${fatalReasons.join(', ')}`);
+            }
+            compatibilityPendingReasons = match.reasons;
           }
         }
         if (reconciliation.blocking) {
@@ -1232,7 +1266,9 @@ function registerAgentRuntimeRoutes(app, deps) {
             workItemId: delegatedTask.id,
             promptRunId: run.id,
             planId: options?.taskPlan?.planId,
-            currentAction: 'Na fila — aguarda ligação do Agent Runtime.',
+            currentAction: compatibilityPendingReasons.length
+              ? `Na fila — aguarda atualização das capacidades do Agent Runtime (${compatibilityPendingReasons.join(', ')}).`
+              : 'Na fila — aguarda ligação do Agent Runtime.',
           });
           const request = ensureArray(mutableProject?.agentRequests).find((entry) => entry.id === delegation.request.id);
           if (request) {
@@ -1243,6 +1279,8 @@ function registerAgentRuntimeRoutes(app, deps) {
         return res.status(202).json({
           agentJob: { ...agentJob, status: 'queued', dispatchId: dispatch.id, packageHash: dispatch.packageHash },
           promptRun: run,
+          compatibilityPending: compatibilityPendingReasons.length > 0,
+          compatibilityPendingReasons,
           agentRequest: delegation.request,
           workItem: workItems.toSlimCard(delegatedTask),
           dispatch: publicDispatch(dispatch),

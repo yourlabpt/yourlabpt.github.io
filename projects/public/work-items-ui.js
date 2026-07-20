@@ -1058,7 +1058,22 @@
       hardware_assessed: 'Segurança do Mac verificada',
       resource_guard_paused: 'Pausa de proteção do Mac',
       provider_timeout: 'Modelo excedeu o tempo seguro',
+      provider_action_rejected: 'Ação do modelo rejeitada',
+      run_blocked: 'Execução bloqueada',
     };
+    const errorEventTypes = new Set([
+      'failed', 'worker_failed', 'provider_action_rejected', 'run_blocked',
+    ]);
+    const warningEventTypes = new Set([
+      'paused', 'resource_guard_paused', 'provider_timeout', 'run_budget_exhausted',
+    ]);
+    const eventToneClass = (event) => (
+      errorEventTypes.has(event.type)
+        ? ' is-error'
+        : warningEventTypes.has(event.type)
+          ? ' is-warning'
+          : ''
+    );
     const describeEvent = (event) => {
       const data = event.data || {};
       if (event.type === 'goal_check') {
@@ -1126,7 +1141,7 @@
       </div>
       <div class="ado-agent-log-list">
         ${events.length ? events.map((event) => `
-          <article class="ado-agent-log-entry">
+          <article class="ado-agent-log-entry${eventToneClass(event)}">
             <time>${escapeHtml(formatWhen(event.timestamp || event.createdAt))}</time>
             <div><strong>${escapeHtml(eventLabels[event.type] || event.type || 'Evento')}</strong><p>${escapeHtml(describeEvent(event))}</p></div>
           </article>
@@ -1886,9 +1901,9 @@
         pane?.classList.remove('hidden'); if (status) status.textContent = 'A verificar ligação, competências e ferramentas…'; if (details) details.innerHTML = '';
         try {
           const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/agent-connection/prepare`);
-          if (!payload.selectedAgentId) throw new Error('Nenhum agente disponível possui as competências e ferramentas necessárias.');
+          if (!payload.selectedAgentId) throw new Error('O runtime ainda não publicou um agente para esta tarefa. Sincronize o runtime e tente novamente.');
           if (status) status.textContent = payload.contextSummary;
-          if (details) details.innerHTML = `<div class="ado-agent-match"><label>Agente compatível<select data-ado-agent-select>${(payload.agents || []).filter((agent) => agent.compatible).map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === payload.selectedAgentId ? 'selected' : ''}>${escapeHtml(agent.name)}</option>`).join('')}</select></label><p><strong>Competências:</strong> ${escapeHtml((payload.requiredSkills || []).join(', ') || 'Contexto geral')}</p><p><strong>Ferramentas MCP:</strong> ${escapeHtml((payload.requiredMcpTools || []).join(', ') || 'Sem ferramentas adicionais')}</p><button type="button" class="ado-action-primary" data-ado-send-agent>Enviar ${payload.scope === 'tree' ? 'plano completo' : 'esta tarefa'} ao agente</button></div>`;
+          if (details) details.innerHTML = `<div class="ado-agent-match"><label>${payload.compatibilityPending ? 'Agente selecionado (capacidades a sincronizar)' : 'Agente compatível'}<select data-ado-agent-select>${(payload.agents || []).filter((agent) => agent.compatible || agent.id === payload.selectedAgentId).map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === payload.selectedAgentId ? 'selected' : ''}>${escapeHtml(agent.name)}${agent.compatible ? '' : ' — a sincronizar'}</option>`).join('')}</select></label>${payload.compatibilityPending ? `<p class="ado-agent-control-pending">O pedido pode entrar na fila agora. Só será reclamado quando o runtime confirmar: ${escapeHtml((payload.compatibilityPendingReasons || []).join(', '))}.</p>` : ''}<p><strong>Competências:</strong> ${escapeHtml((payload.requiredSkills || []).join(', ') || 'Contexto geral')}</p><p><strong>Ferramentas MCP:</strong> ${escapeHtml((payload.requiredMcpTools || []).join(', ') || 'Sem ferramentas adicionais')}</p><button type="button" class="ado-action-primary" data-ado-send-agent>Enviar ${payload.scope === 'tree' ? 'plano completo' : 'esta tarefa'} ao agente</button></div>`;
         } catch (err) { if (status) status.textContent = err.message; if (details) details.innerHTML = '<button type="button" class="ado-action-ghost" data-ado-connect-agent>Tentar novamente</button>'; }
         return;
       }

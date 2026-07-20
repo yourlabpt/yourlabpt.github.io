@@ -129,6 +129,14 @@ function buildPreview(project, input = {}, deps = {}) {
   const key = transitionKey(fromStageId, toStageId, direction);
   const saved = getConfig(project, fromStageId, toStageId, direction);
   const config = defaultConfig({ ...(saved?.values || {}), ...(input.config || {}) });
+  if (
+    direction === 'forward'
+    && toStageId === 'discovery'
+    && ['', 'auto', 'delivery-os-full', 'idea-to-requirements'].includes(config.preferredAgentId)
+  ) {
+    config.preferredAgentId = 'discovery-research';
+    config.enableWebSearch = true;
+  }
   const plan = executionPlans.buildExecutionPlan('stage_transition', project, { ...config, fromStageId, toStageId, direction, stageId: toStageId }, { deliveryOs: deps.deliveryOs });
   let tasks = ensureMeaningfulMinimum(ensureArray(plan.tasks).map((task, index) => ({ ...task, stableTaskKey: textOr(task.stableTaskKey || task.id, `task_${index + 1}`) })));
   tasks = groupTasks(tasks, config.maxSubtasks);

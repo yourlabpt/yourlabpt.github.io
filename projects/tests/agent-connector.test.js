@@ -8,6 +8,7 @@ const {
   CONTRACT_ID,
   assessCompatibility,
   buildFrozenTaskPackage,
+  findCompatibleAgent,
   publicDispatch,
 } = require('../lib/agent-connector-contract');
 const {
@@ -467,6 +468,36 @@ describe('secure outbound agent connector', () => {
       agentType: 'implementation_tasks',
     }, connector.capabilities).compatible, false);
     db.close();
+  });
+
+  it('selects another advertised agent when the preferred manifest is stale or incomplete', () => {
+    const capabilities = {
+      protocol: { id: CONTRACT_ID, versions: [2] },
+      agents: [
+        {
+          id: 'research-agent',
+          taskTypes: ['discovery_research'],
+          skills: ['official_research'],
+          tools: ['project.read'],
+        },
+        {
+          id: 'idea-to-requirements',
+          taskTypes: ['discovery_research'],
+          skills: ['research', 'product_discovery'],
+          tools: ['project.read', 'web.search'],
+        },
+      ],
+    };
+    const match = findCompatibleAgent({
+      contract: { id: CONTRACT_ID, version: 2 },
+      agentId: 'research-agent',
+      agentType: 'discovery_research',
+      requiredSkills: ['research', 'product_discovery'],
+      allowedMcpTools: ['web.search'],
+    }, capabilities);
+
+    assert.equal(match.compatible, true);
+    assert.equal(match.agent.id, 'idea-to-requirements');
   });
 
   it('quarantines deprecated coordination tree packages before they reach a runtime', () => {

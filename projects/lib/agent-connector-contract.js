@@ -108,6 +108,15 @@ function assessCompatibility(packageValue, capabilitiesValue) {
   if (capabilities.agents.length && !agent && !capabilities.features.includes('accepts_any_agent')) {
     reasons.push(`agent:${taskPackage.agent?.id || taskPackage.agentId || 'unspecified'}`);
   }
+  const requestedAgentType = text(taskPackage.agent?.type || taskPackage.agentType);
+  if (
+    agent
+    && requestedAgentType
+    && agent.taskTypes.length
+    && !agent.taskTypes.includes(requestedAgentType)
+  ) {
+    reasons.push(`agent-type:${requestedAgentType}`);
+  }
 
   const availableSkills = [...capabilities.skills, ...(agent?.skills || [])];
   const availableTools = [...capabilities.tools, ...(agent?.tools || [])];
@@ -119,6 +128,41 @@ function assessCompatibility(packageValue, capabilitiesValue) {
   }
 
   return { compatible: reasons.length === 0, reasons, capabilities, agent };
+}
+
+function findCompatibleAgent(packageValue, capabilitiesValue, options = {}) {
+  const taskPackage = packageValue && typeof packageValue === 'object' ? packageValue : {};
+  const capabilities = normalizeCapabilities(capabilitiesValue);
+  const preferredAgentId = text(
+    options.preferredAgentId
+      || taskPackage.agent?.id
+      || taskPackage.agentId
+  );
+  const agentType = text(taskPackage.agent?.type || taskPackage.agentType);
+  const ordered = [...capabilities.agents].sort((left, right) => {
+    const score = (agent) => (
+      (agent.id === preferredAgentId ? 4 : 0)
+      + (agentType && agent.taskTypes.includes(agentType) ? 2 : 0)
+      + (!agent.taskTypes.length ? 1 : 0)
+    );
+    return score(right) - score(left);
+  });
+
+  for (const agent of ordered) {
+    const compatibility = assessCompatibility({
+      ...taskPackage,
+      agent: {
+        ...(taskPackage.agent && typeof taskPackage.agent === 'object' ? taskPackage.agent : {}),
+        id: agent.id,
+        type: agentType,
+      },
+      agentId: agent.id,
+      agentType,
+    }, capabilities);
+    if (compatibility.compatible) return { ...compatibility, agent };
+  }
+
+  return assessCompatibility(taskPackage, capabilities);
 }
 
 function normalizeConnectorStatus(value) {
@@ -218,6 +262,7 @@ module.exports = {
   CONNECTOR_STATUSES,
   assessCompatibility,
   buildFrozenTaskPackage,
+  findCompatibleAgent,
   normalizeAgentManifest,
   normalizeCapabilities,
   normalizeConnectorStatus,

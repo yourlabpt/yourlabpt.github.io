@@ -67,9 +67,11 @@ const ROLE_MODEL_PROFILES = {
 const STAGE_TRANSITION_TASKS = {
   'idea->discovery': {
     forward: [
-      { id: 'vision', title: 'Visão e proposta de valor', role: 'artifact' },
-      { id: 'stakeholders', title: 'Stakeholders e personas', role: 'artifact' },
-      { id: 'market', title: 'Mercado e concorrência', role: 'artifact' },
+      { id: 'framing', title: 'Enquadramento, hipóteses e perguntas de investigação', role: 'analysis' },
+      { id: 'stakeholders', title: 'Stakeholders, segmentos e personas', role: 'artifact' },
+      { id: 'market', title: 'Dimensão de mercado, procura e tendências', role: 'artifact' },
+      { id: 'competitors', title: 'Concorrentes, alternativas e diferenciação', role: 'artifact' },
+      { id: 'business', title: 'Modelo de negócio, go-to-market e implicações', role: 'artifact' },
       { id: 'merge', title: 'Consolidar descoberta', role: 'merge' },
     ],
     backward: [
@@ -1215,7 +1217,9 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
 
     tasks = tasks.map((t) => ({
       ...t,
-      instruction: isPhasedRequirements
+      instruction: resolved.key === 'idea->discovery' && resolved.direction === 'forward'
+        ? buildDiscoveryTransitionTaskPrompt(fullPrompt, t)
+        : isPhasedRequirements
         ? buildRequirementsPhaseTaskPrompt(stubPlan, t, project, deliveryOs)
         : buildTaskInstruction(fullPrompt, t, agentType, project, options),
     }));
@@ -1269,12 +1273,19 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
     masterPlanMarkdown = 'Idea brief em 2 partes + consolidação.';
   } else if (agentType === 'discovery_research') {
     tasks = [
-      { id: 'market', order: 0, title: 'Mercado e segmentos', role: 'artifact', dependsOn: [] },
-      { id: 'competitors', order: 1, title: 'Concorrência', role: 'artifact', dependsOn: [] },
-      { id: 'merge', order: 2, title: 'Consolidar descoberta', role: 'merge', dependsOn: ['market', 'competitors'] },
+      { id: 'framing', order: 0, title: 'Hipóteses e perguntas de investigação', role: 'analysis', dependsOn: [] },
+      { id: 'stakeholders', order: 1, title: 'Stakeholders, segmentos e personas', role: 'artifact', dependsOn: ['framing'] },
+      { id: 'market', order: 2, title: 'Dimensão de mercado, procura e tendências', role: 'artifact', dependsOn: ['framing'] },
+      { id: 'competitors', order: 3, title: 'Concorrentes e alternativas', role: 'artifact', dependsOn: ['market'] },
+      { id: 'business', order: 4, title: 'Modelo de negócio, GTM e implicações', role: 'artifact', dependsOn: ['stakeholders', 'competitors'] },
+      { id: 'merge', order: 5, title: 'Consolidar dossier de descoberta', role: 'merge', dependsOn: ['stakeholders', 'market', 'competitors', 'business'] },
     ];
     fullPrompt = deliveryOs.buildDiscoveryPrompt(project);
-    masterPlanMarkdown = 'Descoberta de mercado em tarefas paralelas + merge.';
+    tasks = tasks.map((task) => ({
+      ...task,
+      instruction: buildDiscoveryTransitionTaskPrompt(fullPrompt, task),
+    }));
+    masterPlanMarkdown = 'Investigação de mercado com evidência: enquadramento → stakeholders/personas → mercado/tendências → concorrência → modelo e implicações → consolidação.';
   } else if (agentType === 'roadmap_plan') {
     const caps = ensureArray(project.capabilities);
     tasks = caps.slice(0, 6).map((cap, i) => ({
@@ -1438,6 +1449,42 @@ function buildTaskInstruction(fullPrompt, task, agentType, project, options) {
   }
 
   return `${header}\n${fullPrompt}`;
+}
+
+function buildDiscoveryTransitionTaskPrompt(fullPrompt, task) {
+  const common = [
+    '# Regras de investigação',
+    '- Use pesquisa web real e trate os resultados fornecidos pelo runtime como evidência.',
+    '- Não invente números, concorrentes, URLs ou alegações. Quando não existir evidência suficiente, registe evidenceGaps e assumptions.',
+    '- Separe factos observados, estimativas calculadas e hipóteses.',
+    '- Toda alegação de mercado, tendência ou concorrência deve referenciar sourceIds.',
+    '- Fontes devem incluir URL, título, publicador, data de consulta, tipo e confiança.',
+    '- Explicite as consequências da evidência para o produto em implications.',
+    '- Responda apenas JSON válido, sem markdown fences.',
+  ].join('\n');
+  const focus = {
+    framing: `Produza:
+{"discovery":{"researchBrief":{"problemFramingMarkdown":"","researchQuestions":[],"hypotheses":[],"scope":{"geographies":[],"customerTypes":[],"timeHorizon":""}},"assumptions":[],"evidenceGaps":[]}}`,
+    stakeholders: `Produza:
+{"discovery":{"segments":[{"name":"","descriptionMarkdown":"","painPoints":[],"sourceIds":[]}],"stakeholders":[{"name":"","type":"","role":"","needs":[],"pains":[],"influence":"low|medium|high","implications":[]}],"personas":[{"name":"","segment":"","contextMarkdown":"","jobs":[],"pains":[],"gains":[],"behaviours":[],"implications":[]}],"researchSources":[],"evidenceGaps":[]}}`,
+    market: `Produza:
+{"discovery":{"marketSummaryMarkdown":"","marketSizing":{"tam":"","sam":"","som":"","methodMarkdown":"","notesMarkdown":"","sourceIds":[]},"trends":[{"title":"","evidenceMarkdown":"","implicationMarkdown":"","sourceIds":[]}],"segments":[],"researchSources":[],"assumptions":[],"evidenceGaps":[]}}`,
+    competitors: `Produza:
+{"discovery":{"competitors":[{"name":"","url":"","category":"direct|indirect|substitute","positioningMarkdown":"","descriptionMarkdown":"","strengths":[],"weaknesses":[],"differentiation":"","sourceIds":[]}],"implications":[{"title":"","descriptionMarkdown":"","impact":"low|medium|high","horizon":"now|next|later","sourceIds":[]}],"researchSources":[],"evidenceGaps":[]}}`,
+    business: `Produza:
+{"discovery":{"businessModel":{"revenueStreams":[],"costStructure":[],"channels":[],"keyPartners":[]},"commercialImpact":{"objectivesMarkdown":"","kpis":[{"name":"","target":"","rationale":""}]},"goToMarketMarkdown":"","swot":{"strengths":[],"weaknesses":[],"opportunities":[],"threats":[]},"implications":[],"assumptions":[],"evidenceGaps":[]}}`,
+    merge: `Consolide um dossier completo no schema discovery_v2:
+{"discovery":{"researchBrief":{"problemFramingMarkdown":"","researchQuestions":[],"hypotheses":[],"scope":{"geographies":[],"customerTypes":[],"timeHorizon":""}},"marketSummaryMarkdown":"","marketSizing":{"tam":"","sam":"","som":"","methodMarkdown":"","notesMarkdown":"","sourceIds":[]},"segments":[],"stakeholders":[],"personas":[],"competitors":[],"trends":[],"businessModel":{"revenueStreams":[],"costStructure":[],"channels":[],"keyPartners":[]},"commercialImpact":{"objectivesMarkdown":"","kpis":[]},"swot":{"strengths":[],"weaknesses":[],"opportunities":[],"threats":[]},"goToMarketMarkdown":"","implications":[],"researchSources":[],"assumptions":[],"evidenceGaps":[]},"requiresHumanConfirmation":true}`,
+  }[task.id] || 'Produza a parte relevante do dossier discovery_v2.';
+  return `# Tarefa de Discovery: ${task.title}
+
+${common}
+
+# Output desta tarefa
+${focus}
+
+# Contexto congelado do projecto
+${fullPrompt.slice(0, 16000)}`;
 }
 
 function preparePhasedRequirementsPlan(plan, project) {

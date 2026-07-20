@@ -469,6 +469,16 @@ describe('stage transition requests through Tasks', () => {
     }, { actorUserId: 'editor' });
     const children = workItems.getWorkItems(data)
       .filter((entry) => entry.agentRequestId === created.request.id && entry.taskRole !== 'coordination');
+    assert.equal(created.request.agentId, 'discovery-research');
+    assert.equal(created.preview.config.enableWebSearch, true);
+    assert.deepEqual(children.map((entry) => entry.stableTaskKey), [
+      'framing',
+      'stakeholders',
+      'market',
+      'competitors',
+      'business',
+      'merge',
+    ]);
     const first = children[0];
     const second = children[1];
     const rawOutput = JSON.stringify({

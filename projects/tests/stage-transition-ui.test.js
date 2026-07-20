@@ -25,6 +25,8 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /request\.requestKind !== 'stage_transition'/);
   assert.match(deliverySource, /if \(agentType === 'discovery_research'\) \{[\s\S]*?openTransitionPicker\('idea', 'discovery', project\)/);
   assert.match(deliverySource, /Entregáveis aprovados da descoberta/);
+  assert.match(deliverySource, /Stakeholders &amp; personas/);
+  assert.match(deliverySource, /Evidência e lacunas/);
   assert.match(workItemsSource, /payload\.nextWorkItem[\s\S]*?apiRequest\('\/agent-runs'/);
   assert.match(workItemsSource, /data-ado-continue-plan/);
   assert.match(workItemsSource, /Iniciar próxima subtarefa/);
@@ -35,7 +37,9 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /function scheduleConnectionPoll/);
   assert.match(workItemsSource, /host\.matches\(':hover'\)/);
   assert.match(workItemsSource, /executionInteractionUntil = Date\.now\(\) \+ 4000/);
+  assert.match(workItemsSource, /errorEventTypes/);
+  assert.match(workItemsSource, /ado-agent-log-entry\$\{eventToneClass\(event\)\}/);
   assert.match(deliverySource, /linkedTask\?\.status === 'waiting_review'[\s\S]*?work-items\/\$\{linkedTask\.id\}\/review/);
-  assert.match(html, /delivery-os-ui\.js\?v=69/);
-  assert.match(html, /work-items-ui\.js\?v=23/);
+  assert.match(html, /delivery-os-ui\.js\?v=70/);
+  assert.match(html, /work-items-ui\.js\?v=24/);
 });

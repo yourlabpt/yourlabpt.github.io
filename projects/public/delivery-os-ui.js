@@ -20,6 +20,15 @@
     return STAGES_WITH_MODULE_NAV.has(stageId);
   }
 
+  function safeExternalUrl(value) {
+    try {
+      const url = new URL(String(value || ''), window.location.origin);
+      return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+    } catch {
+      return '';
+    }
+  }
+
   const FALLBACK_CONCEPTS = {
     capability: { title: 'Funcionalidade do produto', short: 'Bloco de valor que o sistema oferece — ex.: «Comprar plano», «Gerar cupom».', example: '' },
     cluster: { title: 'Grupo de requisitos', short: 'Requisitos relacionados dentro de uma funcionalidade.', example: '' },
@@ -1790,6 +1799,9 @@
 
   function discoveryData(project) {
     const d = project.discovery && typeof project.discovery === 'object' ? project.discovery : {};
+    const researchBrief = d.researchBrief && typeof d.researchBrief === 'object'
+      ? d.researchBrief
+      : {};
     const stageArtifacts = ensureArray(project.artifacts)
       .filter((artifact) => artifact.stageId === 'discovery' && artifact.status !== 'rejected');
     const readableArtifacts = stageArtifacts.filter((artifact) => {
@@ -1805,15 +1817,31 @@
         )
       )) === index);
     return {
+      researchBrief: {
+        problemFramingMarkdown: researchBrief.problemFramingMarkdown || '',
+        researchQuestions: Array.isArray(researchBrief.researchQuestions) ? researchBrief.researchQuestions : [],
+        hypotheses: Array.isArray(researchBrief.hypotheses) ? researchBrief.hypotheses : [],
+        scope: {
+          geographies: Array.isArray(researchBrief.scope?.geographies) ? researchBrief.scope.geographies : [],
+          customerTypes: Array.isArray(researchBrief.scope?.customerTypes) ? researchBrief.scope.customerTypes : [],
+          timeHorizon: researchBrief.scope?.timeHorizon || '',
+        },
+      },
       marketSummaryMarkdown: d.marketSummaryMarkdown || '',
       marketSizing: d.marketSizing || { tam: '', sam: '', som: '', notesMarkdown: '' },
       segments: Array.isArray(d.segments) ? d.segments : [],
+      stakeholders: Array.isArray(d.stakeholders) ? d.stakeholders : [],
+      personas: Array.isArray(d.personas) ? d.personas : [],
       competitors: Array.isArray(d.competitors) ? d.competitors : [],
+      trends: Array.isArray(d.trends) ? d.trends : [],
       businessModel: d.businessModel || { revenueStreams: [], costStructure: [], channels: [], keyPartners: [] },
       commercialImpact: d.commercialImpact || { objectivesMarkdown: '', kpis: [] },
       swot: d.swot || { strengths: [], weaknesses: [], opportunities: [], threats: [] },
       goToMarketMarkdown: d.goToMarketMarkdown || '',
+      implications: Array.isArray(d.implications) ? d.implications : [],
+      researchSources: Array.isArray(d.researchSources) ? d.researchSources : [],
       assumptions: Array.isArray(d.assumptions) ? d.assumptions : [],
+      evidenceGaps: Array.isArray(d.evidenceGaps) ? d.evidenceGaps : [],
       approvedDeliverables,
     };
   }
@@ -1822,9 +1850,12 @@
     const bm = d.businessModel;
     const sw = d.swot;
     return Boolean(
-      d.marketSummaryMarkdown || d.marketSizing.tam || d.marketSizing.sam || d.marketSizing.som
-      || d.segments.length || d.competitors.length || d.commercialImpact.objectivesMarkdown
+      d.researchBrief.problemFramingMarkdown || d.researchBrief.researchQuestions.length
+      || d.marketSummaryMarkdown || d.marketSizing.tam || d.marketSizing.sam || d.marketSizing.som
+      || d.segments.length || d.stakeholders.length || d.personas.length
+      || d.competitors.length || d.trends.length || d.commercialImpact.objectivesMarkdown
       || d.commercialImpact.kpis.length || d.goToMarketMarkdown || d.assumptions.length
+      || d.implications.length || d.researchSources.length || d.evidenceGaps.length
       || d.approvedDeliverables.length
       || bm.revenueStreams.length || bm.costStructure.length || bm.channels.length || bm.keyPartners.length
       || sw.strengths.length || sw.weaknesses.length || sw.opportunities.length || sw.threats.length
@@ -1848,12 +1879,17 @@
     }
 
     const sizing = d.marketSizing;
+    const brief = d.researchBrief;
+    const researchBrief = (brief.problemFramingMarkdown || brief.researchQuestions.length || brief.hypotheses.length)
+      ? `<section class="idea-block"><h4 class="idea-block-title">Enquadramento da investigação</h4><div class="idea-md" data-disc-md="research-framing"></div>${brief.researchQuestions.length ? `<h5>Perguntas</h5><ul class="disc-assumptions">${brief.researchQuestions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}${brief.hypotheses.length ? `<h5>Hipóteses</h5><ul class="disc-assumptions">${brief.hypotheses.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}<small>${escapeHtml([...(brief.scope?.geographies || []), ...(brief.scope?.customerTypes || []), brief.scope?.timeHorizon || ''].filter(Boolean).join(' · '))}</small></section>`
+      : '';
     const sizingTiles = (sizing.tam || sizing.sam || sizing.som)
       ? `<div class="disc-sizing">
           <div class="disc-sizing-tile"><span>TAM</span><strong>${escapeHtml(sizing.tam || '—')}</strong><small>Mercado total</small></div>
           <div class="disc-sizing-tile"><span>SAM</span><strong>${escapeHtml(sizing.sam || '—')}</strong><small>Mercado acessível</small></div>
           <div class="disc-sizing-tile"><span>SOM</span><strong>${escapeHtml(sizing.som || '—')}</strong><small>Mercado obtível</small></div>
         </div>
+        ${sizing.methodMarkdown ? `<div class="idea-md" data-disc-md="sizing-method"></div>` : ''}
         ${sizing.notesMarkdown ? `<div class="idea-md" data-disc-md="sizing-notes"></div>` : ''}`
       : '';
 
@@ -1878,13 +1914,39 @@
           <div class="disc-grid">
             ${d.competitors.map((c, i) => `
               <article class="disc-card">
-                <h5>${escapeHtml(c.name || '')}</h5>
+                <h5>${safeExternalUrl(c.url) ? `<a href="${escapeHtml(safeExternalUrl(c.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(c.name || '')}</a>` : escapeHtml(c.name || '')}</h5>
+                ${c.category ? `<small>${escapeHtml(c.category)}</small>` : ''}
+                ${c.positioningMarkdown ? `<div class="idea-md" data-disc-md="competitor-position-${i}"></div>` : ''}
                 <div class="idea-md" data-disc-md="competitor-${i}"></div>
+                ${(c.strengths || []).length ? `<p><strong>Forças:</strong> ${escapeHtml(c.strengths.join(' · '))}</p>` : ''}
+                ${(c.weaknesses || []).length ? `<p><strong>Fraquezas:</strong> ${escapeHtml(c.weaknesses.join(' · '))}</p>` : ''}
                 ${c.differentiation ? `<p class="disc-edge"><strong>A nossa vantagem:</strong> ${escapeHtml(c.differentiation)}</p>` : ''}
               </article>
             `).join('')}
           </div>
         </section>`
+      : '';
+
+    const stakeholders = (d.stakeholders.length || d.personas.length)
+      ? `<section class="idea-block">
+          <h4 class="idea-block-title">Stakeholders &amp; personas</h4>
+          <div class="disc-grid">
+            ${d.stakeholders.map((s) => `<article class="disc-card"><h5>${escapeHtml(s.name || '')}</h5><small>${escapeHtml([s.type, s.role, s.influence ? `influência ${s.influence}` : ''].filter(Boolean).join(' · '))}</small>${(s.needs || []).length ? `<p><strong>Necessidades:</strong> ${escapeHtml(s.needs.join(' · '))}</p>` : ''}${(s.pains || []).length ? `<p><strong>Dores:</strong> ${escapeHtml(s.pains.join(' · '))}</p>` : ''}${(s.implications || []).length ? `<p class="disc-edge"><strong>Implicações:</strong> ${escapeHtml(s.implications.join(' · '))}</p>` : ''}</article>`).join('')}
+            ${d.personas.map((p, i) => `<article class="disc-card"><h5>${escapeHtml(p.name || '')}</h5><small>${escapeHtml(p.segment || 'Persona')}</small><div class="idea-md" data-disc-md="persona-${i}"></div>${(p.jobs || []).length ? `<p><strong>Jobs:</strong> ${escapeHtml(p.jobs.join(' · '))}</p>` : ''}${(p.pains || []).length ? `<p><strong>Dores:</strong> ${escapeHtml(p.pains.join(' · '))}</p>` : ''}${(p.gains || []).length ? `<p><strong>Ganhos:</strong> ${escapeHtml(p.gains.join(' · '))}</p>` : ''}${(p.implications || []).length ? `<p class="disc-edge"><strong>Implicações:</strong> ${escapeHtml(p.implications.join(' · '))}</p>` : ''}</article>`).join('')}
+          </div>
+        </section>`
+      : '';
+
+    const trends = d.trends.length
+      ? `<section class="idea-block"><h4 class="idea-block-title">Tendências e sinais</h4><div class="disc-grid">${d.trends.map((trend, i) => `<article class="disc-card"><h5>${escapeHtml(trend.title || '')}</h5><div class="idea-md" data-disc-md="trend-evidence-${i}"></div><div class="idea-md disc-edge" data-disc-md="trend-implication-${i}"></div></article>`).join('')}</div></section>`
+      : '';
+
+    const implications = d.implications.length
+      ? `<section class="idea-block"><h4 class="idea-block-title">Implicações para o produto</h4><div class="disc-grid">${d.implications.map((item, i) => `<article class="disc-card"><h5>${escapeHtml(item.title || '')}</h5><small>${escapeHtml([item.impact ? `impacto ${item.impact}` : '', item.horizon || ''].filter(Boolean).join(' · '))}</small><div class="idea-md" data-disc-md="implication-${i}"></div></article>`).join('')}</div></section>`
+      : '';
+
+    const evidence = (d.researchSources.length || d.evidenceGaps.length)
+      ? `<section class="idea-block"><h4 class="idea-block-title">Evidência e lacunas</h4>${d.researchSources.length ? `<ol class="disc-assumptions">${d.researchSources.map((source) => `<li><strong>${escapeHtml(source.id || '')}</strong> · ${safeExternalUrl(source.url) ? `<a href="${escapeHtml(safeExternalUrl(source.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.url)}</a>` : escapeHtml(source.title || '')}${source.publisher ? ` · ${escapeHtml(source.publisher)}` : ''}${source.confidence ? ` · confiança ${escapeHtml(source.confidence)}` : ''}</li>`).join('')}</ol>` : ''}${d.evidenceGaps.length ? `<div class="ado-agent-quality-warning"><strong>Lacunas de evidência</strong><ul>${d.evidenceGaps.map((gap) => `<li>${escapeHtml(gap)}</li>`).join('')}</ul></div>` : ''}</section>`
       : '';
 
     const bm = d.businessModel;
@@ -1970,14 +2032,19 @@
           </div>
         </header>
         <div class="idea-md idea-main" data-disc-md="summary"></div>
+        ${researchBrief}
         ${approvedDeliverables}
         ${sizingTiles ? `<section class="idea-block"><h4 class="idea-block-title">Dimensão de mercado</h4>${sizingTiles}</section>` : ''}
         ${segments}
+        ${stakeholders}
+        ${trends}
         ${competitors}
         ${businessModel}
         ${impact}
         ${swot}
         ${gtm}
+        ${implications}
+        ${evidence}
         ${assumptions}
       </article>
     `;
@@ -1990,6 +2057,8 @@
       if (el && md) renderMarkdownPreview(md, el);
     };
     fill('summary', d.marketSummaryMarkdown);
+    fill('research-framing', d.researchBrief.problemFramingMarkdown);
+    fill('sizing-method', d.marketSizing.methodMarkdown);
     fill('sizing-notes', d.marketSizing.notesMarkdown);
     fill('impact-obj', d.commercialImpact.objectivesMarkdown);
     fill('gtm', d.goToMarketMarkdown);
@@ -1997,7 +2066,16 @@
       fill(`artifact-${index}`, artifact.bodyMarkdown || artifact.descriptionMarkdown || artifact.description || '');
     });
     d.segments.forEach((s, i) => fill(`segment-${i}`, s.descriptionMarkdown));
-    d.competitors.forEach((c, i) => fill(`competitor-${i}`, c.descriptionMarkdown));
+    d.competitors.forEach((c, i) => {
+      fill(`competitor-${i}`, c.descriptionMarkdown);
+      fill(`competitor-position-${i}`, c.positioningMarkdown);
+    });
+    d.personas.forEach((p, i) => fill(`persona-${i}`, p.contextMarkdown));
+    d.trends.forEach((trend, i) => {
+      fill(`trend-evidence-${i}`, trend.evidenceMarkdown);
+      fill(`trend-implication-${i}`, trend.implicationMarkdown);
+    });
+    d.implications.forEach((item, i) => fill(`implication-${i}`, item.descriptionMarkdown));
   }
 
   function roadmapData(project) {

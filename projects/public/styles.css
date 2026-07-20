@@ -49,16 +49,16 @@
   --kpi-bg: #24231f;
   --kpi-border: #48422f;
   --toast-bg: #fcf9f1;
-  --footer-bg: #f2ebdc;
+  --footer-bg: #181818;
   --page-bg-radial1: rgba(185, 146, 26, 0.08);
   --page-bg-radial2: rgba(143, 111, 18, 0.06);
   --page-bg-linear: linear-gradient(160deg, #f5f1e7 0%, #efe9dd 55%, #f8f3e8 100%);
   --status-ok-text: #166534;
   --status-ok-bg: #dcfce7;
   --status-ok-border: #86efac;
-  --status-err-text: #991b1b;
-  --status-err-bg: #fee2e2;
-  --status-err-border: #fca5a5;
+  --status-err-text: #ffadad;
+  --status-err-bg: #3a2020;
+  --status-err-border: #7d4141;
   --logo-bg: #f4ecdd;
   --logo-border: #dccfb2;
   --module-chip-bg: #f4ecdd;
@@ -2887,6 +2887,10 @@ th {
   --page-bg-radial1: transparent;
   --page-bg-radial2: transparent;
   --page-bg-linear: #f7f7f4;
+  --footer-bg: #f2ebdc;
+  --status-err-text: #991b1b;
+  --status-err-bg: #fee2e2;
+  --status-err-border: #fca5a5;
 }
 
 [data-theme="light"] .btn.ghost {
@@ -10713,8 +10717,9 @@ body.is-client-readonly [data-writes-only] {
 }
 
 .ado-agent-error {
-  background: color-mix(in srgb, #d64545 10%, var(--surface));
-  color: #d64545;
+  border: 1px solid color-mix(in srgb, var(--danger) 48%, var(--line));
+  background: color-mix(in srgb, var(--danger) 13%, var(--surface));
+  color: var(--status-err-text);
 }
 
 .ado-agent-quality-warning {
@@ -10806,6 +10811,28 @@ body.is-client-readonly [data-writes-only] {
   color: var(--text-2);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.ado-agent-log-entry.is-error {
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface-2));
+}
+
+.ado-agent-log-entry.is-error strong {
+  color: var(--status-err-text);
+}
+
+.ado-agent-log-entry.is-error p {
+  color: color-mix(in srgb, var(--status-err-text) 78%, var(--text));
+}
+
+.ado-agent-log-entry.is-warning {
+  border-left: 3px solid #d98e04;
+  background: color-mix(in srgb, #d98e04 9%, var(--surface-2));
+}
+
+.ado-agent-log-entry.is-warning strong {
+  color: color-mix(in srgb, #f6bd52 82%, var(--heading));
 }
 
 .ado-agent-log-empty {

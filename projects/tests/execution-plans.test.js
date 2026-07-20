@@ -86,6 +86,59 @@ describe('execution plan model profiles', () => {
     assert.match(prompt, /Previous verified task outputs/);
     assert.match(prompt, /keep-id/);
   });
+
+  it('builds evidence-first Discovery tasks with market research and implications', () => {
+    const plan = executionPlans.buildExecutionPlan('stage_transition', projectFixture(), {
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      modelProfileId: 'high',
+    });
+
+    assert.deepEqual(plan.tasks.map((task) => task.id), [
+      'framing',
+      'stakeholders',
+      'market',
+      'competitors',
+      'business',
+      'merge',
+    ]);
+    assert.match(plan.tasks.find((task) => task.id === 'market').instruction, /sourceIds/);
+    assert.match(plan.tasks.find((task) => task.id === 'business').instruction, /implications/);
+    assert.match(plan.tasks.find((task) => task.id === 'merge').instruction, /discovery_v2/);
+  });
+
+  it('preserves Discovery research evidence, personas and implications', () => {
+    const discovery = deliveryOs.normalizeDiscovery({
+      researchBrief: { researchQuestions: ['Who pays?'] },
+      personas: [{ name: 'Independent musician', jobs: ['Transcribe a recording'] }],
+      implications: [{ title: 'Lead with trust', impact: 'high', sourceIds: ['SRC-01'] }],
+      researchSources: [{ id: 'SRC-01', title: 'Market report', url: 'https://example.com/report' }],
+      evidenceGaps: ['No reliable local SOM data'],
+    });
+
+    assert.equal(discovery.personas[0].name, 'Independent musician');
+    assert.deepEqual(discovery.researchBrief.researchQuestions, ['Who pays?']);
+    assert.equal(discovery.implications[0].impact, 'high');
+    assert.equal(discovery.researchSources[0].id, 'SRC-01');
+    assert.deepEqual(discovery.evidenceGaps, ['No reliable local SOM data']);
+  });
+
+  it('merges approved Discovery subtasks without erasing earlier sections', () => {
+    const merged = deliveryOs.mergeDiscovery({
+      stakeholders: [{ name: 'Musician', type: 'customer', needs: ['Fast transcription'] }],
+      researchSources: [{ id: 'SRC-01', title: 'User study', url: 'https://example.com/users' }],
+    }, {
+      marketSizing: { tam: '€100M', sourceIds: ['SRC-02'] },
+      competitors: [{ name: 'Alternative A', url: 'https://example.com/alternative' }],
+      researchSources: [{ id: 'SRC-02', title: 'Market data', url: 'https://example.com/market' }],
+    });
+
+    assert.equal(merged.stakeholders[0].name, 'Musician');
+    assert.equal(merged.marketSizing.tam, '€100M');
+    assert.equal(merged.competitors[0].name, 'Alternative A');
+    assert.deepEqual(merged.researchSources.map((source) => source.id), ['SRC-01', 'SRC-02']);
+  });
 });
 
 describe('project audit snapshots', () => {

@@ -812,14 +812,28 @@ function normalizeDiscovery(raw) {
   const model = src.businessModel && typeof src.businessModel === 'object' ? src.businessModel : {};
   const impact = src.commercialImpact && typeof src.commercialImpact === 'object' ? src.commercialImpact : {};
   const swot = src.swot && typeof src.swot === 'object' ? src.swot : {};
+  const brief = src.researchBrief && typeof src.researchBrief === 'object' ? src.researchBrief : {};
+  const briefScope = brief.scope && typeof brief.scope === 'object' ? brief.scope : {};
 
   return {
+    researchBrief: {
+      problemFramingMarkdown: textOr(brief.problemFramingMarkdown || brief.problemFraming),
+      researchQuestions: normalizeStringList(brief.researchQuestions),
+      hypotheses: normalizeStringList(brief.hypotheses),
+      scope: {
+        geographies: normalizeStringList(briefScope.geographies),
+        customerTypes: normalizeStringList(briefScope.customerTypes),
+        timeHorizon: textOr(briefScope.timeHorizon),
+      },
+    },
     marketSummaryMarkdown: textOr(src.marketSummaryMarkdown || src.summaryMarkdown),
     marketSizing: {
       tam: textOr(sizing.tam),
       sam: textOr(sizing.sam),
       som: textOr(sizing.som),
+      methodMarkdown: textOr(sizing.methodMarkdown || sizing.method),
       notesMarkdown: textOr(sizing.notesMarkdown || sizing.notes),
+      sourceIds: normalizeStringList(sizing.sourceIds),
     },
     segments: ensureArray(src.segments).map((s) => {
       if (typeof s === 'string') return { name: s, descriptionMarkdown: '', painPoints: [] };
@@ -827,6 +841,7 @@ function normalizeDiscovery(raw) {
         name: textOr(s?.name || s?.title),
         descriptionMarkdown: textOr(s?.descriptionMarkdown || s?.description),
         painPoints: normalizeStringList(s?.painPoints),
+        sourceIds: normalizeStringList(s?.sourceIds),
       };
     }).filter((s) => s.name),
     competitors: ensureArray(src.competitors).map((c) => {
@@ -835,8 +850,39 @@ function normalizeDiscovery(raw) {
         name: textOr(c?.name || c?.title),
         descriptionMarkdown: textOr(c?.descriptionMarkdown || c?.description),
         differentiation: textOr(c?.differentiation || c?.ourEdge),
+        url: textOr(c?.url),
+        category: textOr(c?.category),
+        positioningMarkdown: textOr(c?.positioningMarkdown || c?.positioning),
+        strengths: normalizeStringList(c?.strengths),
+        weaknesses: normalizeStringList(c?.weaknesses),
+        sourceIds: normalizeStringList(c?.sourceIds),
       };
     }).filter((c) => c.name),
+    stakeholders: ensureArray(src.stakeholders).map((s) => ({
+      name: textOr(s?.name || s?.title),
+      type: textOr(s?.type),
+      role: textOr(s?.role),
+      needs: normalizeStringList(s?.needs),
+      pains: normalizeStringList(s?.pains || s?.painPoints),
+      influence: textOr(s?.influence),
+      implications: normalizeStringList(s?.implications),
+    })).filter((s) => s.name),
+    personas: ensureArray(src.personas).map((p) => ({
+      name: textOr(p?.name || p?.title),
+      segment: textOr(p?.segment),
+      contextMarkdown: textOr(p?.contextMarkdown || p?.descriptionMarkdown || p?.description),
+      jobs: normalizeStringList(p?.jobs),
+      pains: normalizeStringList(p?.pains),
+      gains: normalizeStringList(p?.gains),
+      behaviours: normalizeStringList(p?.behaviours || p?.behaviors),
+      implications: normalizeStringList(p?.implications),
+    })).filter((p) => p.name),
+    trends: ensureArray(src.trends).map((t) => ({
+      title: textOr(t?.title || t?.name),
+      evidenceMarkdown: textOr(t?.evidenceMarkdown || t?.evidence),
+      implicationMarkdown: textOr(t?.implicationMarkdown || t?.implication),
+      sourceIds: normalizeStringList(t?.sourceIds),
+    })).filter((t) => t.title),
     businessModel: {
       revenueStreams: normalizeStringList(model.revenueStreams),
       costStructure: normalizeStringList(model.costStructure),
@@ -861,9 +907,123 @@ function normalizeDiscovery(raw) {
       threats: normalizeStringList(swot.threats),
     },
     goToMarketMarkdown: textOr(src.goToMarketMarkdown),
+    implications: ensureArray(src.implications).map((item) => ({
+      title: textOr(item?.title || item?.name),
+      descriptionMarkdown: textOr(item?.descriptionMarkdown || item?.description),
+      impact: textOr(item?.impact),
+      horizon: textOr(item?.horizon),
+      sourceIds: normalizeStringList(item?.sourceIds),
+    })).filter((item) => item.title),
+    researchSources: ensureArray(src.researchSources || src.sources).map((source, index) => ({
+      id: textOr(source?.id, `SRC-${String(index + 1).padStart(2, '0')}`),
+      title: textOr(source?.title),
+      url: textOr(source?.url),
+      publisher: textOr(source?.publisher),
+      publishedAt: textOr(source?.publishedAt),
+      retrievedAt: textOr(source?.retrievedAt),
+      sourceType: textOr(source?.sourceType || source?.type),
+      claims: normalizeStringList(source?.claims),
+      confidence: textOr(source?.confidence),
+    })).filter((source) => source.url || source.title),
     assumptions: normalizeStringList(src.assumptions),
+    evidenceGaps: normalizeStringList(src.evidenceGaps),
     updatedAt: textOr(src.updatedAt),
   };
+}
+
+function mergeDiscovery(currentRaw, incomingRaw) {
+  const current = normalizeDiscovery(currentRaw);
+  const incoming = normalizeDiscovery(incomingRaw);
+  const preferText = (next, previous) => textOr(next) || textOr(previous);
+  const mergeStrings = (previous, next) => [
+    ...new Set([...normalizeStringList(previous), ...normalizeStringList(next)]),
+  ];
+  const mergeRows = (previous, next, keyOf) => {
+    const rows = [];
+    const positions = new Map();
+    for (const row of [...ensureArray(previous), ...ensureArray(next)]) {
+      const key = textOr(keyOf(row)).toLowerCase();
+      if (!key) continue;
+      if (!positions.has(key)) {
+        positions.set(key, rows.length);
+        rows.push(row);
+      } else {
+        const index = positions.get(key);
+        rows[index] = { ...rows[index], ...row };
+      }
+    }
+    return rows;
+  };
+  return normalizeDiscovery({
+    ...current,
+    ...incoming,
+    researchBrief: {
+      problemFramingMarkdown: preferText(
+        incoming.researchBrief.problemFramingMarkdown,
+        current.researchBrief.problemFramingMarkdown
+      ),
+      researchQuestions: mergeStrings(
+        current.researchBrief.researchQuestions,
+        incoming.researchBrief.researchQuestions
+      ),
+      hypotheses: mergeStrings(current.researchBrief.hypotheses, incoming.researchBrief.hypotheses),
+      scope: {
+        geographies: mergeStrings(
+          current.researchBrief.scope.geographies,
+          incoming.researchBrief.scope.geographies
+        ),
+        customerTypes: mergeStrings(
+          current.researchBrief.scope.customerTypes,
+          incoming.researchBrief.scope.customerTypes
+        ),
+        timeHorizon: preferText(
+          incoming.researchBrief.scope.timeHorizon,
+          current.researchBrief.scope.timeHorizon
+        ),
+      },
+    },
+    marketSummaryMarkdown: preferText(incoming.marketSummaryMarkdown, current.marketSummaryMarkdown),
+    marketSizing: {
+      ...current.marketSizing,
+      ...incoming.marketSizing,
+      tam: preferText(incoming.marketSizing.tam, current.marketSizing.tam),
+      sam: preferText(incoming.marketSizing.sam, current.marketSizing.sam),
+      som: preferText(incoming.marketSizing.som, current.marketSizing.som),
+      methodMarkdown: preferText(incoming.marketSizing.methodMarkdown, current.marketSizing.methodMarkdown),
+      notesMarkdown: preferText(incoming.marketSizing.notesMarkdown, current.marketSizing.notesMarkdown),
+      sourceIds: mergeStrings(current.marketSizing.sourceIds, incoming.marketSizing.sourceIds),
+    },
+    segments: mergeRows(current.segments, incoming.segments, (row) => row.name),
+    stakeholders: mergeRows(current.stakeholders, incoming.stakeholders, (row) => `${row.type}:${row.name}`),
+    personas: mergeRows(current.personas, incoming.personas, (row) => `${row.segment}:${row.name}`),
+    competitors: mergeRows(current.competitors, incoming.competitors, (row) => row.url || row.name),
+    trends: mergeRows(current.trends, incoming.trends, (row) => row.title),
+    implications: mergeRows(current.implications, incoming.implications, (row) => row.title),
+    researchSources: mergeRows(current.researchSources, incoming.researchSources, (row) => row.url || row.id),
+    businessModel: {
+      revenueStreams: mergeStrings(current.businessModel.revenueStreams, incoming.businessModel.revenueStreams),
+      costStructure: mergeStrings(current.businessModel.costStructure, incoming.businessModel.costStructure),
+      channels: mergeStrings(current.businessModel.channels, incoming.businessModel.channels),
+      keyPartners: mergeStrings(current.businessModel.keyPartners, incoming.businessModel.keyPartners),
+    },
+    commercialImpact: {
+      objectivesMarkdown: preferText(
+        incoming.commercialImpact.objectivesMarkdown,
+        current.commercialImpact.objectivesMarkdown
+      ),
+      kpis: mergeRows(current.commercialImpact.kpis, incoming.commercialImpact.kpis, (row) => row.name),
+    },
+    swot: {
+      strengths: mergeStrings(current.swot.strengths, incoming.swot.strengths),
+      weaknesses: mergeStrings(current.swot.weaknesses, incoming.swot.weaknesses),
+      opportunities: mergeStrings(current.swot.opportunities, incoming.swot.opportunities),
+      threats: mergeStrings(current.swot.threats, incoming.swot.threats),
+    },
+    goToMarketMarkdown: preferText(incoming.goToMarketMarkdown, current.goToMarketMarkdown),
+    assumptions: mergeStrings(current.assumptions, incoming.assumptions),
+    evidenceGaps: mergeStrings(current.evidenceGaps, incoming.evidenceGaps),
+    updatedAt: textOr(incoming.updatedAt, textOr(current.updatedAt, nowIso())),
+  });
 }
 
 /**
@@ -1521,7 +1681,7 @@ function buildDiscoveryPrompt(project) {
 
   return `Tu és um analista de negócio e estratégia de mercado YourLab.
 
-Tarefa: a partir da ideia e do contexto, produzir um **dossier de descoberta** estruturado segundo
+Tarefa: a partir da ideia, do contexto e de pesquisa web real, produzir um **dossier de descoberta** estruturado segundo
 **frameworks de negócio reais e comprovados**: dimensionamento de mercado (TAM/SAM/SOM),
 segmentos-alvo, concorrência, Business Model Canvas (receitas, custos, canais, parceiros),
 impacto comercial desejado (objectivos + KPIs/OKRs) e análise SWOT.
@@ -1530,23 +1690,34 @@ Princípios:
 - Responde APENAS com JSON válido (sem \`\`\` fences).
 - Texto narrativo e legível em marketSummaryMarkdown (2-3 parágrafos) — como abertura de um pitch.
 - Sê concreto e realista; assenta em práticas que funcionam no mundo real.
+- Não inventes números, concorrentes ou fontes. Distingue factos, estimativas e hipóteses.
+- Cada alegação externa inclui sourceIds que apontam para researchSources.
+- Inclui stakeholders, personas, tendências e implicações concretas para produto, posicionamento e execução.
+- Se a evidência não permitir uma conclusão, usa evidenceGaps em vez de preencher por suposição.
 - assumptions = hipóteses de negócio que ainda precisam de ser validadas.
 
 Ideia e contexto:
 ${JSON.stringify({ ...ctx, vision }, null, 2)}
 
-Schema de output (discovery_v1):
+Schema de output (discovery_v2):
 {
   "discovery": {
+    "researchBrief": { "problemFramingMarkdown": "", "researchQuestions": [], "hypotheses": [], "scope": { "geographies": [], "customerTypes": [], "timeHorizon": "" } },
     "marketSummaryMarkdown": "",
-    "marketSizing": { "tam": "", "sam": "", "som": "", "notesMarkdown": "" },
-    "segments": [{ "name": "", "descriptionMarkdown": "", "painPoints": [] }],
-    "competitors": [{ "name": "", "descriptionMarkdown": "", "differentiation": "" }],
+    "marketSizing": { "tam": "", "sam": "", "som": "", "methodMarkdown": "", "notesMarkdown": "", "sourceIds": [] },
+    "segments": [{ "name": "", "descriptionMarkdown": "", "painPoints": [], "sourceIds": [] }],
+    "stakeholders": [{ "name": "", "type": "", "role": "", "needs": [], "pains": [], "influence": "low|medium|high", "implications": [] }],
+    "personas": [{ "name": "", "segment": "", "contextMarkdown": "", "jobs": [], "pains": [], "gains": [], "behaviours": [], "implications": [] }],
+    "competitors": [{ "name": "", "url": "", "category": "direct|indirect|substitute", "positioningMarkdown": "", "descriptionMarkdown": "", "strengths": [], "weaknesses": [], "differentiation": "", "sourceIds": [] }],
+    "trends": [{ "title": "", "evidenceMarkdown": "", "implicationMarkdown": "", "sourceIds": [] }],
     "businessModel": { "revenueStreams": [], "costStructure": [], "channels": [], "keyPartners": [] },
     "commercialImpact": { "objectivesMarkdown": "", "kpis": [{ "name": "", "target": "", "rationale": "" }] },
     "swot": { "strengths": [], "weaknesses": [], "opportunities": [], "threats": [] },
     "goToMarketMarkdown": "",
-    "assumptions": []
+    "implications": [{ "title": "", "descriptionMarkdown": "", "impact": "low|medium|high", "horizon": "now|next|later", "sourceIds": [] }],
+    "researchSources": [{ "id": "SRC-01", "title": "", "url": "", "publisher": "", "publishedAt": "", "retrievedAt": "", "sourceType": "primary|official|company|secondary", "claims": [], "confidence": "low|medium|high" }],
+    "assumptions": [],
+    "evidenceGaps": []
   },
   "requiresHumanConfirmation": true
 }`;
@@ -3516,7 +3687,10 @@ function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
   }
 
   if (parsed.discovery && typeof parsed.discovery === 'object') {
-    project.discovery = normalizeDiscovery({ ...parsed.discovery, updatedAt: nowIso() });
+    project.discovery = mergeDiscovery(
+      project.discovery,
+      { ...parsed.discovery, updatedAt: nowIso() }
+    );
   }
 
   if (parsed.roadmap && typeof parsed.roadmap === 'object') {
@@ -4299,7 +4473,7 @@ function registerDeliveryOsRoutes(app, deps) {
         targetOutput = 'idea_brief';
       } else if (agentType === 'discovery_research') {
         fullPrompt = buildDiscoveryPrompt(project);
-        targetOutput = 'discovery_v1';
+        targetOutput = 'discovery_v2';
       } else if (agentType === 'roadmap_plan') {
         fullPrompt = buildRoadmapPrompt(project);
         targetOutput = 'roadmap_v1';
@@ -5225,6 +5399,7 @@ module.exports = {
   normalizeProjectV3Fields,
   normalizeVision,
   normalizeDiscovery,
+  mergeDiscovery,
   normalizeRoadmap,
   normalizeImplementation,
   normalizeProposal,
