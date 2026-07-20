@@ -55,8 +55,12 @@
   let draftTimer = null;
   let searchTimer = null;
   let connectionPollTimer = null;
+  let connectionPollScheduled = false;
+  let connectionPollInFlight = false;
   let connectionStreamAbort = null;
   let connectionStreamKey = '';
+  let executionInteractionUntil = 0;
+  let executionPaintTimer = null;
   let runtimeHealthTimer = null;
   let taskBoardRefreshTimer = null;
 
@@ -133,8 +137,7 @@
         const blocks = buffer.split('\n\n');
         buffer = blocks.pop() || '';
         if (blocks.some((block) => block.includes('event: progress'))) {
-          clearTimeout(connectionPollTimer);
-          connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 0);
+          scheduleConnectionPoll(project, runId, taskId, 500);
         }
       }
     } catch (error) {
@@ -145,6 +148,15 @@
         setTimeout(() => openRunEventStream(project, runId, taskId), 1000);
       }
     }
+  }
+
+  function scheduleConnectionPoll(project, runId, taskId, delayMs) {
+    if (connectionPollScheduled || state.selectedId !== taskId) return;
+    connectionPollScheduled = true;
+    connectionPollTimer = setTimeout(() => {
+      connectionPollScheduled = false;
+      void pollConnectedTask(project, runId, taskId);
+    }, Math.max(250, Number(delayMs) || 0));
   }
 
   function showToast(message, type) {
@@ -266,7 +278,13 @@
 
   async function pollConnectedTask(project, runId, taskId) {
     clearTimeout(connectionPollTimer);
+    connectionPollScheduled = false;
     if (!runId || state.selectedId !== taskId) return;
+    if (connectionPollInFlight) {
+      scheduleConnectionPoll(project, runId, taskId, 750);
+      return;
+    }
+    connectionPollInFlight = true;
     void openRunEventStream(project, runId, taskId);
     try {
       const priorEvents = state.detailExecution?.events || [];
@@ -320,9 +338,11 @@
         connectionStreamKey = '';
         await fetchDetail(project.id, taskId); paintEditor(project); await fetchList(project.id); return;
       }
-      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 5000);
+      scheduleConnectionPoll(project, runId, taskId, 5000);
     } catch {
-      connectionPollTimer = setTimeout(() => pollConnectedTask(project, runId, taskId), 4000);
+      scheduleConnectionPoll(project, runId, taskId, 4000);
+    } finally {
+      connectionPollInFlight = false;
     }
   }
 
@@ -1115,9 +1135,30 @@
     `;
   }
 
-  function paintAgentExecution() {
+  function paintAgentExecution(options = {}) {
     const host = $('workItemEditor')?.querySelector('[data-ado-agent-log]');
-    if (host) host.innerHTML = renderAgentExecution();
+    if (!host) return;
+    const interacting = Date.now() < executionInteractionUntil
+      || host.matches(':hover')
+      || host.contains(document.activeElement);
+    if (!options.force && interacting) {
+      clearTimeout(executionPaintTimer);
+      executionPaintTimer = setTimeout(() => paintAgentExecution(), 750);
+      return;
+    }
+    const signature = JSON.stringify([
+      state.detailExecution?.status,
+      state.detailExecution?.desiredAction,
+      state.detailExecution?.updatedAt,
+      state.detailExecution?.progressCurrent,
+      state.detailExecution?.progressTotal,
+      state.detailExecution?.events?.length,
+      state.detailExecution?.events?.at?.(-1)?.id,
+      state.detailExecution?.error,
+    ]);
+    if (!options.force && host.dataset.executionSignature === signature) return;
+    host.innerHTML = renderAgentExecution();
+    host.dataset.executionSignature = signature;
   }
 
   function paintEditor(project) {
@@ -1595,6 +1636,11 @@
     root._adoWired = true;
 
     window.addEventListener('resize', resizeDescription);
+    root.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('[data-ado-agent-log]')) {
+        executionInteractionUntil = Date.now() + 4000;
+      }
+    });
 
     root.addEventListener('click', async (event) => {
       project = window.state?.selectedProject || project;
