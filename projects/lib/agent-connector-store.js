@@ -364,13 +364,18 @@ class AgentConnectorStore {
     `).run(at, at);
   }
 
-  assertLease(connectorId, dispatchId, leaseToken) {
+  assertLease(connectorId, dispatchId, leaseToken, options = {}) {
     const row = this.db.prepare('SELECT * FROM agent_dispatches WHERE id = ?').get(dispatchId);
-    if (!row || row.connector_id !== connectorId || !row.lease_hash
+    if (!row
+      || (
+        ['waiting_review', 'completed', 'failed', 'cancelled'].includes(row.status)
+        && !(options.allowDeliveredResult === true && row.result_hash)
+      )
+      || row.connector_id !== connectorId || !row.lease_hash
       || sha256(String(leaseToken || '')) !== row.lease_hash
       || !row.lease_expires_at
       || Date.parse(row.lease_expires_at) <= this.now()) {
-      throw new Error('Lease invalido ou substituido');
+      throw new Error('Lease invalido, revogado ou substituido');
     }
     return row;
   }
@@ -546,9 +551,57 @@ class AgentConnectorStore {
     }));
   }
 
-  retry(runId) {
+  abandon(runId, options = {}) {
+    const dispatch = this.findDispatch(runId);
+    if (!dispatch) return null;
+    if (['completed', 'failed', 'cancelled'].includes(dispatch.status)) return dispatch;
+    const at = nowIso(this.now());
+    const idempotencyKey = String(
+      options.idempotencyKey || `abandon:${dispatch.id}:${this.now()}`
+    );
+    const existingCommand = this.db.prepare(`
+      SELECT 1 FROM agent_dispatch_commands
+      WHERE dispatch_id = ? AND idempotency_key = ?
+    `).get(dispatch.id, idempotencyKey);
+    if (existingCommand) return this.getDispatch(dispatch.id);
+    const commandVersion = Number(dispatch.commandVersion || 0) + 1;
+    this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO agent_dispatch_commands (
+          dispatch_id, command_version, action, idempotency_key,
+          settings_patch_json, status, requested_at, acknowledged_at
+        ) VALUES (?, ?, 'cancel', ?, ?, 'acknowledged', ?, ?)
+      `).run(
+        dispatch.id,
+        commandVersion,
+        idempotencyKey,
+        JSON.stringify({
+          force: true,
+          reason: String(options.reason || 'platform_force_unlock'),
+        }),
+        at,
+        at
+      );
+      this.db.prepare(`
+        UPDATE agent_dispatches
+        SET status = 'cancelled', desired_action = NULL,
+            command_version = ?, acknowledged_command_version = ?,
+            lease_hash = NULL, lease_expires_at = NULL, updated_at = ?
+        WHERE id = ?
+      `).run(commandVersion, commandVersion, at, dispatch.id);
+    })();
+    return this.getDispatch(dispatch.id);
+  }
+
+  retry(runId, options = {}) {
     const previous = this.findDispatch(runId);
     if (!previous) return null;
+    if (!['completed', 'failed', 'cancelled'].includes(previous.status)) {
+      this.abandon(previous.id, {
+        idempotencyKey: `retry:${previous.id}:supersede`,
+        reason: 'superseded_by_retry',
+      });
+    }
     const attempt = Number(previous.attempt || 1) + 1;
     const retried = this.enqueue({
       projectId: previous.projectId,
@@ -557,7 +610,9 @@ class AgentConnectorStore {
       platformRunId: previous.platformRunId,
       agentJobId: `${previous.agentJobId}:attempt:${attempt}`,
       agentId: previous.agentId,
-      package: previous.package,
+      package: options.package && typeof options.package === 'object'
+        ? options.package
+        : previous.package,
       attempt,
       previousDispatchId: previous.id,
     });
@@ -582,7 +637,9 @@ class AgentConnectorStore {
     const resultHash = sha256(String(rawOutput || ''));
     const existing = this.db.prepare('SELECT * FROM agent_dispatches WHERE id = ?').get(dispatchId);
     if (existing?.result_hash) {
-      const leased = this.assertLease(connectorId, dispatchId, leaseToken);
+      const leased = this.assertLease(connectorId, dispatchId, leaseToken, {
+        allowDeliveredResult: true,
+      });
       if (leased.package_hash !== packageHash
         || existing.result_hash !== resultHash) {
         throw new Error('Ja existe um resultado diferente para este dispatch');

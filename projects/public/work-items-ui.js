@@ -1009,7 +1009,8 @@
       paused: 'Em pausa', cancel_requested: 'A cancelar', reconnecting: 'A retomar',
       connection_lost: 'Ligação perdida', waiting_review: 'Aguarda avaliação',
       pending_human_review: 'Aguarda avaliação', completed: 'Concluída',
-      failed: 'Falhou', cancelled: 'Cancelada',
+      failed: 'Falhou', blocked: 'Bloqueada', budget_exhausted: 'Limite atingido',
+      cancelled: 'Cancelada',
     };
     const eventLabels = {
       planning: 'Plano de execução', info: 'Actualização', goal_set: 'Critérios de sucesso',
@@ -1096,10 +1097,11 @@
         ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
           ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
           ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
-          ${status === 'failed' ? '<button type="button" class="ado-action-primary" data-ado-run-control="retry">Retomar do último checkpoint</button>' : ''}
+          ${['failed', 'blocked', 'budget_exhausted', 'connection_lost'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-run-control="retry">Retomar do último checkpoint</button>' : ''}
           ${['waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-focus-review>Avaliar resultado</button>' : ''}
           ${!desiredAction && !['completed', 'cancelled'].includes(status) ? '<button type="button" class="ado-action-ghost" data-ado-run-control="sync-now">Sincronizar agora</button>' : ''}
           ${cancellable && desiredAction !== 'cancel' ? '<button type="button" class="ado-action-danger" data-ado-run-control="cancel">Cancelar execução</button>' : ''}
+          ${!['completed', 'cancelled', 'waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-danger" data-ado-run-control="abandon">Terminar e desbloquear</button>' : ''}
         </div>` : ''}
       </div>
       <div class="ado-agent-log-list">
@@ -1201,12 +1203,11 @@
 
         ${isCoordination ? `
           <section class="ado-editor-section ado-coordination-panel">
-            <div class="ado-section-heading"><div><h3 class="ado-section-title">Plano deste pedido</h3><p class="ado-section-hint">Execute o pacote completo ou avance subtarefa a subtarefa.</p></div><strong>${children.filter((child) => child.status === 'completed').length}/${children.length}</strong></div>
+            <div class="ado-section-heading"><div><h3 class="ado-section-title">Plano deste pedido</h3><p class="ado-section-hint">A tarefa-pai coordena o plano. O agente recebe apenas a próxima subtarefa pronta, sem repetir trabalho concluído.</p></div><strong>${children.filter((child) => child.status === 'completed').length}/${children.length}</strong></div>
             ${request?.diffSummary ? `<div class="ado-request-diff-summary"><span>${request.diffSummary.changedTasks || 0} alterada(s)</span><span>${request.diffSummary.newTasks || 0} nova(s)</span><span>${request.diffSummary.removedTasks || 0} removida(s)</span></div>` : ''}
             <div class="ado-child-task-list">${children.map((child, index) => `<button type="button" data-ado-open-child="${escapeHtml(child.id)}"><span>${index + 1}</span><strong>${escapeHtml(child.title)}</strong><small>${escapeHtml(statusLabel(child.status))}</small></button>`).join('')}</div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-connect-agent ${agentConnectAttributes}>Connectar agente</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar pacote completo</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar todos os resultados</button></div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-continue-plan ${children.some((child) => child.status === 'ready') ? agentConnectAttributes : 'disabled'}>Iniciar próxima subtarefa</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar subtarefas ainda abertas</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar resultados das subtarefas abertas</button></div>
             ${agentPairingGuidance}
-            <div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>
             <div class="ado-manual-output-pane hidden" data-ado-bundle-pane><label>Pacote JSON completo<textarea rows="14" data-ado-bundle-raw placeholder='{"requestId":"…","requestVersion":1,"taskOutputs":[…]}'></textarea></label><p class="ado-section-hint" data-ado-bundle-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-bundle>Validar pacote</button><button type="button" class="ado-action-primary" data-ado-submit-bundle disabled>Enviar tudo para revisão</button></div></div>
             ${children.some((child) => child.status === 'waiting_review') && state.canManage ? `<div class="ado-bundle-review"><strong>Resultados prontos para decisão</strong><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-bundle="approved">Aprovar e aplicar todos</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="rejected">Rejeitar</button></div></div>` : ''}
             ${executionSettingsMarkup}
@@ -1600,10 +1601,12 @@
       const runControl = event.target.closest('[data-ado-run-control]');
       if (runControl && state.detailExecution?.runId) {
         const action = runControl.dataset.adoRunControl;
+        const controlledRunId = state.detailExecution.runId;
         if (action === 'cancel' && !window.confirm('Cancelar esta execução do agente? O trabalho já concluído continuará no histórico.')) return;
+        if (action === 'abandon' && !window.confirm('Terminar esta execução, revogar o controlo remoto antigo e desbloquear a tarefa? Os checkpoints e o histórico serão preservados.')) return;
         runControl.disabled = true;
         try {
-          await apiRequest(`/agent-runs/${encodeURIComponent(state.detailExecution.runId)}/${encodeURIComponent(action)}`, { method: 'POST', body: {} });
+          await apiRequest(`/agent-runs/${encodeURIComponent(controlledRunId)}/${encodeURIComponent(action)}`, { method: 'POST', body: {} });
           await fetchDetail(project.id, state.detail.id);
           paintEditor(project);
           showToast(action === 'pause'
@@ -1612,12 +1615,14 @@
               ? 'Continuação pedida.'
               : action === 'retry'
                 ? 'Recuperação pedida; o agente continuará do último checkpoint.'
-                : action === 'finish-partial'
-                  ? 'O progresso será preparado para avaliação.'
-                  : action === 'sync-now'
-                    ? 'Sincronização imediata pedida.'
-                  : 'Cancelamento pedido.', 'ok');
-          pollConnectedTask(project, state.detailExecution.runId, state.detail.id);
+                : action === 'abandon'
+                  ? 'Execução antiga terminada; a tarefa foi desbloqueada.'
+                  : action === 'finish-partial'
+                    ? 'O progresso será preparado para avaliação.'
+                    : action === 'sync-now'
+                      ? 'Sincronização imediata pedida.'
+                      : 'Cancelamento pedido.', 'ok');
+          pollConnectedTask(project, controlledRunId, state.detail.id);
         } catch (err) {
           runControl.disabled = false;
           showToast(err.message, 'error');
@@ -1841,6 +1846,41 @@
         } catch (err) { if (status) status.textContent = err.message; if (details) details.innerHTML = '<button type="button" class="ado-action-ghost" data-ado-connect-agent>Tentar novamente</button>'; }
         return;
       }
+      if (event.target.closest('[data-ado-continue-plan]') && state.detail) {
+        const readyChild = (state.detailChildren || []).find((child) => child.status === 'ready');
+        if (!readyChild) {
+          showToast('Não existe uma subtarefa pronta. Reveja resultados pendentes ou dependências bloqueadas.', 'error');
+          return;
+        }
+        const control = event.target.closest('[data-ado-continue-plan]');
+        control.disabled = true;
+        try {
+          const payload = await apiRequest('/agent-runs', {
+            method: 'POST',
+            body: {
+              projectId: project.id,
+              agentId: readyChild.agentId || state.detail.agentId,
+              agentType: readyChild.agentType || state.detail.agentType,
+              agentRequestId: state.detail.agentRequestId,
+              workItemId: state.detail.id,
+            },
+          });
+          if (payload.requiresApproval) throw new Error('O plano ainda precisa de aprovação.');
+          const taskId = payload.workItem?.id || readyChild.id;
+          await fetchList(project.id);
+          await openEditor(project, taskId);
+          showToast(`Subtarefa iniciada: ${readyChild.title}.`, 'ok');
+          pollConnectedTask(
+            project,
+            payload.agentJob?.id || payload.promptRun?.id,
+            taskId
+          );
+        } catch (err) {
+          control.disabled = false;
+          showToast(err.message, 'error');
+        }
+        return;
+      }
       if (event.target.closest('[data-ado-send-agent]') && state.detail) {
         const editor = $('workItemEditor'); const agentId = editor?.querySelector('[data-ado-agent-select]')?.value || state.detail.agentId; const settings = {};
         editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
@@ -1856,13 +1896,12 @@
       if (event.target.closest('[data-ado-save-execution-settings]') && state.detail) {
         const editor = $('workItemEditor'); const settings = {};
         editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
-        const save = async (revisePlan) => apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/execution-settings`, { method: 'POST', body: { settings, revisePlan } });
         try {
-          let payload;
-          try { payload = await save(false); }
-          catch (err) { if (!err.message.includes('mudam os prompts') || !confirm('Esta configuração altera a divisão ou os prompts. Criar uma nova versão do pedido e preservar esta no histórico?')) throw err; payload = await save(true); }
-          if (payload.revised && payload.parentTaskId) { showToast('Nova versão do pedido criada.', 'ok'); await openEditor(project, payload.parentTaskId); }
-          else { state.detail = payload.workItem; state.detailChildren = payload.children || state.detailChildren; paintEditor(project); showToast('Configuração guardada para a próxima tentativa.', 'ok'); }
+          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/execution-settings`, { method: 'POST', body: { settings } });
+          state.detail = payload.workItem;
+          state.detailChildren = payload.children || state.detailChildren;
+          paintEditor(project);
+          showToast('Configuração actualizada no mesmo plano; será usada na continuação ou próxima tentativa.', 'ok');
         } catch (err) { showToast(err.message, 'error'); }
         return;
       }

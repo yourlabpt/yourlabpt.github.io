@@ -184,9 +184,10 @@ function createRequest(project, input, options = {}) {
 function childTasks(project, parent) { return workItems.getWorkItems(project).filter((task) => task.parentTaskId === parent.id); }
 function buildTreePackage(project, parent) {
   const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === parent.agentRequestId); const children = childTasks(project, parent);
-  const envelope = { requestId: request?.id, requestVersion: request?.version || 1, taskOutputs: children.filter((task) => !workItems.isTerminalStatus(task.status)).map((task) => ({ taskId: task.id, packageVersion: task.executionPackage?.version || 1, output: {} })) };
-  const text = [`# ${parent.title}`, `\n## Pedido\n${request?.requestMarkdown || parent.descriptionMarkdown}`, `\n## Resultado esperado\n${request?.desiredOutcomeMarkdown || parent.acceptanceCriteriaMarkdown}`, '\n## Subtarefas', ...children.map((task, index) => `\n### ${index + 1}. ${task.title}\nTask ID: ${task.id}\nPackage version: ${task.executionPackage?.version || 1}\n${task.executionPackage?.instructions || task.descriptionMarkdown}\nFormato: ${task.executionPackage?.outputFormat || 'JSON'}`), '\n## Formato obrigatorio da resposta', JSON.stringify(envelope, null, 2)].join('\n');
-  return { request, children, text, envelope, contextSnapshotHash: request?.inputFingerprint || '' };
+  const openChildren = children.filter((task) => !workItems.isTerminalStatus(task.status));
+  const envelope = { requestId: request?.id, requestVersion: request?.version || 1, taskOutputs: openChildren.map((task) => ({ taskId: task.id, packageVersion: task.executionPackage?.version || 1, output: {} })) };
+  const text = [`# ${parent.title}`, `\n## Pedido\n${request?.requestMarkdown || parent.descriptionMarkdown}`, `\n## Resultado esperado\n${request?.desiredOutcomeMarkdown || parent.acceptanceCriteriaMarkdown}`, '\n## Subtarefas ainda abertas', ...openChildren.map((task, index) => `\n### ${index + 1}. ${task.title}\nTask ID: ${task.id}\nPackage version: ${task.executionPackage?.version || 1}\n${task.executionPackage?.instructions || task.descriptionMarkdown}\nFormato: ${task.executionPackage?.outputFormat || 'JSON'}`), '\n## Formato obrigatorio da resposta', JSON.stringify(envelope, null, 2)].join('\n');
+  return { request, children, openChildren, text, envelope, contextSnapshotHash: request?.inputFingerprint || '' };
 }
 function validateBundle(project, parent, rawOutput) {
   let parsed; try { parsed = typeof rawOutput === 'string' ? JSON.parse(rawOutput) : rawOutput; } catch { throw new Error('O pacote deve ser JSON valido.'); }

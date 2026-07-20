@@ -699,6 +699,55 @@ describe('secure outbound agent connector', () => {
     db.close();
   });
 
+  it('can retry from the same checkpoint with an amended frozen execution policy', () => {
+    const { db, store } = fixture();
+    const original = enqueue(store, {
+      package: {
+        version: 1,
+        execution: { settingsVersion: 1, settings: { modelProfileId: 'medium' } },
+      },
+    });
+    const amendedPackage = {
+      ...original.package,
+      execution: {
+        settingsVersion: 2,
+        settings: { modelProfileId: 'long_context' },
+      },
+    };
+    const retry = store.retry(original.id, { package: amendedPackage });
+    assert.equal(retry.previousDispatchId, original.id);
+    assert.equal(retry.package.execution.settingsVersion, 2);
+    assert.equal(retry.package.execution.settings.modelProfileId, 'long_context');
+    assert.notEqual(retry.packageHash, original.packageHash);
+    db.close();
+  });
+
+  it('force-unlocks a dispatch by revoking its lease and fencing late results', () => {
+    const { db, store, connector } = fixture();
+    const queued = enqueue(store);
+    const claim = store.claim(connector.id);
+    store.ack(connector.id, queued.id, claim.leaseToken, 'local-stuck');
+    const abandoned = store.abandon(queued.id, {
+      idempotencyKey: 'force-unlock-once',
+      reason: 'operator_recovery',
+    });
+    assert.equal(abandoned.status, 'cancelled');
+    assert.equal(abandoned.desiredAction, null);
+    assert.equal(abandoned.commandVersion, abandoned.acknowledgedCommandVersion);
+    assert.throws(() => store.sync(connector.id, queued.id, claim.leaseToken, {
+      status: 'running',
+      events: [],
+    }), /Lease/);
+    assert.throws(() => store.complete(connector.id, queued.id, claim.leaseToken, {
+      packageHash: claim.packageHash,
+      rawOutput: '{"late":true}',
+    }), /Lease/);
+    assert.equal(store.abandon(queued.id, {
+      idempotencyKey: 'force-unlock-once',
+    }).status, 'cancelled');
+    db.close();
+  });
+
   it('moves reviewed connector results to a terminal dispatch state', () => {
     const { db, store, connector } = fixture();
     const queued = enqueue(store);

@@ -161,9 +161,8 @@ function resolveExecutionConfig(connectionMode, request, task, bodyOptions = {},
 function selectReadyAgentTask(tasks, requestedTaskId) {
   const list = Array.isArray(tasks) ? tasks : [];
   const requested = list.find((task) => task.id === requestedTaskId);
-  if (requested?.status === 'ready') return requested;
+  if (requested?.taskRole !== 'coordination' && requested?.status === 'ready') return requested;
   return list.find((task) => task.taskRole !== 'coordination' && task.status === 'ready')
-    || list.find((task) => task.status === 'ready')
     || null;
 }
 
@@ -174,10 +173,11 @@ function reconcileActiveAgentJobs(project, options = {}) {
     ? options.nowIso()
     : new Date().toISOString();
   const tasks = workItems.getWorkItems(project);
+  let repairedTasks = tasks;
+  let repairedCoordination = false;
   let blocking = null;
   const orphaned = [];
   for (const job of Array.isArray(project?.agentJobs) ? project.agentJobs : []) {
-    if (!RUNTIME_ACTIVE_STATUSES.has(job.status)) continue;
     const task = tasks.find((entry) => (
       entry.id === job.workItemId
       || (job.id && entry.agentJobId === job.id)
@@ -186,6 +186,40 @@ function reconcileActiveAgentJobs(project, options = {}) {
     const dispatch = connectionMode === 'remote_pull' && connectorStore
       ? connectorStore.findDispatch(job.dispatchId || job.id || job.promptRunId)
       : null;
+    const coordinationExecutionLinked = task?.taskRole === 'coordination' && (
+      RUNTIME_ACTIVE_STATUSES.has(job.status)
+      || (
+        !['completed', 'cancelled'].includes(job.status)
+        && (task.agentJobId === job.id || task.promptRunId === job.promptRunId)
+      )
+    );
+    if (coordinationExecutionLinked) {
+      const cancelled = dispatch && connectorStore
+        ? connectorStore.abandon(dispatch.id, {
+          idempotencyKey: `coordination:${dispatch.id}:force-unlock`,
+          reason: 'coordination_tasks_are_not_executable',
+        })
+        : null;
+      job.status = 'cancelled';
+      job.cancelReason = 'coordination_execution_reconciled';
+      job.error = 'Execução-pai antiga terminada; o plano continua através das subtarefas.';
+      job.updatedAt = at;
+      repairedTasks = repairedTasks.map((entry) => entry.id === task.id
+        ? workItems.normalizeWorkItem({
+          ...entry,
+          agentJobId: '',
+          promptRunId: '',
+          agentStatus: '',
+          currentAction: 'Plano coordenado pelas subtarefas.',
+          lastMilestone: 'Execução-pai antiga desbloqueada pela plataforma.',
+          updatedAt: at,
+        }, { project })
+        : entry);
+      repairedCoordination = true;
+      orphaned.push({ job, dispatch: cancelled || dispatch, reason: 'coordination_execution' });
+      continue;
+    }
+    if (!RUNTIME_ACTIVE_STATUSES.has(job.status)) continue;
     if (
       task
       && dispatch?.status === 'waiting_review'
@@ -234,6 +268,7 @@ function reconcileActiveAgentJobs(project, options = {}) {
     }
     blocking ||= job;
   }
+  if (repairedCoordination) workItems.setWorkItems(project, repairedTasks);
   return { blocking, orphaned };
 }
 
@@ -1074,9 +1109,10 @@ function registerAgentRuntimeRoutes(app, deps) {
         });
       }
 
-      const canonicalPackage = delegatedTask.taskRole === 'coordination'
-        ? stageTransitions.buildTreePackage(project, delegatedTask)
-        : { text: [delegatedTask.executionPackage?.instructions || delegatedTask.descriptionMarkdown, delegatedTask.executionPackage?.outputFormat ? `\n\nFormato:\n${delegatedTask.executionPackage.outputFormat}` : ''].join(''), contextSnapshotHash: delegation.request.inputFingerprint || '', children: [] };
+      if (delegatedTask.taskRole === 'coordination') {
+        throw new Error('Uma tarefa de coordenação não é executável; inicie uma subtarefa pronta.');
+      }
+      const canonicalPackage = { text: [delegatedTask.executionPackage?.instructions || delegatedTask.descriptionMarkdown, delegatedTask.executionPackage?.outputFormat ? `\n\nFormato:\n${delegatedTask.executionPackage.outputFormat}` : ''].join(''), contextSnapshotHash: delegation.request.inputFingerprint || '', children: [] };
       built = { ...built, fullPrompt: canonicalPackage.text || built.fullPrompt, contextPack: { ...(built.contextPack || {}), taskId: delegatedTask.id, agentRequestId: delegation.request.id, contextSnapshotHash: canonicalPackage.contextSnapshotHash } };
 
       const run = normalizePromptRun({
@@ -1656,6 +1692,112 @@ function registerAgentRuntimeRoutes(app, deps) {
     }
   });
 
+  app.post('/api/projects/agent-runs/:runId/abandon', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+    try {
+      const runId = req.params.runId;
+      const store = await readStore();
+      let agentJob = null;
+      let project = null;
+      for (const entry of store.projects) {
+        const found = ensureArray(entry.agentJobs).find((job) => (
+          job.promptRunId === runId || job.id === runId || job.dispatchId === runId
+        ));
+        if (found) {
+          agentJob = found;
+          project = entry;
+          break;
+        }
+      }
+      if (!agentJob || !project) {
+        return res.status(404).json({ message: 'Agent run nao encontrado.' });
+      }
+
+      let dispatch = null;
+      if (connectionMode === 'remote_pull') {
+        dispatch = connectorStore?.abandon(
+          agentJob.dispatchId || agentJob.id || runId,
+          {
+            idempotencyKey: textOr(
+              req.headers['idempotency-key'],
+              `force-unlock:${agentJob.id}`
+            ),
+            reason: textOr(req.body?.reason, 'platform_force_unlock'),
+          }
+        );
+      } else if (connectionMode === 'local_push' && agentJob.yarJobId) {
+        try { await runtime.cancelJob(agentJob.yarJobId); } catch { /* fenced on platform */ }
+      }
+
+      let updatedTask = null;
+      await updateStore(async (mutableStore) => {
+        const mutableProject = mutableStore.projects.find((entry) => entry.id === project.id);
+        const job = ensureArray(mutableProject?.agentJobs).find((entry) => entry.id === agentJob.id);
+        if (job) {
+          job.status = 'cancelled';
+          job.cancelReason = textOr(req.body?.reason, 'platform_force_unlock');
+          job.error = 'Execução antiga terminada e bloqueio libertado pela plataforma.';
+          job.updatedAt = nowIso();
+        }
+        const list = workItems.getWorkItems(mutableProject);
+        const task = list.find((entry) => entry.id === agentJob.workItemId);
+        if (task) {
+          const coordination = task.taskRole === 'coordination';
+          updatedTask = workItems.normalizeWorkItem({
+            ...task,
+            status: coordination ? task.status : 'ready',
+            agentJobId: '',
+            promptRunId: '',
+            agentStatus: coordination ? '' : 'cancelled',
+            currentAction: coordination
+              ? 'Plano desbloqueado; continue pela próxima subtarefa pronta.'
+              : 'Execução antiga terminada. A tarefa está pronta para reiniciar com a configuração actual.',
+            lastMilestone: 'Execução terminada e lease remoto revogado pela plataforma.',
+            updatedAt: nowIso(),
+            updatedBy: req.auth.user.id,
+          }, { project: mutableProject });
+          workItems.setWorkItems(mutableProject, list.map((entry) => (
+            entry.id === task.id ? updatedTask : entry
+          )));
+        }
+        const request = ensureArray(mutableProject.agentRequests)
+          .find((entry) => entry.id === agentJob.agentRequestId);
+        if (request) {
+          const requestTasks = workItems.getWorkItems(mutableProject)
+            .filter((entry) => entry.agentRequestId === request.id && entry.taskRole !== 'coordination');
+          request.status = requestTasks.some((entry) => entry.status === 'waiting_review')
+            ? 'waiting_review'
+            : requestTasks.some((entry) => ['in_progress', 'waiting_input'].includes(entry.status))
+              ? 'running'
+              : requestTasks.length && requestTasks.every((entry) => workItems.isTerminalStatus(entry.status))
+                ? 'completed'
+                : 'ready';
+          request.updatedAt = nowIso();
+        }
+        mutableProject.updatedAt = nowIso();
+        appendActivity(mutableStore, {
+          actorUserId: req.auth.user.id,
+          projectId: project.id,
+          action: 'agent_run_force_unlocked',
+          details: {
+            agentJobId: agentJob.id,
+            dispatchId: dispatch?.id || agentJob.dispatchId || '',
+            workItemId: agentJob.workItemId,
+            providerNeutralFence: true,
+          },
+        });
+      });
+
+      return res.json({
+        unlocked: true,
+        agentJob: { ...agentJob, status: 'cancelled' },
+        dispatch: dispatch ? publicDispatch(dispatch) : null,
+        workItem: updatedTask ? workItems.toSlimCard(updatedTask) : null,
+      });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post('/api/projects/agent-runs/:runId/pause', authMiddleware, requireAgentProjectEditor, async (req, res) => {
     try {
       const runId = req.params.runId;
@@ -2018,7 +2160,33 @@ function registerAgentRuntimeRoutes(app, deps) {
       };
 
       if (connectionMode === 'remote_pull') {
-        const dispatch = connectorStore?.retry(agentJob.dispatchId || agentJob.id || runId);
+        const previousDispatch = connectorStore?.findDispatch(
+          agentJob.dispatchId || agentJob.id || runId
+        );
+        if (!previousDispatch) {
+          return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
+        }
+        const task = workItems.findWorkItem(project, agentJob.workItemId);
+        const request = agentRequests.getAgentRequests(project)
+          .find((entry) => entry.id === agentJob.agentRequestId) || null;
+        const retryConfig = task
+          ? resolveExecutionConfig('remote_pull', request, task, {}, {})
+          : { options, budget };
+        const retrySettings = workItems.normalizeExecutionSettings(
+          retryConfig.options?.executionSettings || retryConfig.options
+        );
+        const retryPackage = {
+          ...previousDispatch.package,
+          budget: retryConfig.budget,
+          execution: {
+            ...(previousDispatch.package.execution || {}),
+            settingsVersion: retrySettings.version,
+            settings: retrySettings,
+          },
+        };
+        const dispatch = connectorStore?.retry(previousDispatch.id, {
+          package: retryPackage,
+        });
         if (!dispatch) return res.status(404).json({ message: 'Dispatch seguro nao encontrado.' });
         await updateStore(async (mutableStore) => {
           const mutableProject = mutableStore.projects.find((entry) => entry.id === project.id);
@@ -2027,6 +2195,8 @@ function registerAgentRuntimeRoutes(app, deps) {
             job.dispatchId = dispatch.id;
             job.status = 'queued';
             job.error = '';
+            job.runtimeOptions = retryConfig.options;
+            job.budget = retryConfig.budget;
             job.updatedAt = nowIso();
           }
           appendActivity(mutableStore, {

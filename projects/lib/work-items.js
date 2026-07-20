@@ -393,7 +393,9 @@ function deriveParentStatuses(items) {
   list.forEach((item) => {
     const descendants = children.get(item.id) || [];
     if (item.executorMode === 'both' || descendants.length) {
-      item.status = executionDrivenStatus(item) || deriveContainerStatus(descendants);
+      item.status = item.taskRole === 'coordination'
+        ? deriveContainerStatus(descendants)
+        : executionDrivenStatus(item) || deriveContainerStatus(descendants);
       item.childTaskCount = descendants.length;
       item.completedChildTaskCount = descendants.filter((child) => isTerminalStatus(child.status)).length;
     }

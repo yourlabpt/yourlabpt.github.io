@@ -73,7 +73,7 @@ describe('work items model', () => {
     assert.throws(() => workItems.validateHierarchy({ id: 'parent', parentTaskId: 'agent' }, items), /ciclos/);
   });
 
-  it('keeps a coordination task aligned with its live agent execution', () => {
+  it('derives coordination status only from children, never from a parent execution', () => {
     const base = [
       task({
         id: 'parent',
@@ -85,11 +85,11 @@ describe('work items model', () => {
       task({ id: 'child', parentTaskId: 'parent', status: 'ready' }),
     ];
     let items = workItems.normalizeWorkItems(base);
-    assert.equal(items.find((item) => item.id === 'parent').status, 'waiting_input');
+    assert.equal(items.find((item) => item.id === 'parent').status, 'ready');
     items = workItems.normalizeWorkItems(items.map((item) => (
       item.id === 'parent' ? { ...item, agentStatus: 'executing' } : item
     )));
-    assert.equal(items.find((item) => item.id === 'parent').status, 'in_progress');
+    assert.equal(items.find((item) => item.id === 'parent').status, 'ready');
   });
 
   it('ranks blocked and review tasks for phase summaries', () => {
@@ -321,6 +321,7 @@ describe('agent requests and visible plans', () => {
       { id: 'blocked-request', taskRole: 'execution', status: 'planned' },
     ];
     assert.equal(selectReadyAgentTask(tasks, 'blocked-request').id, 'first');
+    assert.equal(selectReadyAgentTask(tasks, 'coordination').id, 'first');
     assert.equal(selectReadyAgentTask(tasks, 'first').id, 'first');
     assert.equal(selectReadyAgentTask(tasks.map((task) => ({ ...task, status: 'planned' })), 'blocked-request'), null);
   });
@@ -598,6 +599,84 @@ describe('stage transition requests through Tasks', () => {
     assert.deepEqual(
       filterAcceptedWorkItems(data).map((item) => item.id).sort(),
       data.workItems.map((item) => item.id).sort(),
+    );
+  });
+
+  it('amends execution settings on the same plan without copying completed work', async () => {
+    const data = project();
+    data.members = [{ userId: 'editor', role: 'partner' }];
+    const created = stageTransitions.createRequest(data, {
+      fromStageId: 'requirements',
+      toStageId: 'architecture',
+      direction: 'forward',
+      config: { modelProfileId: 'medium', maxSubtasks: 3 },
+      idempotencyKey: 'settings-in-place',
+    }, { actorUserId: 'editor' });
+    const parent = workItems.findWorkItem(data, created.request.parentTaskId);
+    const firstChild = workItems.getWorkItems(data)
+      .find((entry) => entry.parentTaskId === parent.id && entry.taskRole !== 'coordination');
+    workItems.setWorkItems(data, workItems.getWorkItems(data).map((entry) => (
+      entry.id === firstChild.id
+        ? workItems.normalizeWorkItem({ ...entry, status: 'completed' }, { project: data })
+        : entry
+    )));
+    const completedSettingsVersion = workItems.findWorkItem(data, firstChild.id)
+      .executionSettings.version;
+    const requestCount = data.agentRequests.length;
+
+    const routes = new Map();
+    const app = {};
+    for (const method of ['get', 'post', 'patch', 'delete']) {
+      app[method] = (path, ...handlers) => routes.set(`${method}:${path}`, handlers);
+    }
+    const store = { projects: [data], users: [] };
+    registerWorkItemRoutes(app, {
+      authMiddleware: (req, res, next) => next(),
+      requireProjectEditor: (req, res, next) => next(),
+      ensureProjectLoadedLite: async () => data,
+      canAccessProject: () => true,
+      updateStore: async (mutate) => mutate(store),
+      appendActivity: () => {},
+      connectorStore: null,
+      agentConnectionMode: 'remote_pull',
+      runtime: null,
+      ensureArray: (value) => Array.isArray(value) ? value : [],
+      nowIso: () => new Date().toISOString(),
+      normalizeRequirementRecord: (value) => value,
+    });
+    const handlers = routes.get(
+      'post:/api/projects/projects/:projectId/work-items/:workItemId/execution-settings'
+    );
+    let responseBody = null;
+    const req = {
+      params: { projectId: data.id, workItemId: parent.id },
+      body: {
+        settings: {
+          modelProfileId: 'long_context',
+          planningWaveSize: 4,
+          targetInputTokens: 32000,
+        },
+      },
+      auth: { user: { id: 'editor', role: 'partner' } },
+    };
+    const res = {
+      status() { return this; },
+      json(payload) { responseBody = payload; return payload; },
+    };
+    await runHandlers(handlers, req, res);
+
+    assert.equal(responseBody.amendedInPlace, true);
+    assert.equal(responseBody.appliesTo, 'open_tree');
+    assert.equal(data.agentRequests.length, requestCount);
+    assert.equal(workItems.findWorkItem(data, parent.id).executionSettings.modelProfileId, 'long_context');
+    assert.equal(
+      workItems.findWorkItem(data, firstChild.id).executionSettings.version,
+      completedSettingsVersion
+    );
+    assert.ok(
+      workItems.getWorkItems(data)
+        .filter((entry) => entry.parentTaskId === parent.id && entry.id !== firstChild.id)
+        .every((entry) => entry.executionSettings.modelProfileId === 'long_context')
     );
   });
 
