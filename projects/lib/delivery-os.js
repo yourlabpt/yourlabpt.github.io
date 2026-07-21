@@ -459,8 +459,11 @@ function applyMeetingClassificationParsed(project, minute, parsed) {
 }
 
 const STAGE_TRANSITION_AGENTS = {
-  'idea->discovery': { forward: 'Expandir contexto e stakeholders a partir da ideia', backward: null },
-  'discovery->requirements': { forward: 'Gerar requisitos de negócio e técnicos', backward: 'Resumir ideia a partir da descoberta' },
+  'idea->discovery': {
+    forward: 'Expandir contexto e stakeholders a partir da ideia',
+    backward: 'Resumir ideia a partir da descoberta',
+  },
+  'discovery->requirements': { forward: 'Gerar requisitos de negócio e técnicos', backward: null },
   'requirements->architecture': { forward: 'Gerar pacote de arquitectura por funcionalidade/módulo', backward: 'Derivar requisitos a partir da arquitectura' },
   'architecture->roadmap': { forward: 'Gerar roadmap e fases', backward: 'Actualizar arquitectura com base no roadmap' },
   'roadmap->implementation': { forward: 'Gerar plano de implementação por unidade', backward: 'Actualizar roadmap com progresso' },
@@ -1602,6 +1605,73 @@ Princípios de escrita:
 
 Contexto e visão atual:
 ${JSON.stringify({ ...ctx, currentVision: existing }, null, 2)}
+
+Responde APENAS com JSON válido (sem \`\`\` fences):
+{
+  "ideaBriefMarkdown": "resumo curto da ideia (compatibilidade)",
+  "vision": {
+    "headline": "uma frase-essência memorável",
+    "mainIdeaMarkdown": "2-4 parágrafos narrativos sobre a ideia principal",
+    "philosophyMarkdown": "1-2 parágrafos sobre cultura e filosofia",
+    "problemMarkdown": "o problema/dor que justifica a ideia",
+    "targetUsers": ["quem beneficia"],
+    "valuePropositionMarkdown": "porque importa / valor entregue",
+    "principles": [{ "title": "", "descriptionMarkdown": "" }],
+    "consequentIdeas": [{ "title": "", "descriptionMarkdown": "" }]
+  },
+  "requiresHumanConfirmation": true
+}`;
+}
+
+function buildIdeaBriefFromDiscoveryPrompt(project) {
+  const discovery = normalizeDiscovery(project.discovery || {});
+  const existing = project.vision && typeof project.vision === 'object'
+    ? normalizeVision(project.vision, project)
+    : normalizeVision({}, project);
+  const discoverySummary = {
+    researchBrief: discovery.researchBrief,
+    marketSummaryMarkdown: textOr(discovery.marketSummaryMarkdown).slice(0, 3000),
+    marketSizing: discovery.marketSizing,
+    segments: ensureArray(discovery.segments).slice(0, 8),
+    stakeholders: ensureArray(discovery.stakeholders).slice(0, 12),
+    personas: ensureArray(discovery.personas).slice(0, 8),
+    competitors: ensureArray(discovery.competitors).slice(0, 10),
+    trends: ensureArray(discovery.trends).slice(0, 8),
+    businessModel: discovery.businessModel,
+    commercialImpact: discovery.commercialImpact,
+    goToMarketMarkdown: textOr(discovery.goToMarketMarkdown).slice(0, 2000),
+    swot: discovery.swot,
+    implications: ensureArray(discovery.implications).slice(0, 12),
+    assumptions: ensureArray(discovery.assumptions).slice(0, 12),
+    evidenceGaps: ensureArray(discovery.evidenceGaps).slice(0, 8),
+  };
+
+  return `Tu és um estratega de produto YourLab.
+
+Tarefa: **regenerar a visão da ideia** a partir do dossier de descoberta já produzido.
+Não volte a fazer investigação de mercado nem produza JSON de discovery — sintetize o que a descoberta
+revelou numa visão narrativa para a página Idea.
+
+Princípios de escrita:
+- Texto humano, fluido e inspirador — frases completas, sem bullet points secos no mainIdeaMarkdown.
+- Linguagem simples; a complexidade técnica fica de fora desta fase.
+- Incorpore insights de mercado, personas e implicações quando relevantes, sem copiar o dossier integralmente.
+- "consequentIdeas" = ideias que nascem naturalmente da ideia principal (extensões, futuros, oportunidades).
+- "principles" = a filosofia/cultura que guia decisões (o "como pensamos", não o "o que fazemos").
+- Preserve o espírito da ideia original quando existir; refine com base na descoberta.
+
+Entradas:
+${JSON.stringify({
+    originalIdeaText: textOr(project.originalIdeaText).slice(0, 4000),
+    currentVision: {
+      headline: textOr(existing.headline),
+      mainIdeaMarkdown: textOr(existing.mainIdeaMarkdown).slice(0, 2000),
+      problemMarkdown: textOr(existing.problemMarkdown).slice(0, 1500),
+      targetUsers: ensureArray(existing.targetUsers),
+      valuePropositionMarkdown: textOr(existing.valuePropositionMarkdown).slice(0, 1500),
+    },
+    discovery: discoverySummary,
+  }, null, 2)}
 
 Responde APENAS com JSON válido (sem \`\`\` fences):
 {
@@ -5532,6 +5602,7 @@ module.exports = {
   buildGroupingPrompt,
   buildHierarchyReorganizePrompt,
   buildReverseIdeaPrompt,
+  buildIdeaBriefFromDiscoveryPrompt,
   buildDiscoveryPrompt,
   buildRoadmapPrompt,
   buildDiagramToRequirementsPrompt,

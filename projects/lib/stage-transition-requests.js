@@ -143,7 +143,13 @@ function buildPreview(project, input = {}, deps = {}) {
     config.enableWebSearch = true;
   }
   const plan = executionPlans.buildExecutionPlan('stage_transition', project, { ...config, fromStageId, toStageId, direction, stageId: toStageId }, { deliveryOs: deps.deliveryOs });
-  let tasks = ensureMeaningfulMinimum(ensureArray(plan.tasks).map((task, index) => ({ ...task, stableTaskKey: textOr(task.stableTaskKey || task.id, `task_${index + 1}`) })));
+  let tasks = ensureArray(plan.tasks).map((task, index) => ({ ...task, stableTaskKey: textOr(task.stableTaskKey || task.id, `task_${index + 1}`) }));
+  const resolvedTransition = executionPlans.resolveStageTransitionSpec(fromStageId, toStageId, direction);
+  const skipMeaningfulMinimum = resolvedTransition.key === 'idea->discovery'
+    && resolvedTransition.direction === 'backward'
+    && tasks.length === 1
+    && tasks[0].id === 'idea_brief';
+  if (!skipMeaningfulMinimum) tasks = ensureMeaningfulMinimum(tasks);
   tasks = groupTasks(tasks, config.maxSubtasks);
   const snapshot = contextSnapshot(project, fromStageId, toStageId); const inputFingerprint = fingerprint(snapshot); const configFingerprint = fingerprint(config);
   const baseline = baselineFor(project, key); const previousTasks = baseline ? workItems.getWorkItems(project).filter((task) => task.agentRequestId === baseline.id && task.taskRole !== 'coordination') : [];

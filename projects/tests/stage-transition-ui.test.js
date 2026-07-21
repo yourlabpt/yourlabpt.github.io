@@ -24,6 +24,10 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /leaveEditorMode\(\);[\s\S]*?await fetchList\(project\.id\);[\s\S]*?refreshBoardView\(\)/);
   assert.match(workItemsSource, /request\.requestKind !== 'stage_transition'/);
   assert.match(deliverySource, /if \(agentType === 'discovery_research'\) \{[\s\S]*?openTransitionPicker\('idea', 'discovery', project\)/);
+  assert.match(deliverySource, /function openTransitionPicker\(fromStageId, toStageId, project, options = \{\}\)/);
+  assert.match(deliverySource, /defaultDirection = options\.defaultDirection === 'backward' \? 'backward' : 'forward'/);
+  assert.match(deliverySource, /selectedStageId === btn\.dataset\.toStage \? 'backward' : 'forward'/);
+  assert.match(deliverySource, /transitionStageLabels\(\)/);
   assert.match(deliverySource, /Entregáveis aprovados da descoberta/);
   assert.match(deliverySource, /Stakeholders &amp; personas/);
   assert.match(deliverySource, /Evidência e lacunas/);
@@ -36,7 +40,8 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.doesNotMatch(workItemsSource, /Executar plano até ao fim/);
   assert.match(workItemsSource, /data-ado-goto-agents/);
   assert.match(workItemsSource, /respectsPauseForSubtaskReview/);
-  assert.match(workItemsSource, /data-ado-run-control="abandon"/);
+  assert.match(workItemsSource, /isLinkedAgentExecution\(state\.detail, state\.detailExecution\)/);
+  assert.match(workItemsSource, /if \(action !== 'abandon'\)/);
   assert.match(workItemsSource, /Terminar e desbloquear/);
   assert.match(workItemsSource, /Reiniciar do último checkpoint/);
   assert.match(workItemsSource, /Retomar do último checkpoint/);

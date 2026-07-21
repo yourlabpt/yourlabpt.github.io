@@ -4,6 +4,12 @@
 (function initWorkItemsUi() {
   const API = '/api/projects';
 
+  function isLinkedAgentExecution(item, execution) {
+    if (!item || !execution?.runId) return false;
+    const runId = String(execution.runId);
+    return runId === String(item.agentJobId || '') || runId === String(item.promptRunId || '');
+  }
+
   const ALL_STATUSES = [
     { id: 'planned', label: 'Planeada' }, { id: 'ready', label: 'Pronta' },
     { id: 'in_progress', label: 'Em curso' }, { id: 'waiting_input', label: 'Aguarda informação' },
@@ -613,7 +619,14 @@
     state.detailRequest = payload.agentRequest || null;
     if (requestVersion >= executionRequestVersion && requestVersion >= executionAppliedVersion) {
       executionAppliedVersion = requestVersion;
-      state.detailExecution = mergeExecutionSnapshot(state.detailExecution, payload.agentExecution || null);
+      if (!payload.agentExecution || !isLinkedAgentExecution(payload.workItem, payload.agentExecution)) {
+        state.detailExecution = null;
+      } else {
+        state.detailExecution = mergeExecutionSnapshot(
+          state.detailExecution?.runId === payload.agentExecution.runId ? state.detailExecution : null,
+          payload.agentExecution,
+        );
+      }
     }
     state.detailReview = payload.reviewTarget || null;
     state.detailOrchestration = payload.orchestration || null;
@@ -1077,7 +1090,9 @@
 
   function renderAgentExecution() {
     const execution = state.detailExecution;
-    if (!execution) return '<p class="ado-agent-log-empty">A execução ainda não produziu eventos.</p>';
+    if (!execution || !isLinkedAgentExecution(state.detail, execution)) {
+      return '<p class="ado-agent-log-empty">Sem execução activa nesta tarefa.</p>';
+    }
     const events = execution.events || [];
     const rawStatus = String(execution.status || 'queued').toLowerCase();
     const desiredAction = String(execution.desiredAction || '').toLowerCase();
@@ -1230,7 +1245,7 @@
         ${execution.bestEffort ? `<div class="ado-agent-quality-warning"><strong>Resultado disponível para decisão humana</strong><p>O agente atingiu o limite de correções e enviou o melhor resultado produzido. Reveja os avisos antes de aprovar.</p>${(execution.qualityWarnings || []).length ? `<ul>${execution.qualityWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : ''}</div>` : ''}
         ${desiredAction ? `<p class="ado-agent-control-pending">Comando pendente: ${escapeHtml(({ pause: 'pausar', resume: 'continuar', cancel: 'cancelar', finish_partial: 'enviar progresso para avaliação', sync_now: 'sincronizar agora' })[desiredAction] || desiredAction)}</p>` : ''}
         ${execution.error ? `<p class="ado-agent-error">${escapeHtml(execution.error)}</p>` : ''}
-        ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
+        ${state.canManage && isLinkedAgentExecution(state.detail, execution) ? `<div class="ado-action-bar ado-agent-controls">
           ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
           ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
           ${['blocked', 'budget_exhausted'].includes(status) && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar checkpoint para avaliação</button>' : ''}
@@ -1355,7 +1370,12 @@
   }
 
   function paintAgentExecution(options = {}) {
+    const section = $('workItemEditor')?.querySelector('.ado-agent-log-section');
     const host = $('workItemEditor')?.querySelector('[data-ado-agent-log]');
+    if (!isLinkedAgentExecution(state.detail, state.detailExecution)) {
+      section?.remove();
+      return;
+    }
     if (!host) return;
     const interacting = Date.now() < executionInteractionUntil
       || host.matches(':hover')
@@ -1574,7 +1594,7 @@
           </section>
         ` : ''}
 
-        ${item.origin === 'agent' && state.detailExecution ? `
+        ${item.origin === 'agent' && isLinkedAgentExecution(item, state.detailExecution) ? `
           <section class="ado-editor-section ado-agent-log-section">
             <h3 class="ado-section-title">Execução do agente</h3>
             <p class="ado-section-hint">Eventos recebidos do runtime local, preservados no histórico desta tarefa.</p>
@@ -1878,7 +1898,7 @@
     root.addEventListener('click', async (event) => {
       project = window.state?.selectedProject || project;
       const runControl = event.target.closest('[data-ado-run-control]');
-      if (runControl && state.detailExecution?.runId) {
+      if (runControl && isLinkedAgentExecution(state.detail, state.detailExecution) && state.detailExecution?.runId) {
         const action = runControl.dataset.adoRunControl;
         const controlledRunId = state.detailExecution.runId;
         if (action === 'cancel' && !window.confirm('Cancelar esta execução do agente? O trabalho já concluído continuará no histórico.')) return;
@@ -1903,6 +1923,9 @@
             paintAgentExecution({ force: true });
           }
           await apiRequest(`/agent-runs/${encodeURIComponent(controlledRunId)}/${encodeURIComponent(action)}`, { method: 'POST', body: {} });
+          if (action === 'abandon') {
+            state.detailExecution = null;
+          }
           await fetchDetail(project.id, state.detail.id);
           paintEditor(project);
           showToast(action === 'pause'
@@ -1918,7 +1941,9 @@
                     : action === 'sync-now'
                       ? 'Sincronização imediata pedida.'
                       : 'Cancelamento pedido.', 'ok');
-          pollConnectedTask(project, controlledRunId, state.detail.id);
+          if (action !== 'abandon') {
+            pollConnectedTask(project, controlledRunId, state.detail.id);
+          }
         } catch (err) {
           state.detailExecution = executionBeforeCommand;
           paintAgentExecution({ force: true });

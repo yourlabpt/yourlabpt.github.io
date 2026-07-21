@@ -67,6 +67,19 @@ describe('work items model', () => {
     assert.equal(blockingReview.pauseForSubtaskReview, true);
   });
 
+  it('resolves linked agent jobs only through task pointers', () => {
+    const project = {
+      agentJobs: [
+        { id: 'job-old', workItemId: 'task-1', status: 'cancelled' },
+        { id: 'job-active', workItemId: 'task-2', status: 'running' },
+      ],
+    };
+    assert.equal(workItems.resolveLinkedAgentJob(project, { id: 'task-1' }), null);
+    assert.equal(workItems.resolveLinkedAgentJob(project, { id: 'task-1', agentJobId: 'job-old' }).id, 'job-old');
+    assert.equal(workItems.isAgentExecutionLinked({ agentJobId: 'job-active' }, { runId: 'job-active' }), true);
+    assert.equal(workItems.isAgentExecutionLinked({ id: 'task-1' }, { runId: 'job-old' }), false);
+  });
+
   it('returns slim cards without descriptions and counts executors', () => {
     const item = workItems.normalizeWorkItem(task({ id: 'w1', resultSummaryMarkdown: 'Done' }));
     assert.equal(workItems.toSlimCard(item).descriptionMarkdown, undefined);
@@ -682,6 +695,67 @@ describe('stage transition requests through Tasks', () => {
     assert.equal(responseBody.agentExecution.commandVersion, 4);
   });
 
+  it('omits abandoned agent execution from task detail when task links are cleared', async () => {
+    const data = project();
+    data.members = [{ userId: 'editor', role: 'partner' }];
+    data.agentJobs = [{
+      id: 'job_abandoned',
+      workItemId: 'task_abandoned',
+      dispatchId: 'dispatch_abandoned',
+      status: 'cancelled',
+      subtasksCompleted: 2,
+      subtasksTotal: 6,
+    }];
+    data.workItems = [workItems.normalizeWorkItem(task({
+      id: 'task_abandoned',
+      origin: 'agent',
+      executorMode: 'agent',
+      status: 'ready',
+      agentJobId: '',
+      promptRunId: '',
+      agentStatus: '',
+    }), { project: data })];
+    const routes = new Map();
+    const app = {};
+    for (const method of ['get', 'post', 'patch', 'delete']) {
+      app[method] = (path, ...handlers) => routes.set(`${method}:${path}`, handlers);
+    }
+    registerWorkItemRoutes(app, {
+      authMiddleware: (req, res, next) => next(),
+      requireProjectEditor: (req, res, next) => next(),
+      ensureProjectLoadedLite: async () => data,
+      canAccessProject: () => true,
+      updateStore: async (mutate) => mutate({ projects: [data], users: [] }),
+      appendActivity: () => {},
+      connectorStore: {
+        activeConnector: () => ({ online: true }),
+        findDispatch: () => ({
+          id: 'dispatch_abandoned',
+          status: 'cancelled',
+          progress: { completed: 2, total: 6 },
+        }),
+        recentEvents: () => [{ id: 1, type: 'paused', message: 'Stopped' }],
+      },
+      agentConnectionMode: 'remote_pull',
+      runtime: null,
+      ensureArray: (value) => Array.isArray(value) ? value : [],
+      nowIso: () => new Date().toISOString(),
+      normalizeRequirementRecord: (value) => value,
+    });
+    const handlers = routes.get('get:/api/projects/projects/:projectId/work-items/:workItemId');
+    let responseBody = null;
+    await runHandlers(handlers, {
+      params: { projectId: data.id, workItemId: 'task_abandoned' },
+      auth: { user: { id: 'editor', role: 'partner' } },
+    }, {
+      status() { return this; },
+      json(payload) { responseBody = payload; return payload; },
+    });
+
+    assert.equal(responseBody.agentExecution, null);
+    assert.equal(responseBody.orchestration.availableAction, 'connect_and_run');
+  });
+
   it('applies an approved subtask, releases its connector and exposes the next task', async () => {
     const data = project();
     data.name = 'Black Adam App';
@@ -1079,6 +1153,26 @@ describe('stage transition requests through Tasks', () => {
       config: { userRequest: 'Research the idea' },
     });
     assert.equal(preview.baselineRequest, null);
+  });
+
+  it('previews a single idea_brief task for discovery to idea backward regeneration', () => {
+    const data = project();
+    data.discovery = {
+      marketSummaryMarkdown: 'Validated market demand.',
+      personas: [{ name: 'Musician', jobs: ['Transcribe songs'] }],
+    };
+    const preview = stageTransitions.buildPreview(data, {
+      fromStageId: 'discovery',
+      toStageId: 'idea',
+      direction: 'backward',
+      config: { userRequest: 'Regenerar a visão da ideia a partir da descoberta.' },
+    });
+
+    assert.equal(preview.key, 'discovery->idea:backward');
+    assert.deepEqual(preview.tasks.map((task) => task.id), ['idea_brief']);
+    assert.match(preview.tasks[0].instruction, /ideaBriefMarkdown/);
+    assert.doesNotMatch(preview.tasks[0].instruction, /discovery_v2/);
+    assert.equal(preview.tasks.some((task) => task.id === 'framing'), false);
   });
 });
 

@@ -878,7 +878,9 @@
     el.querySelectorAll('.golden-connector').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openTransitionPicker(btn.dataset.fromStage, btn.dataset.toStage, project);
+        const selectedStageId = window.state.deliverySelectedStageId;
+        const defaultDirection = selectedStageId === btn.dataset.toStage ? 'backward' : 'forward';
+        openTransitionPicker(btn.dataset.fromStage, btn.dataset.toStage, project, { defaultDirection });
       });
     });
 
@@ -980,12 +982,13 @@
     });
   }
 
-  function openTransitionPicker(fromStageId, toStageId, project) {
+  function openTransitionPicker(fromStageId, toStageId, project, options = {}) {
     const modal = $('pdosTransitionModal');
     if (!modal) return;
     const stages = getStages(project);
     const from = stages.find((s) => s.id === fromStageId);
     const to = stages.find((s) => s.id === toStageId);
+    const defaultDirection = options.defaultDirection === 'backward' ? 'backward' : 'forward';
     $('pdosTransitionTitle').textContent = `${from?.label || fromStageId} ↔ ${to?.label || toStageId}`;
     $('pdosTransitionDesc').textContent = 'Configure o pedido. Os prompts e resultados serão tratados dentro das tarefas.';
     $('pdosTransitionForwardLabel').textContent = `Avançar para ${to?.label || toStageId}`;
@@ -999,6 +1002,12 @@
       const direction = form.elements.transitionDirection.value || 'forward';
       return { direction, fromStageId: direction === 'forward' ? fromStageId : toStageId, toStageId: direction === 'forward' ? toStageId : fromStageId };
     };
+    const transitionStageLabels = () => {
+      const transition = directionValues();
+      const fromLabel = stages.find((s) => s.id === transition.fromStageId)?.label || transition.fromStageId;
+      const toLabel = stages.find((s) => s.id === transition.toStageId)?.label || transition.toStageId;
+      return { ...transition, fromLabel, toLabel };
+    };
     const readConfig = () => ({
       userRequest: $('pdosTransitionRequest').value.trim(), desiredOutcome: $('pdosTransitionOutcome').value.trim(),
       modelProfileId: $('pdosTransitionModelProfile').value, targetInputTokens: Number($('pdosTransitionInputTokens').value),
@@ -1009,8 +1018,9 @@
       enableWebSearch: $('pdosTransitionWebSearch').checked,
     });
     const fillConfig = (values = {}, firstRequest = false) => {
-      $('pdosTransitionRequest').value = values.userRequest || `Produzir o trabalho necessário para a transição de ${from?.label || fromStageId} para ${to?.label || toStageId}.`;
-      $('pdosTransitionOutcome').value = values.desiredOutcome || `Artefactos de ${to?.label || toStageId} prontos para revisão.`;
+      const transition = transitionStageLabels();
+      $('pdosTransitionRequest').value = values.userRequest || `Produzir o trabalho necessário para a transição de ${transition.fromLabel} para ${transition.toLabel}.`;
+      $('pdosTransitionOutcome').value = values.desiredOutcome || `Artefactos de ${transition.toLabel} prontos para revisão.`;
       $('pdosTransitionModelProfile').value = values.modelProfileId || 'medium';
       $('pdosTransitionInputTokens').value = values.targetInputTokens || 14000; $('pdosTransitionOutputTokens').value = values.targetOutputTokens || 2500;
       $('pdosTransitionMaxTokens').value = values.maxTokens ?? 0; $('pdosTransitionMaxMinutes').value = values.maxWallClockMinutes ?? 0;
@@ -1073,6 +1083,12 @@
       } catch (error) { showToast(error.message, 'error'); }
       finally { button.disabled = false; button.textContent = 'Criar pedido e tarefas'; }
     };
+    const directionInput = form.elements.transitionDirection;
+    if (directionInput) {
+      [...directionInput].forEach((input) => {
+        input.checked = input.value === defaultDirection;
+      });
+    }
     loadSaved();
   }
 

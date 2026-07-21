@@ -1187,12 +1187,15 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
     const direction = textOr(options.direction, 'forward');
     const resolved = resolveStageTransitionSpec(fromStageId, toStageId, direction);
     tasks = buildStageTransitionTasks(fromStageId, toStageId, direction, project);
-    fullPrompt = deliveryOs.buildStageTransitionPrompt(
-      project,
-      resolved.fromStageId,
-      resolved.toStageId,
-      resolved.direction
-    );
+    const isIdeaBriefBackward = resolved.key === 'idea->discovery' && resolved.direction === 'backward';
+    fullPrompt = isIdeaBriefBackward
+      ? deliveryOs.buildIdeaBriefFromDiscoveryPrompt(project)
+      : deliveryOs.buildStageTransitionPrompt(
+        project,
+        resolved.fromStageId,
+        resolved.toStageId,
+        resolved.direction
+      );
 
     const isPhasedRequirements = resolved.key === 'discovery->requirements' && resolved.direction === 'forward';
     const stubPlan = {
@@ -1219,6 +1222,8 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
       ...t,
       instruction: resolved.key === 'idea->discovery' && resolved.direction === 'forward'
         ? buildDiscoveryTransitionTaskPrompt(fullPrompt, t)
+        : isIdeaBriefBackward
+        ? buildIdeaBriefTransitionTaskPrompt(fullPrompt, t)
         : isPhasedRequirements
         ? buildRequirementsPhaseTaskPrompt(stubPlan, t, project, deliveryOs)
         : buildTaskInstruction(fullPrompt, t, agentType, project, options),
@@ -1487,6 +1492,35 @@ ${focus}
 ${fullPrompt.slice(0, 16000)}`;
 }
 
+function buildIdeaBriefTransitionTaskPrompt(fullPrompt, task) {
+  return `# Tarefa de Ideia: ${task.title}
+
+# Regras
+- Sintetize a visão da ideia a partir do dossier de descoberta fornecido.
+- Não produza JSON de discovery nem volte a fazer investigação de mercado.
+- Responda apenas JSON válido, sem markdown fences.
+
+# Output desta tarefa
+Produza o JSON completo de visão da ideia:
+{
+  "ideaBriefMarkdown": "resumo curto da ideia (compatibilidade)",
+  "vision": {
+    "headline": "uma frase-essência memorável",
+    "mainIdeaMarkdown": "2-4 parágrafos narrativos sobre a ideia principal",
+    "philosophyMarkdown": "1-2 parágrafos sobre cultura e filosofia",
+    "problemMarkdown": "o problema/dor que justifica a ideia",
+    "targetUsers": ["quem beneficia"],
+    "valuePropositionMarkdown": "porque importa / valor entregue",
+    "principles": [{ "title": "", "descriptionMarkdown": "" }],
+    "consequentIdeas": [{ "title": "", "descriptionMarkdown": "" }]
+  },
+  "requiresHumanConfirmation": true
+}
+
+# Contexto congelado do projecto
+${fullPrompt.slice(0, 16000)}`;
+}
+
 function preparePhasedRequirementsPlan(plan, project) {
   if (!isPhasedRequirementsPlan(plan)) return plan;
   const pl = { ...plan, tasks: ensureArray(plan.tasks).map((t) => ({ ...t })) };
@@ -1505,6 +1539,14 @@ function buildTaskPrompt(plan, task, project, deps = {}) {
     const syncedPlan = preparePhasedRequirementsPlan(plan, project);
     const syncedTask = ensureArray(syncedPlan.tasks).find((t) => t.id === task.id) || task;
     return buildRequirementsPhaseTaskPrompt(syncedPlan, syncedTask, project, deliveryOs);
+  }
+
+  const isIdeaBriefBackward = plan.agentType === 'stage_transition'
+    && resolveStageTransitionSpec(plan.fromStageId, plan.toStageId, plan.direction).key === 'idea->discovery'
+    && textOr(plan.direction, 'forward') === 'backward';
+  if (isIdeaBriefBackward) {
+    const ideaPrompt = deliveryOs.buildIdeaBriefFromDiscoveryPrompt(project);
+    return buildIdeaBriefTransitionTaskPrompt(ideaPrompt, task);
   }
 
   const base = buildTaskInstruction(

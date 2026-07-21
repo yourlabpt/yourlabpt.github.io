@@ -743,6 +743,26 @@ function patchWorkItemUpdate(item, id, bodyMarkdown, options = {}) {
 }
 function findWorkItemUpdate(item, id) { return ensureArray(item?.updates).find((entry) => entry.id === id) || null; }
 
+function resolveLinkedAgentJob(project, item) {
+  if (!item) return null;
+  const jobs = ensureArray(project?.agentJobs);
+  const agentJobId = textOr(item.agentJobId);
+  if (agentJobId) {
+    return jobs.find((job) => job.id === agentJobId) || null;
+  }
+  const promptRunId = textOr(item.promptRunId);
+  if (promptRunId) {
+    return jobs.find((job) => job.promptRunId === promptRunId || job.id === promptRunId) || null;
+  }
+  return null;
+}
+
+function isAgentExecutionLinked(item, agentExecution = null) {
+  if (!item || !agentExecution?.runId) return false;
+  const runId = textOr(agentExecution.runId);
+  return runId === textOr(item.agentJobId) || runId === textOr(item.promptRunId);
+}
+
 module.exports = {
   WORK_ITEMS_SCHEMA_VERSION, UNCLASSIFIED_STAGE_ID, ORIGINS, EXECUTOR_MODES, STATUSES, COMPLEXITIES,
   normalizeWorkItem, normalizeWorkItems, normalizeSourceRefs, normalizeUpdate, normalizeUpdates,
@@ -750,7 +770,7 @@ module.exports = {
   toSlimCard, toSlimCards, computeMetaCounts, validateWorkItemForCreate, validateWorkItemForUpdate,
   validateHierarchy, validateDependencies, filterByTransitionFromStage, relevantWorkItems, sortPrioritized, priorityRank,
   isTerminalStatus, deriveContainerStatus, deriveParentStatuses, normalizeStatus,
-  buildOrchestrationProjection, executionStatusChip,
+  buildOrchestrationProjection, executionStatusChip, resolveLinkedAgentJob, isAgentExecutionLinked,
   normalizeExecutionSettings,
   stableKeysForWorkItem, normalizeWorkItemTombstone, getWorkItemTombstones,
   isWorkItemTombstoned, addWorkItemTombstone, restoreWorkItemTombstone,

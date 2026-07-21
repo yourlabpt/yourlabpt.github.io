@@ -649,13 +649,7 @@ function registerWorkItemRoutes(app, deps) {
     const linkedRequest = item.agentRequestId ? agentRequests.getAgentRequests(project).find((entry) => entry.id === item.agentRequestId) || null : null;
     const safeRequest = linkedRequest ? Object.fromEntries(Object.entries(linkedRequest).filter(([key]) => !['inputSnapshot', 'configSnapshot'].includes(key))) : null;
     const canManage = projectAccess.canManageWorkItems(user, project);
-    const allAgentJobs = workItems.ensureArray(project.agentJobs);
-    const agentJob = canManage ? (
-      (item.agentJobId ? allAgentJobs.find((job) => job.id === item.agentJobId) : null)
-      || (item.promptRunId ? allAgentJobs.find((job) => job.promptRunId === item.promptRunId) : null)
-      || [...allAgentJobs].reverse().find((job) => job.workItemId === item.id)
-      || null
-    ) : null;
+    const agentJob = canManage ? workItems.resolveLinkedAgentJob(project, item) : null;
     const dispatch = agentJob && connectorStore
       ? connectorStore.findDispatch(agentJob.dispatchId || agentJob.id || agentJob.promptRunId)
       : null;

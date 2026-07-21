@@ -108,6 +108,29 @@ describe('execution plan model profiles', () => {
     assert.match(plan.tasks.find((task) => task.id === 'merge').instruction, /discovery_v2/);
   });
 
+  it('builds a single idea vision task for discovery to idea backward transition', () => {
+    const project = {
+      ...projectFixture(),
+      originalIdeaText: 'Music transcription app',
+      discovery: deliveryOs.normalizeDiscovery({
+        marketSummaryMarkdown: 'Growing demand for AI transcription.',
+        personas: [{ name: 'Musician', jobs: ['Transcribe recordings'] }],
+      }),
+      vision: { mainIdeaMarkdown: 'Existing idea summary' },
+    };
+    const plan = executionPlans.buildExecutionPlan('stage_transition', project, {
+      fromStageId: 'discovery',
+      toStageId: 'idea',
+      direction: 'backward',
+    });
+
+    assert.deepEqual(plan.tasks.map((task) => task.id), ['idea_brief']);
+    assert.match(plan.tasks[0].instruction, /ideaBriefMarkdown/);
+    assert.match(plan.tasks[0].instruction, /"vision"/);
+    assert.doesNotMatch(plan.tasks[0].instruction, /discovery_v2/);
+    assert.doesNotMatch(plan.tasks[0].instruction, /framing/);
+  });
+
   it('preserves Discovery research evidence, personas and implications', () => {
     const discovery = deliveryOs.normalizeDiscovery({
       researchBrief: { researchQuestions: ['Who pays?'] },
