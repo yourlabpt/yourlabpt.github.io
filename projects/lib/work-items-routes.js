@@ -180,13 +180,16 @@ function registerWorkItemRoutes(app, deps) {
   }
 
   function projectVisionFromApprovedDiscovery(project, item, parsed) {
-    if (!parsed?.discovery || !isIdeaDiscoveryForwardTransition(project, item)) return;
-    deliveryOs.projectVisionFromDiscoveryApproval(project, {
-      discoveryPatch: parsed.discovery,
-      stableTaskKey: item.stableTaskKey,
-      taskId: item.id,
-      taskTitle: item.title,
-    });
+    if (!parsed || !isIdeaDiscoveryForwardTransition(project, item)) return;
+    if (parsed.discovery) {
+      deliveryOs.projectVisionFromDiscoveryApproval(project, {
+        discoveryPatch: parsed.discovery,
+        stableTaskKey: item.stableTaskKey,
+      });
+    } else {
+      deliveryOs.projectVisionFromArtifactContent(project, item, parsed);
+    }
+    deliveryOs.syncIdeaVisionFromDiscoverySnapshot(project);
   }
 
   function applyApprovedOutput(project, item, attempts, actorUserId, at) {

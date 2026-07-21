@@ -1275,4 +1275,59 @@ describe('idea page sync', () => {
     assert.equal(projectData.stages.find((stage) => stage.id === 'idea').status, 'completed');
     assert.equal(projectData.stages.find((stage) => stage.id === 'discovery').status, 'in_progress');
   });
+
+  it('backfills idea vision from discovery dossier and artifact-only task outputs', () => {
+    const projectData = {
+      id: 'p_backfill',
+      vision: {},
+      assumptions: [],
+      ideaBriefMarkdown: 'Converter música em partituras.',
+      discovery: {
+        researchBrief: {
+          problemFramingMarkdown: 'Músicos amadores não conseguem transcrever melodias rapidamente.',
+          hypotheses: ['Existe procura por transcrição bidirecional'],
+        },
+        marketSummaryMarkdown: 'O mercado de apps musicais continua a crescer.',
+      },
+      agentRequests: [{
+        id: 'req-idea',
+        transitionKey: 'idea->discovery:forward',
+        status: 'completed',
+      }],
+      workItems: [],
+      promptRuns: [],
+    };
+    const created = stageTransitions.createRequest(projectData, {
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      config: { maxSubtasks: 8 },
+      idempotencyKey: 'backfill-artifacts',
+    }, { actorUserId: 'editor' });
+    const first = workItems.getWorkItems(projectData)
+      .find((entry) => entry.agentRequestId === created.request.id && entry.stableTaskKey === 'framing');
+    const rawOutput = JSON.stringify({
+      transitionSummaryMarkdown: 'Visão e proposta de valor validadas.',
+      artifacts: [{
+        type: 'context',
+        name: 'Visão aprovada',
+        bodyMarkdown: '## Proposta de valor\nUma experiência musical bidirecional.',
+        stageId: 'discovery',
+      }],
+    });
+    workItems.setWorkItems(projectData, workItems.getWorkItems(projectData).map((entry) => (
+      entry.id === first.id
+        ? workItems.normalizeWorkItem({
+          ...entry,
+          status: 'completed',
+          attempts: [{ id: 'attempt-1', number: 1, source: 'runtime', status: 'completed', rawOutput }],
+        }, { project: projectData })
+        : entry
+    )));
+
+    assert.equal(deliveryOs.ensureIdeaVisionFromDiscovery(projectData), true);
+    assert.match(projectData.vision.problemMarkdown, /transcrever melodias/i);
+    assert.match(projectData.vision.valuePropositionMarkdown || '', /experiência musical bidirecional/i);
+    assert.equal(projectData.assumptions.includes('Existe procura por transcrição bidirecional'), true);
+  });
 });

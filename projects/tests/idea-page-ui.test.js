@@ -64,5 +64,7 @@ test('Idea page shows Idea→Discovery transition progress and task visibility',
   assert.match(source, /data-idea-transition-progress/);
   assert.match(source, /hydrateIdeaTransitionProgress/);
   assert.match(source, /transitionFromStageId=\$\{encodeURIComponent\('idea'\)\}/);
+  assert.match(source, /ideaDiscoveryBrief/);
+  assert.match(source, /discovery\.marketSummaryMarkdown/);
   assert.match(source, /Plano Idea → Discovery:/);
 });

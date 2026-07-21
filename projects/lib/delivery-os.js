@@ -3627,12 +3627,11 @@ function appendProjectAssumptions(project, values) {
   project.assumptions = next;
 }
 
-function projectVisionFromDiscoveryApproval(project, context = {}) {
-  const discovery = context.discoveryPatch && typeof context.discoveryPatch === 'object'
-    ? context.discoveryPatch
-    : null;
-  if (!discovery) return;
-  const stableTaskKey = textOr(context.stableTaskKey);
+function mergeDiscoveryPatchIntoIdeaVision(project, discoveryPatch) {
+  const discovery = discoveryPatch && typeof discoveryPatch === 'object' ? discoveryPatch : null;
+  if (!discovery) return false;
+  const visionBefore = JSON.stringify(normalizeVision(project.vision || {}, project));
+  const assumptionsBefore = JSON.stringify(ensureArray(project.assumptions));
   const vision = normalizeVision(project.vision || {}, project);
   const fillIfEmpty = (field, value) => {
     const next = textOr(value);
@@ -3648,36 +3647,138 @@ function projectVisionFromDiscoveryApproval(project, context = {}) {
     if (merged.size) vision.targetUsers = [...merged];
   };
 
-  if (stableTaskKey === 'framing') {
-    fillIfEmpty('problemMarkdown', discovery.researchBrief?.problemFramingMarkdown);
-    appendProjectAssumptions(project, [
-      ...ensureArray(discovery.researchBrief?.hypotheses),
-      ...ensureArray(discovery.hypotheses),
-      ...ensureArray(discovery.assumptions),
-    ]);
-  } else if (stableTaskKey === 'stakeholders') {
-    mergeUsers([
-      ...ensureArray(discovery.personas).map((persona) => persona?.name),
-      ...ensureArray(discovery.segments).map((segment) => segment?.name),
-      ...ensureArray(discovery.stakeholders).map((stakeholder) => stakeholder?.name),
-    ]);
-  } else if (stableTaskKey === 'business') {
-    fillIfEmpty('valuePropositionMarkdown', discovery.commercialImpact?.objectivesMarkdown);
-    fillIfEmpty('valuePropositionMarkdown', discovery.goToMarketMarkdown);
-  } else if (stableTaskKey === 'merge') {
-    const summary = [
-      firstParagraph(discovery.researchBrief?.problemFramingMarkdown),
-      firstParagraph(discovery.marketSummaryMarkdown),
-    ].filter(Boolean).join('\n\n');
-    fillIfEmpty('mainIdeaMarkdown', summary);
-    fillIfEmpty('problemMarkdown', discovery.researchBrief?.problemFramingMarkdown);
-  }
+  fillIfEmpty('problemMarkdown', discovery.researchBrief?.problemFramingMarkdown);
+  mergeUsers([
+    ...ensureArray(discovery.personas).map((persona) => persona?.name),
+    ...ensureArray(discovery.segments).map((segment) => segment?.name),
+    ...ensureArray(discovery.stakeholders).map((stakeholder) => stakeholder?.name),
+  ]);
+  fillIfEmpty('valuePropositionMarkdown', discovery.commercialImpact?.objectivesMarkdown);
+  fillIfEmpty('valuePropositionMarkdown', discovery.goToMarketMarkdown);
+  const summary = [
+    firstParagraph(discovery.researchBrief?.problemFramingMarkdown),
+    firstParagraph(discovery.marketSummaryMarkdown),
+  ].filter(Boolean).join('\n\n');
+  fillIfEmpty('mainIdeaMarkdown', summary);
+  appendProjectAssumptions(project, [
+    ...ensureArray(discovery.researchBrief?.hypotheses),
+    ...ensureArray(discovery.hypotheses),
+    ...ensureArray(discovery.assumptions),
+  ]);
 
   vision.updatedAt = nowIso();
   project.vision = normalizeVision(vision, project);
   if (!textOr(project.ideaBriefMarkdown) && textOr(project.vision.mainIdeaMarkdown)) {
     project.ideaBriefMarkdown = project.vision.mainIdeaMarkdown;
   }
+  return visionBefore !== JSON.stringify(project.vision)
+    || assumptionsBefore !== JSON.stringify(ensureArray(project.assumptions));
+}
+
+function projectVisionFromArtifactContent(project, item, parsed) {
+  if (!parsed || typeof parsed !== 'object') return false;
+  let changed = false;
+  const stableTaskKey = textOr(item?.stableTaskKey);
+  for (const artifact of ensureArray(parsed.artifacts)) {
+    const body = textOr(artifact.bodyMarkdown || artifact.descriptionMarkdown || artifact.description);
+    if (!body || body.startsWith('{') || body.startsWith('[')) continue;
+    const label = textOr(artifact.name || artifact.title);
+    const patch = {};
+    if (/proposta|valor|visão/i.test(label)) {
+      patch.commercialImpact = { objectivesMarkdown: body };
+    } else if (stableTaskKey === 'framing' || /problema|framing|enquadramento/i.test(label)) {
+      patch.researchBrief = { problemFramingMarkdown: body };
+    } else if (stableTaskKey === 'business') {
+      patch.commercialImpact = { objectivesMarkdown: body };
+    } else if (stableTaskKey === 'merge' || stableTaskKey === 'market') {
+      patch.marketSummaryMarkdown = body;
+    } else {
+      patch.researchBrief = { problemFramingMarkdown: body };
+    }
+    if (mergeDiscoveryPatchIntoIdeaVision(project, patch)) changed = true;
+  }
+  if (textOr(parsed.transitionSummaryMarkdown)) {
+    if (mergeDiscoveryPatchIntoIdeaVision(project, {
+      researchBrief: { problemFramingMarkdown: parsed.transitionSummaryMarkdown },
+    })) changed = true;
+  }
+  return changed;
+}
+
+function syncIdeaVisionFromDiscoverySnapshot(project) {
+  return mergeDiscoveryPatchIntoIdeaVision(project, project.discovery);
+}
+
+function projectVisionFromDiscoveryApproval(project, context = {}) {
+  const discovery = context.discoveryPatch && typeof context.discoveryPatch === 'object'
+    ? context.discoveryPatch
+    : null;
+  if (!discovery) return false;
+  const stableTaskKey = textOr(context.stableTaskKey);
+  if (!stableTaskKey || stableTaskKey === 'merge') {
+    return mergeDiscoveryPatchIntoIdeaVision(project, discovery);
+  }
+  const scoped = {};
+  if (stableTaskKey === 'framing') {
+    scoped.researchBrief = discovery.researchBrief;
+    scoped.hypotheses = discovery.hypotheses;
+    scoped.assumptions = discovery.assumptions;
+  } else if (stableTaskKey === 'stakeholders') {
+    scoped.personas = discovery.personas;
+    scoped.segments = discovery.segments;
+    scoped.stakeholders = discovery.stakeholders;
+  } else if (stableTaskKey === 'business') {
+    scoped.commercialImpact = discovery.commercialImpact;
+    scoped.goToMarketMarkdown = discovery.goToMarketMarkdown;
+  } else if (stableTaskKey === 'market') {
+    scoped.marketSummaryMarkdown = discovery.marketSummaryMarkdown;
+    scoped.marketSizing = discovery.marketSizing;
+    scoped.trends = discovery.trends;
+  } else {
+    return mergeDiscoveryPatchIntoIdeaVision(project, discovery);
+  }
+  return mergeDiscoveryPatchIntoIdeaVision(project, scoped);
+}
+
+function ensureIdeaVisionFromDiscovery(project, deps = {}) {
+  const workItems = deps.workItems || require('./work-items');
+  const agentRequests = deps.agentRequests || require('./agent-requests');
+  let changed = false;
+  if (syncIdeaVisionFromDiscoverySnapshot(project)) changed = true;
+  const transitionRequestIds = new Set(agentRequests.getAgentRequests(project)
+    .filter((request) => textOr(request.transitionKey) === 'idea->discovery:forward')
+    .map((request) => request.id));
+  const order = ['framing', 'stakeholders', 'market', 'competitors', 'business', 'merge'];
+  const items = workItems.getWorkItems(project)
+    .filter((item) => item.agentRequestId
+      && transitionRequestIds.has(item.agentRequestId)
+      && item.taskRole !== 'coordination'
+      && ['completed', 'waiting_review'].includes(item.status))
+    .sort((a, b) => order.indexOf(a.stableTaskKey) - order.indexOf(b.stableTaskKey));
+
+  for (const item of items) {
+    const rawOutputs = [];
+    const latest = ensureArray(item.attempts).at(-1);
+    if (latest?.rawOutput) rawOutputs.push(latest.rawOutput);
+    const run = item.promptRunId
+      ? ensureArray(project.promptRuns).find((entry) => entry.id === item.promptRunId)
+      : null;
+    if (run?.rawOutput) rawOutputs.push(run.rawOutput);
+    for (const rawOutput of rawOutputs) {
+      const parsed = parseAgentJsonOutput(rawOutput).parsed;
+      if (!parsed) continue;
+      if (parsed.discovery) {
+        if (projectVisionFromDiscoveryApproval(project, {
+          discoveryPatch: parsed.discovery,
+          stableTaskKey: item.stableTaskKey,
+        })) changed = true;
+      } else if (projectVisionFromArtifactContent(project, item, parsed)) {
+        changed = true;
+      }
+    }
+  }
+  if (syncIdeaVisionFromDiscoverySnapshot(project)) changed = true;
+  return changed;
 }
 
 function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
@@ -5447,6 +5548,10 @@ module.exports = {
   buildHumanReviewPayload,
   applyPromptRunOutput,
   projectVisionFromDiscoveryApproval,
+  mergeDiscoveryPatchIntoIdeaVision,
+  syncIdeaVisionFromDiscoverySnapshot,
+  ensureIdeaVisionFromDiscovery,
+  projectVisionFromArtifactContent,
   applyArchitecturePack,
   parseAgentJsonOutput,
   normalizeJsonInput,

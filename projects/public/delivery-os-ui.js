@@ -1484,18 +1484,53 @@
     }
   }
 
+  function ideaDiscoveryBrief(project) {
+    const discovery = project.discovery && typeof project.discovery === 'object' ? project.discovery : {};
+    const brief = discovery.researchBrief && typeof discovery.researchBrief === 'object'
+      ? discovery.researchBrief
+      : {};
+    return { discovery, brief };
+  }
+
+  function ideaParagraph(markdown) {
+    const blocks = String(markdown || '').split(/\n\s*\n/).map((entry) => entry.trim()).filter(Boolean);
+    return blocks[0] || String(markdown || '').trim();
+  }
+
   function ideaVision(project) {
     const v = project.vision && typeof project.vision === 'object' ? project.vision : {};
+    const { discovery, brief } = ideaDiscoveryBrief(project);
+    const discoveryUsers = [
+      ...ensureArray(discovery.personas).map((persona) => persona?.name),
+      ...ensureArray(discovery.segments).map((segment) => segment?.name),
+      ...ensureArray(discovery.stakeholders).map((stakeholder) => stakeholder?.name),
+    ].filter(Boolean);
+    const targetUsers = ensureArray(v.targetUsers).length
+      ? ensureArray(v.targetUsers)
+      : [...new Set(discoveryUsers.map((entry) => String(entry || '').trim()).filter(Boolean))];
+    const discoverySummary = [
+      ideaParagraph(brief.problemFramingMarkdown),
+      ideaParagraph(discovery.marketSummaryMarkdown),
+    ].filter(Boolean).join('\n\n');
+    const discoveryAssumptions = [
+      ...ensureArray(project.assumptions),
+      ...ensureArray(discovery.assumptions),
+      ...ensureArray(brief.hypotheses),
+    ].filter(Boolean);
     return {
       headline: v.headline || '',
-      mainIdeaMarkdown: v.mainIdeaMarkdown || project.ideaBriefMarkdown || '',
+      mainIdeaMarkdown: v.mainIdeaMarkdown || project.ideaBriefMarkdown || discoverySummary || '',
       philosophyMarkdown: v.philosophyMarkdown || '',
-      problemMarkdown: v.problemMarkdown || '',
-      targetUsers: Array.isArray(v.targetUsers) ? v.targetUsers : [],
-      valuePropositionMarkdown: v.valuePropositionMarkdown || '',
+      problemMarkdown: v.problemMarkdown || brief.problemFramingMarkdown || '',
+      targetUsers,
+      valuePropositionMarkdown: v.valuePropositionMarkdown
+        || discovery.commercialImpact?.objectivesMarkdown
+        || discovery.goToMarketMarkdown
+        || '',
       principles: Array.isArray(v.principles) ? v.principles : [],
       consequentIdeas: Array.isArray(v.consequentIdeas) ? v.consequentIdeas : [],
       acceptedSections: Array.isArray(v.acceptedSections) ? v.acceptedSections : [],
+      assumptions: discoveryAssumptions,
     };
   }
 
@@ -1503,6 +1538,7 @@
     return Boolean(
       v.headline || v.mainIdeaMarkdown || v.philosophyMarkdown || v.problemMarkdown
       || v.valuePropositionMarkdown || v.targetUsers.length || v.principles.length || v.consequentIdeas.length
+      || ensureArray(v.assumptions).length
     );
   }
 
@@ -1524,7 +1560,7 @@
     const direction = v.consequentIdeas.length
       ? v.consequentIdeas.map((item) => item.title || item.descriptionMarkdown || '').filter(Boolean).join('\n')
       : '';
-    const assumptions = ensureArray(project.assumptions).filter(Boolean);
+    const assumptions = ensureArray(v.assumptions).filter(Boolean);
 
     return `
       <div class="idea-workspace">

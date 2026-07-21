@@ -721,6 +721,11 @@ function registerRequirementsPlatform(app, options) {
     }
     await hydrateProjectFromHybrid(project);
 
+    if (deliveryOs.ensureIdeaVisionFromDiscovery(project)) {
+      project.updatedAt = new Date().toISOString();
+      await persistProjectHybrid(project);
+    }
+
     if (!project._blobsCompacted) {
       const externalized = await blobStore.externalizeProjectBlobs(project, dataDir, writeJson);
       if (externalized) {
