@@ -136,7 +136,6 @@
   const AGENT_JOB_THRESHOLD = 25;
 
   const YAR_AGENT_BY_PLATFORM_TYPE = {
-    reverse_idea: 'idea-to-requirements',
     requirements_to_architecture: 'requirements-to-architecture',
     roadmap_plan: 'architecture-to-roadmap',
     implementation_tasks: 'roadmap-to-implementation',
@@ -225,7 +224,7 @@
       stageId: window.state?.deliverySelectedStageId,
       capabilityId: $('archGenCapability')?.value,
       moduleTag: $('archGenModule')?.value || pdosState.moduleFilter || undefined,
-      enableWebSearch: ['discovery_research', 'reverse_idea', 'requirements_to_architecture'].includes(agentType),
+      enableWebSearch: ['discovery_research', 'requirements_to_architecture'].includes(agentType),
     };
   }
 
@@ -1472,21 +1471,8 @@
 
   function renderIdeaStage(project) {
     const v = ideaVision(project);
-    const genLabel = agentButtonLabel(ideaHasContent(v) ? 'Regenerar visão com IA' : 'Gerar visão com IA', 'reverse_idea');
     const canEdit = Boolean(window.canEditProject?.());
     const original = String(project.originalIdeaText || '').trim();
-    const conversation = ensureArray(project.ideaConversation).slice(-30);
-    const actionButtons = ideaHasContent(v)
-      ? [
-          ['organize', 'Organizar o que escrevi'],
-          ['critique', 'Mostrar o que não está claro'],
-          ['solutions', 'Explorar soluções'],
-          ['research', 'Pesquisa inicial'],
-        ]
-      : [
-          ['interpret', 'Interpretar a minha ideia'],
-          ['question', 'Fazer uma pergunta útil'],
-        ];
     const section = (title, field, markdownKey, content, extra = '') => {
       const accepted = v.acceptedSections.includes(field);
       return content ? `
@@ -1520,22 +1506,15 @@
           ${direction ? section('Direcção possível', 'consequentIdeas', '', direction, `<p class="overview-preserve-lines">${escapeHtml(direction)}</p>`) : ''}
           ${assumptions.length ? `<section class="idea-understanding-section"><header><h4>Hipóteses abertas</h4></header><ul>${assumptions.map((item) => `<li>${escapeHtml(typeof item === 'string' ? item : item.description || item.title || '')}</li>`).join('')}</ul></section>` : ''}
           ${!ideaHasContent(v) ? '<p class="idea-later-note">Podemos explorar estas secções mais tarde.</p>' : ''}
-          ${canEdit ? `<details class="collapsible idea-advanced-action"><summary>Acção avançada</summary><button type="button" class="btn tiny mt-8" data-agent="reverse_idea">${genLabel}</button></details>` : ''}
         </article>
 
-        <article class="pdos-card idea-workspace-panel idea-panel-guidance">
-          <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE A CONVERSA</span><h3>Guia de IA</h3></div></header>
-          <div class="idea-guidance-actions">${actionButtons.map(([mode, label]) => `<button type="button" class="btn tiny" data-idea-guidance-mode="${mode}" ${canEdit ? '' : 'disabled'}>${escapeHtml(label)}</button>`).join('')}</div>
-          <div class="idea-conversation" data-idea-conversation>${conversation.length ? conversation.map((turn) => `<div class="idea-turn is-${turn.role === 'assistant' ? 'assistant' : 'user'}"><small>${turn.role === 'assistant' ? 'Guia' : 'Você'}</small><p>${escapeHtml(turn.content || '')}</p></div>`).join('') : '<p class="muted-text">Escolha uma acção ou escreva o que gostaria de explorar.</p>'}</div>
-          <label class="idea-guidance-compose"><span class="sr-only">Mensagem para o guia</span><textarea rows="3" data-idea-guidance-input placeholder="Escreva uma resposta, dúvida ou detalhe…" ${canEdit ? '' : 'disabled'}></textarea></label>
-          <div class="pdos-card-actions"><button type="button" class="btn tiny ghost" data-idea-guidance-unknown ${canEdit ? '' : 'disabled'}>Ainda não sei</button><button type="button" class="btn tiny primary" data-idea-guidance-send ${canEdit ? '' : 'disabled'}>Enviar</button></div>
-          <div class="idea-guidance-status muted-text" data-idea-guidance-status aria-live="polite"></div>
-          <details class="collapsible idea-manual-response hidden" data-idea-manual>
-            <summary>Prompt gerado — modo manual</summary>
-            <label class="full mt-8">Prompt<textarea rows="8" readonly data-idea-prompt></textarea></label>
-            <label class="full mt-8">Colar resposta da IA<textarea rows="6" data-idea-manual-reply></textarea></label>
-            <button type="button" class="btn tiny primary mt-8" data-idea-manual-accept>Guardar como compreensão</button>
-          </details>
+        <article class="pdos-card idea-workspace-panel idea-panel-workflow">
+          <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE PELO WORKFLOW</span><h3>Preparar a Discovery</h3></div></header>
+          <p class="muted-text">A investigação e a expansão da ideia são executadas como Tasks rastreáveis. Pode acompanhar, pausar, retomar e rever os resultados na plataforma, sem copiar prompts manualmente.</p>
+          <div class="pdos-card-actions">
+            ${canEdit ? '<button type="button" class="btn primary" data-idea-open-discovery>Criar plano Idea → Discovery</button>' : ''}
+            <button type="button" class="btn ghost" data-idea-open-tasks>Ver Tasks</button>
+          </div>
         </article>
       </div>
     `;
@@ -1747,55 +1726,12 @@
       } catch (error) { showToast(error.message, 'error'); }
     });
 
-    const requestGuidance = async (mode, userMessage = '') => {
-      const status = root.querySelector('[data-idea-guidance-status]');
-      const buttons = root.querySelectorAll('[data-idea-guidance-mode], [data-idea-guidance-send], [data-idea-guidance-unknown]');
-      buttons.forEach((button) => { button.disabled = true; });
-      if (status) status.textContent = 'A preparar orientação…';
-      try {
-        const response = await apiRequest(`/projects/${encodeURIComponent(project.id)}/idea-guidance`, {
-          method: 'POST',
-          body: { mode, userMessage, conversationHistory: project.ideaConversation || [] },
-        });
-        if (response.mode === 'auto' && response.reply) {
-          if (status) status.textContent = '';
-          await reloadProject(project.id);
-          return;
-        }
-        const manual = root.querySelector('[data-idea-manual]');
-        manual?.classList.remove('hidden');
-        if (manual) manual.open = true;
-        const prompt = root.querySelector('[data-idea-prompt]');
-        if (prompt) prompt.value = response.prompt || '';
-        if (status) status.textContent = response.runtimeError ? 'Resposta automática indisponível; use o prompt manual abaixo.' : 'Prompt pronto para usar manualmente.';
-      } catch (error) {
-        if (status) status.textContent = '';
-        showToast(error.message, 'error');
-      } finally {
-        buttons.forEach((button) => { button.disabled = false; });
-      }
-    };
-    root.querySelectorAll('[data-idea-guidance-mode]').forEach((button) => {
-      button.addEventListener('click', () => requestGuidance(button.dataset.ideaGuidanceMode));
+    root.querySelector('[data-idea-open-discovery]')?.addEventListener('click', () => {
+      openTransitionPicker('idea', 'discovery', project);
     });
-    root.querySelector('[data-idea-guidance-send]')?.addEventListener('click', () => {
-      const input = root.querySelector('[data-idea-guidance-input]');
-      const message = input?.value.trim() || '';
-      if (!message) return showToast('Escreva uma mensagem para continuar.', 'error');
-      requestGuidance('freeform', message);
-    });
-    root.querySelector('[data-idea-guidance-unknown]')?.addEventListener('click', () => requestGuidance('freeform', 'Ainda não sei. Ajuda-me a avançar sem assumir uma resposta.'));
-    root.querySelector('[data-idea-manual-accept]')?.addEventListener('click', async () => {
-      const reply = root.querySelector('[data-idea-manual-reply]')?.value.trim() || '';
-      if (!reply) return showToast('Cole primeiro a resposta da IA.', 'error');
-      try {
-        const now = new Date().toISOString();
-        await patchIdea(project, {
-          ideaBriefMarkdown: reply,
-          vision: { ...(project.vision || {}), mainIdeaMarkdown: reply },
-          ideaConversation: [...ensureArray(project.ideaConversation), { role: 'assistant', content: reply, timestamp: now }].slice(-100),
-        }, 'Resposta guardada como compreensão inicial.');
-      } catch (error) { showToast(error.message, 'error'); }
+    root.querySelector('[data-idea-open-tasks]')?.addEventListener('click', () => {
+      window.navigateToFilteredTab?.('tarefas', { deliveryStageId: 'discovery' });
+      window.WorkItemsUI?.openFiltered?.(project, { deliveryStageId: 'discovery' });
     });
   }
 

@@ -1602,71 +1602,10 @@ function registerRequirementsPlatform(app, options) {
   });
 
   app.post('/api/projects/projects/:projectId/idea-guidance', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {
-    try {
-      const projectId = req.params.projectId;
-      const allowedModes = new Set(['interpret', 'question', 'organize', 'critique', 'solutions', 'research', 'freeform']);
-      const requestedMode = String(req.body?.mode || 'interpret').trim();
-      const guidanceMode = allowedModes.has(requestedMode) ? requestedMode : 'freeform';
-      const userMessage = String(req.body?.userMessage || '').trim();
-      const storedHistory = ensureArray(req.loadedProject?.ideaConversation);
-      const conversationHistory = Array.isArray(req.body?.conversationHistory)
-        ? req.body.conversationHistory
-        : storedHistory;
-      const prompt = deliveryOs.buildIdeaGuidancePrompt(
-        req.loadedProject,
-        guidanceMode,
-        conversationHistory,
-        userMessage
-      );
-
-      const runtimeEnabled = agentConnectionMode === 'local_push'
-        && Boolean(String(process.env.AGENT_RUNTIME_API_KEY || '').trim());
-      if (!runtimeEnabled) {
-        return res.json({ prompt, mode: 'manual' });
-      }
-
-      try {
-        const runtime = createAgentRuntimeClient();
-        const runtimeResponse = await runtime.request('POST', '/v1/prompt', {
-          prompt,
-          metadata: { projectId, feature: 'idea-guidance', mode: guidanceMode },
-        });
-        const reply = String(
-          runtimeResponse?.reply
-          || runtimeResponse?.content
-          || runtimeResponse?.text
-          || runtimeResponse?.output
-          || ''
-        ).trim();
-        if (!reply) throw new Error('O runtime não devolveu uma resposta de texto.');
-
-        const now = nowIso();
-        const turn = { role: 'assistant', content: reply, timestamp: now };
-        await updateStore(async (store) => {
-          const project = store.projects.find((entry) => entry.id === projectId);
-          if (!project) throw new Error('Projeto nao encontrado.');
-          project.ideaConversation = ensureArray(project.ideaConversation);
-          if (userMessage) {
-            project.ideaConversation.push({ role: 'user', content: userMessage, timestamp: now });
-          }
-          project.ideaConversation.push(turn);
-          project.ideaConversation = project.ideaConversation.slice(-100);
-          project.updatedAt = now;
-          appendActivity(store, {
-            actorUserId: req.auth.user.id,
-            projectId,
-            action: 'idea_guidance_answered',
-            details: { mode: guidanceMode },
-          });
-        });
-
-        return res.json({ prompt, mode: 'auto', reply, turn });
-      } catch (runtimeError) {
-        return res.json({ prompt, mode: 'manual', runtimeError: runtimeError.message });
-      }
-    } catch (error) {
-      return res.status(400).json({ message: error.message });
-    }
+    return res.status(410).json({
+      message: 'O guia de prompt manual foi descontinuado. Use o workflow Idea → Discovery baseado em Tasks.',
+      replacement: { fromStageId: 'idea', toStageId: 'discovery', taskBased: true },
+    });
   });
 
   app.post('/api/projects/projects/:projectId/phases/sync-requirements', authMiddleware, loadProjectForUser, requireProjectEditor, async (req, res) => {

@@ -1,28 +1,28 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const deliveryOs = require('../lib/delivery-os');
 
-test('idea guidance prompt keeps original input and current understanding separate', () => {
-  const prompt = deliveryOs.buildIdeaGuidancePrompt({
-    originalIdeaText: 'Uma aplicação para simplificar reservas locais.',
-    vision: {
-      mainIdeaMarkdown: 'Reservas num único lugar.',
-      problemMarkdown: 'O processo actual é disperso.',
-      targetUsers: ['comerciantes'],
-    },
-  }, 'interpret', [], 'Ainda não sei como cobrar.');
-
-  assert.match(prompt, /Uma aplicação para simplificar reservas locais/);
-  assert.match(prompt, /Reservas num único lugar/);
-  assert.match(prompt, /Ainda não sei como cobrar/);
-  assert.match(prompt, /APENAS em informação explicitamente fornecida/);
-  assert.match(prompt, /no máximo uma pergunta/);
-});
-
-test('idea guidance question mode asks for one unknown without filling it', () => {
-  const prompt = deliveryOs.buildIdeaGuidancePrompt({ originalIdeaText: 'Quero melhorar entregas.' }, 'question');
-  assert.match(prompt, /faz UMA pergunta clara/);
-  assert.match(prompt, /Não tentes preencher a lacuna/);
+test('Idea page exposes only the canonical Task-based Discovery workflow', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),
+    'utf8',
+  );
+  const apiSource = fs.readFileSync(path.join(__dirname, '..', 'api.js'), 'utf8');
+  const ideaUi = source.slice(
+    source.indexOf('function renderIdeaStage'),
+    source.indexOf('function renderDiscoveryStage'),
+  );
+  assert.match(ideaUi, /data-idea-open-discovery/);
+  assert.match(ideaUi, /openTransitionPicker\('idea', 'discovery', project\)/);
+  assert.match(ideaUi, /Criar plano Idea → Discovery/);
+  assert.doesNotMatch(ideaUi, /data-agent="reverse_idea"/);
+  assert.doesNotMatch(ideaUi, /data-idea-manual/);
+  assert.doesNotMatch(ideaUi, /Prompt gerado — modo manual/);
+  assert.doesNotMatch(ideaUi, /use o prompt manual abaixo/);
+  assert.match(apiSource, /idea-guidance[\s\S]{0,500}status\(410\)/);
+  assert.equal(deliveryOs.buildIdeaGuidancePrompt, undefined);
 });
 
 test('idea section acceptance survives vision normalization and ignores unknown fields', () => {

@@ -1259,55 +1259,6 @@ function normalizeProjectV3Fields(project) {
   };
 }
 
-function buildIdeaGuidancePrompt(project, mode = 'interpret', conversationHistory = [], userMessage = '') {
-  const allowedModes = new Set(['interpret', 'question', 'organize', 'critique', 'solutions', 'research', 'freeform']);
-  const selectedMode = allowedModes.has(mode) ? mode : 'freeform';
-  const vision = normalizeVision(project?.vision, project || {});
-  const history = ensureArray(conversationHistory)
-    .filter((turn) => turn && ['user', 'assistant'].includes(turn.role) && textOr(turn.content))
-    .slice(-20)
-    .map((turn) => `${turn.role === 'assistant' ? 'GUIA' : 'UTILIZADOR'}: ${textOr(turn.content).slice(0, 3000)}`)
-    .join('\n');
-  const instructions = {
-    interpret: 'Resume o que entendeste. Distingue claramente informação dada de sugestões. Termina com, no máximo, uma pergunta útil.',
-    question: 'Identifica a lacuna mais importante e faz UMA pergunta clara. Não tentes preencher a lacuna.',
-    organize: 'Organiza apenas o que já se sabe em secções curtas: ideia principal, problema, público, melhoria esperada e hipóteses abertas.',
-    critique: 'Aponta aspectos promissores, incertezas e pontos frágeis. Não cries uma lista completa de riscos e faz, no máximo, uma pergunta.',
-    solutions: 'Explora poucas direcções de solução como possibilidades, nunca como decisões tomadas, e liga cada uma ao problema descrito.',
-    research: 'Sugere um plano compacto de pesquisa inicial baseado apenas nas incógnitas presentes. Não inventes resultados de pesquisa.',
-    freeform: 'Responde à mensagem do utilizador, ajudando a clarificar e organizar a ideia. Faz, no máximo, uma pergunta.',
-  };
-
-  return `És um guia de descoberta de ideias. Responde em português europeu, com linguagem simples e acolhedora.
-
-REGRAS OBRIGATÓRIAS:
-- Baseia todas as afirmações APENAS em informação explicitamente fornecida abaixo.
-- Não transformes suposições em factos. Identifica sugestões e hipóteses como tal.
-- Aceita "não sei ainda" como uma resposta válida.
-- Faz no máximo uma pergunta por resposta.
-
-IDEIA ORIGINAL:
-${textOr(project?.originalIdeaText) || '(ainda não descrita)'}
-
-COMPREENSÃO ACTUAL:
-${JSON.stringify({
-    headline: vision.headline,
-    mainIdea: vision.mainIdeaMarkdown || textOr(project?.ideaBriefMarkdown),
-    problem: vision.problemMarkdown,
-    targetUsers: vision.targetUsers,
-    valueProposition: vision.valuePropositionMarkdown,
-  }, null, 2)}
-
-CONVERSA ANTERIOR:
-${history || '(sem conversa anterior)'}
-
-MENSAGEM ACTUAL:
-${textOr(userMessage) || '(foi escolhida uma acção guiada)'}
-
-TAREFA (${selectedMode}):
-${instructions[selectedMode]}`;
-}
-
 function enrichRequirementWithModuleTags(requirement) {
   if (!requirement) return requirement;
   const tags = normalizeModuleTags(requirement.moduleTags, requirement.module);
@@ -4459,8 +4410,9 @@ function registerDeliveryOsRoutes(app, deps) {
         fullPrompt = buildHierarchyReorganizePrompt(project);
         targetOutput = 'hierarchy_json';
       } else if (agentType === 'reverse_idea') {
-        fullPrompt = buildReverseIdeaPrompt(project);
-        targetOutput = 'idea_brief';
+        return res.status(410).json({
+          message: 'A geração manual de visão foi descontinuada. Use a transição Idea → Discovery baseada em Tasks.',
+        });
       } else if (agentType === 'discovery_research') {
         fullPrompt = buildDiscoveryPrompt(project);
         targetOutput = 'discovery_v2';
@@ -4964,6 +4916,11 @@ function registerDeliveryOsRoutes(app, deps) {
       const projectId = req.params.projectId;
       const body = req.body || {};
       const project = req.loadedProject;
+      if (body.agentType === 'reverse_idea') {
+        return res.status(410).json({
+          message: 'O plano legado de visão foi descontinuado. Use a transição Idea → Discovery.',
+        });
+      }
       const planOptions = { ...body, createdBy: req.auth.user.id };
 
       if (body.agentType === 'impact_regeneration') {
@@ -5400,7 +5357,6 @@ module.exports = {
   buildGroupingPrompt,
   buildHierarchyReorganizePrompt,
   buildReverseIdeaPrompt,
-  buildIdeaGuidancePrompt,
   buildDiscoveryPrompt,
   buildRoadmapPrompt,
   buildDiagramToRequirementsPrompt,

@@ -922,6 +922,11 @@ function registerAgentRuntimeRoutes(app, deps) {
         return res.status(503).json({ message: 'Execucao por agente desativada.' });
       }
       const { projectId, agentType, options = {} } = req.body || {};
+      if (agentType === 'reverse_idea') {
+        return res.status(410).json({
+          message: 'A preparação legada de visão foi descontinuada. Crie uma Task na transição Idea → Discovery.',
+        });
+      }
       let agentId = runtime.mapPlatformType(agentType);
 
       if (!projectId || !agentType || !agentId) {
