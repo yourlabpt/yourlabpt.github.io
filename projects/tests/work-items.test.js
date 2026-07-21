@@ -8,6 +8,7 @@ const agentRequests = require('../lib/agent-requests');
 const stageTransitions = require('../lib/stage-transition-requests');
 const {
   selectReadyAgentTask,
+  resolveContinuousExecutionTask,
   resetTaskForRestart,
   reconcileActiveAgentJobs,
 } = require('../lib/agent-runtime-routes');
@@ -51,6 +52,8 @@ describe('work items model', () => {
     assert.equal(settings.externalMaxTokens, 50000);
     assert.equal(settings.timePolicy.mode, 'unlimited');
     assert.equal(settings.maxWallClockMinutes, 0);
+    assert.equal(settings.reviewPolicy.subtask, 'non_blocking');
+    assert.equal(settings.pauseForSubtaskReview, false);
     assert.equal(settings.planningWaveSize, 6);
     const explicitlyTimed = workItems.normalizeExecutionSettings({
       timeLimitEnabled: true,
@@ -58,6 +61,9 @@ describe('work items model', () => {
     });
     assert.equal(explicitlyTimed.timePolicy.mode, 'limited');
     assert.equal(explicitlyTimed.maxWallClockMinutes, 90);
+    const blockingReview = workItems.normalizeExecutionSettings({ pauseForSubtaskReview: true });
+    assert.equal(blockingReview.reviewPolicy.subtask, 'blocking');
+    assert.equal(blockingReview.pauseForSubtaskReview, true);
   });
 
   it('returns slim cards without descriptions and counts executors', () => {
@@ -374,6 +380,21 @@ describe('agent requests and visible plans', () => {
     assert.equal(selectReadyAgentTask(tasks, 'coordination').id, 'coordination');
     assert.equal(selectReadyAgentTask(tasks, 'first').id, 'first');
     assert.equal(selectReadyAgentTask(tasks.map((task) => ({ ...task, status: 'planned' })), 'blocked-request'), null);
+  });
+
+  it('promotes a requested subtask to continuous parent execution by default', () => {
+    const tasks = [
+      { id: 'coordination', taskRole: 'coordination', status: 'ready', executionSettings: {} },
+      { id: 'first', parentTaskId: 'coordination', taskRole: 'execution', status: 'ready', executionSettings: {} },
+      { id: 'second', parentTaskId: 'coordination', taskRole: 'execution', status: 'planned', executionSettings: {} },
+    ];
+    assert.equal(resolveContinuousExecutionTask(tasks, tasks[1]).id, 'coordination');
+    assert.equal(selectReadyAgentTask(tasks, resolveContinuousExecutionTask(tasks, tasks[1]).id).id, 'coordination');
+    const blocking = {
+      ...tasks[1],
+      executionSettings: { pauseForSubtaskReview: true },
+    };
+    assert.equal(resolveContinuousExecutionTask(tasks, blocking).id, 'first');
   });
 
   it('keeps the coordination task executable while earlier results await batch review', () => {

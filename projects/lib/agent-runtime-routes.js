@@ -172,6 +172,21 @@ function selectReadyAgentTask(tasks, requestedTaskId) {
     || null;
 }
 
+function resolveContinuousExecutionTask(tasks, requestedTask) {
+  if (!requestedTask || requestedTask.taskRole === 'coordination' || !requestedTask.parentTaskId) {
+    return requestedTask || null;
+  }
+  const list = Array.isArray(tasks) ? tasks : [];
+  const parent = list.find((task) => (
+    task.id === requestedTask.parentTaskId && task.taskRole === 'coordination'
+  ));
+  if (!parent) return requestedTask;
+  const settings = workItems.normalizeExecutionSettings(
+    requestedTask.executionSettings || parent.executionSettings || {}
+  );
+  return settings.reviewPolicy?.subtask === 'blocking' ? requestedTask : parent;
+}
+
 const RESTARTABLE_TASK_STATUSES = new Set([
   'failed', 'blocked', 'cancelled', 'waiting_input', 'in_progress',
 ]);
@@ -959,7 +974,9 @@ function registerAgentRuntimeRoutes(app, deps) {
       }
       const store = await readStore(); const project = store.projects.find((entry) => entry.id === req.params.projectId);
       if (!project) return res.status(404).json({ message: 'Projeto nao encontrado.' });
-      const task = workItems.findWorkItem(project, req.params.workItemId); if (!task) return res.status(404).json({ message: 'Tarefa nao encontrada.' });
+      const requestedTask = workItems.findWorkItem(project, req.params.workItemId); if (!requestedTask) return res.status(404).json({ message: 'Tarefa nao encontrada.' });
+      const requestTasks = workItems.getWorkItems(project).filter((entry) => entry.agentRequestId === requestedTask.agentRequestId);
+      const task = resolveContinuousExecutionTask(requestTasks, requestedTask);
       const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === task.agentRequestId) || null;
       let health;
       let rows;
@@ -1003,7 +1020,7 @@ function registerAgentRuntimeRoutes(app, deps) {
           compatibilityPendingReasons = match.reasons;
         }
       }
-      return res.json({ reachable: connectionMode === 'remote_pull' ? Boolean(health.connector?.online) : true, queuedWhenOffline: connectionMode === 'remote_pull', health, task: workItems.toSlimCard(task), requestId: request?.id || '', requiredSkills, requiredMcpTools: requiredTools, agents, selectedAgentId: selected?.id || preferred || '', compatibilityPending: compatibilityPendingReasons.length > 0, compatibilityPendingReasons, settings: task.executionSettings, scope: task.taskRole === 'coordination' ? 'tree' : 'task', contextSummary: task.taskRole === 'coordination' ? `Pedido completo com ${workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === task.id).length} subtarefas e contexto autorizado do projecto.` : 'Contexto congelado e autorizado para esta tarefa.' });
+      return res.json({ reachable: connectionMode === 'remote_pull' ? Boolean(health.connector?.online) : true, queuedWhenOffline: connectionMode === 'remote_pull', health, task: workItems.toSlimCard(task), requestedTaskId: requestedTask.id, requestId: request?.id || '', requiredSkills, requiredMcpTools: requiredTools, agents, selectedAgentId: selected?.id || preferred || '', compatibilityPending: compatibilityPendingReasons.length > 0, compatibilityPendingReasons, settings: task.executionSettings, scope: task.taskRole === 'coordination' ? 'tree' : 'task', contextSummary: task.taskRole === 'coordination' ? `Execução contínua do pedido com ${workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === task.id && entry.status !== 'completed').length} subtarefas ainda abertas. A revisão humana acontece no fim do pedido.` : 'Contexto congelado e autorizado para esta tarefa.' });
     } catch (error) { return res.status(503).json({ message: `Agent Runtime indisponivel: ${error.message}`, reachable: false }); }
   });
 
@@ -1136,7 +1153,8 @@ function registerAgentRuntimeRoutes(app, deps) {
           }, connector?.capabilities, { preferredAgentId: agentId });
           if (match.compatible && match.agent?.id) agentId = match.agent.id;
         }
-        delegatedTask = selectReadyAgentTask(delegation.tasks, requestedWorkItemId);
+        const executionScopeTask = resolveContinuousExecutionTask(tasks, canonicalTask);
+        delegatedTask = selectReadyAgentTask(delegation.tasks, executionScopeTask?.id || requestedWorkItemId);
         if (!delegatedTask) throw new Error('Nao existe uma tarefa pronta para executar neste plano.');
         ({ options, budget } = resolveExecutionConfig(
           connectionMode,
@@ -2383,6 +2401,7 @@ module.exports = {
   buildPromptForAgentType,
   resolveExecutionConfig,
   selectReadyAgentTask,
+  resolveContinuousExecutionTask,
   resetTaskForRestart,
   reconcileActiveAgentJobs,
 };

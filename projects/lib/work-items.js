@@ -213,6 +213,14 @@ function normalizeExecutionSettings(raw) {
       autoAfterWindow: src.resumePolicy?.autoAfterWindow === true,
       requireApprovalForRisk: src.resumePolicy?.requireApprovalForRisk !== false,
     },
+    reviewPolicy: {
+      subtask: src.reviewPolicy?.subtask === 'blocking' || src.pauseForSubtaskReview === true
+        ? 'blocking'
+        : 'non_blocking',
+      parent: 'required',
+    },
+    pauseForSubtaskReview: src.reviewPolicy?.subtask === 'blocking'
+      || src.pauseForSubtaskReview === true,
     goalPolicy: {
       checkEverySteps: Math.max(1, Math.min(10, Number(src.goalPolicy?.checkEverySteps || src.goalCheckInterval) || 3)),
       maxNoProgressIterations: Math.max(1, Math.min(20, Number(src.goalPolicy?.maxNoProgressIterations) || 3)),
