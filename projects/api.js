@@ -3914,6 +3914,7 @@ function registerRequirementsPlatform(app, options) {
     sqliteStore,
     connectorStore,
     verifyPassword,
+    dataDir,
   });
 
   registerEngineeringStateRoutes(app, {

@@ -8,7 +8,7 @@ const LAST_PROJECT_KEY = 'requirements_platform_last_project';
 const LAST_TAB_KEY = 'requirements_platform_last_tab';
 const LAST_STAGE_KEY = 'requirements_platform_last_stage';
 
-const PROJECTLESS_TABS = new Set(['projetos', 'definicoes']);
+const PROJECTLESS_TABS = new Set(['projetos', 'definicoes', 'agentes']);
 
 const NAV_ICON_PATHS = {
   folder: 'M8 4h8l1 2h3v14H4V6h3z',
@@ -58,7 +58,10 @@ const NAV_GROUPS = [
   },
   {
     id: 'system',
-    items: [{ id: 'definicoes', label: 'Definições do projecto', icon: 'settings' }],
+    items: [
+      { id: 'agentes', label: 'Agentes', icon: 'bolt', superAdminOnly: true },
+      { id: 'definicoes', label: 'Definições do projecto', icon: 'settings' },
+    ],
   },
 ];
 
@@ -1280,6 +1283,7 @@ function navIconSvg(iconKey) {
 }
 
 function isNavItemVisible(item) {
+  if (item.superAdminOnly && !isSuperAdmin()) return false;
   if (item.id === 'tarefas') {
     if (!state.selectedProject) return false;
     const meta = window.workItemsTabMeta;
@@ -1508,6 +1512,9 @@ function renderActiveTab(project, tabId) {
       renderMembers(project);
       setReadonlyByRole();
       break;
+    case 'agentes':
+      window.AgentsAdminUI?.render?.();
+      break;
     default:
       break;
   }
@@ -1534,6 +1541,9 @@ function renderProjectDetails(options = {}) {
     renderPhaseContextBar();
     window.ProposalDownloads?.mountBar?.();
     renderProjectsPage();
+    if (state.activeTab === 'agentes') {
+      window.AgentsAdminUI?.render?.();
+    }
     return;
   }
 
@@ -2861,6 +2871,7 @@ function renderPhaseContextBar() {
 
   const hideBar = !state.selectedProject
     || state.activeTab === 'definicoes'
+    || state.activeTab === 'agentes'
     || state.activeTab === 'projetos'
     || state.activeTab === 'deliveryos';
 
@@ -2984,6 +2995,7 @@ function switchToTab(tabId) {
 }
 
 window.switchToTab = switchToTab;
+window.isSuperAdmin = isSuperAdmin;
 window.renderActiveTab = renderActiveTab;
 window.navigateToRequirement = navigateToRequirement;
 window.navigateToFilteredTab = navigateToFilteredTab;

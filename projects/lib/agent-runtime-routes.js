@@ -8,6 +8,8 @@ const stageTransitions = require('./stage-transition-requests');
 const { normalizeMode } = require('./agent-connection-mode');
 const { registerAgentConnectorRoutes } = require('./agent-connector-routes');
 const engineeringState = require('./engineering-state');
+const agentPlatformSettings = require('./agent-platform-settings');
+const { resolveRuntimeReachability } = require('./work-items-routes');
 const {
   CONTRACT_ID,
   CONTRACT_VERSION,
@@ -334,6 +336,7 @@ function registerAgentRuntimeRoutes(app, deps) {
     sqliteStore,
     connectorStore,
     verifyPassword,
+    dataDir,
   } = deps;
 
   const { createAgentRuntimeClient } = require('./agent-runtime-client');
@@ -1086,7 +1089,10 @@ function registerAgentRuntimeRoutes(app, deps) {
         const compatible = supportsTaskType && requiredSkills.every((value) => skills.includes(value)) && requiredTools.every((value) => tools.includes(value));
         return { id, name: textOr(raw.name || raw.label, id), taskTypes, skills, mcpTools: tools, compatible, legacyManifest };
       }).filter((row) => row.id);
-      const compatible = agents.filter((row) => row.compatible); const preferred = task.executionSettings?.agentId || request?.configSnapshot?.preferredAgentId || task.agentId;
+      const platformSettings = await agentPlatformSettings.readAgentPlatformSettings(dataDir);
+      const mergedSettings = agentPlatformSettings.mergeWithPlatformDefaults(task.executionSettings, platformSettings);
+      const compatible = agents.filter((row) => row.compatible);
+      const preferred = mergedSettings.agentId || request?.configSnapshot?.preferredAgentId || task.agentId;
       let selected = compatible.find((row) => row.id === preferred) || compatible[0] || null;
       let compatibilityPendingReasons = [];
       if (connectionMode === 'remote_pull') {
@@ -1108,7 +1114,31 @@ function registerAgentRuntimeRoutes(app, deps) {
           compatibilityPendingReasons = match.reasons;
         }
       }
-      return res.json({ reachable: connectionMode === 'remote_pull' ? Boolean(health.connector?.online) : true, queuedWhenOffline: connectionMode === 'remote_pull', health, task: workItems.toSlimCard(task), requestedTaskId: requestedTask.id, requestId: request?.id || '', requiredSkills, requiredMcpTools: requiredTools, agents, selectedAgentId: selected?.id || preferred || '', compatibilityPending: compatibilityPendingReasons.length > 0, compatibilityPendingReasons, settings: task.executionSettings, scope: task.taskRole === 'coordination' ? 'tree' : 'task', contextSummary: task.taskRole === 'coordination' ? `Execução contínua do pedido com ${workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === task.id && entry.status !== 'completed').length} subtarefas ainda abertas. A revisão humana acontece no fim do pedido.` : 'Contexto congelado e autorizado para esta tarefa.' });
+      return res.json({
+        reachable: connectionMode === 'remote_pull' ? Boolean(health.connector?.online) : true,
+        queuedWhenOffline: connectionMode === 'remote_pull',
+        health,
+        task: workItems.toSlimCard(task),
+        requestedTaskId: requestedTask.id,
+        requestId: request?.id || '',
+        requiredSkills,
+        requiredMcpTools: requiredTools,
+        agents,
+        selectedAgentId: selected?.id || preferred || '',
+        compatibilityPending: compatibilityPendingReasons.length > 0,
+        compatibilityPendingReasons,
+        settings: mergedSettings,
+        scope: task.taskRole === 'coordination' ? 'tree' : 'task',
+        contextSummary: task.taskRole === 'coordination'
+          ? `Execução contínua do pedido com ${workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === task.id && entry.status !== 'completed').length} subtarefas ainda abertas. A revisão humana acontece no fim do pedido.`
+          : 'Contexto congelado e autorizado para esta tarefa.',
+        orchestration: workItems.buildOrchestrationProjection(requestedTask, {
+          children: workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === requestedTask.id),
+          agentRequest: request,
+          agentExecution: null,
+          ...resolveRuntimeReachability({ agentConnectionMode: connectionMode, connectorStore }),
+        }),
+      });
     } catch (error) { return res.status(503).json({ message: `Agent Runtime indisponivel: ${error.message}`, reachable: false }); }
   });
 
@@ -2334,6 +2364,63 @@ function registerAgentRuntimeRoutes(app, deps) {
       });
 
       return res.json({ dismissed: true, promptRunId: agentJob.promptRunId });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/projects/agent-platform/settings', authMiddleware, requireRole('super_admin'), async (req, res) => {
+    try {
+      const settings = await agentPlatformSettings.readAgentPlatformSettings(dataDir);
+      return res.json({ settings });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch('/api/projects/agent-platform/settings', authMiddleware, requireRole('super_admin'), async (req, res) => {
+    try {
+      const body = req.body || {};
+      const settings = await agentPlatformSettings.writeAgentPlatformSettings(
+        dataDir,
+        { executionDefaults: body.executionDefaults || {} },
+        req.auth?.user?.id || '',
+      );
+      return res.json({ settings });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/projects/agent-runs/recent', authMiddleware, requireRole('super_admin'), async (req, res) => {
+    try {
+      const limit = Math.min(80, Math.max(1, Number(req.query.limit) || 30));
+      const store = await readStore();
+      const activeStatuses = new Set([
+        'dispatching', 'queued', 'claimed', 'running', 'planning', 'researching',
+        'executing', 'verifying', 'self_review', 'paused', 'waiting_review',
+        'pending_human_review', 'connection_lost', 'blocked', 'budget_exhausted',
+      ]);
+      const rows = [];
+      for (const project of store.projects || []) {
+        for (const job of ensureArray(project.agentJobs)) {
+          const status = textOr(job.status).toLowerCase();
+          const task = workItems.findWorkItem(project, job.workItemId);
+          rows.push({
+            runId: job.id || job.promptRunId,
+            projectId: project.id,
+            projectName: project.name,
+            workItemId: job.workItemId,
+            taskTitle: task?.title || '',
+            status,
+            agentId: job.agentId || task?.agentId || '',
+            updatedAt: job.updatedAt || job.createdAt || null,
+            active: activeStatuses.has(status),
+          });
+        }
+      }
+      rows.sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+      return res.json({ runs: rows.slice(0, limit) });
     } catch (error) {
       return res.status(500).json({ message: error.message });
     }

@@ -710,6 +710,46 @@
               </section>
             </div>
 
+            <!-- TAB: AGENTES (admin) -->
+            <div class="tab-panel hidden" data-panel="agentes">
+              <section class="panel section-panel" id="agentsAdminRoot">
+                <div class="panel-title-row">
+                  <div>
+                    <h3 class="panel-heading"><span class="section-badge badge-gray">IA</span> Agentes</h3>
+                    <p class="muted-text">Configuração central do Agent Runtime, políticas de execução e execuções activas.</p>
+                  </div>
+                  <button type="button" class="btn tiny" id="agentsRefreshBtn" title="Actualizar">↺</button>
+                </div>
+                <section class="settings-section mt-12">
+                  <h4>Estado</h4>
+                  <div id="agentsHealthPanel"></div>
+                </section>
+                <section class="settings-section mt-12">
+                  <h4>Predefinições de execução</h4>
+                  <p class="muted-text">Estas definições aplicam-se às novas execuções. As tarefas mostram apenas o estado e um atalho para aqui.</p>
+                  <div class="form-grid compact mt-8">
+                    <label>Agente preferido<input id="agentsDefaultAgentId" placeholder="ID do agente no runtime" /></label>
+                    <label>Perfil do modelo<select id="agentsDefaultModel"><option value="small">small</option><option value="medium">medium</option><option value="large">large</option><option value="high">high</option><option value="max">max</option><option value="long_context">long_context</option></select></label>
+                    <label>Limite tokens locais<input id="agentsDefaultMaxTokens" type="number" min="0" value="0" /></label>
+                    <label>Limite tokens externos<input id="agentsDefaultExternalTokens" type="number" min="0" value="120000" /></label>
+                    <label>Custo máximo (EUR)<input id="agentsDefaultMaxCost" type="number" min="0" step="0.01" value="0" /></label>
+                    <label>Tempo máximo (min)<input id="agentsDefaultMaxMinutes" type="number" min="0" value="0" /></label>
+                    <label>Passos por vaga<input id="agentsDefaultWaveSize" type="number" min="1" value="8" /></label>
+                    <label class="full">Ferramentas MCP<input id="agentsDefaultTools" placeholder="project.read, docs.search" /></label>
+                    <label class="checkline full"><input id="agentsDefaultWebSearch" type="checkbox" checked /> Pesquisa web</label>
+                    <label class="checkline full"><input id="agentsDefaultPauseReview" type="checkbox" /> Parar para revisão após cada subtarefa</label>
+                  </div>
+                  <div class="settings-save-row mt-8">
+                    <button type="button" class="btn primary" id="agentsSaveDefaultsBtn">Guardar predefinições</button>
+                  </div>
+                </section>
+                <section class="settings-section mt-12">
+                  <h4>Execuções recentes</h4>
+                  <div id="agentsRunsList" class="agents-runs-list"></div>
+                </section>
+              </section>
+            </div>
+
             <!-- TAB: DEFINIÇÕES -->
             <div class="tab-panel hidden" data-panel="definicoes">
               <section class="settings-welcome" aria-labelledby="settingsWelcomeTitle">
@@ -1329,7 +1369,8 @@
   <script src="/projects/static/delivery-os-ui.js?v=73" defer></script>
   <script src="/projects/static/engineering-state-ui.js?v=3" defer></script>
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
-  <script src="/projects/static/work-items-ui.js?v=31" defer></script>
+  <script src="/projects/static/work-items-ui.js?v=32" defer></script>
+  <script src="/projects/static/agents-admin-ui.js?v=1" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=6" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

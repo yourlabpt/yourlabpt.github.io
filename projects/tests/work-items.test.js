@@ -1027,3 +1027,91 @@ describe('contextual task suggestions', () => {
     assert.equal(suggestions.some((entry) => entry.ruleId === 'pending_human_review'), true);
   });
 });
+
+describe('orchestration projection', () => {
+  const { buildOrchestrationProjection } = workItems;
+
+  function parent(overrides = {}) {
+    return workItems.normalizeWorkItem({
+      id: 'coordination',
+      title: 'Plan',
+      origin: 'agent',
+      executorMode: 'agent',
+      taskRole: 'coordination',
+      status: 'ready',
+      ...overrides,
+    });
+  }
+
+  function child(overrides = {}) {
+    return workItems.normalizeWorkItem({
+      id: 'child-1',
+      title: 'Step',
+      origin: 'agent',
+      executorMode: 'agent',
+      taskRole: 'execution',
+      parentTaskId: 'coordination',
+      status: 'ready',
+      ...overrides,
+    });
+  }
+
+  it('requests plan approval when the agent request is awaiting approval', () => {
+    const projection = buildOrchestrationProjection(parent({ status: 'planned' }), {
+      children: [child({ status: 'planned' })],
+      agentRequest: { status: 'awaiting_approval' },
+      runtimeReachable: true,
+    });
+    assert.equal(projection.availableAction, 'approve_plan');
+    assert.match(projection.label, /aprovar plano/i);
+  });
+
+  it('offers connect_and_run for a ready coordination parent with ready children', () => {
+    const projection = buildOrchestrationProjection(parent(), {
+      children: [child()],
+      runtimeReachable: true,
+    });
+    assert.equal(projection.availableAction, 'connect_and_run');
+    assert.match(projection.label, /executar plano/i);
+    assert.equal(projection.scope, 'tree');
+  });
+
+  it('opens execution when a run is active', () => {
+    const projection = buildOrchestrationProjection(parent({ status: 'in_progress', agentJobId: 'job-1' }), {
+      children: [child({ status: 'in_progress' })],
+      agentExecution: { runId: 'job-1', status: 'running' },
+      runtimeReachable: true,
+    });
+    assert.equal(projection.availableAction, 'open_execution');
+    assert.equal(projection.currentRunId, 'job-1');
+  });
+
+  it('routes to review when children are waiting review', () => {
+    const projection = buildOrchestrationProjection(parent({ status: 'waiting_review' }), {
+      children: [child({ id: 'review-child', status: 'waiting_review' })],
+      runtimeReachable: true,
+    });
+    assert.equal(projection.availableAction, 'review_results');
+    assert.equal(projection.targetWorkItemId, 'review-child');
+  });
+
+  it('labels leaf continuous execution as full plan', () => {
+    const projection = buildOrchestrationProjection(child({ parentTaskId: 'coordination' }), {
+      children: [],
+      runtimeReachable: true,
+    });
+    assert.equal(projection.availableAction, 'connect_and_run');
+    assert.equal(projection.label, 'Executar plano completo');
+    assert.equal(projection.scope, 'tree');
+  });
+
+  it('blocks when runtime is unavailable', () => {
+    const projection = buildOrchestrationProjection(parent(), {
+      children: [child()],
+      runtimeReachable: false,
+      runtimeBlockingReason: 'Offline',
+    });
+    assert.equal(projection.availableAction, 'none');
+    assert.equal(projection.blockingReason, 'Offline');
+  });
+});

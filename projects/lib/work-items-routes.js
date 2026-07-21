@@ -8,6 +8,7 @@ const taskSuggestions = require('./task-suggestions');
 const agentRequests = require('./agent-requests');
 const deliveryOs = require('./delivery-os');
 const stageTransitions = require('./stage-transition-requests');
+const agentPlatformSettings = require('./agent-platform-settings');
 
 const ACTIVE_AGENT_STATUSES = new Set([
   'queued', 'claimed', 'running', 'planning', 'researching', 'executing',
@@ -25,6 +26,29 @@ function safeTransitionPreview(preview) {
     baselineRequest: baselineRequest ? { id: baselineRequest.id, title: baselineRequest.title, status: baselineRequest.status, version: baselineRequest.version, updatedAt: baselineRequest.updatedAt } : null,
     tasks: workItems.ensureArray(preview?.tasks).map(({ instruction, ...task }) => task),
   };
+}
+
+function resolveRuntimeReachability({ agentConnectionMode, connectorStore }) {
+  if (agentConnectionMode === 'disabled') {
+    return { runtimeReachable: false, runtimeBlockingReason: 'A execução por agente está desativada.' };
+  }
+  if (agentConnectionMode === 'remote_pull') {
+    const connector = connectorStore?.activeConnector?.() || null;
+    if (!connector) {
+      return {
+        runtimeReachable: false,
+        runtimeBlockingReason: 'Nenhum Agent Runtime emparelhado. Configure em Agentes.',
+      };
+    }
+    if (!connector.online) {
+      return {
+        runtimeReachable: false,
+        runtimeBlockingReason: 'O Agent Runtime está offline.',
+      };
+    }
+    return { runtimeReachable: true, runtimeBlockingReason: '' };
+  }
+  return { runtimeReachable: true, runtimeBlockingReason: '' };
 }
 
 function filterAcceptedWorkItems(project, items = workItems.getWorkItems(project)) {
@@ -608,10 +632,22 @@ function registerWorkItemRoutes(app, deps) {
       || promptRun?.rawOutput
       || humanReview?.suggestedChanges?.rawOutput,
     );
+    const runtimeState = resolveRuntimeReachability({ agentConnectionMode, connectorStore });
+    const orchestration = workItems.buildOrchestrationProjection(item, {
+      children: workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === item.id),
+      agentRequest: linkedRequest,
+      agentExecution: agentJob ? {
+        runId: agentJob.id,
+        status: dispatch?.status || agentJob.status,
+      } : null,
+      runtimeReachable: runtimeState.runtimeReachable,
+      runtimeBlockingReason: runtimeState.runtimeBlockingReason,
+    });
     return res.json({
       workItem: item,
       children: workItems.getWorkItems(project).filter((entry) => entry.parentTaskId === item.id),
       agentRequest: safeRequest,
+      orchestration,
       agentExecution: agentJob ? {
         runId: agentJob.id,
         status: dispatch?.status || agentJob.status,
@@ -1289,4 +1325,9 @@ function registerWorkItemRoutes(app, deps) {
   });
 }
 
-module.exports = { registerWorkItemRoutes, filterAcceptedWorkItems };
+module.exports = {
+  registerWorkItemRoutes,
+  filterAcceptedWorkItems,
+  resolveRuntimeReachability,
+  buildOrchestrationProjection: workItems.buildOrchestrationProjection,
+};

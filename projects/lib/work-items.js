@@ -362,6 +362,166 @@ function normalizeWorkItem(raw, options = {}) {
   return item;
 }
 function isTerminalStatus(status) { return ['completed', 'cancelled'].includes(normalizeStatus(status)); }
+
+const RUNNING_AGENT_STATUSES = new Set([
+  'dispatching', 'queued', 'claimed', 'running', 'planning', 'researching',
+  'executing', 'verifying', 'replanning', 'goal_setting', 'goal_check', 'self_review',
+  'pausing', 'cancel_requested', 'reconnecting',
+]);
+
+const PAUSED_AGENT_STATUSES = new Set([
+  'paused', 'waiting_input', 'budget_exhausted', 'connection_lost',
+]);
+
+const REVIEW_AGENT_STATUSES = new Set([
+  'waiting_review', 'pending_human_review',
+]);
+
+function executionStatusChip(item, agentExecution = null) {
+  const raw = textOr(agentExecution?.status || item?.agentStatus).toLowerCase();
+  const status = normalizeStatus(item?.status);
+  if (REVIEW_AGENT_STATUSES.has(raw) || status === 'waiting_review') {
+    return { label: 'Aguarda revisão', tone: 'review' };
+  }
+  if (PAUSED_AGENT_STATUSES.has(raw) || status === 'waiting_input') {
+    return { label: 'Em pausa', tone: 'paused' };
+  }
+  if (RUNNING_AGENT_STATUSES.has(raw) || status === 'in_progress') {
+    return { label: 'A correr', tone: 'running' };
+  }
+  if (status === 'failed' || raw === 'failed') return { label: 'Falhou', tone: 'failed' };
+  if (status === 'blocked' || raw === 'blocked') return { label: 'Bloqueada', tone: 'failed' };
+  if (isTerminalStatus(status)) {
+    return { label: status === 'cancelled' ? 'Cancelada' : 'Concluída', tone: 'done' };
+  }
+  if (status === 'ready') return { label: 'Pronta', tone: 'ready' };
+  if (status === 'planned') return { label: 'Planeada', tone: 'planned' };
+  return { label: status, tone: 'planned' };
+}
+
+function buildOrchestrationProjection(item, context = {}) {
+  const children = ensureArray(context.children);
+  const agentRequest = context.agentRequest || null;
+  const agentExecution = context.agentExecution || null;
+  const runtimeReachable = context.runtimeReachable !== false;
+  const runtimeBlockingReason = textOr(context.runtimeBlockingReason);
+  const isCoordination = item?.taskRole === 'coordination';
+  const isAgentSurface = isCoordination
+    || item?.origin === 'agent'
+    || item?.executorMode === 'agent'
+    || item?.executorMode === 'both';
+  const settings = normalizeExecutionSettings(item?.executionSettings || {});
+  const statusChip = executionStatusChip(item, agentExecution);
+  const currentRunId = textOr(agentExecution?.runId, item?.agentJobId, item?.promptRunId);
+  const rawAgentStatus = textOr(agentExecution?.status || item?.agentStatus).toLowerCase();
+  const promotesToParent = Boolean(
+    !isCoordination
+    && item?.parentTaskId
+    && settings.reviewPolicy?.subtask !== 'blocking',
+  );
+  const scope = isCoordination || promotesToParent ? 'tree' : 'task';
+
+  const base = {
+    availableAction: 'none',
+    label: '',
+    blockingReason: null,
+    targetWorkItemId: item?.id || '',
+    currentRunId,
+    respectsPauseForSubtaskReview: settings.pauseForSubtaskReview === true,
+    statusChip,
+    scope,
+  };
+
+  if (!item?.id || !isAgentSurface) return base;
+
+  if (!runtimeReachable) {
+    return {
+      ...base,
+      blockingReason: runtimeBlockingReason || 'Agent Runtime indisponível.',
+    };
+  }
+
+  if (['awaiting_approval', 'revision_requested'].includes(textOr(agentRequest?.status))) {
+    return {
+      ...base,
+      availableAction: 'approve_plan',
+      label: 'Rever e aprovar plano',
+      targetWorkItemId: item.id,
+    };
+  }
+
+  const status = normalizeStatus(item.status);
+  if (isTerminalStatus(status)) return base;
+
+  if (
+    REVIEW_AGENT_STATUSES.has(rawAgentStatus)
+    || status === 'waiting_review'
+    || (isCoordination && children.some((child) => child.status === 'waiting_review'))
+  ) {
+    const reviewChild = children.find((child) => child.status === 'waiting_review');
+    return {
+      ...base,
+      availableAction: 'review_results',
+      label: 'Rever resultados',
+      targetWorkItemId: reviewChild?.id || item.id,
+    };
+  }
+
+  if (
+    RUNNING_AGENT_STATUSES.has(rawAgentStatus)
+    || (status === 'in_progress' && currentRunId)
+  ) {
+    return {
+      ...base,
+      availableAction: 'open_execution',
+      label: 'Ver execução',
+      targetWorkItemId: item.id,
+    };
+  }
+
+  const needsResume = PAUSED_AGENT_STATUSES.has(rawAgentStatus)
+    || ['waiting_input', 'failed', 'blocked'].includes(status)
+    || ['failed', 'blocked', 'budget_exhausted', 'connection_lost', 'cancelled'].includes(rawAgentStatus);
+
+  if (needsResume && currentRunId) {
+    return {
+      ...base,
+      availableAction: 'resume',
+      label: 'Retomar do checkpoint',
+      targetWorkItemId: item.id,
+    };
+  }
+
+  const hasReadyChild = children.some((child) => child.status === 'ready');
+  const canStart = status === 'ready' || (isCoordination && hasReadyChild);
+
+  if (canStart || (needsResume && !currentRunId)) {
+    let label = 'Conectar agente';
+    if (isCoordination) label = 'Conectar agente e executar plano';
+    else if (promotesToParent || scope === 'tree') label = 'Executar plano completo';
+
+    let blockingReason = null;
+    if (isCoordination && !hasReadyChild && status !== 'ready') {
+      blockingReason = 'Não existe uma subtarefa pronta. Reveja dependências ou resultados pendentes.';
+    } else if (!isCoordination && status !== 'ready' && !needsResume) {
+      blockingReason = 'A tarefa ainda não está pronta para execução.';
+    }
+
+    return {
+      ...base,
+      availableAction: blockingReason ? 'none' : 'connect_and_run',
+      label: blockingReason ? '' : label,
+      blockingReason,
+      targetWorkItemId: item.id,
+      scope,
+    };
+  }
+
+  return {
+    ...base,
+    blockingReason: 'Nenhuma ação de execução disponível neste estado.',
+  };
+}
 function deriveContainerStatus(children) {
   const list = ensureArray(children);
   if (!list.length || list.every((item) => item.status === 'planned')) return 'planned';
@@ -573,6 +733,7 @@ module.exports = {
   toSlimCard, toSlimCards, computeMetaCounts, validateWorkItemForCreate, validateWorkItemForUpdate,
   validateHierarchy, validateDependencies, relevantWorkItems, sortPrioritized, priorityRank,
   isTerminalStatus, deriveContainerStatus, deriveParentStatuses, normalizeStatus,
+  buildOrchestrationProjection, executionStatusChip,
   normalizeExecutionSettings,
   stableKeysForWorkItem, normalizeWorkItemTombstone, getWorkItemTombstones,
   isWorkItemTombstoned, addWorkItemTombstone, restoreWorkItemTombstone,

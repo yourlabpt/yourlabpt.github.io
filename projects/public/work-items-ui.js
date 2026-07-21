@@ -26,6 +26,7 @@
     detailChildren: [],
     detailRequest: null,
     detailExecution: null,
+    detailOrchestration: null,
     detailReview: null,
     detailChangeSets: [],
     suggestions: [],
@@ -40,6 +41,7 @@
     selectedRequestTasks: [],
     pendingConnectionTaskId: '',
     pendingConnectionAgentId: '',
+    pendingConnectionSettings: null,
     filtersOpen: false,
     filters: { origin: '', status: '', stage: '', planPhaseId: '', executorMode: '', assigneeUserId: '', complexity: '', priority: '', clientVisible: '', q: '' },
     loaded: false,
@@ -614,6 +616,7 @@
       state.detailExecution = mergeExecutionSnapshot(state.detailExecution, payload.agentExecution || null);
     }
     state.detailReview = payload.reviewTarget || null;
+    state.detailOrchestration = payload.orchestration || null;
     state.canManage = Boolean(payload.canManage);
     state.canPostUpdate = Boolean(payload.canPostUpdate);
     state.canEditUpdate = Boolean(payload.canEditUpdate);
@@ -1249,6 +1252,108 @@
     `;
   }
 
+  function renderOrchestrationBar(orchestration, options = {}) {
+    const orch = orchestration || {};
+    const runtimeConfig = window.state?.config?.agentRuntime || {};
+    const agentUnavailableReason = runtimeConfig.mode === 'remote_pull' && !runtimeConfig.enabled
+      ? 'Nenhum Agent Runtime está emparelhado. Configure em Agentes.'
+      : runtimeConfig.mode === 'disabled'
+        ? 'A execução por agente está desativada.'
+        : '';
+    const chip = orch.statusChip || { label: '—', tone: 'planned' };
+    const action = orch.availableAction || 'none';
+    const disabled = action === 'none' || Boolean(agentUnavailableReason);
+    const disabledAttr = disabled
+      ? `disabled title="${escapeHtml(agentUnavailableReason || orch.blockingReason || '')}"`
+      : '';
+    const primaryButton = action !== 'none'
+      ? `<button type="button" class="ado-action-primary" data-ado-orchestration="${escapeHtml(action)}" ${disabledAttr}>${escapeHtml(orch.label || 'Executar')}</button>`
+      : '';
+    const runLink = orch.currentRunId
+      ? `<button type="button" class="ado-action-ghost" data-ado-open-execution>Abrir execução</button>`
+      : '';
+    const adminLink = options.showAdminLink !== false
+      ? `<button type="button" class="ado-action-ghost" data-ado-goto-agents>Definições de agentes</button>`
+      : '';
+    return `
+      <div class="ado-orchestration-bar" data-orchestration-respects-pause="${orch.respectsPauseForSubtaskReview === true}">
+        <span class="ado-exec-status-chip tone-${escapeHtml(chip.tone)}">${escapeHtml(chip.label)}</span>
+        <div class="ado-action-bar">${primaryButton}${runLink}${adminLink}</div>
+      </div>
+      ${orch.blockingReason ? `<p class="ado-section-hint">${escapeHtml(orch.blockingReason)}</p>` : ''}
+      <div class="ado-agent-connection-pane hidden" data-ado-connection-pane>
+        <p data-ado-connection-status>A verificar o Agent Runtime…</p>
+        <div data-ado-connection-details></div>
+      </div>
+    `;
+  }
+
+  async function prepareAgentConnection(project, taskId) {
+    const pane = $('workItemEditor')?.querySelector('[data-ado-connection-pane]');
+    const status = pane?.querySelector('[data-ado-connection-status]');
+    const details = pane?.querySelector('[data-ado-connection-details]');
+    pane?.classList.remove('hidden');
+    if (status) status.textContent = 'A verificar ligação, competências e ferramentas…';
+    if (details) details.innerHTML = '';
+    const payload = await apiRequest(
+      `/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(taskId)}/agent-connection/prepare`,
+    );
+    if (!payload.selectedAgentId) {
+      throw new Error('O runtime ainda não publicou um agente para esta tarefa. Sincronize o runtime e tente novamente.');
+    }
+    state.detailOrchestration = payload.orchestration || state.detailOrchestration;
+    state.pendingConnectionTaskId = taskId;
+    state.pendingConnectionAgentId = payload.selectedAgentId;
+    state.pendingConnectionSettings = payload.settings || null;
+    const sendLabel = payload.scope === 'tree' || state.detailOrchestration?.scope === 'tree'
+      ? 'Executar plano completo'
+      : 'Enviar esta tarefa ao agente';
+    if (status) status.textContent = payload.contextSummary;
+    if (details) {
+      details.innerHTML = `<div class="ado-agent-match"><label>${payload.compatibilityPending ? 'Agente selecionado (capacidades a sincronizar)' : 'Agente compatível'}<select data-ado-agent-select>${(payload.agents || []).filter((agent) => agent.compatible || agent.id === payload.selectedAgentId).map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === payload.selectedAgentId ? 'selected' : ''}>${escapeHtml(agent.name)}${agent.compatible ? '' : ' — a sincronizar'}</option>`).join('')}</select></label>${payload.compatibilityPending ? `<p class="ado-agent-control-pending">O pedido pode entrar na fila agora. Só será reclamado quando o runtime confirmar: ${escapeHtml((payload.compatibilityPendingReasons || []).join(', '))}.</p>` : ''}<p><strong>Competências:</strong> ${escapeHtml((payload.requiredSkills || []).join(', ') || 'Contexto geral')}</p><p><strong>Ferramentas MCP:</strong> ${escapeHtml((payload.requiredMcpTools || []).join(', ') || 'Sem ferramentas adicionais')}</p><button type="button" class="ado-action-primary" data-ado-send-agent>${escapeHtml(sendLabel)}</button></div>`;
+    }
+    pane?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return payload;
+  }
+
+  async function handleOrchestrationAction(project, action) {
+    const orch = state.detailOrchestration || {};
+    const taskId = orch.targetWorkItemId || state.detail?.id;
+    if (!taskId || !state.detail) return;
+    if (action === 'approve_plan') {
+      if (state.detail.agentRequestId) await openRequestPlan(project, state.detail.agentRequestId);
+      else showToast('Não existe um plano pendente de aprovação.', 'error');
+      return;
+    }
+    if (action === 'open_execution' || action === 'resume') {
+      $('workItemEditor')?.querySelector('.ado-agent-log-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (action === 'resume') {
+        const resumeBtn = $('workItemEditor')?.querySelector('[data-ado-run-control="resume"], [data-ado-run-control="retry"]');
+        if (resumeBtn) resumeBtn.click();
+      }
+      return;
+    }
+    if (action === 'review_results') {
+      const reviewChild = orch.targetWorkItemId && orch.targetWorkItemId !== state.detail.id
+        ? orch.targetWorkItemId
+        : null;
+      if (reviewChild) await openEditor(project, reviewChild);
+      else $('workItemEditor')?.querySelector('.ado-decision-section, .ado-editor-result')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (action === 'connect_and_run') {
+      try {
+        await prepareAgentConnection(project, taskId);
+      } catch (err) {
+        const pane = $('workItemEditor')?.querySelector('[data-ado-connection-pane]');
+        const status = pane?.querySelector('[data-ado-connection-status]');
+        if (status) status.textContent = err.message;
+        pane?.classList.remove('hidden');
+        showToast(err.message, 'error');
+      }
+    }
+  }
+
   function paintAgentExecution(options = {}) {
     const host = $('workItemEditor')?.querySelector('[data-ado-agent-log]');
     if (!host) return;
@@ -1278,8 +1383,18 @@
       state.detailExecution?.error,
     ]);
     if (!options.force && host.dataset.executionSignature === signature) return;
+    const priorLog = host.querySelector('.ado-agent-log-list');
+    const priorScrollTop = priorLog?.scrollTop ?? 0;
+    const stickToBottom = priorLog
+      ? (priorLog.scrollHeight - priorScrollTop - priorLog.clientHeight) < 48
+      : true;
     host.innerHTML = renderAgentExecution();
     host.dataset.executionSignature = signature;
+    const nextLog = host.querySelector('.ado-agent-log-list');
+    if (nextLog) {
+      if (stickToBottom) nextLog.scrollTop = nextLog.scrollHeight;
+      else nextLog.scrollTop = Math.min(priorScrollTop, Math.max(0, nextLog.scrollHeight - nextLog.clientHeight));
+    }
   }
 
   function paintEditor(project) {
@@ -1312,30 +1427,7 @@
       ? `<p class="ado-section-hint">${escapeHtml(agentUnavailableReason)}</p>`
       : '';
     const executionSettingsMarkup = (item.executorMode === 'agent' || item.executorMode === 'both' || item.origin === 'agent') ? `
-      <details class="ado-advanced-details ado-execution-settings">
-        <summary>Configuração da execução do agente</summary>
-        <div class="ado-advanced-grid">
-          <label>Agente preferido<input data-ado-setting="agentId" value="${escapeHtml(executionSettings.agentId || item.agentId || '')}" /></label>
-          <label>Perfil do modelo<select data-ado-setting="modelProfileId"><option value="small" ${executionSettings.modelProfileId === 'small' ? 'selected' : ''}>small</option><option value="medium" ${!executionSettings.modelProfileId || executionSettings.modelProfileId === 'medium' ? 'selected' : ''}>medium</option><option value="large" ${executionSettings.modelProfileId === 'large' ? 'selected' : ''}>large</option><option value="high" ${executionSettings.modelProfileId === 'high' ? 'selected' : ''}>high</option><option value="max" ${executionSettings.modelProfileId === 'max' ? 'selected' : ''}>max</option><option value="long_context" ${executionSettings.modelProfileId === 'long_context' ? 'selected' : ''}>long_context</option></select></label>
-          <label>Tokens locais<select data-ado-setting="tokenBudgetMode"><option value="auto" ${executionSettings.tokenBudgetMode !== 'limited' ? 'selected' : ''}>Sem limite</option><option value="limited" ${executionSettings.tokenBudgetMode === 'limited' ? 'selected' : ''}>Com limite</option></select></label>
-          <label>Limite local<input type="number" min="0" data-ado-setting="maxTokens" value="${executionSettings.maxTokens || 0}" /></label>
-          <label>Tokens externos<select data-ado-setting="externalTokenBudgetMode"><option value="limited" ${executionSettings.externalTokenBudgetMode !== 'unlimited' ? 'selected' : ''}>Com limite</option><option value="unlimited" ${executionSettings.externalTokenBudgetMode === 'unlimited' ? 'selected' : ''}>Sem limite</option></select></label>
-          <label>Limite externo<input type="number" min="0" data-ado-setting="externalMaxTokens" value="${executionSettings.externalMaxTokens || 120000}" /></label>
-          <label>Custo máximo (EUR, 0 = sem limite)<input type="number" min="0" step="0.01" data-ado-setting="maxCost" value="${executionSettings.costPolicy?.maxCost || 0}" /></label>
-          <label>Tempo máximo (min, 0 = sem limite)<input type="number" min="0" data-ado-setting="maxWallClockMinutes" value="${executionSettings.maxWallClockMinutes || 0}" /></label>
-          <label>Input alvo<input type="number" data-ado-setting="targetInputTokens" value="${executionSettings.targetInputTokens || 14000}" /></label>
-          <label>Output alvo<input type="number" data-ado-setting="targetOutputTokens" value="${executionSettings.targetOutputTokens || 2500}" /></label>
-          <label>Passos por vaga<input type="number" min="1" data-ado-setting="planningWaveSize" value="${executionSettings.planningWaveSize || executionSettings.maxSubtasks || 8}" /></label>
-          <label>Máximo total de passos (0 = sem limite)<input type="number" min="0" data-ado-setting="maxTotalSteps" value="${executionSettings.maxTotalSteps || 0}" /></label>
-          <label>Checkpoint a cada (seg)<input type="number" min="10" data-ado-setting="checkpointIntervalSeconds" value="${executionSettings.checkpointPolicy?.intervalSeconds || 30}" /></label>
-          <label>Verificar objetivos a cada N passos<input type="number" min="1" max="10" data-ado-setting="goalCheckInterval" value="${executionSettings.goalCheckInterval || 3}" /></label>
-          <label>Ferramentas permitidas<input data-ado-setting="allowedMcpTools" value="${escapeHtml((executionSettings.allowedMcpTools || item.requiredMcpTools || []).join(', '))}" placeholder="project.read, docs.search, repo.patch" /></label>
-          <label class="checkline"><input type="checkbox" data-ado-setting="enableWebSearch" ${executionSettings.enableWebSearch !== false ? 'checked' : ''}> Pesquisa web</label>
-          <label class="checkline"><input type="checkbox" data-ado-setting="pauseForSubtaskReview" ${executionSettings.pauseForSubtaskReview === true ? 'checked' : ''}> Parar para revisão após cada subtarefa</label>
-        </div>
-        <p class="ado-section-hint">Por defeito, todas as subtarefas aprovadas são executadas continuamente e ficam disponíveis para revisão em lote no fim. A configuração fica congelada por tentativa.</p>
-        ${state.canManage ? '<button type="button" class="ado-action-ghost" data-ado-save-execution-settings>Guardar configuração</button>' : ''}
-      </details>
+      <p class="ado-section-hint">Modelo, limites e política de revisão estão centralizados em <button type="button" class="ado-inline-link" data-ado-goto-agents>Agentes</button>. As alterações aplicam-se às próximas execuções.</p>
     ` : '';
 
     const assigneeOptions = members.map((m) => {
@@ -1370,7 +1462,8 @@
             <div class="ado-section-heading"><div><h3 class="ado-section-title">Plano deste pedido</h3><p class="ado-section-hint">A tarefa-pai executa continuamente todas as subtarefas aprovadas ainda abertas, sem parar para revisão entre elas nem repetir trabalho concluído.</p></div><strong>${children.filter((child) => ['completed', 'waiting_review'].includes(child.status)).length}/${children.length}</strong></div>
             ${request?.diffSummary ? `<div class="ado-request-diff-summary"><span>${request.diffSummary.changedTasks || 0} alterada(s)</span><span>${request.diffSummary.newTasks || 0} nova(s)</span><span>${request.diffSummary.removedTasks || 0} removida(s)</span></div>` : ''}
             <div class="ado-child-task-list">${children.map((child, index) => `<button type="button" data-ado-open-child="${escapeHtml(child.id)}"><span>${index + 1}</span><strong>${escapeHtml(child.title)}</strong><small>${escapeHtml(statusLabel(child.status))}</small></button>`).join('')}</div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-continue-plan ${children.some((child) => child.status === 'ready') ? agentConnectAttributes : 'disabled'}>Executar plano até ao fim</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar subtarefas ainda abertas</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar resultados das subtarefas abertas</button></div>
+            ${renderOrchestrationBar(state.detailOrchestration)}
+            <details class="ado-advanced-details"><summary>Mais ações do plano</summary><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar subtarefas ainda abertas</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar resultados das subtarefas abertas</button></div></details>
             ${agentPairingGuidance}
             <div class="ado-manual-output-pane hidden" data-ado-bundle-pane><label>Pacote JSON completo<textarea rows="14" data-ado-bundle-raw placeholder='{"requestId":"…","requestVersion":1,"taskOutputs":[…]}'></textarea></label><p class="ado-section-hint" data-ado-bundle-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-bundle>Validar pacote</button><button type="button" class="ado-action-primary" data-ado-submit-bundle disabled>Enviar tudo para revisão</button></div></div>
             ${children.some((child) => child.status === 'waiting_review') && state.canManage ? `<div class="ado-bundle-review"><strong>Resultados prontos para decisão</strong><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-bundle="approved">Aprovar e aplicar todos</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="rejected">Rejeitar</button></div></div>` : ''}
@@ -1473,10 +1566,10 @@
 
         ${item.origin === 'agent' && !isCoordination ? `
           <section class="ado-editor-section ado-agent-actions">
-            <div><h3 class="ado-section-title">Execução manual</h3><p class="ado-section-hint">Use as mesmas instruções fora da plataforma e mantenha o resultado ligado à tarefa.</p></div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button>${!isCoordination ? `<button type="button" class="ado-action-primary" data-ado-connect-agent ${agentConnectAttributes}>${['failed', 'blocked', 'cancelled'].includes(item.status) ? 'Reiniciar tarefa com agente' : 'Conectar agente para esta tarefa'}</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>` : ''}${item.agentStatus !== 'running' && !isCoordination ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div>
+            <div><h3 class="ado-section-title">Execução</h3><p class="ado-section-hint">Estado da execução e ligação ao Agent Runtime.</p></div>
+            ${renderOrchestrationBar(state.detailOrchestration)}
+            <details class="ado-advanced-details"><summary>Execução manual</summary><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>${item.agentStatus !== 'running' ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div></details>
             ${agentPairingGuidance}
-            ${!isCoordination ? '<div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>' : ''}
             <div class="ado-manual-output-pane hidden" data-ado-manual-pane><label>Resultado obtido<textarea rows="10" data-ado-manual-raw placeholder="Cole aqui a resposta completa ou o JSON produzido…"></textarea></label><p class="ado-section-hint" data-ado-manual-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-manual>Validar e pré-visualizar</button><button type="button" class="ado-action-primary" data-ado-submit-manual disabled>Enviar para revisão</button></div></div>
           </section>
         ` : ''}
@@ -2040,66 +2133,82 @@
         return;
       }
 
-      if (event.target.closest('[data-ado-connect-agent]') && state.detail) {
-        const pane = $('workItemEditor')?.querySelector('[data-ado-connection-pane]'); const status = pane?.querySelector('[data-ado-connection-status]'); const details = pane?.querySelector('[data-ado-connection-details]');
-        pane?.classList.remove('hidden'); if (status) status.textContent = 'A verificar ligação, competências e ferramentas…'; if (details) details.innerHTML = '';
-        try {
-          const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/agent-connection/prepare`);
-          if (!payload.selectedAgentId) throw new Error('O runtime ainda não publicou um agente para esta tarefa. Sincronize o runtime e tente novamente.');
-          if (status) status.textContent = payload.contextSummary;
-          if (details) details.innerHTML = `<div class="ado-agent-match"><label>${payload.compatibilityPending ? 'Agente selecionado (capacidades a sincronizar)' : 'Agente compatível'}<select data-ado-agent-select>${(payload.agents || []).filter((agent) => agent.compatible || agent.id === payload.selectedAgentId).map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === payload.selectedAgentId ? 'selected' : ''}>${escapeHtml(agent.name)}${agent.compatible ? '' : ' — a sincronizar'}</option>`).join('')}</select></label>${payload.compatibilityPending ? `<p class="ado-agent-control-pending">O pedido pode entrar na fila agora. Só será reclamado quando o runtime confirmar: ${escapeHtml((payload.compatibilityPendingReasons || []).join(', '))}.</p>` : ''}<p><strong>Competências:</strong> ${escapeHtml((payload.requiredSkills || []).join(', ') || 'Contexto geral')}</p><p><strong>Ferramentas MCP:</strong> ${escapeHtml((payload.requiredMcpTools || []).join(', ') || 'Sem ferramentas adicionais')}</p><button type="button" class="ado-action-primary" data-ado-send-agent>Enviar ${payload.scope === 'tree' ? 'plano completo' : 'esta tarefa'} ao agente</button></div>`;
-        } catch (err) { if (status) status.textContent = err.message; if (details) details.innerHTML = '<button type="button" class="ado-action-ghost" data-ado-connect-agent>Tentar novamente</button>'; }
+      if (event.target.closest('[data-ado-goto-agents]')) {
+        window.switchToTab?.('agentes');
         return;
       }
-      if (event.target.closest('[data-ado-continue-plan]') && state.detail) {
-        const readyChild = (state.detailChildren || []).find((child) => child.status === 'ready');
-        if (!readyChild) {
-          showToast('Não existe uma subtarefa pronta. Reveja resultados pendentes ou dependências bloqueadas.', 'error');
-          return;
-        }
-        const control = event.target.closest('[data-ado-continue-plan]');
-        control.disabled = true;
+      if (event.target.closest('[data-ado-open-execution]')) {
+        $('workItemEditor')?.querySelector('.ado-agent-log-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      const orchestrationBtn = event.target.closest('[data-ado-orchestration]');
+      if (orchestrationBtn && state.detail) {
+        orchestrationBtn.disabled = true;
         try {
-          const payload = await apiRequest('/agent-runs', {
-            method: 'POST',
-            body: {
-              projectId: project.id,
-              agentId: readyChild.agentId || state.detail.agentId,
-              agentType: readyChild.agentType || state.detail.agentType,
-              agentRequestId: state.detail.agentRequestId,
-              workItemId: state.detail.id,
-            },
-          });
-          if (payload.requiresApproval) throw new Error('O plano ainda precisa de aprovação.');
-          const taskId = payload.workItem?.id || state.detail.id;
-          await fetchList(project.id);
-          await openEditor(project, taskId);
-          showToast('Plano completo iniciado. Os resultados serão acumulados para revisão em lote.', 'ok');
-          pollConnectedTask(
-            project,
-            payload.agentJob?.id || payload.promptRun?.id,
-            taskId
-          );
+          await handleOrchestrationAction(project, orchestrationBtn.dataset.adoOrchestration);
+        } finally {
+          orchestrationBtn.disabled = false;
+        }
+        return;
+      }
+      if (event.target.closest('[data-ado-connect-agent]') && state.detail) {
+        try {
+          await prepareAgentConnection(project, state.detail.id);
         } catch (err) {
-          control.disabled = false;
           showToast(err.message, 'error');
         }
         return;
       }
       if (event.target.closest('[data-ado-send-agent]') && state.detail) {
-        const editor = $('workItemEditor'); const agentId = editor?.querySelector('[data-ado-agent-select]')?.value || state.detail.agentId; const settings = {};
-        editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
+        const editor = $('workItemEditor');
+        const agentId = editor?.querySelector('[data-ado-agent-select]')?.value
+          || state.pendingConnectionAgentId
+          || state.detail.agentId;
+        const settings = { ...(state.pendingConnectionSettings || state.detail.executionSettings || {}) };
         settings.timeLimitEnabled = Number(settings.maxWallClockMinutes) > 0;
         settings.timePolicy = settings.timeLimitEnabled
           ? { mode: 'limited', enforced: true, maxWallClockMinutes: Number(settings.maxWallClockMinutes), onLimit: 'best_effort_review' }
           : { mode: 'unlimited', enforced: false, onLimit: 'best_effort_review' };
-        const status = editor?.querySelector('[data-ado-connection-status]'); if (status) status.textContent = 'A ligar e a entregar o pacote versionado…';
+        const status = editor?.querySelector('[data-ado-connection-status]');
+        if (status) status.textContent = 'A ligar e a entregar o pacote versionado…';
         try {
-          const payload = await apiRequest('/agent-runs', { method: 'POST', body: { projectId: project.id, agentId, agentType: state.detail.agentType, agentRequestId: state.detail.agentRequestId, workItemId: state.detail.id, budget: { maxTokens: settings.maxTokens, maxWallClockMinutes: settings.maxWallClockMinutes, maxSubtasks: settings.maxSubtasks }, options: { ...settings, stageId: state.detail.deliveryStageId, enableWebSearch: settings.enableWebSearch } } });
-          if (payload.requiresApproval) { state.pendingConnectionTaskId = state.detail.id; state.pendingConnectionAgentId = agentId; showToast('O plano precisa de aprovação antes de ser enviado.', 'error'); await openRequestPlan(project, state.detail.agentRequestId); return; }
-          const taskId = state.detail.id; await fetchDetail(project.id, taskId); paintEditor(project); await fetchList(project.id); showToast('Tarefa entregue ao agente. O progresso ficará visível aqui.', 'ok');
+          const payload = await apiRequest('/agent-runs', {
+            method: 'POST',
+            body: {
+              projectId: project.id,
+              agentId,
+              agentType: state.detail.agentType,
+              agentRequestId: state.detail.agentRequestId,
+              workItemId: state.pendingConnectionTaskId || state.detail.id,
+              budget: {
+                maxTokens: settings.maxTokens,
+                maxWallClockMinutes: settings.maxWallClockMinutes,
+                maxSubtasks: settings.maxSubtasks || settings.planningWaveSize,
+              },
+              options: {
+                ...settings,
+                stageId: state.detail.deliveryStageId,
+                enableWebSearch: settings.enableWebSearch,
+              },
+            },
+          });
+          if (payload.requiresApproval) {
+            state.pendingConnectionTaskId = state.detail.id;
+            state.pendingConnectionAgentId = agentId;
+            showToast('O plano precisa de aprovação antes de ser enviado.', 'error');
+            await openRequestPlan(project, state.detail.agentRequestId);
+            return;
+          }
+          const taskId = payload.workItem?.id || state.pendingConnectionTaskId || state.detail.id;
+          await fetchDetail(project.id, taskId);
+          paintEditor(project);
+          await fetchList(project.id);
+          showToast('Tarefa entregue ao agente. O progresso ficará visível aqui.', 'ok');
           pollConnectedTask(project, payload.agentJob?.id || payload.promptRun?.id, taskId);
-        } catch (err) { if (status) status.textContent = err.message; showToast(err.message, 'error'); }
+        } catch (err) {
+          if (status) status.textContent = err.message;
+          showToast(err.message, 'error');
+        }
         return;
       }
       if (event.target.closest('[data-ado-save-execution-settings]') && state.detail) {
@@ -2477,5 +2586,16 @@
     openRequestPlan(project, requestId) { return openRequestPlan(project, requestId); },
     openTask(project, taskId) { return openEditor(project, taskId); },
     refreshTasks(project, options = {}) { return refreshTasks(project, options); },
+    __testApplyExecution(snapshot) {
+      const requestVersion = beginExecutionRequest();
+      applyExecutionSnapshot(snapshot, requestVersion);
+      const project = window.state?.selectedProject;
+      if (!project || !state.detail) return;
+      if (!$('workItemEditor')?.querySelector('[data-ado-agent-log]')) {
+        paintEditor(project);
+      } else {
+        paintAgentExecution({ force: true });
+      }
+    },
   };
 })();
