@@ -170,9 +170,10 @@ function normalizeExecutionSettings(raw) {
     0,
     Number(src.timePolicy?.maxWallClockMinutes ?? src.maxWallClockMinutes) || 0
   );
-  const timeMode = src.timePolicy?.mode === 'unlimited' || maxWallClockMinutes === 0
-    ? 'unlimited'
-    : 'limited';
+  const timeLimitEnforced = (
+    src.timePolicy?.enforced === true || src.timeLimitEnabled === true
+  ) && maxWallClockMinutes > 0;
+  const timeMode = timeLimitEnforced ? 'limited' : 'unlimited';
   const planningWaveSize = Math.max(1, Number(src.planningWaveSize || src.maxSubtasks) || 8);
   const checkpointIntervalSeconds = Math.max(
     10,
@@ -197,8 +198,9 @@ function normalizeExecutionSettings(raw) {
     },
     timePolicy: {
       mode: timeMode,
+      enforced: timeLimitEnforced,
       ...(timeMode === 'limited' ? { maxWallClockMinutes } : {}),
-      onLimit: 'checkpoint_pause',
+      onLimit: 'best_effort_review',
     },
     checkpointPolicy: {
       intervalSeconds: checkpointIntervalSeconds,
@@ -232,6 +234,7 @@ function normalizeExecutionSettings(raw) {
     goalCheckInterval: Math.max(1, Math.min(10, Number(src.goalCheckInterval) || 3)),
     maxTokens: tokenPolicy.local.mode === 'limited' ? tokenPolicy.local.maxTokens : 0,
     maxWallClockMinutes: timeMode === 'limited' ? maxWallClockMinutes : 0,
+    timeLimitEnabled: timeLimitEnforced,
     maxSubtasks: planningWaveSize,
     enableWebSearch: src.enableWebSearch !== false,
     allowedMcpTools: normalizeStringList(src.allowedMcpTools),

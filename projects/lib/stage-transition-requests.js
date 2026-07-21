@@ -28,13 +28,18 @@ const TOOLS_BY_STAGE = {
 };
 
 function defaultConfig(input = {}) {
+  const timeLimitEnabled = input.timeLimitEnabled === true
+    || input.timePolicy?.enforced === true;
   return {
     userRequest: textOr(input.userRequest), desiredOutcome: textOr(input.desiredOutcome),
     modelProfileId: textOr(input.modelProfileId, 'medium'),
     targetInputTokens: Math.max(1000, Number(input.targetInputTokens) || 14000),
     targetOutputTokens: Math.max(500, Number(input.targetOutputTokens) || 2500),
     maxTokens: Math.max(0, Number(input.maxTokens) || 0),
-    maxWallClockMinutes: Math.max(0, Number(input.maxWallClockMinutes) || 0),
+    maxWallClockMinutes: timeLimitEnabled
+      ? Math.max(0, Number(input.timePolicy?.maxWallClockMinutes ?? input.maxWallClockMinutes) || 0)
+      : 0,
+    timeLimitEnabled,
     maxSubtasks: Math.min(24, Math.max(2, Number(input.maxSubtasks) || 8)),
     enableWebSearch: input.enableWebSearch === true,
     allowedMcpTools: [...new Set(ensureArray(input.allowedMcpTools).map(String).filter(Boolean))],

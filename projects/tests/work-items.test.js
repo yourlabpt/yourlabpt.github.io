@@ -8,6 +8,7 @@ const agentRequests = require('../lib/agent-requests');
 const stageTransitions = require('../lib/stage-transition-requests');
 const {
   selectReadyAgentTask,
+  resetTaskForRestart,
   reconcileActiveAgentJobs,
 } = require('../lib/agent-runtime-routes');
 const { filterAcceptedWorkItems, registerWorkItemRoutes } = require('../lib/work-items-routes');
@@ -48,8 +49,15 @@ describe('work items model', () => {
     assert.equal(settings.maxTokens, 0);
     assert.equal(settings.tokenPolicy.external.mode, 'limited');
     assert.equal(settings.externalMaxTokens, 50000);
-    assert.equal(settings.timePolicy.mode, 'limited');
+    assert.equal(settings.timePolicy.mode, 'unlimited');
+    assert.equal(settings.maxWallClockMinutes, 0);
     assert.equal(settings.planningWaveSize, 6);
+    const explicitlyTimed = workItems.normalizeExecutionSettings({
+      timeLimitEnabled: true,
+      timePolicy: { mode: 'limited', enforced: true, maxWallClockMinutes: 90 },
+    });
+    assert.equal(explicitlyTimed.timePolicy.mode, 'limited');
+    assert.equal(explicitlyTimed.maxWallClockMinutes, 90);
   });
 
   it('returns slim cards without descriptions and counts executors', () => {
@@ -366,6 +374,59 @@ describe('agent requests and visible plans', () => {
     assert.equal(selectReadyAgentTask(tasks, 'coordination').id, 'coordination');
     assert.equal(selectReadyAgentTask(tasks, 'first').id, 'first');
     assert.equal(selectReadyAgentTask(tasks.map((task) => ({ ...task, status: 'planned' })), 'blocked-request'), null);
+  });
+
+  it('keeps the coordination task executable while earlier results await batch review', () => {
+    const tasks = [
+      { id: 'coordination', taskRole: 'coordination', status: 'waiting_review' },
+      { id: 'reviewed-output', parentTaskId: 'coordination', taskRole: 'execution', status: 'waiting_review' },
+      { id: 'next', parentTaskId: 'coordination', taskRole: 'execution', status: 'ready' },
+    ];
+    assert.equal(selectReadyAgentTask(tasks, 'coordination').id, 'coordination');
+  });
+
+  it('force-unlocks a whole plan without discarding results already waiting for review', () => {
+    const project = {
+      workItems: workItems.normalizeWorkItems([
+        task({
+          id: 'coordination', origin: 'agent', executorMode: 'agent',
+          taskRole: 'coordination', status: 'in_progress', agentJobId: 'job_old',
+        }),
+        task({
+          id: 'finished-output', origin: 'agent', executorMode: 'agent',
+          taskRole: 'execution', parentTaskId: 'coordination', status: 'waiting_review',
+          attempts: [{ id: 'attempt_done', rawOutput: '{"ok":true}' }],
+        }),
+        task({
+          id: 'stuck-step', origin: 'agent', executorMode: 'agent',
+          taskRole: 'execution', parentTaskId: 'coordination', status: 'in_progress',
+          agentStatus: 'running', dependencyTaskIds: ['finished-output'],
+        }),
+        task({
+          id: 'later-step', origin: 'agent', executorMode: 'agent',
+          taskRole: 'execution', parentTaskId: 'coordination', status: 'planned',
+          dependencyTaskIds: ['stuck-step'],
+        }),
+      ]),
+    };
+
+    resetTaskForRestart(project, 'coordination', {
+      at: '2026-07-21T12:00:00.000Z',
+      actorUserId: 'u1',
+    });
+
+    const tasks = workItems.getWorkItems(project);
+    const parent = tasks.find((entry) => entry.id === 'coordination');
+    const finished = tasks.find((entry) => entry.id === 'finished-output');
+    const restarted = tasks.find((entry) => entry.id === 'stuck-step');
+    const later = tasks.find((entry) => entry.id === 'later-step');
+    assert.equal(parent.agentJobId, '');
+    assert.equal(finished.status, 'waiting_review');
+    assert.equal(finished.attempts[0].rawOutput, '{"ok":true}');
+    assert.equal(restarted.status, 'ready');
+    assert.equal(restarted.agentStatus, '');
+    assert.equal(later.status, 'planned');
+    assert.equal(selectReadyAgentTask(tasks, parent.id).id, parent.id);
   });
 
   it('does not let accumulated human review block another agent execution', () => {

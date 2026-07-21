@@ -109,6 +109,8 @@ describe('secure outbound agent connector', () => {
         modelProfileId: 'large',
         maxTokens: 120_000,
         maxWallClockMinutes: 45,
+        timeLimitEnabled: true,
+        timePolicy: { mode: 'limited', enforced: true, maxWallClockMinutes: 45 },
         maxSubtasks: 8,
       },
     };

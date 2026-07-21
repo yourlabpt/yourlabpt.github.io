@@ -162,8 +162,72 @@ function selectReadyAgentTask(tasks, requestedTaskId) {
   const list = Array.isArray(tasks) ? tasks : [];
   const requested = list.find((task) => task.id === requestedTaskId);
   if (requested?.status === 'ready') return requested;
+  if (
+    requested?.taskRole === 'coordination'
+    && list.some((task) => task.parentTaskId === requested.id && task.status === 'ready')
+  ) {
+    return requested;
+  }
   return list.find((task) => task.taskRole !== 'coordination' && task.status === 'ready')
     || null;
+}
+
+const RESTARTABLE_TASK_STATUSES = new Set([
+  'failed', 'blocked', 'cancelled', 'waiting_input', 'in_progress',
+]);
+
+function resetTaskForRestart(project, requestedTaskId, options = {}) {
+  const at = options.at || new Date().toISOString();
+  const actorUserId = options.actorUserId || 'platform';
+  const list = workItems.getWorkItems(project);
+  const requested = list.find((task) => task.id === requestedTaskId);
+  if (!requested) return null;
+  const scopeIds = new Set([requested.id]);
+  if (requested.taskRole === 'coordination') {
+    list.filter((task) => task.parentTaskId === requested.id)
+      .forEach((task) => scopeIds.add(task.id));
+  }
+  const dependencySatisfied = (dependencyId) => {
+    const dependency = list.find((task) => task.id === dependencyId);
+    return dependency && ['completed', 'cancelled', 'waiting_review'].includes(dependency.status);
+  };
+  const next = list.map((task) => {
+    if (!scopeIds.has(task.id)) return task;
+    const isRequested = task.id === requested.id;
+    const shouldReset = isRequested || RESTARTABLE_TASK_STATUSES.has(task.status);
+    if (!shouldReset) return task;
+    const dependenciesReady = workItems.ensureArray(task.dependencyTaskIds).every(dependencySatisfied);
+    const nextStatus = task.taskRole === 'coordination'
+      ? task.status
+      : dependenciesReady ? 'ready' : 'planned';
+    return workItems.normalizeWorkItem({
+      ...task,
+      status: nextStatus,
+      agentJobId: '',
+      promptRunId: '',
+      agentStatus: '',
+      currentAction: task.taskRole === 'coordination'
+        ? 'A execução anterior foi libertada. O plano pode ser reiniciado.'
+        : dependenciesReady
+          ? 'Pronta para uma nova tentativa.'
+          : 'A aguardar as dependências antes da nova tentativa.',
+      lastMilestone: 'Execução anterior terminada; checkpoints e histórico preservados.',
+      taskActivity: [
+        ...workItems.ensureArray(task.taskActivity),
+        {
+          type: 'execution_unlocked',
+          message: 'A plataforma libertou a execução anterior e preparou uma nova tentativa.',
+          actorType: 'human',
+          actorId: actorUserId,
+          createdAt: at,
+        },
+      ],
+      updatedAt: at,
+      updatedBy: actorUserId,
+    }, { project });
+  });
+  workItems.setWorkItems(project, next);
+  return workItems.findWorkItem(project, requestedTaskId);
 }
 
 function reconcileActiveAgentJobs(project, options = {}) {
@@ -992,6 +1056,7 @@ function registerAgentRuntimeRoutes(app, deps) {
       };
 
       let built = buildPromptForAgentType(project, platformAgentType, promptBody);
+      let executionProject = project;
       let delegation = null;
       let delegatedTask = null;
       let compatibilityPendingReasons = [];
@@ -999,32 +1064,57 @@ function registerAgentRuntimeRoutes(app, deps) {
         const mutableProject = mutableStore.projects.find((entry) => entry.id === projectId);
         workItems.migrateProjectWorkItems(mutableProject);
         agentRequests.migrateAgentRequests(mutableProject);
-        const canonicalTask = workItems.findWorkItem(mutableProject, requestedWorkItemId);
+        let canonicalTask = workItems.findWorkItem(mutableProject, requestedWorkItemId);
         if (!canonicalTask) throw new Error('Tarefa canonica nao encontrada.');
         if (!canonicalTask.agentRequestId) throw new Error('A tarefa nao esta ligada a um pedido de agente.');
         if (requestedAgentRequestId && requestedAgentRequestId !== canonicalTask.agentRequestId) throw new Error('A tarefa nao pertence ao pedido de agente indicado.');
         const request = agentRequests.getAgentRequests(mutableProject).find((entry) => entry.id === canonicalTask.agentRequestId);
         if (!request) throw new Error('Pedido do agente nao encontrado.');
-        const tasks = workItems.getWorkItems(mutableProject).filter((task) => task.agentRequestId === request.id);
+        let tasks = workItems.getWorkItems(mutableProject).filter((task) => task.agentRequestId === request.id);
         delegation = { request: agentRequests.requestSummary(request, tasks), tasks, created: false };
         const reconciliation = reconcileActiveAgentJobs(mutableProject, {
           connectorStore,
           connectionMode,
           nowIso,
         });
-        const executionTasks = tasks.filter((task) => task.taskRole !== 'coordination');
-        if (
-          request.status === 'waiting_review'
-          && !executionTasks.some((task) => task.status === 'waiting_review')
-        ) {
-          request.status = executionTasks.every((task) => workItems.isTerminalStatus(task.status))
-            ? 'completed'
-            : executionTasks.some((task) => ['in_progress', 'waiting_input'].includes(task.status))
-              ? 'running'
-              : 'ready';
-          request.updatedAt = nowIso();
-          delegation.request = agentRequests.requestSummary(request, tasks);
+        if (reconciliation.blocking) {
+          const linkedTask = workItems.findWorkItem(
+            mutableProject,
+            reconciliation.blocking.workItemId
+          );
+          throw new Error(
+            linkedTask
+              ? `Já existe uma tarefa de agente em execução: ${linkedTask.title}. Abra essa tarefa para pausar ou cancelar.`
+              : 'Já existe uma tarefa de agente em execução neste projecto.'
+          );
         }
+        if (RESTARTABLE_TASK_STATUSES.has(canonicalTask.status)) {
+          resetTaskForRestart(mutableProject, canonicalTask.id, {
+            at: nowIso(),
+            actorUserId: req.auth.user.id,
+          });
+          canonicalTask = workItems.findWorkItem(mutableProject, requestedWorkItemId);
+          tasks = workItems.getWorkItems(mutableProject)
+            .filter((task) => task.agentRequestId === request.id);
+        }
+        const executionTasks = tasks.filter((task) => task.taskRole !== 'coordination');
+        if (!['awaiting_approval', 'revision_requested'].includes(request.status)) {
+          request.status = executionTasks.some((task) => ['in_progress', 'waiting_input'].includes(task.status))
+            ? 'running'
+            : executionTasks.some((task) => task.status === 'ready')
+              ? 'ready'
+              : executionTasks.some((task) => task.status === 'waiting_review')
+                ? 'waiting_review'
+                : executionTasks.length && executionTasks.every((task) => workItems.isTerminalStatus(task.status))
+                  ? 'completed'
+                  : request.status;
+          request.updatedAt = nowIso();
+        }
+        delegation = {
+          request: agentRequests.requestSummary(request, tasks),
+          tasks,
+          created: false,
+        };
         if (['awaiting_approval', 'revision_requested'].includes(delegation.request.status)) {
           await notifyActionable(mutableStore, mutableProject, { type: 'plan_approval', request: delegation.request, title: 'Plano do agente aguarda aprovação', message: `${delegation.request.title} tem ${delegation.tasks.length} tarefa(s) para rever.` });
           return;
@@ -1076,22 +1166,12 @@ function registerAgentRuntimeRoutes(app, deps) {
             compatibilityPendingReasons = match.reasons;
           }
         }
-        if (reconciliation.blocking) {
-          const linkedTask = workItems.findWorkItem(
-            mutableProject,
-            reconciliation.blocking.workItemId
-          );
-          throw new Error(
-            linkedTask
-              ? `Já existe uma tarefa de agente em execução: ${linkedTask.title}. Abra essa tarefa para pausar ou cancelar.`
-              : 'Já existe uma tarefa de agente em execução neste projecto.'
-          );
-        }
+        executionProject = mutableProject;
         mutableProject.updatedAt = nowIso();
       });
 
       if (requestedAgentRequestId) {
-        built = buildPromptForAgentType(project, platformAgentType, {
+        built = buildPromptForAgentType(executionProject, platformAgentType, {
           agentType: platformAgentType,
           capabilityId: options.capabilityId,
           moduleTag: options.moduleTag,
@@ -1109,7 +1189,7 @@ function registerAgentRuntimeRoutes(app, deps) {
 
       const canonicalPackage = delegatedTask.taskRole === 'coordination'
         ? (() => {
-            const tree = stageTransitions.buildTreePackage(project, delegatedTask);
+            const tree = stageTransitions.buildTreePackage(executionProject, delegatedTask);
             return { ...tree, children: tree.openChildren };
           })()
         : { text: [delegatedTask.executionPackage?.instructions || delegatedTask.descriptionMarkdown, delegatedTask.executionPackage?.outputFormat ? `\n\nFormato:\n${delegatedTask.executionPackage.outputFormat}` : ''].join(''), contextSnapshotHash: delegation.request.inputFingerprint || '', children: [] };
@@ -1745,33 +1825,22 @@ function registerAgentRuntimeRoutes(app, deps) {
         const list = workItems.getWorkItems(mutableProject);
         const task = list.find((entry) => entry.id === agentJob.workItemId);
         if (task) {
-          const coordination = task.taskRole === 'coordination';
-          updatedTask = workItems.normalizeWorkItem({
-            ...task,
-            status: coordination ? task.status : 'ready',
-            agentJobId: '',
-            promptRunId: '',
-            agentStatus: coordination ? '' : 'cancelled',
-            currentAction: coordination
-              ? 'Plano desbloqueado; continue pela próxima subtarefa pronta.'
-              : 'Execução antiga terminada. A tarefa está pronta para reiniciar com a configuração actual.',
-            lastMilestone: 'Execução terminada e lease remoto revogado pela plataforma.',
-            updatedAt: nowIso(),
-            updatedBy: req.auth.user.id,
-          }, { project: mutableProject });
-          workItems.setWorkItems(mutableProject, list.map((entry) => (
-            entry.id === task.id ? updatedTask : entry
-          )));
+          updatedTask = resetTaskForRestart(mutableProject, task.id, {
+            at: nowIso(),
+            actorUserId: req.auth.user.id,
+          });
         }
         const request = ensureArray(mutableProject.agentRequests)
           .find((entry) => entry.id === agentJob.agentRequestId);
         if (request) {
           const requestTasks = workItems.getWorkItems(mutableProject)
             .filter((entry) => entry.agentRequestId === request.id && entry.taskRole !== 'coordination');
-          request.status = requestTasks.some((entry) => entry.status === 'waiting_review')
-            ? 'waiting_review'
-            : requestTasks.some((entry) => ['in_progress', 'waiting_input'].includes(entry.status))
+          request.status = requestTasks.some((entry) => ['in_progress', 'waiting_input'].includes(entry.status))
               ? 'running'
+              : requestTasks.some((entry) => entry.status === 'ready')
+                ? 'ready'
+                : requestTasks.some((entry) => entry.status === 'waiting_review')
+                  ? 'waiting_review'
               : requestTasks.length && requestTasks.every((entry) => workItems.isTerminalStatus(entry.status))
                 ? 'completed'
                 : 'ready';
@@ -2158,8 +2227,8 @@ function registerAgentRuntimeRoutes(app, deps) {
 
       const options = req.body?.options || agentJob.runtimeOptions || {};
       const budget = req.body?.budget || agentJob.budget || {
-        maxTokens: 120000,
-        maxWallClockMinutes: 45,
+        maxTokens: 0,
+        maxWallClockMinutes: 0,
         maxSubtasks: 8,
       };
 
@@ -2202,6 +2271,38 @@ function registerAgentRuntimeRoutes(app, deps) {
             job.runtimeOptions = retryConfig.options;
             job.budget = retryConfig.budget;
             job.updatedAt = nowIso();
+          }
+          const restartTarget = workItems.findWorkItem(mutableProject, agentJob.workItemId);
+          if (restartTarget) {
+            resetTaskForRestart(mutableProject, restartTarget.id, {
+              at: nowIso(),
+              actorUserId: req.auth.user.id,
+            });
+            workItemsSync.onAgentRunStart(mutableProject, {
+              workItemId: restartTarget.id,
+              agentJobId: agentJob.id,
+              promptRunId: agentJob.promptRunId,
+              currentAction: 'Nova tentativa na fila; o runtime continuará do último checkpoint disponível.',
+            });
+            if (restartTarget.taskRole === 'coordination') {
+              const allTasks = workItems.getWorkItems(mutableProject);
+              const first = allTasks.find((task) => (
+                task.parentTaskId === restartTarget.id && task.status === 'ready'
+              ));
+              if (first) {
+                workItems.setWorkItems(mutableProject, allTasks.map((task) => (
+                  task.id === first.id
+                    ? workItems.normalizeWorkItem({
+                      ...task,
+                      status: 'in_progress',
+                      agentStatus: 'queued',
+                      currentAction: 'Nova tentativa na fila para esta subtarefa.',
+                      updatedAt: nowIso(),
+                    }, { project: mutableProject })
+                    : task
+                )));
+              }
+            }
           }
           appendActivity(mutableStore, {
             actorUserId: req.auth.user.id,
@@ -2246,6 +2347,10 @@ function registerAgentRuntimeRoutes(app, deps) {
           job.budget = budget;
           job.updatedAt = nowIso();
         }
+        resetTaskForRestart(mutableProject, agentJob.workItemId, {
+          at: nowIso(),
+          actorUserId: req.auth.user.id,
+        });
         workItemsSync.onAgentRunStart(mutableProject, { workItemId: agentJob.workItemId, agentJobId: agentJob.id, promptRunId: agentJob.promptRunId, currentAction: 'O agente iniciou uma nova tentativa.' });
         mutableProject.updatedAt = nowIso();
       });
@@ -2278,5 +2383,6 @@ module.exports = {
   buildPromptForAgentType,
   resolveExecutionConfig,
   selectReadyAgentTask,
+  resetTaskForRestart,
   reconcileActiveAgentJobs,
 };

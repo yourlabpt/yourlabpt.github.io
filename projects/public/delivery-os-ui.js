@@ -1004,7 +1004,9 @@
       userRequest: $('pdosTransitionRequest').value.trim(), desiredOutcome: $('pdosTransitionOutcome').value.trim(),
       modelProfileId: $('pdosTransitionModelProfile').value, targetInputTokens: Number($('pdosTransitionInputTokens').value),
       targetOutputTokens: Number($('pdosTransitionOutputTokens').value), maxTokens: Number($('pdosTransitionMaxTokens').value),
-      maxWallClockMinutes: Number($('pdosTransitionMaxMinutes').value), maxSubtasks: Number($('pdosTransitionMaxSubtasks').value),
+      maxWallClockMinutes: Number($('pdosTransitionMaxMinutes').value),
+      timeLimitEnabled: Number($('pdosTransitionMaxMinutes').value) > 0,
+      maxSubtasks: Number($('pdosTransitionMaxSubtasks').value),
       enableWebSearch: $('pdosTransitionWebSearch').checked,
     });
     const fillConfig = (values = {}, firstRequest = false) => {
@@ -3835,7 +3837,9 @@
     await resumeAgentRuntime(runId, projectId, {
       budget: {
         maxTokens: (yar?.budget?.maxTokens || 0) + extraTokens,
-        maxWallClockMinutes: (yar?.budget?.maxWallClockMinutes || 45) + extraMinutes,
+        maxWallClockMinutes: Number(yar?.budget?.maxWallClockMinutes) > 0
+          ? Number(yar.budget.maxWallClockMinutes) + extraMinutes
+          : 0,
       },
     });
   }

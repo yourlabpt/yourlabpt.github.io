@@ -32,6 +32,8 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /Executar todas as subtarefas/);
   assert.match(workItemsSource, /data-ado-run-control="abandon"/);
   assert.match(workItemsSource, /Terminar e desbloquear/);
+  assert.match(workItemsSource, /Reiniciar do último checkpoint/);
+  assert.match(workItemsSource, /Reiniciar tarefa com agente/);
   assert.doesNotMatch(workItemsSource, /Criar uma nova versão do pedido/);
   assert.match(workItemsSource, /function scheduleConnectionPoll/);
   assert.match(workItemsSource, /host\.matches\(':hover'\)/);
@@ -39,6 +41,6 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /errorEventTypes/);
   assert.match(workItemsSource, /ado-agent-log-entry\$\{eventToneClass\(event\)\}/);
   assert.match(deliverySource, /linkedTask\?\.status === 'waiting_review'[\s\S]*?work-items\/\$\{linkedTask\.id\}\/review/);
-  assert.match(html, /delivery-os-ui\.js\?v=71/);
-  assert.match(html, /work-items-ui\.js\?v=25/);
+  assert.match(html, /delivery-os-ui\.js\?v=72/);
+  assert.match(html, /work-items-ui\.js\?v=27/);
 });

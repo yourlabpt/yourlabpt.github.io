@@ -1060,6 +1060,7 @@
       provider_timeout: 'Modelo excedeu o tempo seguro',
       provider_action_rejected: 'Ação do modelo rejeitada',
       run_blocked: 'Execução bloqueada',
+      best_effort_review_submitted: 'Resultado parcial enviado para revisão',
     };
     const errorEventTypes = new Set([
       'failed', 'worker_failed', 'provider_action_rejected', 'run_blocked',
@@ -1132,7 +1133,7 @@
         ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
           ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
           ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
-          ${['failed', 'blocked', 'budget_exhausted', 'connection_lost'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-run-control="retry">Retomar do último checkpoint</button>' : ''}
+          ${['failed', 'blocked', 'budget_exhausted', 'connection_lost', 'cancelled'].includes(status) ? `<button type="button" class="ado-action-primary" data-ado-run-control="retry">${status === 'cancelled' ? 'Reiniciar do último checkpoint' : 'Retomar do último checkpoint'}</button>` : ''}
           ${['waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-focus-review>Avaliar resultado</button>' : ''}
           ${!desiredAction && !['completed', 'cancelled'].includes(status) ? '<button type="button" class="ado-action-ghost" data-ado-run-control="sync-now">Sincronizar agora</button>' : ''}
           ${cancellable && desiredAction !== 'cancel' ? '<button type="button" class="ado-action-danger" data-ado-run-control="cancel">Cancelar execução</button>' : ''}
@@ -1366,7 +1367,7 @@
         ${item.origin === 'agent' && !isCoordination ? `
           <section class="ado-editor-section ado-agent-actions">
             <div><h3 class="ado-section-title">Execução manual</h3><p class="ado-section-hint">Use as mesmas instruções fora da plataforma e mantenha o resultado ligado à tarefa.</p></div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button>${!isCoordination ? `<button type="button" class="ado-action-primary" data-ado-connect-agent ${agentConnectAttributes}>Connectar agente para esta tarefa</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>` : ''}${item.agentStatus !== 'running' && !isCoordination ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar instruções</button>${!isCoordination ? `<button type="button" class="ado-action-primary" data-ado-connect-agent ${agentConnectAttributes}>${['failed', 'blocked', 'cancelled'].includes(item.status) ? 'Reiniciar tarefa com agente' : 'Conectar agente para esta tarefa'}</button><button type="button" class="ado-action-ghost" data-ado-manual-output>Registar resultado manual</button>` : ''}${item.agentStatus !== 'running' && !isCoordination ? '<button type="button" class="ado-action-ghost" data-ado-assume-human>Assumir como tarefa humana</button>' : ''}</div>
             ${agentPairingGuidance}
             ${!isCoordination ? '<div class="ado-agent-connection-pane hidden" data-ado-connection-pane><p data-ado-connection-status>A verificar o Agent Runtime…</p><div data-ado-connection-details></div></div>' : ''}
             <div class="ado-manual-output-pane hidden" data-ado-manual-pane><label>Resultado obtido<textarea rows="10" data-ado-manual-raw placeholder="Cole aqui a resposta completa ou o JSON produzido…"></textarea></label><p class="ado-section-hint" data-ado-manual-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-manual>Validar e pré-visualizar</button><button type="button" class="ado-action-primary" data-ado-submit-manual disabled>Enviar para revisão</button></div></div>
@@ -1945,6 +1946,10 @@
       if (event.target.closest('[data-ado-send-agent]') && state.detail) {
         const editor = $('workItemEditor'); const agentId = editor?.querySelector('[data-ado-agent-select]')?.value || state.detail.agentId; const settings = {};
         editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
+        settings.timeLimitEnabled = Number(settings.maxWallClockMinutes) > 0;
+        settings.timePolicy = settings.timeLimitEnabled
+          ? { mode: 'limited', enforced: true, maxWallClockMinutes: Number(settings.maxWallClockMinutes), onLimit: 'best_effort_review' }
+          : { mode: 'unlimited', enforced: false, onLimit: 'best_effort_review' };
         const status = editor?.querySelector('[data-ado-connection-status]'); if (status) status.textContent = 'A ligar e a entregar o pacote versionado…';
         try {
           const payload = await apiRequest('/agent-runs', { method: 'POST', body: { projectId: project.id, agentId, agentType: state.detail.agentType, agentRequestId: state.detail.agentRequestId, workItemId: state.detail.id, budget: { maxTokens: settings.maxTokens, maxWallClockMinutes: settings.maxWallClockMinutes, maxSubtasks: settings.maxSubtasks }, options: { ...settings, stageId: state.detail.deliveryStageId, enableWebSearch: settings.enableWebSearch } } });
@@ -1957,6 +1962,10 @@
       if (event.target.closest('[data-ado-save-execution-settings]') && state.detail) {
         const editor = $('workItemEditor'); const settings = {};
         editor?.querySelectorAll('[data-ado-setting]').forEach((control) => { settings[control.dataset.adoSetting] = control.dataset.adoSetting === 'allowedMcpTools' ? control.value.split(',').map((value) => value.trim()).filter(Boolean) : control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value; });
+        settings.timeLimitEnabled = Number(settings.maxWallClockMinutes) > 0;
+        settings.timePolicy = settings.timeLimitEnabled
+          ? { mode: 'limited', enforced: true, maxWallClockMinutes: Number(settings.maxWallClockMinutes), onLimit: 'best_effort_review' }
+          : { mode: 'unlimited', enforced: false, onLimit: 'best_effort_review' };
         try {
           const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/execution-settings`, { method: 'POST', body: { settings } });
           state.detail = payload.workItem;
