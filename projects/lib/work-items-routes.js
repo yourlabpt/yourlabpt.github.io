@@ -579,18 +579,24 @@ function registerWorkItemRoutes(app, deps) {
     const linkedRequest = item.agentRequestId ? agentRequests.getAgentRequests(project).find((entry) => entry.id === item.agentRequestId) || null : null;
     const safeRequest = linkedRequest ? Object.fromEntries(Object.entries(linkedRequest).filter(([key]) => !['inputSnapshot', 'configSnapshot'].includes(key))) : null;
     const canManage = projectAccess.canManageWorkItems(user, project);
-    const agentJob = canManage ? workItems.ensureArray(project.agentJobs).find((job) => (
-      (item.agentJobId && job.id === item.agentJobId)
-      || (item.promptRunId && job.promptRunId === item.promptRunId)
-      || job.workItemId === item.id
-    )) || null : null;
+    const allAgentJobs = workItems.ensureArray(project.agentJobs);
+    const agentJob = canManage ? (
+      (item.agentJobId ? allAgentJobs.find((job) => job.id === item.agentJobId) : null)
+      || (item.promptRunId ? allAgentJobs.find((job) => job.promptRunId === item.promptRunId) : null)
+      || [...allAgentJobs].reverse().find((job) => job.workItemId === item.id)
+      || null
+    ) : null;
     const dispatch = agentJob && connectorStore
       ? connectorStore.findDispatch(agentJob.dispatchId || agentJob.id || agentJob.promptRunId)
       : null;
-    const promptRun = workItems.ensureArray(project.promptRuns).find((run) => (
-      (item.promptRunId && run.id === item.promptRunId)
-      || (agentJob?.promptRunId && run.id === agentJob.promptRunId)
-    )) || null;
+    const allPromptRuns = workItems.ensureArray(project.promptRuns);
+    const promptRun = (item.promptRunId
+      ? allPromptRuns.find((run) => run.id === item.promptRunId)
+      : null)
+      || (agentJob?.promptRunId
+        ? allPromptRuns.find((run) => run.id === agentJob.promptRunId)
+        : null)
+      || null;
     const latestAttempt = [...workItems.ensureArray(item.attempts)].reverse()
       .find((attempt) => attempt.rawOutput || attempt.resultSummaryMarkdown) || null;
     const humanReview = workItems.ensureArray(project.humanReviews).find((review) => (
@@ -611,19 +617,23 @@ function registerWorkItemRoutes(app, deps) {
         status: dispatch?.status || agentJob.status,
         desiredAction: dispatch?.desiredAction || null,
         latestCommand: dispatch?.latestCommand || null,
+        commandVersion: Number(dispatch?.commandVersion) || 0,
+        acknowledgedCommandVersion: Number(dispatch?.acknowledgedCommandVersion) || 0,
         events: dispatch && connectorStore ? connectorStore.recentEvents(dispatch.id, 200) : [],
         checkpoint: dispatch?.checkpoint || {},
         reviewPacket: dispatch?.reviewPacket || {},
         progressCurrent: Number(dispatch?.progress?.completed ?? agentJob.subtasksCompleted) || 0,
         progressTotal: Number(dispatch?.progress?.total ?? agentJob.subtasksTotal) || 0,
-        tokensUsed: Number(agentJob.tokensUsed) || 0,
-        localTokensUsed: Number(dispatch?.progress?.localTokensUsed) || 0,
-        externalTokensUsed: Number(dispatch?.progress?.externalTokensUsed) || 0,
-        externalMaxTokens: Math.max(0, Number(dispatch?.progress?.externalMaxTokens) || 0),
-        costUsed: Math.max(0, Number(dispatch?.progress?.costUsed) || 0),
-        maxCost: Math.max(0, Number(dispatch?.progress?.maxCost) || 0),
-        maxTokens: Math.max(0, Number(agentJob.budget?.maxTokens) || 0),
-        maxWallClockMinutes: Math.max(0, Number(agentJob.budget?.maxWallClockMinutes) || 0),
+        tokensUsed: Number(dispatch?.progress?.tokensUsed ?? agentJob.tokensUsed) || 0,
+        localTokensUsed: Number(dispatch?.progress?.localTokensUsed ?? agentJob.localTokensUsed) || 0,
+        externalTokensUsed: Number(dispatch?.progress?.externalTokensUsed ?? agentJob.externalTokensUsed) || 0,
+        externalMaxTokens: Math.max(0, Number(dispatch?.progress?.externalMaxTokens ?? agentJob.budget?.externalMaxTokens) || 0),
+        costUsed: Math.max(0, Number(dispatch?.progress?.costUsed ?? agentJob.costUsed) || 0),
+        maxCost: Math.max(0, Number(dispatch?.progress?.maxCost ?? agentJob.budget?.maxCost) || 0),
+        maxTokens: Math.max(0, Number(dispatch?.progress?.maxTokens ?? agentJob.budget?.maxTokens) || 0),
+        maxWallClockMinutes: Math.max(0, Number(dispatch?.progress?.maxWallClockMinutes ?? agentJob.budget?.maxWallClockMinutes) || 0),
+        phase: textOr(dispatch?.progress?.phase ?? agentJob.currentPhase),
+        checkpointBoundary: textOr(dispatch?.progress?.checkpointBoundary ?? agentJob.checkpointBoundary),
         hardwareSafety: dispatch?.progress?.hardwareSafety || agentJob.hardwareSafety || {},
         bestEffort: agentJob.bestEffort === true,
         qualityWarnings: ensureArray(agentJob.qualityWarnings),

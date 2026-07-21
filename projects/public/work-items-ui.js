@@ -61,6 +61,8 @@
   let connectionStreamKey = '';
   let executionInteractionUntil = 0;
   let executionPaintTimer = null;
+  let executionRequestVersion = 0;
+  let executionAppliedVersion = 0;
   let runtimeHealthTimer = null;
   let taskBoardRefreshTimer = null;
 
@@ -157,6 +159,83 @@
       connectionPollScheduled = false;
       void pollConnectedTask(project, runId, taskId);
     }, Math.max(250, Number(delayMs) || 0));
+  }
+
+  function beginExecutionRequest() {
+    executionRequestVersion += 1;
+    return executionRequestVersion;
+  }
+
+  function hasObjectValues(value) {
+    return Boolean(value && typeof value === 'object' && Object.keys(value).length);
+  }
+
+  function mergeExecutionEvents(previous = [], incoming = []) {
+    const eventMap = new Map();
+    [...previous, ...incoming].forEach((entry) => {
+      const id = Number(entry?.id || entry?._id) || 0;
+      const key = id || `${entry?.timestamp || entry?.createdAt || ''}:${entry?.type || ''}:${entry?.message || ''}`;
+      eventMap.set(key, entry);
+    });
+    return [...eventMap.values()]
+      .sort((a, b) => {
+        const aId = Number(a?.id || a?._id) || 0;
+        const bId = Number(b?.id || b?._id) || 0;
+        if (aId || bId) return aId - bId;
+        return new Date(a?.timestamp || a?.createdAt || 0).getTime()
+          - new Date(b?.timestamp || b?.createdAt || 0).getTime();
+      })
+      .slice(-200);
+  }
+
+  function mergeExecutionSnapshot(previous, incoming) {
+    if (!incoming) return previous || null;
+    if (!previous || (previous.runId && incoming.runId && previous.runId !== incoming.runId)) {
+      return { ...incoming, events: mergeExecutionEvents([], incoming.events || []) };
+    }
+    const previousTime = Date.parse(previous.updatedAt || '') || 0;
+    const incomingTime = Date.parse(incoming.updatedAt || '') || 0;
+    const stale = previousTime > 0 && incomingTime > 0 && incomingTime < previousTime;
+    const events = mergeExecutionEvents(previous.events || [], incoming.events || []);
+    if (stale) return { ...previous, events };
+
+    const latestCommand = Number(incoming.latestCommand?.version || 0)
+      >= Number(previous.latestCommand?.version || 0)
+      ? (incoming.latestCommand || previous.latestCommand || null)
+      : previous.latestCommand;
+    const preferObject = (next, prior) => hasObjectValues(next) ? next : (prior || {});
+    const monotonicNumber = (next, prior) => Math.max(Number(next) || 0, Number(prior) || 0);
+    return {
+      ...previous,
+      ...incoming,
+      runId: incoming.runId || previous.runId,
+      status: incoming.status || previous.status,
+      desiredAction: Object.prototype.hasOwnProperty.call(incoming, 'desiredAction')
+        ? incoming.desiredAction
+        : (previous.desiredAction || null),
+      latestCommand,
+      events,
+      progressCurrent: monotonicNumber(incoming.progressCurrent, previous.progressCurrent),
+      progressTotal: monotonicNumber(incoming.progressTotal, previous.progressTotal),
+      tokensUsed: monotonicNumber(incoming.tokensUsed, previous.tokensUsed),
+      localTokensUsed: monotonicNumber(incoming.localTokensUsed, previous.localTokensUsed),
+      externalTokensUsed: monotonicNumber(incoming.externalTokensUsed, previous.externalTokensUsed),
+      costUsed: monotonicNumber(incoming.costUsed, previous.costUsed),
+      checkpoint: preferObject(incoming.checkpoint, previous.checkpoint),
+      reviewPacket: preferObject(incoming.reviewPacket, previous.reviewPacket),
+      hardwareSafety: preferObject(incoming.hardwareSafety, previous.hardwareSafety),
+      checkpointBoundary: incoming.checkpointBoundary || previous.checkpointBoundary || '',
+      phase: incoming.phase || previous.phase || '',
+      createdAt: incoming.createdAt || previous.createdAt || null,
+      updatedAt: incoming.updatedAt || previous.updatedAt || null,
+    };
+  }
+
+  function applyExecutionSnapshot(snapshot, requestVersion) {
+    if (requestVersion < executionRequestVersion || requestVersion < executionAppliedVersion) return false;
+    executionAppliedVersion = requestVersion;
+    state.detailExecution = mergeExecutionSnapshot(state.detailExecution, snapshot);
+    return true;
   }
 
   function showToast(message, type) {
@@ -285,6 +364,7 @@
       return;
     }
     connectionPollInFlight = true;
+    const requestVersion = beginExecutionRequest();
     void openRunEventStream(project, runId, taskId);
     try {
       const priorEvents = state.detailExecution?.events || [];
@@ -294,20 +374,12 @@
       );
       const eventQuery = afterEventId ? `?afterEventId=${encodeURIComponent(afterEventId)}` : '';
       const payload = await apiRequest(`/agent-runs/${encodeURIComponent(runId)}/status${eventQuery}`);
-      const eventMap = new Map();
-      [...priorEvents, ...(payload.events || [])].forEach((entry) => {
-        const id = Number(entry.id || entry._id) || 0;
-        eventMap.set(id || `${entry.timestamp || ''}:${entry.type || ''}:${entry.message || ''}`, entry);
-      });
-      const mergedEvents = [...eventMap.values()]
-        .sort((a, b) => (Number(a.id || a._id) || 0) - (Number(b.id || b._id) || 0))
-        .slice(-200);
-      state.detailExecution = {
+      const snapshot = {
         runId: payload.agentJob?.id || runId,
         status: payload.dispatch?.status || payload.agentJob?.status || '',
         desiredAction: payload.dispatch?.desiredAction || null,
         latestCommand: payload.dispatch?.latestCommand || null,
-        events: mergedEvents,
+        events: payload.events || [],
         progressCurrent: payload.progress?.current ?? payload.agentJob?.subtasksCompleted ?? 0,
         progressTotal: payload.progress?.total ?? payload.agentJob?.subtasksTotal ?? 0,
         tokensUsed: payload.progress?.tokensUsed ?? payload.agentJob?.tokensUsed ?? 0,
@@ -329,6 +401,7 @@
         createdAt: payload.agentJob?.createdAt || state.detailExecution?.createdAt || null,
         updatedAt: payload.dispatch?.updatedAt || payload.agentJob?.updatedAt || null,
       };
+      if (state.selectedId !== taskId || !applyExecutionSnapshot(snapshot, requestVersion)) return;
       paintAgentExecution();
       const status = $('workItemEditor')?.querySelector('[data-ado-connection-status]');
       if (status) status.textContent = payload.agentJob?.status === 'pending_human_review' ? 'Resultado recebido. Precisa da sua revisão.' : payload.workItem?.currentAction || `Agente: ${payload.agentJob?.status || 'em execução'}.`;
@@ -528,13 +601,17 @@
   }
 
   async function fetchDetail(projectId, workItemId) {
+    const requestVersion = beginExecutionRequest();
     const payload = await apiRequest(
       `/projects/${encodeURIComponent(projectId)}/work-items/${encodeURIComponent(workItemId)}`,
     );
     state.detail = payload.workItem;
     state.detailChildren = payload.children || [];
     state.detailRequest = payload.agentRequest || null;
-    state.detailExecution = payload.agentExecution || null;
+    if (requestVersion >= executionRequestVersion && requestVersion >= executionAppliedVersion) {
+      executionAppliedVersion = requestVersion;
+      state.detailExecution = mergeExecutionSnapshot(state.detailExecution, payload.agentExecution || null);
+    }
     state.detailReview = payload.reviewTarget || null;
     state.canManage = Boolean(payload.canManage);
     state.canPostUpdate = Boolean(payload.canPostUpdate);
@@ -835,7 +912,13 @@
   }
 
   async function openEditor(project, workItemId, seedDetail) {
+    beginExecutionRequest();
+    executionAppliedVersion = executionRequestVersion;
     state.selectedId = workItemId;
+    state.detailExecution = null;
+    connectionStreamAbort?.abort();
+    connectionStreamAbort = null;
+    connectionStreamKey = '';
     enterEditorMode();
 
     const pane = $('workItemEditor');
@@ -1165,9 +1248,16 @@
     const signature = JSON.stringify([
       state.detailExecution?.status,
       state.detailExecution?.desiredAction,
-      state.detailExecution?.updatedAt,
+      state.detailExecution?.latestCommand?.version,
       state.detailExecution?.progressCurrent,
       state.detailExecution?.progressTotal,
+      state.detailExecution?.tokensUsed,
+      state.detailExecution?.localTokensUsed,
+      state.detailExecution?.externalTokensUsed,
+      state.detailExecution?.costUsed,
+      state.detailExecution?.checkpointBoundary,
+      state.detailExecution?.bestEffort,
+      state.detailExecution?.qualityWarnings,
       state.detailExecution?.events?.length,
       state.detailExecution?.events?.at?.(-1)?.id,
       state.detailExecution?.error,
@@ -1667,7 +1757,24 @@
         if (action === 'cancel' && !window.confirm('Cancelar esta execução do agente? O trabalho já concluído continuará no histórico.')) return;
         if (action === 'abandon' && !window.confirm('Terminar esta execução, revogar o controlo remoto antigo e desbloquear a tarefa? Os checkpoints e o histórico serão preservados.')) return;
         runControl.disabled = true;
+        const executionBeforeCommand = state.detailExecution;
         try {
+          const desiredAction = ({
+            pause: 'pause', resume: 'resume', cancel: 'cancel',
+            'finish-partial': 'finish_partial', 'sync-now': 'sync_now',
+          })[action] || null;
+          if (desiredAction && action !== 'retry' && action !== 'abandon') {
+            state.detailExecution = {
+              ...state.detailExecution,
+              desiredAction,
+              latestCommand: {
+                ...(state.detailExecution.latestCommand || {}),
+                action: desiredAction,
+                version: Number(state.detailExecution.latestCommand?.version || 0) + 1,
+              },
+            };
+            paintAgentExecution({ force: true });
+          }
           await apiRequest(`/agent-runs/${encodeURIComponent(controlledRunId)}/${encodeURIComponent(action)}`, { method: 'POST', body: {} });
           await fetchDetail(project.id, state.detail.id);
           paintEditor(project);
@@ -1686,6 +1793,8 @@
                       : 'Cancelamento pedido.', 'ok');
           pollConnectedTask(project, controlledRunId, state.detail.id);
         } catch (err) {
+          state.detailExecution = executionBeforeCommand;
+          paintAgentExecution({ force: true });
           runControl.disabled = false;
           showToast(err.message, 'error');
         }

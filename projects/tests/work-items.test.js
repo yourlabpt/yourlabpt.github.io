@@ -576,6 +576,80 @@ describe('stage transition requests through Tasks', () => {
     };
   }
 
+  it('uses the live dispatch projection consistently in task detail', async () => {
+    const data = project();
+    data.members = [{ userId: 'editor', role: 'partner' }];
+    data.agentJobs = [
+      {
+        id: 'job_historical_projection', dispatchId: 'dispatch_historical_projection',
+        workItemId: 'task_live_projection', status: 'failed', tokensUsed: 100,
+        subtasksCompleted: 1, subtasksTotal: 4,
+      },
+      {
+        id: 'job_live_projection', dispatchId: 'dispatch_live_projection',
+        workItemId: 'task_live_projection', status: 'running',
+        tokensUsed: 100, localTokensUsed: 100, subtasksCompleted: 1, subtasksTotal: 4,
+        budget: { maxTokens: 10, maxWallClockMinutes: 90 },
+      },
+    ];
+    data.workItems = [workItems.normalizeWorkItem(task({
+      id: 'task_live_projection', origin: 'agent', executorMode: 'agent',
+      agentJobId: 'job_live_projection', agentStatus: 'running', status: 'in_progress',
+    }), { project: data })];
+    const dispatch = {
+      id: 'dispatch_live_projection', status: 'running', desiredAction: null,
+      commandVersion: 4, acknowledgedCommandVersion: 4,
+      updatedAt: '2026-07-21T12:00:00.000Z',
+      progress: {
+        completed: 3, total: 5, tokensUsed: 8200, localTokensUsed: 8000,
+        externalTokensUsed: 200, maxTokens: 0, externalMaxTokens: 50000,
+        costUsed: 0.42, maxCost: 5, maxWallClockMinutes: 0,
+        phase: 'researching', checkpointBoundary: 'step_completed',
+      },
+      checkpoint: {}, reviewPacket: {},
+    };
+    const routes = new Map();
+    const app = {};
+    for (const method of ['get', 'post', 'patch', 'delete']) {
+      app[method] = (path, ...handlers) => routes.set(`${method}:${path}`, handlers);
+    }
+    registerWorkItemRoutes(app, {
+      authMiddleware: (req, res, next) => next(),
+      requireProjectEditor: (req, res, next) => next(),
+      ensureProjectLoadedLite: async () => data,
+      canAccessProject: () => true,
+      updateStore: async (mutate) => mutate({ projects: [data], users: [] }),
+      appendActivity: () => {},
+      connectorStore: {
+        findDispatch: (id) => id === dispatch.id ? dispatch : null,
+        recentEvents: () => [],
+      },
+      agentConnectionMode: 'remote_pull', runtime: null,
+      ensureArray: (value) => Array.isArray(value) ? value : [],
+      nowIso: () => new Date().toISOString(),
+      normalizeRequirementRecord: (value) => value,
+    });
+    const handlers = routes.get('get:/api/projects/projects/:projectId/work-items/:workItemId');
+    let responseBody = null;
+    await runHandlers(handlers, {
+      params: { projectId: data.id, workItemId: 'task_live_projection' },
+      auth: { user: { id: 'editor', role: 'partner' } },
+    }, {
+      status() { return this; },
+      json(payload) { responseBody = payload; return payload; },
+    });
+
+    assert.equal(responseBody.agentExecution.progressCurrent, 3);
+    assert.equal(responseBody.agentExecution.progressTotal, 5);
+    assert.equal(responseBody.agentExecution.tokensUsed, 8200);
+    assert.equal(responseBody.agentExecution.localTokensUsed, 8000);
+    assert.equal(responseBody.agentExecution.maxTokens, 0);
+    assert.equal(responseBody.agentExecution.maxWallClockMinutes, 0);
+    assert.equal(responseBody.agentExecution.phase, 'researching');
+    assert.equal(responseBody.agentExecution.checkpointBoundary, 'step_completed');
+    assert.equal(responseBody.agentExecution.commandVersion, 4);
+  });
+
   it('applies an approved subtask, releases its connector and exposes the next task', async () => {
     const data = project();
     data.name = 'Black Adam App';

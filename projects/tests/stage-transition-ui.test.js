@@ -36,11 +36,15 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /Reiniciar tarefa com agente/);
   assert.doesNotMatch(workItemsSource, /Criar uma nova versão do pedido/);
   assert.match(workItemsSource, /function scheduleConnectionPoll/);
+  assert.match(workItemsSource, /function mergeExecutionSnapshot/);
+  assert.match(workItemsSource, /requestVersion < executionRequestVersion/);
+  assert.match(workItemsSource, /progressCurrent: monotonicNumber/);
+  assert.doesNotMatch(workItemsSource, /state\.detailExecution\?\.updatedAt,[\s\S]{0,250}state\.detailExecution\?\.progressCurrent/);
   assert.match(workItemsSource, /host\.matches\(':hover'\)/);
   assert.match(workItemsSource, /executionInteractionUntil = Date\.now\(\) \+ 4000/);
   assert.match(workItemsSource, /errorEventTypes/);
   assert.match(workItemsSource, /ado-agent-log-entry\$\{eventToneClass\(event\)\}/);
   assert.match(deliverySource, /linkedTask\?\.status === 'waiting_review'[\s\S]*?work-items\/\$\{linkedTask\.id\}\/review/);
   assert.match(html, /delivery-os-ui\.js\?v=72/);
-  assert.match(html, /work-items-ui\.js\?v=27/);
+  assert.match(html, /work-items-ui\.js\?v=28/);
 });
