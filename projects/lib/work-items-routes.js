@@ -112,6 +112,28 @@ function applyListFilters(items, query) {
   return list;
 }
 
+function applyTransitionListFilters(items, query, agentRequestsList = []) {
+  const transitionFromStageId = textOr(query.transitionFromStageId);
+  if (!transitionFromStageId) return items;
+  return workItems.filterByTransitionFromStage(items, transitionFromStageId, agentRequestsList);
+}
+
+function promoteStageStatusOnTransitionComplete(project, request) {
+  if (!request || request.status !== 'completed') return;
+  if (textOr(request.transitionKey) !== 'idea->discovery:forward') return;
+  const stages = workItems.ensureArray(project.stages);
+  if (!stages.length) return;
+  project.stages = stages.map((stage) => {
+    if (stage.id === 'idea' && !['completed', 'done', 'approved'].includes(textOr(stage.status))) {
+      return { ...stage, status: 'completed' };
+    }
+    if (stage.id === 'discovery' && (!stage.status || stage.status === 'not_started')) {
+      return { ...stage, status: 'in_progress' };
+    }
+    return stage;
+  });
+}
+
 function registerWorkItemRoutes(app, deps) {
   const {
     authMiddleware,
@@ -151,6 +173,22 @@ function registerWorkItemRoutes(app, deps) {
     };
   }
 
+  function isIdeaDiscoveryForwardTransition(project, item) {
+    if (!item?.agentRequestId) return false;
+    const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === item.agentRequestId);
+    return textOr(request?.transitionKey) === 'idea->discovery:forward';
+  }
+
+  function projectVisionFromApprovedDiscovery(project, item, parsed) {
+    if (!parsed?.discovery || !isIdeaDiscoveryForwardTransition(project, item)) return;
+    deliveryOs.projectVisionFromDiscoveryApproval(project, {
+      discoveryPatch: parsed.discovery,
+      stableTaskKey: item.stableTaskKey,
+      taskId: item.id,
+      taskTitle: item.title,
+    });
+  }
+
   function applyApprovedOutput(project, item, attempts, actorUserId, at) {
     const linked = linkedExecution(project, item, attempts);
     const parsed = linked.run?.parsedOutput
@@ -166,6 +204,7 @@ function registerWorkItemRoutes(app, deps) {
         createdAt: linked.latest?.createdAt || at,
       };
       deliveryOs.applyPromptRunOutput(project, applyRun, parsed, actorUserId, { normalizeRequirementRecord });
+      projectVisionFromApprovedDiscovery(project, item, parsed);
       project.artifacts = workItems.ensureArray(project.artifacts).map((artifact) => (
         beforeArtifactIds.has(artifact.id)
           ? artifact
@@ -208,6 +247,7 @@ function registerWorkItemRoutes(app, deps) {
     request.updatedAt = at;
     project.agentRequests = agentRequests.getAgentRequests(project)
       .map((entry) => entry.id === request.id ? request : entry);
+    promoteStageStatusOnTransitionComplete(project, request);
     return request;
   }
 
@@ -352,6 +392,7 @@ function registerWorkItemRoutes(app, deps) {
     const project = req.loadedProject;
     const user = req.auth.user;
     let list = acceptedVisibleItems(project, user);
+    list = applyTransitionListFilters(list, req.query || {}, agentRequests.getAgentRequests(project));
     list = applyListFilters(list, req.query || {});
     if (req.query?.showCompleted !== 'true') list = list.filter((item) => !workItems.isTerminalStatus(item.status));
     if (req.query?.view === 'prioritized' || !req.query?.view) list = workItems.sortPrioritized(list);
@@ -373,6 +414,8 @@ function registerWorkItemRoutes(app, deps) {
   app.get('/api/projects/projects/:projectId/work-items/relevant', authMiddleware, loadProjectLiteForUser, (req, res) => {
     const relevant = workItems.relevantWorkItems(acceptedVisibleItems(req.loadedProject, req.auth.user), {
       deliveryStageId: req.query?.deliveryStageId || req.query?.stage,
+      transitionFromStageId: req.query?.transitionFromStageId,
+      agentRequests: agentRequests.getAgentRequests(req.loadedProject),
       planPhaseId: req.query?.planPhaseId,
       limit: req.query?.limit,
     });
@@ -888,14 +931,28 @@ function registerWorkItemRoutes(app, deps) {
             const latest = child.attempts[child.attempts.length - 1];
             if (!latest?.rawOutput) throw new Error(`A tarefa ${child.title} nao tem um resultado aplicavel.`);
             const linkedRun = child.promptRunId ? ensureArray(project.promptRuns).find((run) => run.id === child.promptRunId) : null;
-            if (linkedRun?.parsedOutput) deliveryOs.applyPromptRunOutput(project, linkedRun, linkedRun.parsedOutput, req.auth.user.id, { normalizeRequirementRecord });
+            const parsed = linkedRun?.parsedOutput
+              || deliveryOs.parseAgentJsonOutput(latest.rawOutput || '').parsed;
+            if (parsed) {
+              const applyRun = linkedRun || {
+                id: child.promptRunId || `task_result_${child.id}`,
+                agentType: child.agentType,
+                stageId: child.deliveryStageId,
+                workItemId: child.id,
+                agentRequestId: child.agentRequestId,
+                createdAt: latest.createdAt || at,
+              };
+              deliveryOs.applyPromptRunOutput(project, applyRun, parsed, req.auth.user.id, { normalizeRequirementRecord });
+              projectVisionFromApprovedDiscovery(project, child, parsed);
+            }
             if (!project.artifacts.some((artifact) => artifact.provenance?.taskId === child.id && artifact.provenance?.attemptId === latest.id)) project.artifacts.unshift({ id: `artifact_${require('crypto').randomUUID()}`, type: child.expectedOutputs[0]?.kind || 'other', name: child.expectedOutputs[0]?.label || child.title, stageId: child.deliveryStageId, status: 'approved', description: latest.resultSummaryMarkdown, bodyMarkdown: latest.rawOutput, provenance: { taskId: child.id, agentRequestId: child.agentRequestId, attemptId: latest.id, executor: latest.source }, createdAt: at, updatedAt: at, createdBy: req.auth.user.id });
           }
         }
         const nextStatus = action === 'approved' ? 'completed' : action === 'changes_requested' ? 'ready' : 'failed';
         const next = workItems.getWorkItems(project).map((task) => children.some((child) => child.id === task.id) ? workItems.normalizeWorkItem({ ...task, status: nextStatus, agentStatus: action === 'approved' ? 'completed' : action === 'changes_requested' ? 'revision_requested' : 'rejected', currentAction: action === 'approved' ? 'Resultado aprovado.' : action === 'changes_requested' ? 'Alteracoes pedidas; pronta para nova tentativa.' : 'Resultado rejeitado.', taskActivity: [...task.taskActivity, { type: `bundle_review_${action}`, message: action === 'approved' ? 'Resultado aprovado no pacote.' : feedback, actorType: 'human', actorId: req.auth.user.id, createdAt: at }], updatedAt: at, updatedBy: req.auth.user.id }, { project }) : task);
-        workItems.setWorkItems(project, next); const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === parent.agentRequestId);
-        if (request) { request.status = action === 'approved' ? 'completed' : action === 'changes_requested' ? 'ready' : 'failed'; request.updatedAt = at; project.agentRequests = agentRequests.getAgentRequests(project).map((entry) => entry.id === request.id ? request : entry); }
+        workItems.setWorkItems(project, next);
+        const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === parent.agentRequestId);
+        if (request) refreshRequestProgress(project, request.id, at);
         project.updatedAt = at; result = { parent: workItems.findWorkItem(project, parent.id), children: workItems.getWorkItems(project).filter((task) => task.parentTaskId === parent.id) };
         appendActivity(store, { actorUserId: req.auth.user.id, projectId: project.id, action: `work_item_bundle_review_${action}`, details: { parentTaskId: parent.id, taskIds: children.map((child) => child.id) } });
       });
@@ -1329,5 +1386,7 @@ module.exports = {
   registerWorkItemRoutes,
   filterAcceptedWorkItems,
   resolveRuntimeReachability,
+  promoteStageStatusOnTransitionComplete,
+  applyTransitionListFilters,
   buildOrchestrationProjection: workItems.buildOrchestrationProjection,
 };

@@ -2128,7 +2128,11 @@
         if (action !== 'approved' && !feedbackMarkdown) return;
         try {
           await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/${encodeURIComponent(state.detail.id)}/review-bundle`, { method: 'POST', body: { action, feedbackMarkdown } });
-          await fetchDetail(project.id, state.detail.id); paintEditor(project); await fetchList(project.id); showToast('Decisão aplicada ao pacote.', 'ok');
+          await fetchDetail(project.id, state.detail.id); paintEditor(project); await fetchList(project.id);
+          if (action === 'approved') {
+            await window.PdosUI?.reloadProject?.(project.id);
+          }
+          showToast('Decisão aplicada ao pacote.', 'ok');
         } catch (err) { showToast(err.message, 'error'); }
         return;
       }

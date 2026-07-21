@@ -682,11 +682,28 @@ function sortPrioritized(items) {
     return ad - bd || String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
   });
 }
+function filterByTransitionFromStage(items, fromStageId, agentRequests = []) {
+  const prefix = `${textOr(fromStageId)}->`;
+  const requestIds = new Set(ensureArray(agentRequests)
+    .filter((request) => textOr(request.transitionKey).startsWith(prefix))
+    .map((request) => request.id));
+  return ensureArray(items).filter((item) => item.agentRequestId && requestIds.has(item.agentRequestId));
+}
+
 function relevantWorkItems(items, options = {}) {
   const stage = textOr(options.deliveryStageId || options.stageId);
+  const transitionFromStageId = textOr(options.transitionFromStageId);
   const phase = textOr(options.planPhaseId);
   const limit = Math.max(1, Math.min(Number(options.limit) || 4, 20));
-  let list = ensureArray(items).filter((item) => (!stage || item.deliveryStageId === stage) && (!phase || item.planPhaseId === phase));
+  let list = ensureArray(items);
+  if (transitionFromStageId) {
+    list = filterByTransitionFromStage(list, transitionFromStageId, options.agentRequests);
+  } else {
+    list = list.filter((item) => (!stage || item.deliveryStageId === stage) && (!phase || item.planPhaseId === phase));
+  }
+  if (phase && transitionFromStageId) {
+    list = list.filter((item) => !phase || item.planPhaseId === phase);
+  }
   const visibleParentIds = new Set(list.filter((item) => item.taskRole === 'coordination').map((item) => item.id));
   list = list.filter((item) => !item.parentTaskId || !visibleParentIds.has(item.parentTaskId));
   const open = list.filter((item) => !isTerminalStatus(item.status));
@@ -731,7 +748,7 @@ module.exports = {
   normalizeWorkItem, normalizeWorkItems, normalizeSourceRefs, normalizeUpdate, normalizeUpdates,
   getWorkItems, setWorkItems, findWorkItem, findBySourceRef, sourceRefKey, findByExternalRef, externalRefKey,
   toSlimCard, toSlimCards, computeMetaCounts, validateWorkItemForCreate, validateWorkItemForUpdate,
-  validateHierarchy, validateDependencies, relevantWorkItems, sortPrioritized, priorityRank,
+  validateHierarchy, validateDependencies, filterByTransitionFromStage, relevantWorkItems, sortPrioritized, priorityRank,
   isTerminalStatus, deriveContainerStatus, deriveParentStatuses, normalizeStatus,
   buildOrchestrationProjection, executionStatusChip,
   normalizeExecutionSettings,

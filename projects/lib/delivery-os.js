@@ -3606,6 +3606,80 @@ function mergeRequirementsDedup(project, incoming, normalizeRequirementRecord) {
   return { added, updated, skipped };
 }
 
+function firstParagraph(markdown) {
+  const blocks = String(markdown || '').split(/\n\s*\n/).map((entry) => entry.trim()).filter(Boolean);
+  return blocks[0] || String(markdown || '').trim();
+}
+
+function appendProjectAssumptions(project, values) {
+  const existing = new Set(ensureArray(project.assumptions)
+    .map((item) => textOr(typeof item === 'string' ? item : (item?.description || item?.title || item?.text)).trim().toLowerCase())
+    .filter(Boolean));
+  const next = [...ensureArray(project.assumptions)];
+  ensureArray(values).forEach((value) => {
+    const text = textOr(typeof value === 'string' ? value : (value?.description || value?.title || value?.text));
+    if (!text) return;
+    const key = text.toLowerCase();
+    if (existing.has(key)) return;
+    existing.add(key);
+    next.push(text);
+  });
+  project.assumptions = next;
+}
+
+function projectVisionFromDiscoveryApproval(project, context = {}) {
+  const discovery = context.discoveryPatch && typeof context.discoveryPatch === 'object'
+    ? context.discoveryPatch
+    : null;
+  if (!discovery) return;
+  const stableTaskKey = textOr(context.stableTaskKey);
+  const vision = normalizeVision(project.vision || {}, project);
+  const fillIfEmpty = (field, value) => {
+    const next = textOr(value);
+    if (!next || textOr(vision[field])) return;
+    vision[field] = next;
+  };
+  const mergeUsers = (names) => {
+    const merged = new Set(ensureArray(vision.targetUsers).map((entry) => textOr(entry)).filter(Boolean));
+    ensureArray(names).forEach((name) => {
+      const next = textOr(name);
+      if (next) merged.add(next);
+    });
+    if (merged.size) vision.targetUsers = [...merged];
+  };
+
+  if (stableTaskKey === 'framing') {
+    fillIfEmpty('problemMarkdown', discovery.researchBrief?.problemFramingMarkdown);
+    appendProjectAssumptions(project, [
+      ...ensureArray(discovery.researchBrief?.hypotheses),
+      ...ensureArray(discovery.hypotheses),
+      ...ensureArray(discovery.assumptions),
+    ]);
+  } else if (stableTaskKey === 'stakeholders') {
+    mergeUsers([
+      ...ensureArray(discovery.personas).map((persona) => persona?.name),
+      ...ensureArray(discovery.segments).map((segment) => segment?.name),
+      ...ensureArray(discovery.stakeholders).map((stakeholder) => stakeholder?.name),
+    ]);
+  } else if (stableTaskKey === 'business') {
+    fillIfEmpty('valuePropositionMarkdown', discovery.commercialImpact?.objectivesMarkdown);
+    fillIfEmpty('valuePropositionMarkdown', discovery.goToMarketMarkdown);
+  } else if (stableTaskKey === 'merge') {
+    const summary = [
+      firstParagraph(discovery.researchBrief?.problemFramingMarkdown),
+      firstParagraph(discovery.marketSummaryMarkdown),
+    ].filter(Boolean).join('\n\n');
+    fillIfEmpty('mainIdeaMarkdown', summary);
+    fillIfEmpty('problemMarkdown', discovery.researchBrief?.problemFramingMarkdown);
+  }
+
+  vision.updatedAt = nowIso();
+  project.vision = normalizeVision(vision, project);
+  if (!textOr(project.ideaBriefMarkdown) && textOr(project.vision.mainIdeaMarkdown)) {
+    project.ideaBriefMarkdown = project.vision.mainIdeaMarkdown;
+  }
+}
+
 function applyPromptRunOutput(project, run, parsed, userId, deps = {}) {
   const normalizeRequirementRecord = deps.normalizeRequirementRecord || ((r) => r);
   const traceability = require('./diagram-traceability');
@@ -5372,6 +5446,7 @@ module.exports = {
   applyGroupingResult,
   buildHumanReviewPayload,
   applyPromptRunOutput,
+  projectVisionFromDiscoveryApproval,
   applyArchitecturePack,
   parseAgentJsonOutput,
   normalizeJsonInput,

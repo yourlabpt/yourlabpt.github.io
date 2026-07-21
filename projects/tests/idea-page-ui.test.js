@@ -54,3 +54,15 @@ test('runtime monitoring is idempotent across Idea page re-renders', () => {
   assert.match(source, /pdosState\.terminalRuntimeRuns\.add\(runId\)/);
   assert.match(source, /!pdosState\.terminalRuntimeRuns\.has\(runId\)/);
 });
+
+test('Idea page shows Idea→Discovery transition progress and task visibility', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),
+    'utf8',
+  );
+
+  assert.match(source, /data-idea-transition-progress/);
+  assert.match(source, /hydrateIdeaTransitionProgress/);
+  assert.match(source, /transitionFromStageId=\$\{encodeURIComponent\('idea'\)\}/);
+  assert.match(source, /Plano Idea → Discovery:/);
+});

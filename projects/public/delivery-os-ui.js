@@ -1277,20 +1277,56 @@
     const countHost = feed?.querySelector(`[data-phase-task-count="${stageId}"]`);
     const previewHost = feed?.querySelector(`[data-phase-task-preview="${stageId}"]`);
     if (!countHost) return;
+    const taskStatusLabel = (status) => (
+      status === 'waiting_review' ? 'Aguarda revisão'
+        : status === 'completed' ? 'Concluída'
+          : status === 'in_progress' ? 'Em curso'
+            : status === 'blocked' ? 'Bloqueada'
+              : status === 'failed' ? 'Falhou'
+                : status === 'waiting_input' ? 'Aguarda informação'
+                  : status === 'ready' ? 'Pronta'
+                    : 'Planeada'
+    );
+    const listQuery = stageId === 'idea'
+      ? `transitionFromStageId=${encodeURIComponent('idea')}&showCompleted=true&limit=200`
+      : `deliveryStageId=${encodeURIComponent(stageId)}&showCompleted=true&limit=200`;
+    const relevantQuery = stageId === 'idea'
+      ? `transitionFromStageId=${encodeURIComponent('idea')}&limit=4`
+      : `deliveryStageId=${encodeURIComponent(stageId)}&limit=4`;
     try {
       const [payload, relevant] = await Promise.all([
-        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?deliveryStageId=${encodeURIComponent(stageId)}&limit=1`),
-        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/relevant?deliveryStageId=${encodeURIComponent(stageId)}&limit=4`),
+        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?${listQuery}`),
+        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items/relevant?${relevantQuery}`),
       ]);
-      const taskCount = Number(payload.total || 0);
+      const taskItems = ensureArray(payload.workItems).filter((task) => task.taskRole !== 'coordination');
+      const taskCount = taskItems.length || Number(payload.total || 0);
       countHost.textContent = String(taskCount);
-      if (previewHost) previewHost.innerHTML = ensureArray(relevant.workItems).map((task) => `<span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.status === 'waiting_review' ? 'Aguarda revisão' : task.status === 'in_progress' ? 'Em curso' : task.status === 'blocked' ? 'Bloqueada' : task.status === 'failed' ? 'Falhou' : task.status === 'waiting_input' ? 'Aguarda informação' : task.status === 'ready' ? 'Pronta' : 'Planeada')} · ${escapeHtml(task.executorMode === 'agent' ? (task.agentId || 'YourLab Agent') : 'Responsável humano')}</small></span>`).join('');
+      if (previewHost) {
+        previewHost.innerHTML = ensureArray(relevant.workItems).map((task) => `<span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(taskStatusLabel(task.status))} · ${escapeHtml(task.executorMode === 'agent' ? (task.agentId || 'YourLab Agent') : 'Responsável humano')}</small></span>`).join('');
+      }
       const totalHost = feed.querySelector('[data-phase-material-total]');
       if (totalHost) {
         totalHost.textContent = String(Number(totalHost.dataset.materialBaseTotal || 0) + taskCount);
       }
     } catch {
       countHost.textContent = '—';
+    }
+  }
+
+  async function hydrateIdeaTransitionProgress(project) {
+    const host = $('pdosCardFeed')?.querySelector('[data-idea-transition-progress]');
+    if (!host) return;
+    try {
+      const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?transitionFromStageId=${encodeURIComponent('idea')}&showCompleted=true&limit=200`);
+      const children = ensureArray(payload.workItems).filter((task) => task.taskRole !== 'coordination');
+      if (!children.length) {
+        host.textContent = '';
+        return;
+      }
+      const done = children.filter((task) => ['completed', 'waiting_review'].includes(task.status)).length;
+      host.textContent = `Plano Idea → Discovery: ${done}/${children.length} subtarefas concluídas ou em revisão`;
+    } catch {
+      host.textContent = '';
     }
   }
 
@@ -1356,6 +1392,7 @@
     } else if (stageId === 'idea') {
       hydrateIdeaStage(project);
       wireIdeaStageEvents(project);
+      hydrateIdeaTransitionProgress(project);
     } else if (stageId === 'discovery') {
       hydrateDiscoveryStage(project);
     } else if (stageId === 'roadmap') {
@@ -1511,6 +1548,7 @@
         <article class="pdos-card idea-workspace-panel idea-panel-workflow">
           <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE PELO WORKFLOW</span><h3>Preparar a Discovery</h3></div></header>
           <p class="muted-text">A investigação e a expansão da ideia são executadas como Tasks rastreáveis. Pode acompanhar, pausar, retomar e rever os resultados na plataforma, sem copiar prompts manualmente.</p>
+          <p class="muted-text idea-transition-progress" data-idea-transition-progress></p>
           <div class="pdos-card-actions">
             ${canEdit ? '<button type="button" class="btn primary" data-idea-open-discovery>Criar plano Idea → Discovery</button>' : ''}
             <button type="button" class="btn ghost" data-idea-open-tasks>Ver Tasks</button>

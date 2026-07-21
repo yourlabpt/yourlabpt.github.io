@@ -12,7 +12,8 @@ const {
   resetTaskForRestart,
   reconcileActiveAgentJobs,
 } = require('../lib/agent-runtime-routes');
-const { filterAcceptedWorkItems, registerWorkItemRoutes } = require('../lib/work-items-routes');
+const { filterAcceptedWorkItems, registerWorkItemRoutes, promoteStageStatusOnTransitionComplete } = require('../lib/work-items-routes');
+const deliveryOs = require('../lib/delivery-os');
 
 function task(overrides = {}) {
   return { title: 'Task', descriptionMarkdown: 'Body', complexity: 'low', deliveryStageId: 'requirements', ...overrides };
@@ -823,6 +824,114 @@ describe('stage transition requests through Tasks', () => {
     assert.equal(data.artifacts[0].provenance.taskId, first.id);
   });
 
+  it('projects approved Black Adam framing output into the idea vision', async () => {
+    const data = project();
+    data.name = 'Black Adam App';
+    data.ideaBriefMarkdown = 'Converter música em partituras e novamente em música.';
+    data.members = [{ userId: 'editor', role: 'partner' }];
+    data.artifacts = [];
+    data.promptRuns = [];
+    data.agentJobs = [];
+    const created = stageTransitions.createRequest(data, {
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      config: { maxSubtasks: 8 },
+      idempotencyKey: 'review-vision',
+    }, { actorUserId: 'editor' });
+    const first = workItems.getWorkItems(data)
+      .filter((entry) => entry.agentRequestId === created.request.id && entry.taskRole !== 'coordination')[0];
+    const rawOutput = JSON.stringify({
+      discovery: {
+        researchBrief: {
+          problemFramingMarkdown: 'Músicos amadores não conseguem transcrever melodias rapidamente.',
+          hypotheses: ['Existe procura por apps de transcrição bidirecional'],
+        },
+      },
+    });
+    const promptRunId = 'run_review_vision';
+    const jobId = 'job_review_vision';
+    const dispatchId = 'dispatch_review_vision';
+    data.promptRuns = [{
+      id: promptRunId,
+      agentType: 'stage_transition',
+      workItemId: first.id,
+      agentRequestId: created.request.id,
+      rawOutput,
+      status: 'pending_review',
+      createdAt: new Date().toISOString(),
+    }];
+    data.agentJobs = [{
+      id: jobId,
+      agentId: 'delivery-os-full',
+      promptRunId,
+      dispatchId,
+      workItemId: first.id,
+      agentRequestId: created.request.id,
+      status: 'pending_human_review',
+    }];
+    workItems.setWorkItems(data, workItems.getWorkItems(data).map((entry) => (
+      entry.id === first.id
+        ? workItems.normalizeWorkItem({
+          ...entry,
+          status: 'waiting_review',
+          agentStatus: 'pending_human_review',
+          agentJobId: jobId,
+          promptRunId,
+          attempts: [{
+            id: 'attempt_review_vision',
+            number: 1,
+            source: 'runtime',
+            status: 'completed',
+            agentJobId: jobId,
+            promptRunId,
+            rawOutput,
+            resultSummaryMarkdown: 'Enquadramento concluído.',
+          }],
+        }, { project: data })
+        : entry
+    )));
+
+    const routes = new Map();
+    const app = {};
+    for (const method of ['get', 'post', 'patch', 'delete']) {
+      app[method] = (path, ...handlers) => routes.set(`${method}:${path}`, handlers);
+    }
+    let dispatchStatus = 'waiting_review';
+    const connectorStore = {
+      findDispatch: (id) => id === dispatchId ? { id: dispatchId, status: dispatchStatus } : null,
+      markReviewed: (id, action) => {
+        dispatchStatus = 'completed';
+        return { id, status: dispatchStatus };
+      },
+    };
+    const store = { projects: [data], users: [] };
+    registerWorkItemRoutes(app, {
+      authMiddleware: (req, res, next) => next(),
+      requireProjectEditor: (req, res, next) => next(),
+      ensureProjectLoadedLite: async () => data,
+      canAccessProject: () => true,
+      updateStore: async (mutate) => mutate(store),
+      appendActivity: () => {},
+      connectorStore,
+      agentConnectionMode: 'remote_pull',
+      runtime: null,
+      ensureArray: (value) => Array.isArray(value) ? value : [],
+      nowIso: () => new Date().toISOString(),
+      normalizeRequirementRecord: (value) => value,
+    });
+    const handlers = routes.get('post:/api/projects/projects/:projectId/work-items/:workItemId/review');
+    await runHandlers(handlers, {
+      params: { projectId: data.id, workItemId: first.id },
+      body: { action: 'approved' },
+      auth: { user: { id: 'editor', role: 'partner' } },
+    }, { status() { return this; }, json() { return this; } });
+
+    assert.match(data.vision?.problemMarkdown || '', /transcrever melodias/i);
+    assert.equal(data.assumptions.includes('Existe procura por apps de transcrição bidirecional'), true);
+    assert.match(data.discovery?.researchBrief?.problemFramingMarkdown || '', /transcrever melodias/i);
+  });
+
   it('creates a coordination parent and never truncates children silently', () => {
     const data = project();
     const created = stageTransitions.createRequest(data, {
@@ -1113,5 +1222,57 @@ describe('orchestration projection', () => {
     });
     assert.equal(projection.availableAction, 'none');
     assert.equal(projection.blockingReason, 'Offline');
+  });
+});
+
+describe('idea page sync', () => {
+  it('projects framing discovery into idea vision without overwriting filled fields', () => {
+    const projectData = {
+      vision: { problemMarkdown: 'Existing problem' },
+      assumptions: [],
+      ideaBriefMarkdown: 'Brief',
+    };
+    deliveryOs.projectVisionFromDiscoveryApproval(projectData, {
+      stableTaskKey: 'framing',
+      discoveryPatch: {
+        researchBrief: {
+          problemFramingMarkdown: 'New problem framing',
+          hypotheses: ['Hypothesis A'],
+        },
+      },
+    });
+    assert.equal(projectData.vision.problemMarkdown, 'Existing problem');
+    assert.equal(projectData.assumptions.includes('Hypothesis A'), true);
+  });
+
+  it('filters idea transition tasks by transitionFromStageId', () => {
+    const requests = [{ id: 'req-idea', transitionKey: 'idea->discovery:forward' }];
+    const items = [
+      workItems.normalizeWorkItem(task({ id: 'child', agentRequestId: 'req-idea', deliveryStageId: 'discovery' })),
+      workItems.normalizeWorkItem(task({ id: 'other', agentRequestId: 'req-other', deliveryStageId: 'idea' })),
+    ];
+    const filtered = workItems.filterByTransitionFromStage(items, 'idea', requests);
+    assert.deepEqual(filtered.map((entry) => entry.id), ['child']);
+    const relevant = workItems.relevantWorkItems(items, {
+      transitionFromStageId: 'idea',
+      agentRequests: requests,
+      limit: 4,
+    });
+    assert.deepEqual(relevant.map((entry) => entry.id), ['child']);
+  });
+
+  it('promotes idea and discovery stage status when the transition request completes', () => {
+    const projectData = {
+      stages: [
+        { id: 'idea', status: 'in_progress' },
+        { id: 'discovery', status: 'not_started' },
+      ],
+    };
+    promoteStageStatusOnTransitionComplete(projectData, {
+      status: 'completed',
+      transitionKey: 'idea->discovery:forward',
+    });
+    assert.equal(projectData.stages.find((stage) => stage.id === 'idea').status, 'completed');
+    assert.equal(projectData.stages.find((stage) => stage.id === 'discovery').status, 'in_progress');
   });
 });
