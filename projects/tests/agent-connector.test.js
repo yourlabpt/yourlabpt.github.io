@@ -500,25 +500,18 @@ describe('secure outbound agent connector', () => {
     assert.equal(match.agent.id, 'idea-to-requirements');
   });
 
-  it('quarantines deprecated coordination tree packages before they reach a runtime', () => {
+  it('claims a versioned coordination tree package for complete-plan execution', () => {
     const { db, store, connector } = fixture();
-    const deprecated = enqueue(store, {
-      platformRunId: 'legacy-parent-run',
+    const tree = enqueue(store, {
+      platformRunId: 'complete-parent-run',
       package: {
         contract: { id: CONTRACT_ID, version: 2 },
         taskGraph: [{ id: 'child-1' }, { id: 'child-2' }],
       },
     });
-    const child = enqueue(store, {
-      platformRunId: 'canonical-child-run',
-      package: {
-        contract: { id: CONTRACT_ID, version: 2 },
-        taskGraph: [],
-      },
-    });
     const claimed = store.claim(connector.id);
-    assert.equal(store.getDispatch(deprecated.id).status, 'cancelled');
-    assert.equal(claimed.id, child.id);
+    assert.equal(claimed.id, tree.id);
+    assert.equal(claimed.package.taskGraph.length, 2);
     db.close();
   });
 

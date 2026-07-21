@@ -220,6 +220,48 @@ describe('work item synchronization', () => {
 });
 
 describe('agent requests and visible plans', () => {
+  it('defaults local stage execution to unlimited tokens and wall-clock time', () => {
+    const config = stageTransitions.defaultConfig({});
+    assert.equal(config.maxTokens, 0);
+    assert.equal(config.maxWallClockMinutes, 0);
+  });
+
+  it('accumulates reviewed outputs and packages every remaining subtask', () => {
+    const data = {
+      id: 'p_bundle',
+      name: 'Bundle project',
+      updatedAt: '2026-07-21T00:00:00.000Z',
+      workItems: [],
+      agentRequests: [],
+      stageTransitionConfigs: [],
+      requirements: [],
+      capabilities: [],
+      diagramArtifacts: [],
+      documents: [],
+      phases: [],
+      ideaBriefMarkdown: 'A project idea ready for discovery.',
+    };
+    const created = stageTransitions.createRequest(data, {
+      fromStageId: 'idea',
+      toStageId: 'discovery',
+      direction: 'forward',
+      regenerationMode: 'full',
+      config: { maxSubtasks: 8 },
+    }, { actorUserId: 'u1' });
+    const parent = workItems.findWorkItem(data, created.request.parentTaskId);
+    const children = workItems.getWorkItems(data)
+      .filter((entry) => entry.parentTaskId === parent.id);
+    workItems.setWorkItems(data, workItems.getWorkItems(data).map((entry) => (
+      entry.id === children[0].id
+        ? workItems.normalizeWorkItem({ ...entry, status: 'waiting_review' }, { project: data })
+        : entry
+    )));
+    const pack = stageTransitions.buildTreePackage(data, parent);
+    assert.ok(pack.openChildren.length > 0);
+    assert.ok(!pack.openChildren.some((entry) => entry.id === children[0].id));
+    assert.ok(pack.openChildren.every((entry) => pack.text.includes(entry.id)));
+  });
+
   it('repairs an already-approved task whose connector was left waiting for review', () => {
     const project = {
       workItems: [workItems.normalizeWorkItem(task({
@@ -314,16 +356,37 @@ describe('agent requests and visible plans', () => {
     assert.equal(result.orphaned.length, 0);
   });
 
-  it('falls forward from a blocked requested task to the next executable subtask', () => {
+  it('executes a requested coordination task as the complete subtask bundle', () => {
     const tasks = [
       { id: 'coordination', taskRole: 'coordination', status: 'ready' },
       { id: 'first', taskRole: 'execution', status: 'ready' },
       { id: 'blocked-request', taskRole: 'execution', status: 'planned' },
     ];
     assert.equal(selectReadyAgentTask(tasks, 'blocked-request').id, 'first');
-    assert.equal(selectReadyAgentTask(tasks, 'coordination').id, 'first');
+    assert.equal(selectReadyAgentTask(tasks, 'coordination').id, 'coordination');
     assert.equal(selectReadyAgentTask(tasks, 'first').id, 'first');
     assert.equal(selectReadyAgentTask(tasks.map((task) => ({ ...task, status: 'planned' })), 'blocked-request'), null);
+  });
+
+  it('does not let accumulated human review block another agent execution', () => {
+    const project = {
+      workItems: [workItems.normalizeWorkItem(task({
+        id: 'review_task',
+        status: 'waiting_review',
+        agentJobId: 'review_job',
+      }))],
+      agentJobs: [{
+        id: 'review_job',
+        workItemId: 'review_task',
+        status: 'pending_human_review',
+      }],
+    };
+    const result = reconcileActiveAgentJobs(project, {
+      connectionMode: 'remote_pull',
+      connectorStore: { findDispatch: () => ({ status: 'waiting_review' }) },
+    });
+    assert.equal(result.blocking, null);
+    assert.equal(project.agentJobs[0].status, 'pending_human_review');
   });
 
   it('creates all tasks before execution and requires approval for multi-task work', () => {

@@ -113,7 +113,7 @@ function buildPromptForAgentType(project, agentType, body = {}) {
 
 const RUNTIME_ACTIVE_STATUSES = new Set([
   'dispatching', 'queued', 'claimed', 'running', 'planning', 'executing',
-  'self_review', 'verifying', 'paused', 'pending_human_review',
+  'self_review', 'verifying', 'paused',
   'cancel_requested', 'connection_lost',
 ]);
 
@@ -161,7 +161,7 @@ function resolveExecutionConfig(connectionMode, request, task, bodyOptions = {},
 function selectReadyAgentTask(tasks, requestedTaskId) {
   const list = Array.isArray(tasks) ? tasks : [];
   const requested = list.find((task) => task.id === requestedTaskId);
-  if (requested?.taskRole !== 'coordination' && requested?.status === 'ready') return requested;
+  if (requested?.status === 'ready') return requested;
   return list.find((task) => task.taskRole !== 'coordination' && task.status === 'ready')
     || null;
 }
@@ -173,8 +173,6 @@ function reconcileActiveAgentJobs(project, options = {}) {
     ? options.nowIso()
     : new Date().toISOString();
   const tasks = workItems.getWorkItems(project);
-  let repairedTasks = tasks;
-  let repairedCoordination = false;
   let blocking = null;
   const orphaned = [];
   for (const job of Array.isArray(project?.agentJobs) ? project.agentJobs : []) {
@@ -186,40 +184,6 @@ function reconcileActiveAgentJobs(project, options = {}) {
     const dispatch = connectionMode === 'remote_pull' && connectorStore
       ? connectorStore.findDispatch(job.dispatchId || job.id || job.promptRunId)
       : null;
-    const coordinationExecutionLinked = task?.taskRole === 'coordination' && (
-      RUNTIME_ACTIVE_STATUSES.has(job.status)
-      || (
-        !['completed', 'cancelled'].includes(job.status)
-        && (task.agentJobId === job.id || task.promptRunId === job.promptRunId)
-      )
-    );
-    if (coordinationExecutionLinked) {
-      const cancelled = dispatch && connectorStore
-        ? connectorStore.abandon(dispatch.id, {
-          idempotencyKey: `coordination:${dispatch.id}:force-unlock`,
-          reason: 'coordination_tasks_are_not_executable',
-        })
-        : null;
-      job.status = 'cancelled';
-      job.cancelReason = 'coordination_execution_reconciled';
-      job.error = 'Execução-pai antiga terminada; o plano continua através das subtarefas.';
-      job.updatedAt = at;
-      repairedTasks = repairedTasks.map((entry) => entry.id === task.id
-        ? workItems.normalizeWorkItem({
-          ...entry,
-          agentJobId: '',
-          promptRunId: '',
-          agentStatus: '',
-          currentAction: 'Plano coordenado pelas subtarefas.',
-          lastMilestone: 'Execução-pai antiga desbloqueada pela plataforma.',
-          updatedAt: at,
-        }, { project })
-        : entry);
-      repairedCoordination = true;
-      orphaned.push({ job, dispatch: cancelled || dispatch, reason: 'coordination_execution' });
-      continue;
-    }
-    if (!RUNTIME_ACTIVE_STATUSES.has(job.status)) continue;
     if (
       task
       && dispatch?.status === 'waiting_review'
@@ -234,6 +198,7 @@ function reconcileActiveAgentJobs(project, options = {}) {
       job.updatedAt = at;
       continue;
     }
+    if (!RUNTIME_ACTIVE_STATUSES.has(job.status)) continue;
     if (dispatch && ['completed', 'failed', 'cancelled'].includes(dispatch.status)) {
       job.status = dispatch.status;
       job.updatedAt = at;
@@ -268,7 +233,6 @@ function reconcileActiveAgentJobs(project, options = {}) {
     }
     blocking ||= job;
   }
-  if (repairedCoordination) workItems.setWorkItems(project, repairedTasks);
   return { blocking, orphaned };
 }
 
@@ -818,8 +782,8 @@ function registerAgentRuntimeRoutes(app, deps) {
       let built = buildPromptForAgentType(project, platformAgentType, promptBody);
 
       let budget = {
-        maxTokens: 120000,
-        maxWallClockMinutes: 45,
+        maxTokens: 0,
+        maxWallClockMinutes: 0,
         maxSubtasks: 8,
       };
       let runtimeHealth = null;
@@ -1143,10 +1107,12 @@ function registerAgentRuntimeRoutes(app, deps) {
         });
       }
 
-      if (delegatedTask.taskRole === 'coordination') {
-        throw new Error('Uma tarefa de coordenação não é executável; inicie uma subtarefa pronta.');
-      }
-      const canonicalPackage = { text: [delegatedTask.executionPackage?.instructions || delegatedTask.descriptionMarkdown, delegatedTask.executionPackage?.outputFormat ? `\n\nFormato:\n${delegatedTask.executionPackage.outputFormat}` : ''].join(''), contextSnapshotHash: delegation.request.inputFingerprint || '', children: [] };
+      const canonicalPackage = delegatedTask.taskRole === 'coordination'
+        ? (() => {
+            const tree = stageTransitions.buildTreePackage(project, delegatedTask);
+            return { ...tree, children: tree.openChildren };
+          })()
+        : { text: [delegatedTask.executionPackage?.instructions || delegatedTask.descriptionMarkdown, delegatedTask.executionPackage?.outputFormat ? `\n\nFormato:\n${delegatedTask.executionPackage.outputFormat}` : ''].join(''), contextSnapshotHash: delegation.request.inputFingerprint || '', children: [] };
       built = { ...built, fullPrompt: canonicalPackage.text || built.fullPrompt, contextPack: { ...(built.contextPack || {}), taskId: delegatedTask.id, agentRequestId: delegation.request.id, contextSnapshotHash: canonicalPackage.contextSnapshotHash } };
 
       const run = normalizePromptRun({

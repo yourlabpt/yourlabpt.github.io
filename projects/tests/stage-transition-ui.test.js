@@ -29,8 +29,7 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(deliverySource, /Evidência e lacunas/);
   assert.match(workItemsSource, /payload\.nextWorkItem[\s\S]*?apiRequest\('\/agent-runs'/);
   assert.match(workItemsSource, /data-ado-continue-plan/);
-  assert.match(workItemsSource, /Iniciar próxima subtarefa/);
-  assert.doesNotMatch(workItemsSource, /Execute o pacote completo ou avance subtarefa a subtarefa/);
+  assert.match(workItemsSource, /Executar todas as subtarefas/);
   assert.match(workItemsSource, /data-ado-run-control="abandon"/);
   assert.match(workItemsSource, /Terminar e desbloquear/);
   assert.doesNotMatch(workItemsSource, /Criar uma nova versão do pedido/);
@@ -40,6 +39,6 @@ test('stage-transition creation refreshes canonical Tasks before opening the tas
   assert.match(workItemsSource, /errorEventTypes/);
   assert.match(workItemsSource, /ado-agent-log-entry\$\{eventToneClass\(event\)\}/);
   assert.match(deliverySource, /linkedTask\?\.status === 'waiting_review'[\s\S]*?work-items\/\$\{linkedTask\.id\}\/review/);
-  assert.match(html, /delivery-os-ui\.js\?v=70/);
-  assert.match(html, /work-items-ui\.js\?v=24/);
+  assert.match(html, /delivery-os-ui\.js\?v=71/);
+  assert.match(html, /work-items-ui\.js\?v=25/);
 });

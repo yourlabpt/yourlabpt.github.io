@@ -33,8 +33,8 @@ function defaultConfig(input = {}) {
     modelProfileId: textOr(input.modelProfileId, 'medium'),
     targetInputTokens: Math.max(1000, Number(input.targetInputTokens) || 14000),
     targetOutputTokens: Math.max(500, Number(input.targetOutputTokens) || 2500),
-    maxTokens: Math.max(10000, Number(input.maxTokens) || 120000),
-    maxWallClockMinutes: Math.max(5, Number(input.maxWallClockMinutes) || 45),
+    maxTokens: Math.max(0, Number(input.maxTokens) || 0),
+    maxWallClockMinutes: Math.max(0, Number(input.maxWallClockMinutes) || 0),
     maxSubtasks: Math.min(24, Math.max(2, Number(input.maxSubtasks) || 8)),
     enableWebSearch: input.enableWebSearch === true,
     allowedMcpTools: [...new Set(ensureArray(input.allowedMcpTools).map(String).filter(Boolean))],
@@ -192,7 +192,9 @@ function createRequest(project, input, options = {}) {
 function childTasks(project, parent) { return workItems.getWorkItems(project).filter((task) => task.parentTaskId === parent.id); }
 function buildTreePackage(project, parent) {
   const request = agentRequests.getAgentRequests(project).find((entry) => entry.id === parent.agentRequestId); const children = childTasks(project, parent);
-  const openChildren = children.filter((task) => !workItems.isTerminalStatus(task.status));
+  const openChildren = children.filter((task) => (
+    task.status !== 'waiting_review' && !workItems.isTerminalStatus(task.status)
+  ));
   const envelope = { requestId: request?.id, requestVersion: request?.version || 1, taskOutputs: openChildren.map((task) => ({ taskId: task.id, packageVersion: task.executionPackage?.version || 1, output: {} })) };
   const text = [`# ${parent.title}`, `\n## Pedido\n${request?.requestMarkdown || parent.descriptionMarkdown}`, `\n## Resultado esperado\n${request?.desiredOutcomeMarkdown || parent.acceptanceCriteriaMarkdown}`, '\n## Subtarefas ainda abertas', ...openChildren.map((task, index) => `\n### ${index + 1}. ${task.title}\nTask ID: ${task.id}\nPackage version: ${task.executionPackage?.version || 1}\n${task.executionPackage?.instructions || task.descriptionMarkdown}\nFormato: ${task.executionPackage?.outputFormat || 'JSON'}`), '\n## Formato obrigatorio da resposta', JSON.stringify(envelope, null, 2)].join('\n');
   return { request, children, openChildren, text, envelope, contextSnapshotHash: request?.inputFingerprint || '' };
@@ -203,7 +205,7 @@ function validateBundle(project, parent, rawOutput) {
   if (Number(parsed?.requestVersion) !== Number(pack.request?.version || 1)) throw new Error('A versao do pedido nao corresponde.');
   const outputs = ensureArray(parsed?.taskOutputs); const byId = new Map();
   outputs.forEach((row) => { if (!row?.taskId || byId.has(row.taskId)) throw new Error('Existem taskIds vazios ou duplicados.'); byId.set(row.taskId, row); });
-  const open = pack.children.filter((task) => !workItems.isTerminalStatus(task.status));
+  const open = pack.openChildren;
   open.forEach((task) => { const row = byId.get(task.id); if (!row) throw new Error(`Falta o resultado da tarefa ${task.title}.`); if (Number(row.packageVersion) !== Number(task.executionPackage?.version || 1)) throw new Error(`O resultado de ${task.title} usa uma versao antiga do prompt.`); if (row.output === undefined || row.output === null || row.output === '') throw new Error(`O resultado de ${task.title} esta vazio.`); });
   outputs.forEach((row) => { if (!open.some((task) => task.id === row.taskId)) throw new Error(`Tarefa desconhecida ou fechada no pacote: ${row.taskId}.`); });
   return { parsed, outputs, tasks: open, request: pack.request };

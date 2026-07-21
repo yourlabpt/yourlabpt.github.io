@@ -271,8 +271,8 @@
         targetOutputTokens: Number($('pdosAgentCfgOutputTokens')?.value) || cfg.options.targetOutputTokens,
       },
       budget: {
-        maxTokens: Number($('pdosAgentCfgMaxTokens')?.value) || cfg.prepare?.budget?.maxTokens || 120000,
-        maxWallClockMinutes: Number($('pdosAgentCfgMaxMinutes')?.value) || cfg.prepare?.budget?.maxWallClockMinutes || 45,
+        maxTokens: Math.max(0, Number($('pdosAgentCfgMaxTokens')?.value) || 0),
+        maxWallClockMinutes: Math.max(0, Number($('pdosAgentCfgMaxMinutes')?.value) || 0),
         maxSubtasks: Number($('pdosAgentCfgMaxSubtasks')?.value) || cfg.prepare?.budget?.maxSubtasks || 8,
       },
     };
@@ -317,8 +317,8 @@
         profileSelect.value = options.modelProfileId || prepare.modelProfileId || 'medium';
       }
       syncAgentProfileFields();
-      $('pdosAgentCfgMaxTokens').value = prepare.budget?.maxTokens ?? 120000;
-      $('pdosAgentCfgMaxMinutes').value = prepare.budget?.maxWallClockMinutes ?? 45;
+      $('pdosAgentCfgMaxTokens').value = prepare.budget?.maxTokens ?? 0;
+      $('pdosAgentCfgMaxMinutes').value = prepare.budget?.maxWallClockMinutes ?? 0;
       $('pdosAgentCfgMaxSubtasks').value = prepare.budget?.maxSubtasks ?? 8;
       $('pdosAgentCfgWebSearch').checked = options.enableWebSearch !== false;
       renderAgentConfigPlan(prepare, Number($('pdosAgentCfgMaxSubtasks').value));
@@ -1012,7 +1012,7 @@
       $('pdosTransitionOutcome').value = values.desiredOutcome || `Artefactos de ${to?.label || toStageId} prontos para revisão.`;
       $('pdosTransitionModelProfile').value = values.modelProfileId || 'medium';
       $('pdosTransitionInputTokens').value = values.targetInputTokens || 14000; $('pdosTransitionOutputTokens').value = values.targetOutputTokens || 2500;
-      $('pdosTransitionMaxTokens').value = values.maxTokens || 120000; $('pdosTransitionMaxMinutes').value = values.maxWallClockMinutes || 45;
+      $('pdosTransitionMaxTokens').value = values.maxTokens ?? 0; $('pdosTransitionMaxMinutes').value = values.maxWallClockMinutes ?? 0;
       $('pdosTransitionMaxSubtasks').value = values.maxSubtasks || 8; $('pdosTransitionWebSearch').checked = values.enableWebSearch !== false;
       $('pdosTransitionRegeneration').value = firstRequest ? 'full' : 'affected';
     };

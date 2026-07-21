@@ -967,8 +967,8 @@
           <label>Perfil do modelo<select id="pdosTransitionModelProfile"><option value="small">small</option><option value="medium">medium</option><option value="large">large</option><option value="long_context">long_context</option></select></label>
           <label>Input alvo / tarefa<input type="number" id="pdosTransitionInputTokens" min="1000" max="200000" step="1000" /></label>
           <label>Output alvo / tarefa<input type="number" id="pdosTransitionOutputTokens" min="500" max="50000" step="500" /></label>
-          <label>Tokens máximos<input type="number" id="pdosTransitionMaxTokens" min="10000" max="500000" step="5000" /></label>
-          <label>Tempo máximo (minutos)<input type="number" id="pdosTransitionMaxMinutes" min="5" max="240" step="5" /></label>
+          <label>Tokens máximos (0 = sem limite)<input type="number" id="pdosTransitionMaxTokens" min="0" step="5000" /></label>
+          <label>Tempo máximo (0 = sem limite)<input type="number" id="pdosTransitionMaxMinutes" min="0" step="5" /></label>
           <label>Subtarefas máximas<input type="number" id="pdosTransitionMaxSubtasks" min="2" max="24" step="1" /></label>
         </div>
         <div class="pdos-transition-options">
@@ -1069,11 +1069,11 @@
           <label>Output alvo / tarefa
             <input type="number" id="pdosAgentCfgOutputTokens" min="500" max="50000" step="500" />
           </label>
-          <label>Tokens máximos
-            <input type="number" id="pdosAgentCfgMaxTokens" min="10000" max="500000" step="5000" required />
+          <label>Tokens máximos (0 = sem limite)
+            <input type="number" id="pdosAgentCfgMaxTokens" min="0" step="5000" required />
           </label>
-          <label>Tempo máximo (minutos)
-            <input type="number" id="pdosAgentCfgMaxMinutes" min="5" max="240" step="5" required />
+          <label>Tempo máximo (0 = sem limite)
+            <input type="number" id="pdosAgentCfgMaxMinutes" min="0" step="5" required />
           </label>
           <label>Sub-tarefas máximas
             <input type="number" id="pdosAgentCfgMaxSubtasks" min="1" max="24" step="1" required />
@@ -1308,9 +1308,9 @@
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
-  <script src="/projects/static/delivery-os-ui.js?v=70" defer></script>
+  <script src="/projects/static/delivery-os-ui.js?v=71" defer></script>
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
-  <script src="/projects/static/work-items-ui.js?v=24" defer></script>
+  <script src="/projects/static/work-items-ui.js?v=25" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=6" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

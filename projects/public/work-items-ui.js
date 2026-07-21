@@ -1262,7 +1262,7 @@
             <div class="ado-section-heading"><div><h3 class="ado-section-title">Plano deste pedido</h3><p class="ado-section-hint">A tarefa-pai coordena o plano. O agente recebe apenas a próxima subtarefa pronta, sem repetir trabalho concluído.</p></div><strong>${children.filter((child) => child.status === 'completed').length}/${children.length}</strong></div>
             ${request?.diffSummary ? `<div class="ado-request-diff-summary"><span>${request.diffSummary.changedTasks || 0} alterada(s)</span><span>${request.diffSummary.newTasks || 0} nova(s)</span><span>${request.diffSummary.removedTasks || 0} removida(s)</span></div>` : ''}
             <div class="ado-child-task-list">${children.map((child, index) => `<button type="button" data-ado-open-child="${escapeHtml(child.id)}"><span>${index + 1}</span><strong>${escapeHtml(child.title)}</strong><small>${escapeHtml(statusLabel(child.status))}</small></button>`).join('')}</div>
-            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-continue-plan ${children.some((child) => child.status === 'ready') ? agentConnectAttributes : 'disabled'}>Iniciar próxima subtarefa</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar subtarefas ainda abertas</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar resultados das subtarefas abertas</button></div>
+            <div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-continue-plan ${children.some((child) => child.status === 'ready') ? agentConnectAttributes : 'disabled'}>Executar todas as subtarefas</button><button type="button" class="ado-action-ghost" data-ado-copy-package>Copiar subtarefas ainda abertas</button><button type="button" class="ado-action-ghost" data-ado-bundle-output>Colar resultados das subtarefas abertas</button></div>
             ${agentPairingGuidance}
             <div class="ado-manual-output-pane hidden" data-ado-bundle-pane><label>Pacote JSON completo<textarea rows="14" data-ado-bundle-raw placeholder='{"requestId":"…","requestVersion":1,"taskOutputs":[…]}'></textarea></label><p class="ado-section-hint" data-ado-bundle-preview></p><div class="ado-action-bar"><button type="button" class="ado-action-ghost" data-ado-preview-bundle>Validar pacote</button><button type="button" class="ado-action-primary" data-ado-submit-bundle disabled>Enviar tudo para revisão</button></div></div>
             ${children.some((child) => child.status === 'waiting_review') && state.canManage ? `<div class="ado-bundle-review"><strong>Resultados prontos para decisão</strong><div class="ado-action-bar"><button type="button" class="ado-action-primary" data-ado-review-bundle="approved">Aprovar e aplicar todos</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="changes_requested">Pedir alterações</button><button type="button" class="ado-action-ghost" data-ado-review-bundle="rejected">Rejeitar</button></div></div>` : ''}
@@ -1927,10 +1927,10 @@
             },
           });
           if (payload.requiresApproval) throw new Error('O plano ainda precisa de aprovação.');
-          const taskId = payload.workItem?.id || readyChild.id;
+          const taskId = payload.workItem?.id || state.detail.id;
           await fetchList(project.id);
           await openEditor(project, taskId);
-          showToast(`Subtarefa iniciada: ${readyChild.title}.`, 'ok');
+          showToast('Plano completo iniciado. Os resultados serão acumulados para revisão em lote.', 'ok');
           pollConnectedTask(
             project,
             payload.agentJob?.id || payload.promptRun?.id,

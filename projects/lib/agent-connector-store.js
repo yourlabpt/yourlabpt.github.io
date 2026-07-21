@@ -320,30 +320,8 @@ class AgentConnectorStore {
     return row ? this.toDispatch(row) : null;
   }
 
-  quarantineDeprecatedTreeDispatches() {
-    const rows = this.db.prepare(`
-      SELECT id, package_json
-      FROM agent_dispatches
-      WHERE status NOT IN ('waiting_review','completed','failed','cancelled')
-    `).all();
-    for (const row of rows) {
-      const taskPackage = json(row.package_json, {});
-      const contractVersion = Number(
-        taskPackage?.contract?.version || taskPackage?.version || 0
-      );
-      if (contractVersion >= 2 && Array.isArray(taskPackage?.taskGraph)
-        && taskPackage.taskGraph.length > 0) {
-        this.abandon(row.id, {
-          idempotencyKey: `quarantine:${row.id}:deprecated-tree`,
-          reason: 'deprecated_coordination_tree_package',
-        });
-      }
-    }
-  }
-
   claim(connectorId) {
     this.expireLeases();
-    this.quarantineDeprecatedTreeDispatches();
     const now = this.now();
     return this.db.transaction(() => {
       const connector = this.db.prepare(`
