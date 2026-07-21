@@ -64,7 +64,8 @@ wire protocol:
     "execution_settings_v2",
     "versioned_commands",
     "manual_sync",
-    "review_packets"
+    "review_packets",
+    "engineering_change_set_v1"
   ],
   "extensions": {
     "vendor.example/custom-setting": true
@@ -75,6 +76,30 @@ wire protocol:
 Global skills and tools apply to every advertised agent. Agent-level entries
 add capabilities for that agent. Unknown vendor data belongs under
 `extensions`; the Platform preserves it without using it for core routing.
+
+Discovery runtimes may additionally advertise:
+
+```json
+{
+  "features": ["engineering_change_set_v1", "engineering_state_shadow_read"],
+  "extensions": {
+    "yourlab.engineering/change-set-contracts": ["engineering-change-set/v1"]
+  }
+}
+```
+
+The runtime may read the engineering graph and submit a proposed change set. In
+`remote_pull`, the Platform freezes the relevant graph snapshot in
+`context.engineering.currentState` and accepts the proposal only inside the
+signed connector result. In `local_push`, the equivalent typed read/propose
+tools use the versioned Engineering endpoints. The runtime must not advertise
+or call an engineering apply operation. Apply remains a version-checked
+Platform action performed after human section review.
+
+`engineering-change-set/v1` includes the project, Task, run and base engineering
+revision; grouped entity/relationship operations; evidence; impact; questions;
+and Task recommendations. Recommendations remain suggestions until separately
+accepted in the canonical Tasks workflow.
 
 An empty `agents` list is accepted for compatibility with the first runtime,
 but new runtimes should advertise explicit manifests. When manifests exist,

@@ -27,6 +27,7 @@
     detailRequest: null,
     detailExecution: null,
     detailReview: null,
+    detailChangeSets: [],
     suggestions: [],
     automationRules: [],
     selectedIds: new Set(),
@@ -616,6 +617,19 @@
     state.canManage = Boolean(payload.canManage);
     state.canPostUpdate = Boolean(payload.canPostUpdate);
     state.canEditUpdate = Boolean(payload.canEditUpdate);
+    state.detailChangeSets = [];
+    if (window.state?.selectedProject?.featureFlags?.engineering_state_v1) {
+      try {
+        const engineeringPayload = await apiRequest(
+          `/${encodeURIComponent(projectId)}/engineering/change-sets`,
+        );
+        state.detailChangeSets = (engineeringPayload.changeSets || []).filter(
+          (entry) => entry.taskId === workItemId,
+        );
+      } catch {
+        // Engineering is additive; a read failure must not block the existing Task editor.
+      }
+    }
     return state.detail;
   }
 
@@ -1280,6 +1294,7 @@
     const members = project.members || [];
     const users = window.state?.users || [];
     const children = state.detailChildren || [];
+    const engineeringChangeSets = state.detailChangeSets || [];
     const request = state.detailRequest || null;
     const executionSettings = item.executionSettings || {};
     const isCoordination = item.taskRole === 'coordination';
@@ -1483,6 +1498,23 @@
             ${state.detailExecution?.bestEffort ? '<p class="ado-section-hint">Resultado best-effort: pode ser aprovado, devolvido com alterações ou rejeitado.</p>' : ''}
             <p class="ado-section-hint">${state.detailReview?.resultHash ? `Resultado rastreável ${escapeHtml(state.detailReview.resultHash.slice(0, 12))}. ` : ''}A resposta completa permanece ligada a esta tentativa.</p>
             <details open class="ado-advanced-details"><summary>Ver resposta completa</summary><pre class="ado-result-body">${escapeHtml(state.detailReview?.rawOutput || state.detailReview?.bodyMarkdown || item.resultSummaryMarkdown)}</pre></details>
+          </section>
+        ` : ''}
+
+        ${engineeringChangeSets.length ? `
+          <section class="ado-editor-section ado-engineering-change-sets">
+            <h3 class="ado-section-title">Alterações de engenharia propostas</h3>
+            <p class="ado-section-hint">Estas alterações ainda não modificam o projecto. Cada secção requer decisão humana e o apply é atómico, com snapshot.</p>
+            ${engineeringChangeSets.map((changeSet) => `
+              <article class="simple-item engineering-change-set" data-change-set-id="${escapeHtml(changeSet.id)}">
+                <div class="engineering-change-set-head"><strong>${escapeHtml(changeSet.summary || changeSet.id)}</strong><span class="badge badge-gray">${escapeHtml(changeSet.status)}</span></div>
+                ${(changeSet.sections || []).map((section) => `
+                  <div class="engineering-section" data-section-id="${escapeHtml(section.id)}">
+                    <div><strong>${escapeHtml(section.title)}</strong><small>${escapeHtml(section.decision || 'pending')} · ${(section.operations || []).length} operações</small></div>
+                    ${state.canManage && changeSet.status !== 'applied' ? `<div class="actions-row"><button type="button" class="btn tiny" data-engineering-decision="approved">Aceitar</button><button type="button" class="btn tiny ghost" data-engineering-decision="changes_requested">Pedir correções</button><button type="button" class="btn tiny danger" data-engineering-decision="rejected">Rejeitar</button></div>` : ''}
+                  </div>`).join('')}
+                ${state.canManage && changeSet.status !== 'applied' ? '<button type="button" class="btn primary tiny" data-engineering-apply>Aplicar secções aprovadas</button>' : ''}
+              </article>`).join('')}
           </section>
         ` : ''}
 
@@ -2387,6 +2419,7 @@
       state.meta = null;
       state.suggestions = [];
       state.agentRequests = [];
+      state.detailChangeSets = [];
       state.automationRules = [];
       state.selectedIds.clear();
       state.filters.planPhaseId = '';
@@ -2425,6 +2458,13 @@
     if (requestId && state.selectedRequest?.id !== requestId) await openRequestPlan(project, requestId);
     else if (taskId && state.selectedId !== taskId) await openEditor(project, taskId);
   }
+
+  document.addEventListener('engineering:changed', async (event) => {
+    const project = window.state?.selectedProject;
+    if (!project?.id || event.detail?.projectId !== project.id || !state.detail?.id || state.detail.id === '__new__') return;
+    await fetchDetail(project.id, state.detail.id).catch(() => null);
+    paintEditor(project);
+  });
 
   window.WorkItemsUI = {
     open,

@@ -30,6 +30,8 @@ yarn-debug.log*
 # Build
 dist/
 build/
+test-results/
+playwright-report/
 
 # Inquiries (keep example only)
 server/inquiries/*

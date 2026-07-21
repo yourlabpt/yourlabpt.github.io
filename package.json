@@ -3,10 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test": "npm run test:unit",
+    "test:unit": "node --test projects/tests/*.test.js",
+    "test:e2e": "playwright test",
+    "test:all": "npm run test:unit && npm run test:e2e",
     "test:agent-connector": "node --test projects/tests/agent-connector.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
     "multer": "^2.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }

@@ -964,6 +964,18 @@ describe('stage transition requests through Tasks', () => {
 });
 
 describe('contextual task suggestions', () => {
+  it('keeps explicit engineering change-set suggestions until a human decides them', () => {
+    const project = {
+      requirements: [], workItems: [], humanReviews: [], approvals: [], phases: [],
+      taskSuggestions: [{
+        id: 'tsug_eng', fingerprint: 'eng-fingerprint', ruleId: 'engineering_change_set',
+        deliveryStageId: 'discovery', title: 'Validate intent', reason: 'Agent recommendation',
+        proposedTask: { title: 'Validate intent' }, status: 'proposed',
+      }],
+    };
+    taskSuggestions.evaluateProject(project, { now: '2026-07-21T00:00:00.000Z' });
+    assert.equal(project.taskSuggestions[0].status, 'proposed');
+  });
   it('persists dismissal and avoids duplicate fingerprints', () => {
     const project = { workItems: [], humanReviews: [{ id: 'r1', title: 'Review', status: 'pending', stageId: 'architecture' }] };
     taskSuggestions.evaluateProject(project, { now: '2026-01-01T00:00:00.000Z' });

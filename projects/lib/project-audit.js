@@ -105,6 +105,7 @@ function restoreProjectFromSnapshot(project, snapshotData) {
     'stages', 'ideaBriefMarkdown', 'documents', 'informationEntries', 'roadmap',
     'implementation', 'approvals', 'impactReports', 'executionPlans', 'promptRuns',
     'humanReviews', 'diagramArtifacts', 'decisions', 'changeRequests', 'deliveryLevel',
+    'engineeringState', 'engineeringChangeSets', 'engineeringProjectionV1', 'featureFlags',
   ];
   restoreKeys.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(snapshotData, key)) {

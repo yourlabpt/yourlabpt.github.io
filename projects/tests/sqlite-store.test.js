@@ -160,4 +160,32 @@ describe('sqlite requirement store', () => {
     ]), false);
     store.close();
   });
+
+  it('stores Engineering State V1 as an additive shadow projection', () => {
+    const store = createSqliteStore({ dataDir: path.join(tmpDir, 'case-engineering') });
+    const state = {
+      schemaVersion: 1,
+      revision: 3,
+      entities: [{ id: 'problem-1', type: 'problem', title: 'Problem', status: 'active', version: 1, updatedAt: '2026-07-21T00:00:00.000Z' }],
+      relationships: [{ id: 'rel-1', sourceType: 'problem', sourceId: 'problem-1', targetType: 'requirement', targetId: 'REQ-1', relationshipType: 'derives_from' }],
+      externalReferences: [{ id: 'ext-1', provider: 'manual', artifactType: 'document', uri: 'https://example.gov/doc' }],
+    };
+    const changeSets = [{ id: 'engcs-1', taskId: 'task-1', runId: 'run-1', status: 'applied', baseEngineeringRevision: 2, appliedRevision: 3 }];
+    store.saveEngineeringProjection('prj-engineering', state, changeSets);
+    assert.equal(store.engineeringProjectionMatches('prj-engineering', state, changeSets), true);
+    assert.deepEqual(store.loadEngineeringProjection('prj-engineering').state.entities, state.entities);
+    assert.deepEqual(store.getEngineeringProjectionStats('prj-engineering'), {
+      entities: 1,
+      relationships: 1,
+      changeSets: 1,
+      externalReferences: 1,
+      schemaVersion: 1,
+      revision: 3,
+      fingerprint: store.engineeringProjectionFingerprint(state, changeSets),
+      projectedAt: store.getEngineeringProjectionStats('prj-engineering').projectedAt,
+    });
+    store.deleteProjectData('prj-engineering');
+    assert.equal(store.getEngineeringProjectionStats('prj-engineering').entities, 0);
+    store.close();
+  });
 });

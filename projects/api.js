@@ -26,6 +26,8 @@ const phaseSync = require('./lib/phase-sync');
 const roadmapSync = require('./lib/roadmap-sync');
 const proposalGenerator = require('./lib/proposal-generator');
 const { createAgentRuntimeClient } = require('./lib/agent-runtime-client');
+const engineeringState = require('./lib/engineering-state');
+const { registerEngineeringStateRoutes } = require('./lib/engineering-state-routes');
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const sessions = new Map();
@@ -92,6 +94,9 @@ const TRACE_RELATIONSHIP_TYPES = [
   'affects',
   'supersedes',
   'monitors',
+  'evidences',
+  'owned_by',
+  'measures',
 ];
 
 function registerRequirementsPlatform(app, options) {
@@ -212,6 +217,11 @@ function registerRequirementsPlatform(app, options) {
     normalized.auditLog = projectAudit.normalizeAuditLog(project.auditLog);
     normalized.requirements = normalized.requirements.map((entry) => deliveryOs.enrichRequirementWithModuleTags(entry));
     normalized.traceLinks = normalizeTraceLinks(project.traceLinks, normalized.requirements, normalized.artifacts, normalized);
+    normalized.engineeringState = engineeringState.normalizeState(project.engineeringState);
+    normalized.engineeringChangeSets = ensureArray(project.engineeringChangeSets);
+    normalized.featureFlags = project.featureFlags && typeof project.featureFlags === 'object'
+      ? { ...project.featureFlags }
+      : {};
     normalized.generated = ensureArray(project.generated).map((entry) => ({
       ...entry,
       selectedModules: normalizeArchitectureModuleList(entry?.selectedModules),
@@ -326,6 +336,7 @@ function registerRequirementsPlatform(app, options) {
 
       await repairHybridProjectsOnStartup();
       await externalizeInlineRequirementsOnStartup();
+      await backfillEngineeringProjectionOnStartup();
 
       storeInitialized = true;
     });
@@ -453,6 +464,24 @@ function registerRequirementsPlatform(app, options) {
     }
   }
 
+  async function backfillEngineeringProjectionOnStartup() {
+    if (!sqliteStore.canUseSqlite?.() || typeof sqliteStore.saveEngineeringProjection !== 'function') return;
+    try {
+      const idx = await storeLayer.loadIndex();
+      for (const entry of ensureArray(idx?.projects)) {
+        const project = await storeLayer.readProjectBlob(entry.id);
+        if (!project) continue;
+        const state = engineeringState.normalizeState(project.engineeringState);
+        const changeSets = ensureArray(project.engineeringChangeSets);
+        if (!sqliteStore.engineeringProjectionMatches(project.id, state, changeSets)) {
+          sqliteStore.saveEngineeringProjection(project.id, state, changeSets);
+        }
+      }
+    } catch (error) {
+      console.warn('Engineering shadow projection indisponivel:', error.message);
+    }
+  }
+
   async function attachProjectRequirements(project) {
     if (!project?.id) return project;
     if (ensureArray(project.requirements).length) return project;
@@ -513,6 +542,17 @@ function registerRequirementsPlatform(app, options) {
       requirementCount: requirements.length,
     });
     await originalWriteProjectBlob(disk);
+    if (typeof sqliteStore.saveEngineeringProjection === 'function') {
+      try {
+        sqliteStore.saveEngineeringProjection(
+          full.id,
+          engineeringState.normalizeState(full.engineeringState),
+          ensureArray(full.engineeringChangeSets)
+        );
+      } catch (error) {
+        console.warn(`Engineering shadow projection falhou (${full.id}):`, error.message);
+      }
+    }
     storeLayer.loadedProjects.set(project.id, {
       ...full,
       requirements,
@@ -871,6 +911,15 @@ function registerRequirementsPlatform(app, options) {
       aiPrompt: project.aiPrompt || '',
       aiRawJson: project.aiRawJson || '',
       deliveryLevel: normalizeDeliveryLevel(project.deliveryLevel),
+      featureFlags: {
+        engineering_state_v1: engineeringState.featureEnabled(project),
+      },
+      engineeringSummary: {
+        enabled: engineeringState.featureEnabled(project),
+        revision: engineeringState.normalizeState(project.engineeringState).revision,
+        pendingChangeSets: ensureArray(project.engineeringChangeSets)
+          .filter((entry) => !['applied', 'rejected'].includes(entry?.status)).length,
+      },
       stages: normalizeProjectStages(project.stages, normalizeDeliveryLevel(project.deliveryLevel)),
       artifacts: normalizeArtifacts(project.artifacts),
       traceLinks: skipRequirements
@@ -3926,6 +3975,19 @@ function registerRequirementsPlatform(app, options) {
     sqliteStore,
     connectorStore,
     verifyPassword,
+  });
+
+  registerEngineeringStateRoutes(app, {
+    authMiddleware,
+    requireRole,
+    loadProjectForUser,
+    requireProjectEditor,
+    readStore,
+    updateStore,
+    appendActivity,
+    projectAudit,
+    getUserName,
+    sqliteStore,
   });
 
   ensureStore().catch((error) => {

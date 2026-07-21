@@ -9,6 +9,7 @@ Plataforma unificada para gestão de projectos com systems engineering, agentes 
 - Importar JSON estruturado (stakeholder / funcionais / não funcionais / testes / indefinidos / fora de escopo)
 - Modelo SMART lean para requisitos funcionais
 - Product Delivery OS: timeline, capabilities, clusters, trace links, impact reports
+- Engineering State V1: entidades estruturadas, change sets revistos por secção e projeção relacional em shadow mode
 - Markdown-first: conteúdo editável como texto, renderizado visualmente
 - Gerir progresso por requisito e fase
 - Acesso por perfil (super admin, client, partner)
@@ -55,18 +56,38 @@ Definidas por variáveis de ambiente (opcional):
 - `public/`: frontend da plataforma
 - `api.js`: rotas e regras de negócio
 - `lib/`: utilitários (markdown, etc.)
-- `data/store.json`: base de dados local (versionada em git — fonte de verdade)
+- `data/store-index.json`: índice do armazenamento dividido por projecto
+- `data/projects/*.json`: estado de domínio de cada projecto; não editar durante execução do servidor
+- `data/platform.db`: SQLite para utilizadores, actividade, requisitos, conector durável e projeção shadow de Engineering State
+- `data/blobs/`: prompts, outputs e snapshots extensos externalizados
 - `uploads/`: documentos enviados (versionados em git)
 - `../generated_proposals/`: inputs de propostas geradas (versionados quando aplicável)
 
 ## Sincronizar dados com produção
 
-Os requisitos e documentos do projecto vivem em `data/store.json`, `uploads/` e `generated_proposals/`. Depois de alterar localmente:
+Os requisitos vivem em SQLite, o restante estado em `data/projects/*.json`, documentos em `uploads/` e propostas em `generated_proposals/`. O `store.json` monolítico é apenas uma origem legada de migração/recuperação.
 
 1. Commit e push desses ficheiros para `master`.
 2. No servidor: `./scripts/deploy-pull.sh` (hard reset + restaura dados do repositório).
 
-Não use `git pull` simples no servidor se `store.json` foi alterado em runtime — o script de deploy sobrescreve sempre com a versão do git.
+Não copie apenas um dos componentes do armazenamento híbrido: os ficheiros por projecto e `platform.db` são consistentes como um conjunto. Use backups antes de qualquer recuperação manual.
+
+## Engineering State V1
+
+- A flag `engineering_state_v1` é desligada por defeito e activada por projecto em Definições por um super administrador.
+- Com a flag desligada, as páginas e APIs anteriores mantêm o comportamento existente.
+- Agentes submetem `engineering-change-set/v1`; não possuem capacidade de apply nem de criação directa de Tasks.
+- Todas as secções recebem decisão humana. As aprovadas são aplicadas em conjunto com `baseEngineeringRevision`, snapshot e audit log.
+- Requirements continuam no modelo SQLite actual e aparecem no grafo por adapter, sem cópia.
+- As tabelas `engineering_*` são uma projeção shadow. O leitor canónico continua no estado do projecto até um cutover explicitamente validado.
+
+Testes:
+
+```bash
+npm run test:unit
+npm run test:e2e
+npm run test:all
+```
 
 ## Observações
 

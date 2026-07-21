@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const workItems = require('./work-items');
 
 const SUGGESTION_STATUSES = new Set(['proposed', 'dismissed', 'accepted', 'stale']);
-const RULE_IDS = new Set(['pending_human_review', 'pending_approval', 'unplanned_functional_requirements', 'missing_phase_deliverables', 'resolve_stage_blockers']);
+const RULE_IDS = new Set(['pending_human_review', 'pending_approval', 'unplanned_functional_requirements', 'missing_phase_deliverables', 'resolve_stage_blockers', 'engineering_change_set']);
 
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
@@ -186,6 +186,7 @@ function evaluateProject(project, options = {}) {
   const candidates = evaluateCandidates(project);
   const candidateFingerprints = new Set(candidates.map((entry) => entry.fingerprint));
   const next = existing.map((entry) => {
+    if (entry.ruleId === 'engineering_change_set') return entry;
     if (['proposed', 'dismissed'].includes(entry.status) && !candidateFingerprints.has(entry.fingerprint)) {
       return { ...entry, status: 'stale', updatedAt: now };
     }

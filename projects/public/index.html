@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=84" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=85" />
 </head>
 <body>
   <div class="page-bg"></div>
@@ -555,6 +555,19 @@
 
                 <div id="pdosCardFeed" class="pdos-card-feed"></div>
 
+                <details class="pdos-secondary-panel engineering-state-panel hidden" id="engineeringStatePanel">
+                  <summary>Engenharia estruturada <span id="engineeringStateBadge" class="badge badge-gray">shadow</span></summary>
+                  <div class="engineering-state-toolbar">
+                    <small id="engineeringStateSummary">A carregar estado de engenharia…</small>
+                    <button type="button" class="btn tiny" id="engineeringStateRefresh">↺ Actualizar</button>
+                  </div>
+                  <div id="engineeringStateDiagnostics" class="engineering-state-diagnostics"></div>
+                  <div class="engineering-state-columns">
+                    <section><h4>Entidades e relações</h4><div id="engineeringEntityList" class="simple-list"></div></section>
+                    <section><h4>Alterações propostas</h4><div id="engineeringChangeSetList" class="simple-list"></div></section>
+                  </div>
+                </details>
+
                 <div class="pdos-secondary-area">
                   <details class="pdos-secondary-panel">
                     <summary>Resumo e ferramentas desta fase</summary>
@@ -848,6 +861,11 @@
                       </select>
                     </label>
                     <button type="button" class="btn primary" id="saveDeliveryLevelBtn">Guardar nível</button>
+                  </div>
+                  <div class="form-grid compact mt-12 hidden" id="engineeringFeatureAdminControl">
+                    <label class="checkline"><input id="engineeringFeatureToggle" type="checkbox" /> Activar vista de Engenharia estruturada neste projecto</label>
+                    <button type="button" class="btn" id="saveEngineeringFeatureBtn">Guardar feature flag</button>
+                    <small>A activação é por projecto e não altera os leitores existentes.</small>
                   </div>
                   <div class="section-divider"></div>
                   <div class="form-grid">
@@ -1302,15 +1320,16 @@
   <script src="/projects/static/help-ui.js?v=3" defer></script>
   <script src="/projects/static/proposal-downloads-ui.js?v=5" defer></script>
   <script src="/projects/static/proposal-configurator-ui.js?v=3" defer></script>
-  <script src="/projects/static/app.js?v=50" defer></script>
+  <script src="/projects/static/app.js?v=51" defer></script>
   <script src="/projects/static/requirements-map-ui.js?v=13" defer></script>
   <script src="/projects/static/requirements-ui.js?v=16" defer></script>
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
   <script src="/projects/static/delivery-os-ui.js?v=72" defer></script>
+  <script src="/projects/static/engineering-state-ui.js?v=3" defer></script>
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
-  <script src="/projects/static/work-items-ui.js?v=29" defer></script>
+  <script src="/projects/static/work-items-ui.js?v=30" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=6" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

@@ -3906,6 +3906,10 @@ function createProjectSnapshot(project, label, userId, stageId) {
       decisions: cloneForSnapshot(project.decisions),
       changeRequests: cloneForSnapshot(project.changeRequests),
       deliveryLevel: cloneForSnapshot(project.deliveryLevel),
+      engineeringState: cloneForSnapshot(project.engineeringState),
+      engineeringChangeSets: cloneForSnapshot(project.engineeringChangeSets),
+      engineeringProjectionV1: cloneForSnapshot(project.engineeringProjectionV1),
+      featureFlags: cloneForSnapshot(project.featureFlags),
     },
   });
 }
@@ -4112,14 +4116,7 @@ function registerDeliveryOsRoutes(app, deps) {
         if (resolvedAction === 'rollback' && review.preApplySnapshotId) {
           const snap = ensureArray(project.versionSnapshots).find((s) => s.id === review.preApplySnapshotId);
           if (!snap?.snapshotData) throw new Error('Snapshot de rollback nao encontrado.');
-          const data = snap.snapshotData;
-          if (data.requirements) project.requirements = data.requirements;
-          if (data.capabilities) project.capabilities = data.capabilities;
-          if (data.requirementClusters) project.requirementClusters = data.requirementClusters;
-          if (data.artifacts) project.artifacts = data.artifacts;
-          if (data.traceLinks) project.traceLinks = data.traceLinks;
-          if (data.stages) project.stages = data.stages;
-          if (data.ideaBriefMarkdown) project.ideaBriefMarkdown = data.ideaBriefMarkdown;
+          require('./project-audit').restoreProjectFromSnapshot(project, snap.snapshotData);
           review.status = 'rejected';
           review.resolutionNotes = textOr(resolutionNotes, 'Revertido para snapshot anterior.');
           review.resolvedAt = nowIso();
@@ -4336,14 +4333,7 @@ function registerDeliveryOsRoutes(app, deps) {
           ? await resolveSnapshotData(project, snapshotId)
           : snap?.snapshotData;
         if (!data || !Object.keys(data).length) throw new Error('Snapshot nao encontrado.');
-        if (data.requirements) project.requirements = data.requirements;
-        if (data.capabilities) project.capabilities = data.capabilities;
-        if (data.requirementClusters) project.requirementClusters = data.requirementClusters;
-        if (data.artifacts) project.artifacts = data.artifacts;
-        if (data.traceLinks) project.traceLinks = data.traceLinks;
-        if (data.stages) project.stages = data.stages;
-        if (data.ideaBriefMarkdown) project.ideaBriefMarkdown = data.ideaBriefMarkdown;
-        project.updatedAt = nowIso();
+        require('./project-audit').restoreProjectFromSnapshot(project, data);
       });
       const store = await readStore();
       return res.json({ project: sanitizeProject(store.projects.find((e) => e.id === projectId), req.auth.user) });

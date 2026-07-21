@@ -220,6 +220,10 @@ const els = {
   projectMembers: document.getElementById('projectMembers'),
   saveProjectBtn: document.getElementById('saveProjectBtn'),
   saveAdvancedBtn: document.getElementById('saveAdvancedBtn'),
+  saveDeliveryLevelBtn: document.getElementById('saveDeliveryLevelBtn'),
+  engineeringFeatureAdminControl: document.getElementById('engineeringFeatureAdminControl'),
+  engineeringFeatureToggle: document.getElementById('engineeringFeatureToggle'),
+  saveEngineeringFeatureBtn: document.getElementById('saveEngineeringFeatureBtn'),
   projectName: document.getElementById('projectName'),
   projectClient: document.getElementById('projectClient'),
   projectStatus: document.getElementById('projectStatus'),
@@ -2811,6 +2815,10 @@ function renderSettingsAvailability() {
   if (levelSelect && hasProject) {
     levelSelect.value = state.selectedProject.deliveryLevel || 'standard';
   }
+  els.engineeringFeatureAdminControl?.classList.toggle('hidden', !hasProject || !isSuperAdmin());
+  if (els.engineeringFeatureToggle && hasProject) {
+    els.engineeringFeatureToggle.checked = Boolean(state.selectedProject.featureFlags?.engineering_state_v1);
+  }
   if (els.agentConnectorCard) {
     els.agentConnectorCard.classList.toggle('hidden', !isSuperAdmin());
     if (isSuperAdmin()) refreshAgentConnectors().catch(() => {});
@@ -3257,6 +3265,33 @@ async function handleSaveAdvanced() {
     });
 
     showToast('Dados avançados guardados.', 'ok');
+    await refreshSelectedProject();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function handleSaveDeliveryLevel() {
+  if (!state.selectedProject) return;
+  try {
+    await apiRequest(`/projects/${encodeURIComponent(state.selectedProject.id)}`, {
+      method: 'PATCH',
+      body: { deliveryLevel: document.getElementById('deliveryLevelSelect')?.value || 'standard' },
+    });
+    showToast('Nível de detalhe guardado.', 'ok');
+    await refreshSelectedProject();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function handleSaveEngineeringFeature() {
+  if (!state.selectedProject || !isSuperAdmin()) return;
+  try {
+    await apiRequest(`/${encodeURIComponent(state.selectedProject.id)}/engineering/feature`, {
+      method: 'POST', body: { enabled: Boolean(els.engineeringFeatureToggle?.checked) },
+    });
+    showToast('Feature flag de Engenharia guardada.', 'ok');
     await refreshSelectedProject();
   } catch (error) {
     showToast(error.message, 'error');
@@ -3899,6 +3934,8 @@ function wireEvents() {
   els.newUserRole?.addEventListener('change', syncBudgetAccessControl);
   els.saveProjectBtn.addEventListener('click', handleSaveProject);
   els.saveAdvancedBtn.addEventListener('click', handleSaveAdvanced);
+  els.saveDeliveryLevelBtn?.addEventListener('click', handleSaveDeliveryLevel);
+  els.saveEngineeringFeatureBtn?.addEventListener('click', handleSaveEngineeringFeature);
   els.addQuestionForm.addEventListener('submit', handleAddQuestion);
   els.addRequirementForm.addEventListener('submit', handleAddRequirement);
   els.clearAllRequirementsBtn?.addEventListener('click', handleClearAllRequirements);

@@ -7,6 +7,7 @@ const projectAccess = require('./project-access');
 const stageTransitions = require('./stage-transition-requests');
 const { normalizeMode } = require('./agent-connection-mode');
 const { registerAgentConnectorRoutes } = require('./agent-connector-routes');
+const engineeringState = require('./engineering-state');
 const {
   CONTRACT_ID,
   CONTRACT_VERSION,
@@ -517,6 +518,70 @@ function registerAgentRuntimeRoutes(app, deps) {
     return accepted;
   }
 
+  function engineeringChangeSetCandidates(parsed) {
+    if (!parsed || typeof parsed !== 'object') return [];
+    const candidates = [];
+    if (parsed.schemaVersion === engineeringState.CHANGE_SET_SCHEMA) candidates.push(parsed);
+    if (parsed.engineeringChangeSet) candidates.push(parsed.engineeringChangeSet);
+    ensureArray(parsed.engineeringChangeSets).forEach((entry) => candidates.push(entry));
+    ensureArray(parsed.taskOutputs).forEach((entry) => {
+      if (entry?.output?.engineeringChangeSet) candidates.push(entry.output.engineeringChangeSet);
+      ensureArray(entry?.output?.engineeringChangeSets).forEach((changeSet) => candidates.push(changeSet));
+    });
+    return candidates.filter((entry) => entry && typeof entry === 'object');
+  }
+
+  function persistEngineeringChangeSetProposals(project, parsed, provenance = {}) {
+    if (!engineeringState.featureEnabled(project)) return { persisted: [], errors: [] };
+    const candidates = engineeringChangeSetCandidates(parsed);
+    if (!candidates.length) return { persisted: [], errors: [] };
+    project.engineeringChangeSets = ensureArray(project.engineeringChangeSets);
+    const persisted = [];
+    const errors = [];
+    candidates.forEach((candidate) => {
+      try {
+        const validation = engineeringState.validateChangeSet(candidate, project);
+        if (!validation.valid) throw new Error(validation.errors.join(' '));
+        if (validation.changeSet.taskId !== provenance.workItemId) {
+          throw new Error('Change set taskId does not match the executed task.');
+        }
+        if (validation.changeSet.runId !== provenance.promptRunId) {
+          throw new Error('Change set runId does not match the executed run.');
+        }
+        const proposed = engineeringState.normalizeChangeSet({
+          ...validation.changeSet,
+          status: 'proposed',
+          requiresHumanApproval: true,
+          sections: validation.changeSet.sections.map((section) => ({
+            ...section,
+            decision: 'pending',
+            decisionNotes: '',
+            decidedAt: '',
+            decidedBy: '',
+          })),
+          createdBy: provenance.agentId || 'agent_runtime',
+          updatedAt: nowIso(),
+        }, { projectId: project.id, actorId: provenance.agentId || 'agent_runtime' });
+        proposed.proposalHash = engineeringState.changeSetProposalFingerprint(proposed, {
+          projectId: project.id,
+        });
+        const existing = project.engineeringChangeSets.find((entry) => (
+          entry.id === proposed.id || entry.proposalHash === proposed.proposalHash
+        ));
+        if (existing) {
+          persisted.push(existing);
+          return;
+        }
+        project.engineeringChangeSets.unshift(proposed);
+        engineeringState.syncRecommendedTaskSuggestions(project, proposed);
+        persisted.push(proposed);
+      } catch (error) {
+        errors.push(error.message);
+      }
+    });
+    return { persisted, errors };
+  }
+
   async function acceptAgentOutput(projectId, runId, rawInput, deferApply = true) {
     const parsedFromRaw = deliveryOs.parseAgentJsonOutput(String(rawInput || ''));
     const parsed = parsedFromRaw.parsed;
@@ -534,6 +599,11 @@ function registerAgentRuntimeRoutes(app, deps) {
       const agentJob = ensureArray(project.agentJobs).find((entry) => entry.promptRunId === runId);
       const delegatedTask = workItems.findWorkItem(project, agentJob?.workItemId || run.workItemId);
       const persistedReferences = persistOfficialReferences(project, parsed, {
+        promptRunId: runId,
+        workItemId: delegatedTask?.id,
+        agentId: agentJob?.agentId,
+      });
+      const engineeringProposals = persistEngineeringChangeSetProposals(project, parsed, {
         promptRunId: runId,
         workItemId: delegatedTask?.id,
         agentId: agentJob?.agentId,
@@ -611,7 +681,14 @@ function registerAgentRuntimeRoutes(app, deps) {
           actorUserId: 'agent_runtime',
           projectId,
           action: 'agent_runtime_bundle_submitted',
-          details: { promptRunId: runId, parentTaskId: delegatedTask.id, taskIds: checked.tasks.map((task) => task.id), referenceCount: persistedReferences.length },
+          details: {
+            promptRunId: runId,
+            parentTaskId: delegatedTask.id,
+            taskIds: checked.tasks.map((task) => task.id),
+            referenceCount: persistedReferences.length,
+            engineeringChangeSetIds: engineeringProposals.persisted.map((entry) => entry.id),
+            engineeringChangeSetErrors: engineeringProposals.errors,
+          },
         });
         return;
       }
@@ -658,7 +735,13 @@ function registerAgentRuntimeRoutes(app, deps) {
         actorUserId: 'agent_runtime',
         projectId,
         action: 'agent_runtime_output_submitted',
-        details: { promptRunId: runId, deferApply, referenceCount: persistedReferences.length },
+        details: {
+          promptRunId: runId,
+          deferApply,
+          referenceCount: persistedReferences.length,
+          engineeringChangeSetIds: engineeringProposals.persisted.map((entry) => entry.id),
+          engineeringChangeSetErrors: engineeringProposals.errors,
+        },
       });
     });
 
@@ -1267,6 +1350,42 @@ function registerAgentRuntimeRoutes(app, deps) {
       });
 
       if (connectionMode === 'remote_pull') {
+        const engineeringPilot = engineeringState.featureEnabled(executionProject)
+          && (agentId === 'discovery-research' || platformAgentType === 'discovery_research');
+        const engineeringGraph = engineeringPilot
+          ? engineeringState.getGraph(executionProject, { includeRequirements: false })
+          : null;
+        const engineeringEntityIds = new Set((engineeringGraph?.entities || []).map((entry) => entry.id));
+        const engineeringContext = engineeringPilot ? {
+          schemaVersion: engineeringState.CHANGE_SET_SCHEMA,
+          mode: 'proposal_only',
+          projectId,
+          taskId: delegatedTask.id,
+          runId: run.id,
+          baseEngineeringRevision: engineeringGraph.revision,
+          currentState: {
+            entities: engineeringGraph.entities,
+            relationships: engineeringGraph.relationships.filter((entry) => (
+              engineeringEntityIds.has(entry.sourceId) && engineeringEntityIds.has(entry.targetId)
+            )),
+            externalReferences: engineeringGraph.externalReferences,
+          },
+          allowedOperations: [
+            'create_entity',
+            'update_entity',
+            'deprecate_entity',
+            'create_relationship',
+            'remove_relationship',
+          ],
+          entityTypes: [
+            'problem', 'intent', 'stakeholder', 'need', 'objective',
+            'success_criterion', 'assumption', 'constraint', 'risk', 'evidence',
+          ],
+          reviewPolicy: 'Every section remains pending until a human reviews it; the agent cannot apply changes or create Tasks.',
+        } : null;
+        const engineeringInstructions = engineeringPilot
+          ? `\n\n## Proposta de engenharia (piloto)\nAlém do output legado obrigatório, inclui opcionalmente um campo engineeringChangeSet conforme engineering-change-set/v1. Usa exatamente projectId=${projectId}, taskId=${delegatedTask.id}, runId=${run.id} e baseEngineeringRevision=${engineeringContext.baseEngineeringRevision}. Coloca-o no topo da resposta ou dentro do output da subtask correspondente. Todas as secções são apenas propostas para revisão humana. Não apliques alterações e não cries Tasks.`
+          : '';
         const frozenPackage = buildFrozenTaskPackage({
           projectId,
           workItemId: delegatedTask.id,
@@ -1278,8 +1397,11 @@ function registerAgentRuntimeRoutes(app, deps) {
           contextSnapshotHash: canonicalPackage.contextSnapshotHash,
           agentId,
           agentType: platformAgentType,
-          instructions: canonicalPackage.text || built.fullPrompt,
-          context: built.contextPack,
+          instructions: `${canonicalPackage.text || built.fullPrompt}${engineeringInstructions}`,
+          context: {
+            ...built.contextPack,
+            ...(engineeringContext ? { engineering: engineeringContext } : {}),
+          },
           taskGraph: canonicalPackage.children?.map((task) => ({
             id: task.id,
             title: task.title,
@@ -1290,6 +1412,14 @@ function registerAgentRuntimeRoutes(app, deps) {
           allowedTools: delegatedTask.requiredMcpTools || [],
           outputContract: {
             targetOutput: built.targetOutput,
+            ...(engineeringContext ? {
+              engineeringChangeSet: {
+                schemaVersion: engineeringState.CHANGE_SET_SCHEMA,
+                required: false,
+                requiresHumanApproval: true,
+                autoApply: false,
+              },
+            } : {}),
           },
           acceptanceCriteria: delegatedTask.acceptanceCriteriaMarkdown
             || delegatedTask.executionPackage?.acceptanceCriteriaMarkdown,

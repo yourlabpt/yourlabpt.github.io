@@ -10,7 +10,7 @@ function ensureArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function textOr(value, fallback = '') {
   const v = value === null || value === undefined ? '' : String(value).trim();
@@ -162,6 +162,64 @@ function createSqliteStore({ dataDir }) {
         source_field TEXT NOT NULL,
         sequence INTEGER NOT NULL DEFAULT 0
       );
+
+      CREATE TABLE IF NOT EXISTS engineering_entities (
+        project_id TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        updated_at TEXT,
+        PRIMARY KEY (project_id, entity_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS engineering_relationships (
+        project_id TEXT NOT NULL,
+        relationship_id TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        relationship_type TEXT NOT NULL,
+        data TEXT NOT NULL,
+        updated_at TEXT,
+        PRIMARY KEY (project_id, relationship_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS engineering_change_sets (
+        project_id TEXT NOT NULL,
+        change_set_id TEXT NOT NULL,
+        task_id TEXT,
+        run_id TEXT,
+        status TEXT NOT NULL,
+        base_revision INTEGER NOT NULL,
+        applied_revision INTEGER,
+        data TEXT NOT NULL,
+        updated_at TEXT,
+        PRIMARY KEY (project_id, change_set_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS engineering_external_references (
+        project_id TEXT NOT NULL,
+        reference_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        artifact_type TEXT NOT NULL,
+        uri TEXT,
+        remote_id TEXT,
+        data TEXT NOT NULL,
+        updated_at TEXT,
+        PRIMARY KEY (project_id, reference_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS engineering_projection_meta (
+        project_id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL,
+        revision INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        projected_at TEXT NOT NULL
+      );
     `);
 
     ensureColumn(database, 'requirements', 'sort_order', 'INTEGER NOT NULL DEFAULT 0');
@@ -195,6 +253,14 @@ function createSqliteStore({ dataDir }) {
         ON requirement_links(project_id, target_req_id);
       CREATE INDEX IF NOT EXISTS idx_requirement_links_project_type
         ON requirement_links(project_id, link_type);
+      CREATE INDEX IF NOT EXISTS idx_engineering_entities_project_type
+        ON engineering_entities(project_id, entity_type);
+      CREATE INDEX IF NOT EXISTS idx_engineering_relationships_source
+        ON engineering_relationships(project_id, source_type, source_id);
+      CREATE INDEX IF NOT EXISTS idx_engineering_relationships_target
+        ON engineering_relationships(project_id, target_type, target_id);
+      CREATE INDEX IF NOT EXISTS idx_engineering_change_sets_task
+        ON engineering_change_sets(project_id, task_id, status);
     `);
 
     const row = database.prepare('SELECT value FROM store_meta WHERE key = ?').get('schema_version');
@@ -572,11 +638,137 @@ function createSqliteStore({ dataDir }) {
     tx(projectId, list);
   }
 
+  function engineeringProjectionFingerprint(state, changeSets = []) {
+    const payload = JSON.stringify({
+      schemaVersion: Number(state?.schemaVersion) || 1,
+      revision: Number(state?.revision) || 0,
+      entities: ensureArray(state?.entities),
+      relationships: ensureArray(state?.relationships),
+      externalReferences: ensureArray(state?.externalReferences),
+      changeSets: ensureArray(changeSets),
+    });
+    return crypto.createHash('sha256').update(payload).digest('hex');
+  }
+
+  function saveEngineeringProjection(projectId, state = {}, changeSets = []) {
+    const database = getDb();
+    const entities = ensureArray(state.entities);
+    const relationships = ensureArray(state.relationships);
+    const externalReferences = ensureArray(state.externalReferences);
+    const changes = ensureArray(changeSets);
+    const fingerprint = engineeringProjectionFingerprint(state, changes);
+    const projectedAt = new Date().toISOString();
+    const transaction = database.transaction(() => {
+      database.prepare('DELETE FROM engineering_entities WHERE project_id = ?').run(projectId);
+      database.prepare('DELETE FROM engineering_relationships WHERE project_id = ?').run(projectId);
+      database.prepare('DELETE FROM engineering_change_sets WHERE project_id = ?').run(projectId);
+      database.prepare('DELETE FROM engineering_external_references WHERE project_id = ?').run(projectId);
+      const insertEntity = database.prepare(`
+        INSERT INTO engineering_entities
+          (project_id, entity_id, entity_type, title, status, version, data, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      entities.forEach((entity) => insertEntity.run(
+        projectId, entity.id, entity.type, textOr(entity.title, entity.id), textOr(entity.status, 'active'),
+        Math.max(1, Number(entity.version) || 1), JSON.stringify(entity), entity.updatedAt || projectedAt,
+      ));
+      const insertRelationship = database.prepare(`
+        INSERT INTO engineering_relationships
+          (project_id, relationship_id, source_type, source_id, target_type, target_id, relationship_type, data, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      relationships.forEach((relationship) => insertRelationship.run(
+        projectId, relationship.id, relationship.sourceType, relationship.sourceId,
+        relationship.targetType, relationship.targetId, relationship.relationshipType,
+        JSON.stringify(relationship), relationship.updatedAt || projectedAt,
+      ));
+      const insertChangeSet = database.prepare(`
+        INSERT INTO engineering_change_sets
+          (project_id, change_set_id, task_id, run_id, status, base_revision, applied_revision, data, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      changes.forEach((changeSet) => insertChangeSet.run(
+        projectId, changeSet.id, changeSet.taskId || null, changeSet.runId || null,
+        textOr(changeSet.status, 'proposed'), Math.max(0, Number(changeSet.baseEngineeringRevision) || 0),
+        Number.isFinite(Number(changeSet.appliedRevision)) ? Number(changeSet.appliedRevision) : null,
+        JSON.stringify(changeSet), changeSet.updatedAt || projectedAt,
+      ));
+      const insertReference = database.prepare(`
+        INSERT INTO engineering_external_references
+          (project_id, reference_id, provider, artifact_type, uri, remote_id, data, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      externalReferences.forEach((reference) => insertReference.run(
+        projectId, reference.id, textOr(reference.provider, 'manual'), textOr(reference.artifactType, 'reference'),
+        reference.uri || null, reference.remoteId || null, JSON.stringify(reference), reference.updatedAt || projectedAt,
+      ));
+      database.prepare(`
+        INSERT INTO engineering_projection_meta
+          (project_id, schema_version, revision, content_hash, projected_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(project_id) DO UPDATE SET
+          schema_version = excluded.schema_version,
+          revision = excluded.revision,
+          content_hash = excluded.content_hash,
+          projected_at = excluded.projected_at
+      `).run(projectId, Number(state.schemaVersion) || 1, Math.max(0, Number(state.revision) || 0), fingerprint, projectedAt);
+    });
+    transaction();
+    return { fingerprint, projectedAt };
+  }
+
+  function loadEngineeringProjection(projectId) {
+    const database = getDb();
+    const meta = database.prepare('SELECT * FROM engineering_projection_meta WHERE project_id = ?').get(projectId);
+    const entities = database.prepare('SELECT data FROM engineering_entities WHERE project_id = ? ORDER BY entity_id').all(projectId).map((row) => JSON.parse(row.data));
+    const relationships = database.prepare('SELECT data FROM engineering_relationships WHERE project_id = ? ORDER BY relationship_id').all(projectId).map((row) => JSON.parse(row.data));
+    const externalReferences = database.prepare('SELECT data FROM engineering_external_references WHERE project_id = ? ORDER BY reference_id').all(projectId).map((row) => JSON.parse(row.data));
+    const changeSets = database.prepare('SELECT data FROM engineering_change_sets WHERE project_id = ? ORDER BY updated_at DESC').all(projectId).map((row) => JSON.parse(row.data));
+    return {
+      state: {
+        schemaVersion: Number(meta?.schema_version) || 1,
+        revision: Number(meta?.revision) || 0,
+        entities,
+        relationships,
+        externalReferences,
+      },
+      changeSets,
+      fingerprint: meta?.content_hash || '',
+      projectedAt: meta?.projected_at || '',
+    };
+  }
+
+  function engineeringProjectionMatches(projectId, state, changeSets = []) {
+    const row = getDb().prepare('SELECT content_hash FROM engineering_projection_meta WHERE project_id = ?').get(projectId);
+    return Boolean(row?.content_hash) && row.content_hash === engineeringProjectionFingerprint(state, changeSets);
+  }
+
+  function getEngineeringProjectionStats(projectId) {
+    const database = getDb();
+    const count = (table) => database.prepare(`SELECT COUNT(*) AS total FROM ${table} WHERE project_id = ?`).get(projectId)?.total || 0;
+    const meta = database.prepare('SELECT schema_version, revision, content_hash, projected_at FROM engineering_projection_meta WHERE project_id = ?').get(projectId);
+    return {
+      entities: count('engineering_entities'),
+      relationships: count('engineering_relationships'),
+      changeSets: count('engineering_change_sets'),
+      externalReferences: count('engineering_external_references'),
+      schemaVersion: Number(meta?.schema_version) || 0,
+      revision: Number(meta?.revision) || 0,
+      fingerprint: meta?.content_hash || '',
+      projectedAt: meta?.projected_at || '',
+    };
+  }
+
   function deleteProjectData(projectId) {
     const database = getDb();
     database.prepare('DELETE FROM requirement_links WHERE project_id = ?').run(projectId);
     database.prepare('DELETE FROM requirements WHERE project_id = ?').run(projectId);
     database.prepare('DELETE FROM activity WHERE project_id = ?').run(projectId);
+    database.prepare('DELETE FROM engineering_entities WHERE project_id = ?').run(projectId);
+    database.prepare('DELETE FROM engineering_relationships WHERE project_id = ?').run(projectId);
+    database.prepare('DELETE FROM engineering_change_sets WHERE project_id = ?').run(projectId);
+    database.prepare('DELETE FROM engineering_external_references WHERE project_id = ?').run(projectId);
+    database.prepare('DELETE FROM engineering_projection_meta WHERE project_id = ?').run(projectId);
   }
 
   function close() {
@@ -610,6 +802,11 @@ function createSqliteStore({ dataDir }) {
     requirementsMatchStore,
     requirementsFingerprint,
     saveRequirements,
+    engineeringProjectionFingerprint,
+    saveEngineeringProjection,
+    loadEngineeringProjection,
+    engineeringProjectionMatches,
+    getEngineeringProjectionStats,
     deleteProjectData,
     close,
   };
