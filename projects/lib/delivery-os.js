@@ -53,6 +53,7 @@ const AGENT_TYPES = [
   'requirement_grouping',
   'requirement_hierarchy',
   'reverse_idea',
+  'idea_augment',
   'diagram_to_requirements',
   'requirements_to_architecture',
   'prompt_builder',
@@ -1579,6 +1580,80 @@ Responde APENAS com JSON válido:
   ],
   "orphansRemaining": ["FR-99"],
   "notesMarkdown": "Resumo das decisões para revisão humana"
+}`;
+}
+
+function discoveryHasMeaningfulContent(project) {
+  const discovery = normalizeDiscovery(project?.discovery || {});
+  if (textOr(discovery.marketSummaryMarkdown)) return true;
+  if (textOr(discovery.researchBrief?.problemFramingMarkdown)) return true;
+  if (ensureArray(discovery.personas).length) return true;
+  if (ensureArray(discovery.stakeholders).length) return true;
+  if (ensureArray(discovery.competitors).length) return true;
+  if (ensureArray(discovery.segments).length) return true;
+  if (textOr(discovery.goToMarketMarkdown)) return true;
+  if (textOr(discovery.commercialImpact?.objectivesMarkdown)) return true;
+  const workItems = require('./work-items');
+  const agentRequests = require('./agent-requests');
+  const transitionRequestIds = new Set(agentRequests.getAgentRequests(project)
+    .filter((request) => textOr(request.transitionKey) === 'idea->discovery:forward')
+    .map((request) => request.id));
+  return workItems.getWorkItems(project).some((item) => (
+    transitionRequestIds.has(item.agentRequestId)
+    && item.status === 'completed'
+    && ensureArray(item.attempts).some((attempt) => textOr(attempt.rawOutput))
+  ));
+}
+
+function buildIdeaAugmentPrompt(project) {
+  const existing = project.vision && typeof project.vision === 'object'
+    ? {
+      headline: textOr(project.vision.headline),
+      mainIdeaMarkdown: textOr(project.vision.mainIdeaMarkdown).slice(0, 1500),
+      problemMarkdown: textOr(project.vision.problemMarkdown).slice(0, 1000),
+      targetUsers: ensureArray(project.vision.targetUsers).slice(0, 8),
+      valuePropositionMarkdown: textOr(project.vision.valuePropositionMarkdown).slice(0, 1000),
+    }
+    : {
+      headline: '',
+      mainIdeaMarkdown: textOr(project.ideaBriefMarkdown).slice(0, 1500),
+      problemMarkdown: '',
+      targetUsers: [],
+      valuePropositionMarkdown: '',
+    };
+
+  return `Tu és um estratega de produto YourLab.
+
+Tarefa: **expandir a visão da ideia** a partir da descrição original do utilizador.
+Não faça investigação de mercado, não produza JSON de discovery nem requisitos — apenas a visão narrativa para a página Idea.
+
+Princípios de escrita:
+- Texto humano, fluido e inspirador — frases completas, sem bullet points secos no mainIdeaMarkdown.
+- Linguagem simples; a complexidade técnica fica de fora desta fase.
+- "consequentIdeas" = ideias que nascem naturalmente da ideia principal (extensões, futuros, oportunidades).
+- "principles" = a filosofia/cultura que guia decisões (o "como pensamos", não o "o que fazemos").
+- Preserve e refine o que já existir na visão parcial; não invente dados de mercado sem evidência.
+
+Entradas:
+${JSON.stringify({
+    originalIdeaText: textOr(project.originalIdeaText).slice(0, 4000),
+    currentVision: existing,
+  }, null, 2)}
+
+Responde APENAS com JSON válido (sem \`\`\` fences):
+{
+  "ideaBriefMarkdown": "resumo curto da ideia (compatibilidade)",
+  "vision": {
+    "headline": "uma frase-essência memorável",
+    "mainIdeaMarkdown": "2-4 parágrafos narrativos sobre a ideia principal",
+    "philosophyMarkdown": "1-2 parágrafos sobre cultura e filosofia",
+    "problemMarkdown": "o problema/dor que justifica a ideia",
+    "targetUsers": ["quem beneficia"],
+    "valuePropositionMarkdown": "porque importa / valor entregue",
+    "principles": [{ "title": "", "descriptionMarkdown": "" }],
+    "consequentIdeas": [{ "title": "", "descriptionMarkdown": "" }]
+  },
+  "requiresHumanConfirmation": true
 }`;
 }
 
@@ -5602,6 +5677,8 @@ module.exports = {
   buildGroupingPrompt,
   buildHierarchyReorganizePrompt,
   buildReverseIdeaPrompt,
+  buildIdeaAugmentPrompt,
+  discoveryHasMeaningfulContent,
   buildIdeaBriefFromDiscoveryPrompt,
   buildDiscoveryPrompt,
   buildRoadmapPrompt,

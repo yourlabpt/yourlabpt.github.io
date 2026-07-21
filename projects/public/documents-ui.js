@@ -16,6 +16,7 @@
   const AGENT_FRIENDLY = {
     requirement_grouping: 'Organização de requisitos',
     reverse_idea: 'Resumo da ideia',
+    idea_augment: 'Expandir visão da ideia',
     diagram_to_requirements: 'Requisitos a partir de diagrama',
     requirements_to_architecture: 'Pacote de arquitectura',
     capability_requirements: 'Requisitos da funcionalidade',

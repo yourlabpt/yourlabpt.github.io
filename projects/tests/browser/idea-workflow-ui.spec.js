@@ -41,6 +41,7 @@ test('Idea page has one Task-based path and no legacy prompt controls', async ({
   });
 
   const feed = page.locator('#pdosCardFeed');
+  await expect(feed.locator('[data-idea-augment]')).toHaveText('Expandir ideia com IA');
   await expect(feed.locator('[data-idea-open-discovery]')).toHaveText('Criar plano Idea → Discovery');
   await expect(feed.locator('[data-idea-open-tasks]')).toHaveCount(1);
   await expect(feed.locator('[data-agent="reverse_idea"]')).toHaveCount(0);

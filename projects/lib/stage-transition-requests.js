@@ -131,6 +131,12 @@ function ensureMeaningfulMinimum(tasks) {
 function buildPreview(project, input = {}, deps = {}) {
   const fromStageId = textOr(input.fromStageId); const toStageId = textOr(input.toStageId); const direction = textOr(input.direction, 'forward');
   if (!fromStageId || !toStageId) throw new Error('As etapas de origem e destino sao obrigatorias.');
+  const deliveryOs = deps.deliveryOs || require('./delivery-os');
+  const resolvedEarly = executionPlans.resolveStageTransitionSpec(fromStageId, toStageId, direction);
+  if (resolvedEarly.key === 'idea->discovery' && resolvedEarly.direction === 'backward'
+    && !deliveryOs.discoveryHasMeaningfulContent(project)) {
+    throw new Error('Ainda não existe descoberta para regenerar a ideia. Use "Expandir ideia com IA" na fase Idea.');
+  }
   const key = transitionKey(fromStageId, toStageId, direction);
   const saved = getConfig(project, fromStageId, toStageId, direction);
   const config = defaultConfig({ ...(saved?.values || {}), ...(input.config || {}) });
@@ -141,6 +147,11 @@ function buildPreview(project, input = {}, deps = {}) {
   ) {
     config.preferredAgentId = 'discovery-research';
     config.enableWebSearch = true;
+  }
+  const resolvedForAgent = executionPlans.resolveStageTransitionSpec(fromStageId, toStageId, direction);
+  if (resolvedForAgent.key === 'idea->discovery' && resolvedForAgent.direction === 'backward') {
+    config.preferredAgentId = 'idea-augment';
+    config.enableWebSearch = false;
   }
   const plan = executionPlans.buildExecutionPlan('stage_transition', project, { ...config, fromStageId, toStageId, direction, stageId: toStageId }, { deliveryOs: deps.deliveryOs });
   let tasks = ensureArray(plan.tasks).map((task, index) => ({ ...task, stableTaskKey: textOr(task.stableTaskKey || task.id, `task_${index + 1}`) }));
@@ -156,7 +167,13 @@ function buildPreview(project, input = {}, deps = {}) {
   const previousByKey = new Map(previousTasks.map((task) => [task.stableTaskKey || task.executionPlanTaskId, task]));
   tasks = tasks.map((task) => {
     const previous = previousByKey.get(task.stableTaskKey); const currentFingerprint = hash(task.instruction);
-    return { ...task, requiredSkills: [...new Set([...(SKILLS_BY_STAGE[toStageId] || []), ...(SKILLS_BY_STAGE[fromStageId] || [])])], requiredMcpTools: [...new Set([...(TOOLS_BY_STAGE[toStageId] || []), ...(config.enableWebSearch ? ['web.search'] : [])])], previousTaskId: previous?.id || '', previousFingerprint: previous?.executionPackage?.fingerprint || '', promptFingerprint: currentFingerprint, promptDiff: promptDiff(previous?.executionPackage?.instructions, task.instruction), changeType: !previous ? 'new' : previous.executionPackage?.fingerprint === currentFingerprint ? 'unchanged' : 'changed' };
+    let agentId;
+    if (resolvedTransition.key === 'idea->discovery' && resolvedTransition.direction === 'forward') {
+      agentId = 'discovery-research';
+    } else if (resolvedTransition.key === 'idea->discovery' && resolvedTransition.direction === 'backward') {
+      agentId = 'idea-augment';
+    }
+    return { ...task, ...(agentId ? { agentId } : {}), requiredSkills: [...new Set([...(SKILLS_BY_STAGE[toStageId] || []), ...(SKILLS_BY_STAGE[fromStageId] || [])])], requiredMcpTools: [...new Set([...(TOOLS_BY_STAGE[toStageId] || []), ...(config.enableWebSearch ? ['web.search'] : [])])], previousTaskId: previous?.id || '', previousFingerprint: previous?.executionPackage?.fingerprint || '', promptFingerprint: currentFingerprint, promptDiff: promptDiff(previous?.executionPackage?.instructions, task.instruction), changeType: !previous ? 'new' : previous.executionPackage?.fingerprint === currentFingerprint ? 'unchanged' : 'changed' };
   });
   const removed = previousTasks.filter((previous) => !tasks.some((task) => task.stableTaskKey === previous.stableTaskKey)).map((task) => ({ id: task.id, stableTaskKey: task.stableTaskKey, title: task.title, changeType: 'removed' }));
   const changedContext = !baseline || baseline.inputFingerprint !== inputFingerprint; const changedConfig = !baseline || baseline.configFingerprint !== configFingerprint;

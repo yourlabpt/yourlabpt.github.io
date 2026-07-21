@@ -209,6 +209,7 @@ function normalizeExecutionTask(raw, order = 0) {
     diagramType: textOr(raw?.diagramType),
     requirementIds: ensureArray(raw?.requirementIds).map(String),
     reqKind: textOr(raw?.reqKind),
+    agentId: textOr(raw?.agentId),
     phaseId: textOr(raw?.phaseId),
     phaseName: textOr(raw?.phaseName),
   };
@@ -1268,6 +1269,21 @@ function buildExecutionPlan(agentType, project, options = {}, deps = {}) {
     }));
     fullPrompt = deliveryOs.buildArchitecturePackPrompt(project, config.capabilityId, config.moduleTag);
     masterPlanMarkdown = archPlan.masterPlanMarkdown || `Plano de arquitectura: ${tasks.length} tarefa(s).`;
+  } else if (agentType === 'idea_augment') {
+    tasks = [{
+      id: 'idea_augment',
+      order: 0,
+      title: 'Expandir visão da ideia',
+      role: 'artifact',
+      dependsOn: [],
+      agentId: 'idea-augment',
+    }];
+    fullPrompt = deliveryOs.buildIdeaAugmentPrompt(project);
+    tasks = tasks.map((task) => ({
+      ...task,
+      instruction: buildIdeaAugmentTaskPrompt(fullPrompt, task),
+    }));
+    masterPlanMarkdown = 'Expansão narrativa da visão da ideia a partir do texto original.';
   } else if (agentType === 'reverse_idea') {
     tasks = [
       { id: 'vision', order: 0, title: 'Visão e idea brief', role: 'artifact', dependsOn: [] },
@@ -1519,6 +1535,36 @@ Produza o JSON completo de visão da ideia:
 
 # Contexto congelado do projecto
 ${fullPrompt.slice(0, 16000)}`;
+}
+
+function buildIdeaAugmentTaskPrompt(fullPrompt, task) {
+  return `# Tarefa de Ideia: ${task.title}
+
+# Regras
+- Expanda a visão narrativa a partir da ideia original do utilizador.
+- Não produza JSON de discovery, requisitos nem investigação de mercado.
+- Responda apenas JSON válido, sem markdown fences.
+- Preencha todos os campos com texto substantivo — sem placeholders.
+
+# Output desta tarefa
+Produza o JSON completo de visão da ideia:
+{
+  "ideaBriefMarkdown": "resumo curto da ideia (compatibilidade)",
+  "vision": {
+    "headline": "uma frase-essência memorável",
+    "mainIdeaMarkdown": "2-4 parágrafos narrativos sobre a ideia principal",
+    "philosophyMarkdown": "1-2 parágrafos sobre cultura e filosofia",
+    "problemMarkdown": "o problema/dor que justifica a ideia",
+    "targetUsers": ["quem beneficia"],
+    "valuePropositionMarkdown": "porque importa / valor entregue",
+    "principles": [{ "title": "", "descriptionMarkdown": "" }],
+    "consequentIdeas": [{ "title": "", "descriptionMarkdown": "" }]
+  },
+  "requiresHumanConfirmation": true
+}
+
+# Contexto
+${fullPrompt}`;
 }
 
 function preparePhasedRequirementsPlan(plan, project) {

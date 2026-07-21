@@ -8,6 +8,7 @@ const taskSuggestions = require('./task-suggestions');
 const agentRequests = require('./agent-requests');
 const deliveryOs = require('./delivery-os');
 const stageTransitions = require('./stage-transition-requests');
+const ideaAugmentRequests = require('./idea-augment-requests');
 const agentPlatformSettings = require('./agent-platform-settings');
 
 const ACTIVE_AGENT_STATUSES = new Set([
@@ -540,6 +541,34 @@ function registerWorkItemRoutes(app, deps) {
         appendActivity(store, { actorUserId: req.auth.user.id, projectId: project.id, action: 'stage_transition_request_created', details: { agentRequestId: result.request.id, parentTaskId: result.request.parentTaskId, transitionKey: result.request.transitionKey, regenerationMode: result.request.regenerationMode } });
       });
       return res.status(result.created ? 201 : 200).json({ agentRequest: result.request, workItems: result.tasks, parentTaskId: result.request.parentTaskId, preview: safeTransitionPreview(result.preview) });
+    } catch (error) { return res.status(400).json({ message: error.message }); }
+  });
+
+  app.post('/api/projects/projects/:projectId/work-items/idea-augment/requests', authMiddleware, loadProjectLiteForUser, requireProjectEditor, async (req, res) => {
+    try {
+      let result = null;
+      await updateStore(async (store) => {
+        const project = store.projects.find((entry) => entry.id === req.params.projectId);
+        if (!project) throw new Error('Projeto nao encontrado.');
+        result = ideaAugmentRequests.createRequest(project, req.body || {}, {
+          actorUserId: req.auth.user.id,
+          nowIso,
+          deliveryOs,
+        });
+        project.updatedAt = nowIso();
+        appendActivity(store, {
+          actorUserId: req.auth.user.id,
+          projectId: project.id,
+          action: 'idea_augment_request_created',
+          details: { agentRequestId: result.request.id, workItemId: result.tasks?.[0]?.id || '' },
+        });
+      });
+      return res.status(result.created ? 201 : 200).json({
+        agentRequest: result.request,
+        workItems: result.tasks,
+        workItemId: result.tasks?.[0]?.id || '',
+        created: result.created,
+      });
     } catch (error) { return res.status(400).json({ message: error.message }); }
   });
 

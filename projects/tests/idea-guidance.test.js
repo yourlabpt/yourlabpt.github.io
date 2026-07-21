@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const deliveryOs = require('../lib/delivery-os');
 
-test('Idea page exposes only the canonical Task-based Discovery workflow', () => {
+test('Idea page exposes augment and Discovery workflow without legacy prompt controls', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),
     'utf8',
@@ -14,6 +14,9 @@ test('Idea page exposes only the canonical Task-based Discovery workflow', () =>
     source.indexOf('function renderIdeaStage'),
     source.indexOf('function renderDiscoveryStage'),
   );
+  assert.match(ideaUi, /data-idea-augment/);
+  assert.match(ideaUi, /Expandir ideia com IA/);
+  assert.match(ideaUi, /work-items\/idea-augment\/requests/);
   assert.match(ideaUi, /data-idea-open-discovery/);
   assert.match(ideaUi, /openTransitionPicker\('idea', 'discovery', project\)/);
   assert.match(ideaUi, /Criar plano Idea → Discovery/);

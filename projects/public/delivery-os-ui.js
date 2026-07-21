@@ -1599,10 +1599,11 @@
 
         <article class="pdos-card idea-workspace-panel idea-panel-workflow">
           <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE PELO WORKFLOW</span><h3>Preparar a Discovery</h3></div></header>
-          <p class="muted-text">A investigação e a expansão da ideia são executadas como Tasks rastreáveis. Pode acompanhar, pausar, retomar e rever os resultados na plataforma, sem copiar prompts manualmente.</p>
+          <p class="muted-text">Expanda primeiro a visão narrativa da ideia. A investigação de mercado (Discovery) é um passo separado, com tarefas rastreáveis que pode acompanhar, pausar e rever.</p>
           <p class="muted-text idea-transition-progress" data-idea-transition-progress></p>
           <div class="pdos-card-actions">
-            ${canEdit ? '<button type="button" class="btn primary" data-idea-open-discovery>Criar plano Idea → Discovery</button>' : ''}
+            ${canEdit ? `<button type="button" class="btn primary" data-idea-augment ${original ? '' : 'disabled title="Descreva a ideia original antes de expandir com IA."'}>Expandir ideia com IA</button>` : ''}
+            ${canEdit ? '<button type="button" class="btn ghost" data-idea-open-discovery>Criar plano Idea → Discovery</button>' : ''}
             <button type="button" class="btn ghost" data-idea-open-tasks>Ver Tasks</button>
           </div>
         </article>
@@ -1816,6 +1817,32 @@
       } catch (error) { showToast(error.message, 'error'); }
     });
 
+    root.querySelector('[data-idea-augment]')?.addEventListener('click', async () => {
+      const button = root.querySelector('[data-idea-augment]');
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      const previousLabel = button.textContent;
+      button.textContent = 'A criar tarefa…';
+      try {
+        const res = await apiRequest(`/projects/${project.id}/work-items/idea-augment/requests`, {
+          method: 'POST',
+          body: {},
+        });
+        window.switchToTab?.('tarefas');
+        const taskId = res.workItemId || res.workItems?.[0]?.id || '';
+        if (window.WorkItemsUI?.refreshTasks) {
+          await window.WorkItemsUI.refreshTasks(project, { resetFilters: true, openTaskId: taskId });
+        } else if (taskId) {
+          await window.WorkItemsUI?.openTask?.(project, taskId);
+        }
+        showToast('Tarefa criada. Execute a expansão da ideia nas Tasks.', 'ok');
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        button.disabled = !String(project.originalIdeaText || '').trim();
+        button.textContent = previousLabel;
+      }
+    });
     root.querySelector('[data-idea-open-discovery]')?.addEventListener('click', () => {
       openTransitionPicker('idea', 'discovery', project);
     });

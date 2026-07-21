@@ -18,6 +18,7 @@ const {
   publicDispatch,
 } = require('./agent-connector-contract');
 const LEGACY_AGENT_MANIFESTS = {
+  'idea-augment': { skills: ['product_discovery'], tools: ['project.read'] },
   'idea-to-requirements': { skills: ['product_discovery', 'requirements_engineering'], tools: ['project.read', 'requirements.read'] },
   'requirements-to-architecture': { skills: ['requirements_engineering', 'solution_architecture'], tools: ['project.read', 'requirements.read', 'documents.read'] },
   'architecture-to-roadmap': { skills: ['solution_architecture', 'delivery_planning'], tools: ['project.read', 'requirements.read'] },
@@ -49,6 +50,13 @@ function buildPromptForAgentType(project, agentType, body = {}) {
     return {
       fullPrompt: deliveryOs.buildGroupingPrompt(project),
       targetOutput: 'grouping_json',
+      contextPack: {},
+    };
+  }
+  if (agentType === 'idea_augment') {
+    return {
+      fullPrompt: deliveryOs.buildIdeaAugmentPrompt(project),
+      targetOutput: 'idea_brief',
       contextPack: {},
     };
   }
@@ -1092,7 +1100,7 @@ function registerAgentRuntimeRoutes(app, deps) {
       const platformSettings = await agentPlatformSettings.readAgentPlatformSettings(dataDir);
       const mergedSettings = agentPlatformSettings.mergeWithPlatformDefaults(task.executionSettings, platformSettings);
       const compatible = agents.filter((row) => row.compatible);
-      const preferred = mergedSettings.agentId || request?.configSnapshot?.preferredAgentId || task.agentId;
+      const preferred = task.agentId || request?.configSnapshot?.preferredAgentId || mergedSettings.agentId;
       let selected = compatible.find((row) => row.id === preferred) || compatible[0] || null;
       let compatibilityPendingReasons = [];
       if (connectionMode === 'remote_pull') {
@@ -2613,6 +2621,7 @@ function registerAgentRuntimeRoutes(app, deps) {
 
 function agentFriendlyName(agentType) {
   const map = {
+    idea_augment: 'Expandir visão da ideia',
     reverse_idea: 'Ideia → requisitos',
     requirements_to_architecture: 'Requisitos → arquitectura',
     roadmap_plan: 'Arquitectura → roadmap',

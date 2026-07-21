@@ -6,6 +6,7 @@ const projectAccess = require('../lib/project-access');
 const taskSuggestions = require('../lib/task-suggestions');
 const agentRequests = require('../lib/agent-requests');
 const stageTransitions = require('../lib/stage-transition-requests');
+const ideaAugmentRequests = require('../lib/idea-augment-requests');
 const {
   selectReadyAgentTask,
   resolveContinuousExecutionTask,
@@ -1170,9 +1171,48 @@ describe('stage transition requests through Tasks', () => {
 
     assert.equal(preview.key, 'discovery->idea:backward');
     assert.deepEqual(preview.tasks.map((task) => task.id), ['idea_brief']);
+    assert.equal(preview.tasks[0].agentId, 'idea-augment');
     assert.match(preview.tasks[0].instruction, /ideaBriefMarkdown/);
     assert.doesNotMatch(preview.tasks[0].instruction, /discovery_v2/);
     assert.equal(preview.tasks.some((task) => task.id === 'framing'), false);
+  });
+
+  it('blocks backward idea regeneration when discovery is empty', () => {
+    const data = project();
+    assert.throws(
+      () => stageTransitions.buildPreview(data, {
+        fromStageId: 'discovery',
+        toStageId: 'idea',
+        direction: 'backward',
+      }),
+      /Ainda não existe descoberta/,
+    );
+  });
+});
+
+describe('idea augment requests', () => {
+  it('creates a single idea augment task when original idea text exists', () => {
+    const data = {
+      id: 'p_augment',
+      name: 'Augment project',
+      originalIdeaText: 'A platform for hotel guests and restaurants.',
+      workItems: [],
+      agentRequests: [],
+    };
+    const created = ideaAugmentRequests.createRequest(data, {}, { actorUserId: 'u1' });
+    assert.equal(created.created, true);
+    assert.equal(created.tasks.length, 1);
+    assert.equal(created.tasks[0].agentType, 'idea_augment');
+    assert.equal(created.tasks[0].agentId, 'idea-augment');
+    assert.equal(created.tasks[0].deliveryStageId, 'idea');
+    assert.match(created.tasks[0].executionPackage.instructions, /ideia original/);
+  });
+
+  it('rejects idea augment when original idea text is missing', () => {
+    assert.throws(
+      () => ideaAugmentRequests.createRequest({ id: 'p_empty', workItems: [], agentRequests: [] }, {}),
+      /Descreva a ideia original/,
+    );
   });
 });
 

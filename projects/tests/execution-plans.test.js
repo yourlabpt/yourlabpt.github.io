@@ -61,6 +61,18 @@ describe('execution plan model profiles', () => {
     assert.match(plan.masterPlanMarkdown, /configuração deve ser revista/);
   });
 
+  it('builds a single-task idea_augment plan from original idea text', () => {
+    const plan = executionPlans.buildExecutionPlan('idea_augment', {
+      ...projectFixture(),
+      originalIdeaText: 'A mobile app for city passes.',
+      vision: {},
+    });
+    assert.deepEqual(plan.tasks.map((task) => task.id), ['idea_augment']);
+    assert.equal(plan.tasks[0].agentId, 'idea-augment');
+    assert.match(plan.tasks[0].instruction, /originalIdeaText/);
+    assert.doesNotMatch(plan.tasks[0].instruction, /discovery_v2/);
+  });
+
   it('builds prompt packs with task, verification and rollback sections', () => {
     const plan = executionPlans.buildExecutionPlan('reverse_idea', projectFixture(), {
       modelProfileId: 'small',
