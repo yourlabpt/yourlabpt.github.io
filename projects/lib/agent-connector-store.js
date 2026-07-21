@@ -443,8 +443,8 @@ class AgentConnectorStore {
         ||
         (leased.desired_action === 'cancel' && localStatus === 'cancelled')
         || (leased.desired_action === 'pause' && localStatus === 'paused')
-        || (leased.desired_action === 'resume' && localStatus !== 'paused')
-        || (leased.desired_action === 'finish_partial' && localStatus !== 'paused')
+        || (leased.desired_action === 'resume' && ['running', 'planning', 'executing', 'self_review', 'verifying'].includes(localStatus))
+        || (leased.desired_action === 'finish_partial' && ['waiting_review', 'completed'].includes(localStatus))
       ) ? null : leased.desired_action;
       this.db.prepare(`
         UPDATE agent_dispatches
@@ -492,8 +492,11 @@ class AgentConnectorStore {
         ? 'A execução ainda está na fila; cancele-a ou aguarde que o agente inicie.'
         : 'A execução já está em pausa.');
     }
-    if (['resume', 'finish_partial'].includes(action) && dispatch.status !== 'paused') {
-      throw new Error('A execução tem de estar em pausa para continuar ou enviar o progresso.');
+    if (action === 'resume' && dispatch.status !== 'paused') {
+      throw new Error('A execução tem de estar em pausa para continuar.');
+    }
+    if (action === 'finish_partial' && !['paused', 'blocked', 'failed', 'budget_exhausted'].includes(dispatch.status)) {
+      throw new Error('O progresso só pode ser enviado a partir de uma execução pausada ou interrompida.');
     }
     const idempotencyKey = String(
       options.idempotencyKey || `${dispatch.id}:${action}:${this.now()}`

@@ -576,6 +576,11 @@ describe('secure outbound agent connector', () => {
     synced = store.sync(connector.id, queued.id, claim.leaseToken, {
       localJobId: 'local-controlled', status: 'self_review',
     });
+    assert.equal(synced.desiredAction, 'finish_partial');
+    synced = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-controlled', status: 'self_review',
+      acknowledgedAction: 'finish_partial',
+    });
     assert.equal(synced.desiredAction, null);
     db.close();
   });
@@ -633,6 +638,34 @@ describe('secure outbound agent connector', () => {
     });
     assert.equal(acknowledged.desiredAction, null);
     assert.equal(acknowledged.status, 'paused');
+    db.close();
+  });
+
+  it('keeps finish-partial pending while a blocked runtime has not acknowledged it', () => {
+    const { db, store, connector } = fixture();
+    const queued = enqueue(store);
+    const claim = store.claim(connector.id);
+    store.ack(connector.id, queued.id, claim.leaseToken, 'local-blocked');
+    store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-blocked',
+      status: 'paused',
+    });
+    db.prepare('UPDATE agent_dispatches SET status = ? WHERE id = ?')
+      .run('blocked', queued.id);
+
+    store.setDesiredAction(queued.id, 'finish_partial');
+    const delivered = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-blocked',
+      status: 'paused',
+    });
+    assert.equal(delivered.desiredAction, 'finish_partial');
+
+    const acknowledged = store.sync(connector.id, queued.id, claim.leaseToken, {
+      localJobId: 'local-blocked',
+      status: 'self_review',
+      acknowledgedAction: 'finish_partial',
+    });
+    assert.equal(acknowledged.desiredAction, null);
     db.close();
   });
 

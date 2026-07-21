@@ -200,9 +200,27 @@ function buildTreePackage(project, parent) {
   const openChildren = children.filter((task) => (
     task.status !== 'waiting_review' && !workItems.isTerminalStatus(task.status)
   ));
+  let provisionalCharacters = 0;
+  const provisionalOutputs = children.filter((task) => !openChildren.some((entry) => entry.id === task.id)).map((task) => {
+    const latestAttempt = ensureArray(task.attempts).at(-1);
+    const raw = textOr(latestAttempt?.rawOutput || task.resultSummaryMarkdown);
+    if (!raw || provisionalCharacters >= 18000) return null;
+    const output = raw.slice(0, Math.min(6000, 18000 - provisionalCharacters));
+    provisionalCharacters += output.length;
+    let parsedOutput = output;
+    try { parsedOutput = JSON.parse(output); } catch { /* preserve reviewable text */ }
+    return {
+      taskId: task.id,
+      title: task.title,
+      status: task.status,
+      packageVersion: task.executionPackage?.version || 1,
+      provisional: true,
+      output: parsedOutput,
+    };
+  }).filter(Boolean);
   const envelope = { requestId: request?.id, requestVersion: request?.version || 1, taskOutputs: openChildren.map((task) => ({ taskId: task.id, packageVersion: task.executionPackage?.version || 1, output: {} })) };
-  const text = [`# ${parent.title}`, `\n## Pedido\n${request?.requestMarkdown || parent.descriptionMarkdown}`, `\n## Resultado esperado\n${request?.desiredOutcomeMarkdown || parent.acceptanceCriteriaMarkdown}`, '\n## Subtarefas ainda abertas', ...openChildren.map((task, index) => `\n### ${index + 1}. ${task.title}\nTask ID: ${task.id}\nPackage version: ${task.executionPackage?.version || 1}\n${task.executionPackage?.instructions || task.descriptionMarkdown}\nFormato: ${task.executionPackage?.outputFormat || 'JSON'}`), '\n## Formato obrigatorio da resposta', JSON.stringify(envelope, null, 2)].join('\n');
-  return { request, children, openChildren, text, envelope, contextSnapshotHash: request?.inputFingerprint || '' };
+  const text = [`# ${parent.title}`, `\n## Pedido\n${request?.requestMarkdown || parent.descriptionMarkdown}`, `\n## Resultado esperado\n${request?.desiredOutcomeMarkdown || parent.acceptanceCriteriaMarkdown}`, ...(provisionalOutputs.length ? ['\n## Resultados provisórios já obtidos\nUse-os como contexto; não os repita nem os substitua.', JSON.stringify(provisionalOutputs, null, 2)] : []), '\n## Subtarefas ainda abertas', ...openChildren.map((task, index) => `\n### ${index + 1}. ${task.title}\nTask ID: ${task.id}\nPackage version: ${task.executionPackage?.version || 1}\n${task.executionPackage?.instructions || task.descriptionMarkdown}\nFormato: ${task.executionPackage?.outputFormat || 'JSON'}`), '\n## Formato obrigatorio da resposta', JSON.stringify(envelope, null, 2)].join('\n');
+  return { request, children, openChildren, provisionalOutputs, text, envelope, contextSnapshotHash: request?.inputFingerprint || '' };
 }
 function validateBundle(project, parent, rawOutput) {
   let parsed; try { parsed = typeof rawOutput === 'string' ? JSON.parse(rawOutput) : rawOutput; } catch { throw new Error('O pacote deve ser JSON valido.'); }

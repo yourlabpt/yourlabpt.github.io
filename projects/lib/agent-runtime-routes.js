@@ -1294,7 +1294,7 @@ function registerAgentRuntimeRoutes(app, deps) {
             return { ...tree, children: tree.openChildren };
           })()
         : { text: [delegatedTask.executionPackage?.instructions || delegatedTask.descriptionMarkdown, delegatedTask.executionPackage?.outputFormat ? `\n\nFormato:\n${delegatedTask.executionPackage.outputFormat}` : ''].join(''), contextSnapshotHash: delegation.request.inputFingerprint || '', children: [] };
-      built = { ...built, fullPrompt: canonicalPackage.text || built.fullPrompt, contextPack: { ...(built.contextPack || {}), taskId: delegatedTask.id, agentRequestId: delegation.request.id, contextSnapshotHash: canonicalPackage.contextSnapshotHash } };
+      built = { ...built, fullPrompt: canonicalPackage.text || built.fullPrompt, contextPack: { ...(built.contextPack || {}), taskId: delegatedTask.id, agentRequestId: delegation.request.id, contextSnapshotHash: canonicalPackage.contextSnapshotHash, provisionalTaskOutputs: canonicalPackage.provisionalOutputs || [] } };
 
       const run = normalizePromptRun({
         agentType: platformAgentType,
@@ -1407,6 +1407,10 @@ function registerAgentRuntimeRoutes(app, deps) {
             title: task.title,
             dependsOn: task.dependencyTaskIds,
             packageVersion: task.executionPackage?.version || 1,
+            instructions: task.executionPackage?.instructions || task.descriptionMarkdown,
+            outputFormat: task.executionPackage?.outputFormat || 'JSON',
+            acceptanceCriteria: task.acceptanceCriteriaMarkdown
+              || task.executionPackage?.acceptanceCriteriaMarkdown || '',
           })) || [],
           requiredSkills: delegatedTask.requiredSkills || [],
           allowedTools: delegatedTask.requiredMcpTools || [],

@@ -1230,6 +1230,7 @@
         ${state.canManage ? `<div class="ado-action-bar ado-agent-controls">
           ${active && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="pause">Pausar no próximo checkpoint</button>' : ''}
           ${status === 'paused' && !desiredAction ? '<button type="button" class="ado-action-primary" data-ado-run-control="resume">Continuar</button><button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar progresso para avaliação</button>' : ''}
+          ${['blocked', 'budget_exhausted'].includes(status) && !desiredAction ? '<button type="button" class="ado-action-ghost" data-ado-run-control="finish-partial">Enviar checkpoint para avaliação</button>' : ''}
           ${['failed', 'blocked', 'budget_exhausted', 'connection_lost', 'cancelled'].includes(status) ? `<button type="button" class="ado-action-primary" data-ado-run-control="retry">${status === 'cancelled' ? 'Reiniciar do último checkpoint' : 'Retomar do último checkpoint'}</button>` : ''}
           ${['waiting_review', 'pending_human_review'].includes(status) ? '<button type="button" class="ado-action-primary" data-ado-focus-review>Avaliar resultado</button>' : ''}
           ${!desiredAction && !['completed', 'cancelled'].includes(status) ? '<button type="button" class="ado-action-ghost" data-ado-run-control="sync-now">Sincronizar agora</button>' : ''}

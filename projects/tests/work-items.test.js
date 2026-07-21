@@ -267,13 +267,23 @@ describe('agent requests and visible plans', () => {
       .filter((entry) => entry.parentTaskId === parent.id);
     workItems.setWorkItems(data, workItems.getWorkItems(data).map((entry) => (
       entry.id === children[0].id
-        ? workItems.normalizeWorkItem({ ...entry, status: 'waiting_review' }, { project: data })
+        ? workItems.normalizeWorkItem({
+            ...entry,
+            status: 'waiting_review',
+            attempts: [{
+              id: 'attempt_reviewed',
+              rawOutput: JSON.stringify({ stakeholders: [{ name: 'Independent musicians' }] }),
+            }],
+          }, { project: data })
         : entry
     )));
     const pack = stageTransitions.buildTreePackage(data, parent);
     assert.ok(pack.openChildren.length > 0);
     assert.ok(!pack.openChildren.some((entry) => entry.id === children[0].id));
     assert.ok(pack.openChildren.every((entry) => pack.text.includes(entry.id)));
+    assert.equal(pack.provisionalOutputs[0].taskId, children[0].id);
+    assert.equal(pack.provisionalOutputs[0].output.stakeholders[0].name, 'Independent musicians');
+    assert.match(pack.text, /Resultados provisórios já obtidos/);
   });
 
   it('repairs an already-approved task whose connector was left waiting for review', () => {
