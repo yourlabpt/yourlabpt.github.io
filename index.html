@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,191 +28,121 @@
             <div class="logo-container">
                 <img src="logo.png" alt="YourLab Logo" class="logo">
             </div>
-            <p class="tagline" data-i18n="tagline">Your Ideas Into Reality</p>
+            <a class="header-cta" href="#convite" data-i18n="headerCta">Falar connosco</a>
         </header>
 
-        <!-- About Section -->
-        <section class="about" id="about">
-            <div class="about-content">
-                <h2 class="about-heading reveal-up" data-i18n="aboutHeading">About YourLab</h2>
-                <p class="about-lead reveal-up" data-i18n="aboutLead">Fail small. Learn fast. Launch smart.</p>
-                <p class="about-body reveal-up" data-i18n="aboutBody">Every year, over 30,000 new products are launched — and more than 90% of them fail. The biggest risk isn't having a bad idea; it's investing everything before validating on your business.</p>
-                <p class="about-body reveal-up" data-i18n="aboutBody2">At YourLab, we help you build lean solutions so you can test your concept in the real market, learn what works, and iterate — fail smaller and pivot sooner.</p>
-            </div>
-
-            <!-- Industry Reality Stats -->
-            <div class="about-stats reveal-up">
-                <div class="stat stat-danger">
-                    <span class="stat-number" data-target="90">0</span><span class="stat-suffix">%</span>
-                    <span class="stat-label" data-i18n="statLabel1">of new products fail</span>
-                    <span class="stat-source">Harvard Business Review</span>
+        <!-- 1. Hero — problema + resultado -->
+        <section class="yl-section yl-section--hero" id="hero">
+            <div class="yl-section-inner">
+                <h1 class="reveal-up" data-i18n="heroH1">Transformamos processos confusos em sistemas simples de usar.</h1>
+                <p class="yl-lead reveal-up" data-i18n="heroSub">Tem uma ideia para testar, um processo preso em folhas de cálculo e mensagens, ou uma aplicação que ficou a meio? Construímos a primeira versão útil em semanas — com orçamento fechado antes de começar.</p>
+                <div class="yl-cta-row reveal-up">
+                    <a class="yl-btn-primary" href="#convite" data-i18n="heroCtaPrimary">Conte-nos o que precisa de melhorar</a>
+                    <a class="yl-btn-secondary" href="#como-trabalhamos" data-i18n="heroCtaSecondary">Ver como trabalhamos</a>
                 </div>
-                <div class="stat stat-warning">
-                    <span class="stat-number" data-target="70">0</span><span class="stat-suffix">%</span>
-                    <span class="stat-label" data-i18n="statLabel2">of organisations struggle to innovate</span>
-                    <span class="stat-source">VMware / Digitalisation World</span>
-                </div>
-            </div>
-
-            <p class="about-cta-text reveal-up" data-i18n="aboutCta" data-i18n-html="true">The solution? Don't build everything — build the <strong>right thing first</strong>. That's what an MVP does.</p>
-
-            <!-- Idea → MVP Journey -->
-            <div class="journey">
-                <div class="journey-step reveal-up">
-                    <div class="journey-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 1 4 12.9V17H8v-2.1A7 7 0 0 1 12 2z"/></svg>
-                    </div>
-                    <div class="journey-step-text">
-                        <h3 data-i18n="journeyIdea">Idea</h3>
-                        <p data-i18n="journeyIdeaDesc">You share your vision and business concept with us</p>
-                    </div>
-                </div>
-                <div class="journey-connector reveal-up"><span></span></div>
-                <div class="journey-step reveal-up">
-                    <div class="journey-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                    </div>
-                    <div class="journey-step-text">
-                        <h3 data-i18n="journeyStrategy">Strategy</h3>
-                        <p data-i18n="journeyStrategyDesc">We define the roadmap, scope, and core features</p>
-                    </div>
-                </div>
-                <div class="journey-connector reveal-up"><span></span></div>
-                <div class="journey-step reveal-up">
-                    <div class="journey-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>
-                    </div>
-                    <div class="journey-step-text">
-                        <h3 data-i18n="journeyBuild">Build</h3>
-                        <p data-i18n="journeyBuildDesc">Our team designs and develops your product rapidly</p>
-                    </div>
-                </div>
-                <div class="journey-connector reveal-up"><span></span></div>
-                <div class="journey-step reveal-up">
-                    <div class="journey-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 3 0 3 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-3 0-3"/></svg>
-                    </div>
-                    <div class="journey-step-text">
-                        <h3 data-i18n="journeyLaunch">Launch MVP</h3>
-                        <p data-i18n="journeyLaunchDesc">Your product is ready to meet real users and grow</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="about-content">
-                <p class="about-lead reveal-up" data-i18n="conclusionHeading">Why we are different?</p>
-                <p class="about-body reveal-up" data-i18n="conclusionBody">We apply disciplined requirements engineering to transform your ideas into structured, measurable outcomes. Every request becomes a defined requirement, and every requirement carries a validation metric — so you always know what is being built and why. We don’t build for you; we build with you. This isn’t our lab — it’s YourLab. A place to test, measure, iterate, and grow. If you’re ready to move from assumption to validation, let’s start building the right thing.</p>
-          </div>
-        </section>
-
-        <!-- Gallery Slideshow Section -->
-        <section class="slideshow-section" id="slideshow">
-            <div class="slideshow-intro reveal-up">
-                <p class="slideshow-kicker" data-i18n="slideshowKicker">IMMERSIVE OVERVIEW</p>
-                <h2 data-i18n="slideshowIntroHeading">An interactive walkthrough of how YourLab builds products</h2>
-                <p data-i18n="slideshowIntroDesc">Move through each scene, interact with words, and follow the journey from concept to launch.</p>
-            </div>
-
-            <div class="slideshow-container">
-                <div class="slide active">
-                    <article class="story-scene">
-                        <p class="slide-index">01 / 05</p>
-                        <h3 data-word-interactive data-i18n="slide1Heading">Welcome to YourLab.</h3>
-                        <p class="scene-lead" data-word-interactive data-i18n="slide1Lead">We are the lab where your business ideas are developed, tested, and brought to life.</p>
-                        <div class="game-shell" data-game-level="0"></div>
-                        <button class="scene-next" type="button" data-action="next" data-level-next="0" data-i18n="slideContinue">Continue</button>
-                    </article>
-                </div>
-                <div class="slide">
-                    <article class="story-scene">
-                        <p class="slide-index">02 / 05</p>
-                        <h3 data-word-interactive data-i18n="slide2Heading">What We Do</h3>
-                        <p class="scene-quote" data-word-interactive data-i18n="slide2Quote">Your idea in our lab.</p>
-                        <div class="scene-list">
-                            <p data-word-interactive data-i18n="slide2Item1">Smart Design — we transform raw ideas into actionable, well-defined requirements based on systems engineering methods.</p>
-                            <p data-word-interactive data-i18n="slide2Item2">Test first — we start with a focused MVP, giving you something tangible to test and refine before moving ahead.</p>
-                            <p data-word-interactive data-i18n="slide2Item3">Scope — projects range from custom business software to IoT applications and integrations built around your needs.</p>
-                        </div>
-                        <div class="game-shell" data-game-level="1"></div>
-                        <button class="scene-next" type="button" data-action="next" data-level-next="1" data-i18n="slideContinue">Continue</button>
-                    </article>
-                </div>
-                <div class="slide">
-                    <article class="story-scene">
-                        <p class="slide-index">03 / 05</p>
-                        <h3 data-word-interactive data-i18n="slide3Heading">Our Process</h3>
-                        <p class="scene-quote" data-word-interactive data-i18n="slide3Quote">Turning ideas into action.</p>
-                        <div class="scene-steps">
-                            <article class="step-card">
-                                <span>01</span>
-                                <p data-word-interactive data-i18n="slide3Step1">Book a call and show your idea.</p>
-                            </article>
-                            <article class="step-card">
-                                <span>02</span>
-                                <p data-word-interactive data-i18n="slide3Step2">Plan the requirements and select the essentials for the MVP.</p>
-                            </article>
-                            <article class="step-card">
-                                <span>03</span>
-                                <p data-word-interactive data-i18n="slide3Step3">Build with regular updates as your idea comes to life.</p>
-                            </article>
-                            <article class="step-card">
-                                <span>04</span>
-                                <p data-word-interactive data-i18n="slide3Step4">Launch with confidence by validating before investing more.</p>
-                            </article>
-                        </div>
-                        <div class="game-shell" data-game-level="2"></div>
-                        <button class="scene-next" type="button" data-action="next" data-level-next="2" data-i18n="slideContinue">Continue</button>
-                    </article>
-                </div>
-                <div class="slide">
-                    <article class="story-scene">
-                        <p class="slide-index">04 / 05</p>
-                        <h3 data-word-interactive data-i18n="slide4Heading">Why Choose YourLab</h3>
-                        <div class="scene-list">
-                            <p data-word-interactive data-i18n="slide4Item1">One-to-One Rule — each specialist handles one project at a time, ensuring focused expertise and attention.</p>
-                            <p data-word-interactive data-i18n="slide4Item2">Real People, Real Expertise — we combine human experience with AI support for smarter delivery.</p>
-                            <p data-word-interactive data-i18n="slide4Item3">Builder Driven — we work side by side with you to build innovative solutions from scratch.</p>
-                            <p data-word-interactive data-i18n="slide4Item4">Custom pricing — we understand your business reality and define pricing together.</p>
-                        </div>
-                        <div class="game-shell" data-game-level="3"></div>
-                        <button class="scene-next" type="button" data-action="next" data-level-next="3" data-i18n="slideContinue">Continue</button>
-                    </article>
-                </div>
-                <div class="slide">
-                    <article class="story-scene scene-final">
-                        <p class="slide-index">05 / 05</p>
-                        <h3 data-word-interactive data-i18n="slide5Heading">Are you ready to turn ideas into reality?</h3>
-                        <p class="scene-lead" data-word-interactive data-i18n="slide5Lead">We are here for you. YourLab Technologies.</p>
-                        <div class="game-finale" data-game-finale></div>
-                        <button class="scene-next scene-restart" type="button" data-action="restart-game" data-i18n="gameRestart">Play a new challenge</button>
-                        <a class="scene-next-link" href="#chatForm" data-i18n="slide5Cta">Start the conversation</a>
-                    </article>
-                </div>
-
-                <!-- Navigation Arrows -->
-                <button class="slide-arrow slide-prev" aria-label="Previous slide">&#10094;</button>
-                <button class="slide-arrow slide-next" aria-label="Next slide">&#10095;</button>
-
-                <!-- Dots -->
-                <div class="slide-dots">
-                    <span class="dot active" data-index="0"></span>
-                    <span class="dot" data-index="1"></span>
-                    <span class="dot" data-index="2"></span>
-                    <span class="dot" data-index="3"></span>
-                    <span class="dot" data-index="4"></span>
-                </div>
-
-                <!-- Progress bar -->
-                <div class="slide-progress"><div class="slide-progress-bar"></div></div>
+                <p class="yl-microcopy reveal-up" data-i18n="heroMicrocopy">Primeira chamada gratuita e sem compromisso. Se não fizer sentido construir, dizemos-lhe isso.</p>
             </div>
         </section>
 
-        <!-- Projects Showcase Section -->
+        <!-- 2. Faixa de confiança -->
+        <section class="yl-section yl-section--strip" id="confianca">
+            <div class="yl-chip-row yl-chip-row--wrap reveal-up">
+                <span class="yl-chip" data-i18n="trust1">Preços confortáveis, pagamento ajustado ao seu negócio</span>
+                <span class="yl-chip" data-i18n="trust2">Primeira versão em 4 a 6 semanas</span>
+                <span class="yl-chip" data-i18n="trust3">Orçamento fechado antes de começar</span>
+                <span class="yl-chip" data-i18n="trust4">O sistema fica seu, incluindo o código</span>
+                <span class="yl-chip" data-i18n="trust5">Portugal e Europa · português e inglês</span>
+            </div>
+        </section>
+
+        <!-- 3. Situações reconhecíveis -->
+        <section class="yl-section yl-section--panel" id="situacoes">
+            <div class="yl-section-inner">
+                <h2 class="reveal-up" data-i18n="situationsH2">Reconhece alguma destas situações?</h2>
+            </div>
+            <div class="yl-cards-grid reveal-up">
+                <article class="yl-card">
+                    <h3 data-i18n="situation1Title">Tem uma ideia e não sabe por onde começar</h3>
+                    <p data-i18n="situation1Body">Sabe o problema que quer resolver, mas não sabe o que construir primeiro, quanto custa nem quanto tempo leva. Ajudamos a definir a primeira versão e a testá-la com pessoas reais.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="situation2Title">Começou a construir com IA e ficou preso</h3>
+                    <p data-i18n="situation2Body">A primeira versão saiu depressa, mas agora há erros que voltam sempre, nada funciona fora do seu computador e ninguém sabe explicar o que está lá dentro. Arrumamos o que já existe e deixamos aquilo a funcionar.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="situation3Title">A empresa cresceu e o trabalho ficou espalhado</h3>
+                    <p data-i18n="situation3Body">Informação em Excel, WhatsApp e e-mail. A equipa copia os mesmos dados, os relatórios são feitos à mão e ninguém consegue ver a operação toda. Juntamos isso num sistema só.</p>
+                </article>
+            </div>
+            <p class="yl-section-inner yl-lead reveal-up" data-i18n="situationsClose">Em qualquer destes casos, o primeiro passo é o mesmo: entender bem o que precisa de acontecer.</p>
+        </section>
+
+        <!-- 4. Como ajudamos -->
+        <section class="yl-section" id="como-ajudamos">
+            <div class="yl-section-inner">
+                <p class="yl-eyebrow reveal-up" data-i18n="helpEyebrow">COMO AJUDAMOS</p>
+                <h2 class="reveal-up" data-i18n="helpH2">Organizamos primeiro. Construímos depois.</h2>
+                <p class="reveal-up" data-i18n="helpBody1">Começamos por entender como a sua empresa trabalha hoje, onde se perde tempo e o que precisa mesmo de mudar.</p>
+                <p class="reveal-up" data-i18n="helpBody2">Depois construímos uma primeira versão simples, colocamos em utilização e melhoramos com base no que acontece no dia a dia.</p>
+            </div>
+            <div class="yl-chip-row yl-chip-row--wrap reveal-up">
+                <span class="yl-chip" data-i18n="helpType1">Digitalizar um processo manual</span>
+                <span class="yl-chip" data-i18n="helpType2">Sistemas internos para a equipa</span>
+                <span class="yl-chip" data-i18n="helpType3">Portais para clientes</span>
+                <span class="yl-chip" data-i18n="helpType4">Ligar ferramentas que não falam entre si</span>
+                <span class="yl-chip" data-i18n="helpType5">Relatórios e acompanhamento</span>
+                <span class="yl-chip" data-i18n="helpType6">Retomar um projeto parado</span>
+            </div>
+        </section>
+
+        <!-- 5. Como trabalhamos — processo em 5 passos -->
+        <section class="yl-section yl-section--panel" id="como-trabalhamos">
+            <div class="yl-section-inner">
+                <p class="yl-eyebrow reveal-up" data-i18n="processEyebrow">COMO TRABALHAMOS</p>
+                <h2 class="reveal-up" data-i18n="processH2">Cinco passos. Vê o resultado em cada um.</h2>
+            </div>
+            <div class="yl-process-diagram reveal-up" role="list">
+                <div class="yl-process-step" role="listitem">
+                    <span class="yl-process-index">1</span>
+                    <h3 data-i18n="processStep1Title">Entendemos</h3>
+                    <p data-i18n="processStep1Desc">falamos com quem faz o trabalho todos os dias</p>
+                </div>
+                <div class="yl-process-arrow" aria-hidden="true"></div>
+                <div class="yl-process-step" role="listitem">
+                    <span class="yl-process-index">2</span>
+                    <h3 data-i18n="processStep2Title">Organizamos</h3>
+                    <p data-i18n="processStep2Desc">o que precisa de ser feito, e por que ordem</p>
+                </div>
+                <div class="yl-process-arrow" aria-hidden="true"></div>
+                <div class="yl-process-step" role="listitem">
+                    <span class="yl-process-index">3</span>
+                    <h3 data-i18n="processStep3Title">Construímos</h3>
+                    <p data-i18n="processStep3Desc">só o essencial para já poder ser usado</p>
+                </div>
+                <div class="yl-process-arrow" aria-hidden="true"></div>
+                <div class="yl-process-step" role="listitem">
+                    <span class="yl-process-index">4</span>
+                    <h3 data-i18n="processStep4Title">Testamos</h3>
+                    <p data-i18n="processStep4Desc">a sua equipa usa, comenta e aprova</p>
+                </div>
+                <div class="yl-process-arrow" aria-hidden="true"></div>
+                <div class="yl-process-step" role="listitem">
+                    <span class="yl-process-index">5</span>
+                    <h3 data-i18n="processStep5Title">Melhoramos</h3>
+                    <p data-i18n="processStep5Desc">por etapas, com base no uso real</p>
+                </div>
+            </div>
+            <div class="yl-section-inner">
+                <p class="yl-anchor reveal-up" data-i18n="processAnchor">Em cada passo há algo concreto para ver, testar e aprovar. Sabe sempre o que está planeado, o que está a ser feito e o que já foi entregue.</p>
+            </div>
+        </section>
+
+        <!-- 6. Casos — Projects Showcase Section -->
         <section class="project-showcase-section" id="projects">
             <div class="project-showcase-intro reveal-up">
-                <p class="project-showcase-kicker" data-i18n="projectShowcaseKicker">PROVEN PROJECT STORIES</p>
-                <h2 data-i18n="projectShowcaseHeading">From pain to system: how client ideas become daily operations</h2>
-                <p data-i18n="projectShowcaseDescription">Each case follows one clear arc: the pain, the build, and the final result running in real life.</p>
+                <p class="project-showcase-kicker" data-i18n="projectShowcaseKicker">PROJETOS</p>
+                <h2 data-i18n="projectShowcaseHeading">Sistemas que já estão a ser usados todos os dias.</h2>
+                <p data-i18n="projectShowcaseDescription">O problema que existia, o que mudou, e o que a equipa consegue fazer agora.</p>
             </div>
 
             <div class="project-showcase-stage reveal-up" data-project-showcase>
@@ -225,19 +155,113 @@
             </div>
         </section>
 
-        <!-- Chat Agent Section -->
-        <section class="chat-section">
-            <h2 data-i18n="chatHeading">Let's Talk About Your Idea</h2>
-            <p class="chat-description" data-i18n="chatDescription">Have a business idea? Our AI agent is here to listen and help you shape your vision. Just describe your idea and leave your contact information.</p>
-            
+        <!-- 7. O que nos torna diferentes -->
+        <section class="yl-section" id="diferenca">
+            <div class="yl-section-inner">
+                <p class="yl-eyebrow reveal-up" data-i18n="diffEyebrow">O QUE NOS TORNA DIFERENTES</p>
+                <h2 class="reveal-up" data-i18n="diffH2">Começamos pelo problema, não pela tecnologia.</h2>
+            </div>
+            <div class="yl-icon-row reveal-up">
+                <div class="yl-icon-item">
+                    <span class="yl-icon-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                    </span>
+                    <p data-i18n="diffPoint1">Entendemos antes de construir</p>
+                </div>
+                <div class="yl-icon-item">
+                    <span class="yl-icon-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+                    </span>
+                    <p data-i18n="diffPoint2">Começamos pequeno e crescemos depois</p>
+                </div>
+                <div class="yl-icon-item">
+                    <span class="yl-icon-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                    </span>
+                    <p data-i18n="diffPoint3">Acompanha o trabalho do início ao fim</p>
+                </div>
+                <div class="yl-icon-item">
+                    <span class="yl-icon-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v6c0 4-3.4 6.9-8 8-4.6-1.1-8-4-8-8V7z"/><path d="M9 12l2 2 4-4"/></svg>
+                    </span>
+                    <p data-i18n="diffPoint4">O sistema fica seu, sem ficar dependente de nós</p>
+                </div>
+            </div>
+            <div class="yl-section-inner">
+                <p class="yl-anchor reveal-up" data-i18n="diffAnchor">Usamos inteligência artificial para pesquisar, documentar, construir e testar mais depressa. As decisões, as prioridades e a qualidade continuam com pessoas.</p>
+                <p class="yl-note reveal-up" data-i18n="diffNote">Mais velocidade na execução, sem passar a responsabilidade para uma ferramenta.</p>
+            </div>
+        </section>
+
+        <!-- 8. Investimento -->
+        <section class="yl-section yl-section--panel" id="investimento">
+            <div class="yl-section-inner">
+                <p class="yl-eyebrow reveal-up" data-i18n="priceEyebrow">INVESTIMENTO</p>
+                <h2 class="reveal-up" data-i18n="priceH2">Preços confortáveis, ajustados à realidade do seu negócio.</h2>
+                <p class="reveal-up" data-i18n="priceBody1">Os nossos projetos ficam normalmente em valores de quatro dígitos. Quando é só para olhar para um problema e perceber o que está a acontecer, a consultoria começa nos 200 €.</p>
+                <p class="reveal-up" data-i18n="priceBody2">A forma de pagamento é combinada consigo — por etapas, à medida que as coisas ficam prontas.</p>
+            </div>
+            <div class="yl-chip-row yl-chip-row--wrap reveal-up">
+                <span class="yl-chip" data-i18n="priceItem1">Consultoria para um problema, desde 200 €</span>
+                <span class="yl-chip" data-i18n="priceItem2">Projetos em valores de quatro dígitos</span>
+                <span class="yl-chip" data-i18n="priceItem3">Pagamento por etapas, combinado consigo</span>
+                <span class="yl-chip" data-i18n="priceItem4">Orçamento fechado antes de começar</span>
+            </div>
+            <div class="yl-section-inner">
+                <p class="yl-anchor reveal-up" data-i18n="priceAnchor">A primeira chamada é gratuita e sem compromisso. Serve para entender o problema e dizer-lhe, com honestidade, o que faz sentido fazer.</p>
+                <p class="yl-note reveal-up" data-i18n="priceNote">Depois de percebermos o que precisa, recebe um orçamento fechado — sem custos escondidos e sem surpresas a meio do trabalho.</p>
+            </div>
+        </section>
+
+        <!-- 9. Perguntas frequentes -->
+        <section class="yl-section" id="perguntas">
+            <div class="yl-section-inner">
+                <h2 class="reveal-up" data-i18n="faqH2">Perguntas que nos fazem sempre.</h2>
+            </div>
+            <div class="yl-cards-grid yl-cards-grid--two reveal-up">
+                <article class="yl-card">
+                    <h3 data-i18n="faq1Q">Quanto tempo leva?</h3>
+                    <p data-i18n="faq1A">A primeira versão costuma ficar pronta em 4 a 6 semanas. Damos-lhe um prazo concreto no orçamento.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="faq2Q">Fico dependente de vocês?</h3>
+                    <p data-i18n="faq2A">Não. O sistema e o código são seus, e fica tudo escrito para que outra pessoa consiga continuar o trabalho.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="faq3Q">Não sei explicar bem o que preciso. É problema?</h3>
+                    <p data-i18n="faq3A">Não, essa parte é o nosso trabalho. Conte o que acontece no dia a dia e nós traduzimos isso em algo que pode ser construído.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="faq4Q">Já construí algo com IA. Conseguem pegar nisso?</h3>
+                    <p data-i18n="faq4A">Sim. Começamos por entender o que já existe, corrigimos o essencial e deixamos aquilo estável para poder crescer.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="faq5Q">E se a minha ideia não fizer sentido?</h3>
+                    <p data-i18n="faq5A">Dizemos-lhe. É muito mais barato descobrir isso numa conversa do que depois de investir.</p>
+                </article>
+                <article class="yl-card">
+                    <h3 data-i18n="faq6Q">Trabalham com empresas pequenas?</h3>
+                    <p data-i18n="faq6A">Sim, é com quem trabalhamos a maior parte do tempo — empresas e equipas pequenas, em Portugal e no resto da Europa.</p>
+                </article>
+            </div>
+        </section>
+
+        <!-- 10. Convite final — Chat -->
+        <section class="chat-section" id="convite">
+            <h2 data-i18n="chatHeading">Conte-nos o que precisa de melhorar.</h2>
+            <p class="chat-description" data-i18n="inviteBody">A primeira conversa serve para entender o problema. Se fizer sentido construir alguma coisa, explicamos o caminho e o custo. Se não fizer, dizemos isso também.</p>
+
+            <a class="yl-btn-primary" href="#chatForm" data-i18n="inviteCta">Começar a conversa</a>
+
             <div class="chat-container">
+                <p class="chat-description" data-i18n="chatDescription">Descreva a situação da sua empresa e deixe o seu contacto. Alguém da equipa responde-lhe diretamente.</p>
                 <div class="chat-status-bar">
                     <span class="chat-status-dot" id="chatStatusDot"></span>
-                    <span class="chat-status-label" id="chatStatusLabel">connecting…</span>
+                    <span class="chat-status-label" id="chatStatusLabel">a ligar…</span>
                 </div>
                 <div class="chat-messages" id="chatMessages">
                     <div class="message bot-message">
-                        <p data-i18n="chatGreeting">Hi there! I'm the YourLab Agent. Tell me about your business idea and share your contact info so we can reach out to discuss it further.</p>
+                        <p data-i18n="chatGreeting">Conte-nos, em poucas palavras, o que está a acontecer na sua empresa.</p>
                     </div>
                 </div>
 
@@ -245,25 +269,33 @@
                     <input
                         type="text"
                         id="userInput"
-                        placeholder="Type your message here..."
+                        placeholder="Escreva a sua mensagem aqui..."
                         data-i18n-placeholder="inputPlaceholder"
                         required
                     >
-                    <button type="submit" class="send-btn" data-i18n="sendBtn">Send</button>
+                    <button type="submit" class="send-btn" data-i18n="sendBtn">Enviar</button>
                 </form>
+            </div>
+
+            <div class="yl-direct-contact reveal-up">
+                <p data-i18n="directContactLabel">Prefere falar diretamente?</p>
+                <div class="yl-direct-contact-links">
+                    <a href="https://wa.me/351927319412" target="_blank" rel="noopener noreferrer" data-i18n="directWhatsapp">WhatsApp</a>
+                    <a href="mailto:yourlabpt@gmail.com" data-i18n="directEmail">Email</a>
+                </div>
             </div>
         </section>
 
         <!-- Footer -->
         <footer class="footer">
-            <p data-i18n="footerText">&copy; 2025 YourLab. All rights reserved.</p>
+            <p data-i18n="footerText">&copy; 2026 YourLab. Todos os direitos reservados.</p>
             <div class="footer-contact-shortcut">
                 <a class="footer-contact-link" href="business-card/" target="_blank" rel="noopener noreferrer">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z"/>
                         <path d="M8 9.2a2.2 2.2 0 1 1 4.4 0a2.2 2.2 0 0 1-4.4 0M14 16H8.1c.2-1.6 1.6-2.8 3.3-2.8h.4c1.7 0 3.1 1.2 3.3 2.8M15.5 9h2.8M15.5 12h2.8"/>
                     </svg>
-                    <span data-i18n="footerContactShortcut">Contacts card</span>
+                    <span data-i18n="footerContactShortcut">Cartão de contacto</span>
                 </a>
             </div>
         </footer>

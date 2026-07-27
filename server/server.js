@@ -1231,11 +1231,12 @@ function buildIcsContent(inquiry) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Leads must never be lost because an env var was forgotten on a new deploy,
+// so fall back to the company inbox when LEAD_NOTIFY_TO is unset.
+const DEFAULT_LEAD_NOTIFY_TO = 'yourlabpt@gmail.com';
+
 async function sendLeadNotificationEmail(inquiry) {
-    const to = cleanText(process.env.LEAD_NOTIFY_TO, 600);
-    if (!to) {
-        return { sent: false, reason: 'LEAD_NOTIFY_TO is not configured.' };
-    }
+    const to = cleanText(process.env.LEAD_NOTIFY_TO, 600) || DEFAULT_LEAD_NOTIFY_TO;
 
     const transporter = getOrCreateTransporter();
     if (!transporter) {

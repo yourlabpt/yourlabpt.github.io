@@ -4,356 +4,291 @@ let currentLang = localStorage.getItem('yourlab_lang_v2') || 'pt';
 const translations = {
     en: {
         // Header
-        tagline: 'Your Ideas Into Reality',
-        // About
-        aboutHeading: "The Lab Where Ideas Don't Stay Ideas",
-        aboutLead: "Start small. Prove it. Scale what's real.",
-        aboutBody: "Every year, over 30,000 new products are launched — and more than 90% of them fail. Not because the ideas were bad. Because most were never tested against the real world before everything was invested.",
-        aboutBody2: "At YourLab, we build the first version of your idea — the one that answers the only question that matters: does this actually work? Small, fast, and real. So you know before you invest everything.",
-        statLabel1: 'of new products fail',
-        statLabel2: 'of organisations struggle to innovate',
-        aboutCta: "The most expensive thing isn't building — it's keeping your idea trapped in your head. That's what an <strong>MVP</strong> changes.",
-        // Journey
-        journeyIdea: 'Idea',
-        journeyIdeaDesc: "You've been building this in your head. Now we hear it out loud.",
-        journeyStrategy: 'Strategy',
-        journeyStrategyDesc: 'We map everything it needs to exist — scope, features, the first real version.',
-        journeyBuild: 'Build',
-        journeyBuildDesc: "Your idea starts taking form. We build only what's needed to learn fast.",
-        journeyLaunch: 'Launch MVP',
-        journeyLaunchDesc: 'It exists. Real people. Real reactions. Real data.',
+        headerCta: 'Talk to us',
 
-        // Conclusion
-        conclusionHeading: "This isn't our lab.",
-        conclusionBody: "It's yours. We apply disciplined thinking to make sure what gets built matches what you envisioned — and tests whether that vision survives contact with the real world. We don't consult from a distance. We build alongside you. Every feature is defined. Every milestone is measurable. If you're ready to stop imagining and start finding out — this is where that happens.",
+        // 1. Hero
+        heroH1: 'We turn messy processes into systems that are simple to use.',
+        heroSub: 'Have an idea to test, a process stuck in spreadsheets and messages, or an application left half-finished? We build the first useful version in weeks — with a fixed quote before we start.',
+        heroCtaPrimary: 'Tell us what needs improving',
+        heroCtaSecondary: 'See how we work',
+        heroMicrocopy: 'First call is free, with no strings attached. If building makes no sense, we say so.',
 
-        // Slideshow
-        slideshowKicker: 'THE PATH FROM THOUGHT TO BUILT',
-        slideshowIntroHeading: 'Follow the journey of an idea as it becomes real.',
-        slideshowIntroDesc: 'Five scenes. Interact with each one. This is how YourLab works — and how your idea gets built.',
-        slideContinue: 'Continue',
-        slide1Heading: 'You have an idea.',
-        slide1Lead: "Every product that exists in the world right now started inside someone's head. The question was never if the idea was good enough. It was whether someone would build it. You're in the right place.",
-        slide2Heading: 'What We Do',
-        slide2Quote: "We are the space between 'I have an idea' and 'I built it.'",
-        slide2Item1: "We take what's in your head and make it into something actionable — requirements, not assumptions.",
-        slide2Item2: 'We build the smallest version that answers the biggest question: does this actually work?',
-        slide2Item3: 'Software, IoT, integrations — built around your reality, not a generic template.',
-        slide3Heading: 'Our Process',
-        slide3Quote: "Every thing that was ever built followed a sequence. Here's ours.",
-        slide3Step1: 'You speak. We listen. You show your idea on a call.',
-        slide3Step2: 'We define what it needs to exist — requirements, scope, the MVP.',
-        slide3Step3: 'We build it. Regular updates as your idea comes to life.',
-        slide3Step4: 'It meets the world. Validated. Real. Ready to grow.',
-        slide4Heading: 'Why Choose YourLab',
-        slide4Item1: "One specialist. One focus. Yours — we don't split attention across 10 projects.",
-        slide4Item2: 'Real craft supported by the best tools. Human judgment, AI speed.',
-        slide4Item3: 'We build alongside you. This is YourLab — not ours.',
-        slide4Item4: "Pricing built around where you are now, not where we'd like you to be.",
-        slide5Heading: 'This idea has been in your head long enough.',
-        slide5Lead: "YourLab. For the people ready to find out if it's real.",
-        slide5Cta: "Say it. Let's build it.",
-        gameRestart: 'Run the challenge again',
-        gameContinueLocked: "Want to go deeper? Try the challenge below — or continue when you're ready.",
-        gameL1Title: 'The First Step: Name the path',
-        gameL1Hint: 'Before anything is built, it has to be named. Reveal each step of the journey.',
-        gameL1ButtonBegin: 'Begin',
-        gameL1ButtonReveal: 'Reveal next card',
-        gameL1ButtonSolved: 'Level completed',
-        gameL1StatusStart: 'Click begin to reveal the first card.',
-        gameL1StatusProgress: 'Cards revealed',
-        gameL1StatusDone: "The path is clear. Everything starts by naming what you're building.",
-        gameL1Hidden: 'Locked step',
-        gameRevealCardDiscoveryTitle: 'Discovery',
-        gameRevealCardDiscoveryBody: 'We identify the real problem and user context.',
-        gameRevealCardScopeTitle: 'Scope',
-        gameRevealCardScopeBody: 'We define a clear MVP with measurable goals.',
-        gameRevealCardBuildTitle: 'Build',
-        gameRevealCardBuildBody: 'We develop only what is needed to learn fast.',
-        gameRevealCardLaunchTitle: 'Launch',
-        gameRevealCardLaunchBody: 'We validate in market and iterate with evidence.',
-        gameL2Title: 'The Building Blocks: Match what makes it real',
-        gameL2Hint: 'Every product is assembled from the same elements. Find the pairs your idea needs.',
-        gameL2Moves: 'Moves',
-        gameL2Solved: "You know the building blocks. That's already further than most people get.",
-        gameMemoryHidden: 'Tap',
-        gameMemoryCardRequirements: 'Requirements',
-        gameMemoryCardMvp: 'MVP Focus',
-        gameMemoryCardValidation: 'Validation',
-        gameMemoryCardDelivery: 'Delivery',
-        gameMemoryCardFeedback: 'Feedback',
-        gameMemoryCardIntegration: 'Integration',
-        gameL3Title: 'The Sequence: Put creation in order',
-        gameL3Hint: "Great products aren't built randomly — they follow a sequence. Get it right.",
-        gameL3Progress: 'Correct sequence',
-        gameL3Mistakes: 'Resets',
-        gameL3Solved: "You understand the order. That's the most underrated skill in building anything.",
-        gameOrderStepDiscover: 'Understand the problem',
-        gameOrderStepRequirements: 'Define requirements',
-        gameOrderStepPrototype: 'Build MVP prototype',
-        gameOrderStepTest: 'Test with real users',
-        gameOrderStepIterate: 'Iterate and improve',
-        gameOrderStepBusinessCase: 'Clarify business case',
-        gameOrderStepArchitecture: 'Map the architecture',
-        gameOrderStepRelease: 'Release first version',
-        gameOrderStepMeasure: 'Measure adoption',
-        gameOrderStepScale: 'Scale what works',
-        gameOrderStepInterview: 'Interview stakeholders',
-        gameOrderStepPrioritize: 'Prioritize essentials',
-        gameOrderStepBuild: 'Build core features',
-        gameOrderStepPilot: 'Run pilot deployment',
-        gameOrderStepLearn: 'Learn and refine',
-        gameL4Title: 'The Pattern: Internalize the rhythm of creation',
-        gameL4Hint: 'Creation has a rhythm: Concept → Scope → Prototype → Launch. Watch. Memorize. Repeat.',
-        gameL4Round: 'Round',
-        gameL4Replay: 'Play sequence',
-        gameL4Listen: 'Memorize the pattern',
-        gameL4Input: 'Your turn to repeat',
-        gameL4Mistakes: 'Mistakes',
-        gameL4Solved: "That pattern is yours now. It's the same one behind every product that exists.",
-        gameL4Miss: 'Not quite — the sequence matters. Replay and try again.',
-        gameSymbolConcept: 'Concept',
-        gameSymbolScope: 'Scope',
-        gameSymbolPrototype: 'Prototype',
-        gameSymbolLaunch: 'Launch',
-        gameFinalTitle: 'Challenge Progress',
-        gameFinalBody: 'You named it. You found the elements. You ordered the steps. You memorized the rhythm. This is how ideas stop being ideas.',
-        gameFinalReady: 'Completed',
-        gameFinalPending: 'Pending',
-        gameFinalLevel1: 'Level 1 · Name the path',
-        gameFinalLevel2: 'Level 2 · Find the elements',
-        gameFinalLevel3: 'Level 3 · Order the sequence',
-        gameFinalLevel4: 'Level 4 · Internalize the rhythm',
-        // Project Showcase
-        projectShowcaseKicker: 'PROVEN PROJECT STORIES',
-        projectShowcaseHeading: 'From pain to system: how client ideas become daily operations',
-        projectShowcaseDescription: 'Each case follows one clear arc: the pain, the build, and the final result running in real life.',
+        // 2. Trust strip
+        trust1: 'Comfortable pricing, payment shaped around your business',
+        trust2: 'First version in 4 to 6 weeks',
+        trust3: 'Fixed quote before we start',
+        trust4: 'The system is yours, source code included',
+        trust5: 'Portugal and Europe · Portuguese and English',
+
+        // 3. Situations
+        situationsH2: 'Does any of this sound familiar?',
+        situation1Title: "You have an idea and don't know where to start",
+        situation1Body: "You know the problem you want to solve, but not what to build first, what it costs, or how long it takes. We help define the first version and test it with real people.",
+        situation2Title: 'You started building with AI and got stuck',
+        situation2Body: "The first version came out fast, but now errors keep coming back, nothing works outside your own computer, and nobody can explain what is inside it. We sort out what already exists and get it working.",
+        situation3Title: 'The company grew and the work is scattered',
+        situation3Body: 'Information in Excel, WhatsApp and email. The team copies the same data, reports are built by hand, and nobody can see the whole operation. We bring that together into one system.',
+        situationsClose: 'In all three cases the first step is the same: properly understanding what needs to happen.',
+
+        // 4. How we help
+        helpEyebrow: 'HOW WE HELP',
+        helpH2: 'We organise first. We build after.',
+        helpBody1: 'We start by understanding how your company works today, where time is lost, and what really needs to change.',
+        helpBody2: 'Then we build a simple first version, put it into use, and improve it based on what actually happens day to day.',
+        helpType1: 'Digitising a manual process',
+        helpType2: 'Internal systems for your team',
+        helpType3: 'Client portals',
+        helpType4: 'Connecting tools that do not talk to each other',
+        helpType5: 'Reporting and tracking',
+        helpType6: 'Picking up a stalled project',
+
+        // 5. How we work
+        processEyebrow: 'HOW WE WORK',
+        processH2: 'Five steps. You see the result at each one.',
+        processStep1Title: 'Understand',
+        processStep1Desc: 'we talk to the people doing the work every day',
+        processStep2Title: 'Organise',
+        processStep2Desc: 'what needs doing, and in what order',
+        processStep3Title: 'Build',
+        processStep3Desc: 'only what is needed to start using it',
+        processStep4Title: 'Test',
+        processStep4Desc: 'your team uses it, comments and approves',
+        processStep5Title: 'Improve',
+        processStep5Desc: 'in stages, based on real use',
+        processAnchor: 'Every step produces something concrete to see, test and approve. You always know what is planned, what is being done, and what has been delivered.',
+
+        // 6. Projects (Showcase)
+        projectShowcaseKicker: 'PROJECTS',
+        projectShowcaseHeading: 'Systems already in use every day.',
+        projectShowcaseDescription: 'The problem that existed, what changed, and what the team can do now.',
         projectCaseLabel: 'Case',
         projectBuiltForLabel: 'Built for',
         projectSectorLabel: 'Sector',
         projectTimelineLabel: 'Timeline',
         projectStoryLabel: 'The story',
-        projectSystemLabel: 'Pain to system',
+        projectSystemLabel: 'From problem to system',
         projectFinalResultLabel: 'Result in operation',
         projectRequestLabel: 'Client request',
-        projectPainLabel: 'Initial pain',
+        projectPainLabel: 'Starting situation',
         projectBusinessImpactLabel: 'Business impact',
         projectProcessLabel: 'How we built it',
         projectResultLabel: 'System delivered',
         projectOutcomesLabel: 'Final result',
         projectDailyUseLabel: 'How it runs today',
-        projectCtaText: 'Want to turn your pain into a practical system? Share your scenario and we map the best first version with you.',
+        projectCtaText: 'Recognise this situation in your company? Tell us what is happening and we work out the best first step together.',
         projectCtaButton: 'Talk to the team',
         projectPrevAria: 'Previous project',
         projectNextAria: 'Next project',
         projectDotAriaPrefix: 'Project',
-        // NFC Business Card
-        nfcKicker: 'NFC BUSINESS CARD',
-        nfcHeading: 'Tap, Open, Save Contact',
-        nfcDescription: 'Use an NFC card, NFC sticker, or iPhone shortcut to instantly share your website contact profile.',
-        nfcStep1: '1. Tap card',
-        nfcStep2: '2. Open page',
-        nfcStep3: '3. Save contact',
-        nfcOpenPage: 'Open digital card',
-        nfcDownload: 'Download contact (.vcf)',
-        nfcNote: 'NFC tip: write only the page URL as an NDEF URI record.',
 
-        // Chat
-        chatHeading: 'Say it out loud.',
-        chatDescription: "Every product that exists today started as a thought someone was afraid to speak. Tell Alex what's been on your mind. No pitch needed. Just the idea.",
-        chatGreeting: "Think of something you've been building in your head but haven't told anyone yet. That's what I'm here for. What is it?",
-        chatThinking: 'Alex is thinking...',
+        // 7. What makes us different
+        diffEyebrow: 'WHAT MAKES US DIFFERENT',
+        diffH2: 'We start with the problem, not the technology.',
+        diffPoint1: 'We understand before we build',
+        diffPoint2: 'We start small and grow after',
+        diffPoint3: 'You follow the work from start to finish',
+        diffPoint4: 'The system is yours, with no dependency on us',
+        diffAnchor: 'We use artificial intelligence to research, document, build and test faster. Decisions, priorities and quality stay with people.',
+        diffNote: 'More speed in execution, without handing responsibility to a tool.',
+
+        // 8. Investment
+        priceEyebrow: 'INVESTMENT',
+        priceH2: 'Comfortable pricing, shaped around the reality of your business.',
+        priceBody1: 'Our projects usually come in at four-figure amounts. When it is only a matter of looking at a problem and working out what is going on, consulting starts at €200.',
+        priceBody2: 'How you pay is agreed with you — in stages, as things get finished.',
+        priceItem1: 'Consulting on a problem, from €200',
+        priceItem2: 'Projects at four-figure amounts',
+        priceItem3: 'Payment in stages, agreed with you',
+        priceItem4: 'Fixed quote before we start',
+        priceAnchor: 'The first call is free and carries no obligation. It exists to understand the problem and tell you honestly what is worth doing.',
+        priceNote: 'Once we understand what you need, you get a fixed quote — no hidden costs and no surprises halfway through.',
+
+        // 9. FAQ
+        faqH2: 'Questions we always get.',
+        faq1Q: 'How long does it take?',
+        faq1A: 'The first version is usually ready in 4 to 6 weeks. You get a concrete deadline in the quote.',
+        faq2Q: 'Will I be dependent on you?',
+        faq2A: 'No. The system and the source code are yours, and everything is written down so someone else can carry the work on.',
+        faq3Q: 'I cannot explain exactly what I need. Is that a problem?',
+        faq3A: 'No, that part is our job. Tell us what happens day to day and we translate it into something that can be built.',
+        faq4Q: 'I already built something with AI. Can you take it over?',
+        faq4A: 'Yes. We start by understanding what already exists, fix the essentials, and leave it stable enough to grow.',
+        faq5Q: 'What if my idea does not make sense?',
+        faq5A: 'We tell you. It is far cheaper to find that out in a conversation than after investing.',
+        faq6Q: 'Do you work with small companies?',
+        faq6A: 'Yes, that is who we work with most of the time — small companies and teams, in Portugal and across Europe.',
+
+        // 10. Invitation
+        chatHeading: 'Tell us what needs improving.',
+        inviteBody: 'The first conversation is for understanding the problem. If building something makes sense, we explain the path and the cost. If it does not, we say that too.',
+        inviteCta: 'Start the conversation',
+        chatDescription: 'Describe your situation and leave your contact. Someone from the team replies to you directly.',
+        chatGreeting: 'Tell us, in a few words, what is happening in your company.',
+        chatThinking: 'One moment…',
         inputPlaceholder: 'Type your message here...',
         sendBtn: 'Send',
+        directContactLabel: 'Prefer to talk directly?',
+        directWhatsapp: 'WhatsApp',
+        directEmail: 'Email',
+
         // Footer
-        footerText: '\u00A9 2025 YourLab. All rights reserved.',
+        footerText: '\u00A9 2026 YourLab. All rights reserved.',
         footerContactShortcut: 'Contacts card',
+
         // Chat bot responses (used as frontend fallback)
         bot: {
-            saved: (name) => `The YourLab team has your idea now, ${name}. Expect a proper conversation \u2014 not a template reply, a real one.`,
+            saved: (name) => `The YourLab team has your situation on record, ${name}. You will get a direct reply from a person on the team — not an automated one.`,
             generic: [
-                "What's the unfair advantage you have here that nobody else in this space has?",
-                "If you couldn't use code or an app to solve this \u2014 how would you do it manually?",
-                "Who's the first person you'd show this to, and what would their reaction probably be?",
-                "If this totally fails in 6 months \u2014 what would be the real reason?",
-                "What's the dumbest simple version of this idea that might actually work?"
+                'Can you tell me a bit more about what is happening?',
+                'How long has this been a problem in the company?',
+                'What have you already tried in order to fix it?',
+                'Who in the company feels this problem most day to day?',
+                'If this carries on for another six months, what does that cost the company?'
             ]
         }
     },
     pt: {
         // Header
-        tagline: 'Transforme as Suas Ideias de Neg\u00F3cio em Realidade',
-        // About
-        aboutHeading: 'O Laborat\u00F3rio Onde as Ideias Deixam de Ser Ideias',
-        aboutLead: 'Come\u00E7a pequeno. Prova. Escala o que \u00E9 real.',
-        aboutBody: 'Todos os anos, mais de 30.000 novos produtos s\u00E3o lan\u00E7ados \u2014 e mais de 90% deles falham. N\u00E3o porque as ideias eram m\u00E1s. Porque a maioria nunca foi testada no mundo real antes de tudo ser investido.',
-        aboutBody2: 'Na YourLab, constru\u00EDmos a primeira vers\u00E3o da tua ideia \u2014 a que responde \u00E0 \u00FAnica quest\u00E3o que importa: isto funciona mesmo? Pequena, r\u00E1pida e real. Para saberes antes de investires tudo.',
-        statLabel1: 'dos novos produtos falham',
-        statLabel2: 'das organiza\u00E7\u00F5es t\u00EAm dificuldade em inovar',
-        aboutCta: 'O que custa mais n\u00E3o \u00E9 construir \u2014 \u00E9 manter a tua ideia presa na cabe\u00E7a. \u00C9 isso que um <strong>MVP</strong> muda.',
-        // Journey
-        journeyIdea: 'Ideia',
-        journeyIdeaDesc: 'Tens constru\u00EDdo isto na tua cabe\u00E7a. Agora ouvimo-lo em voz alta.',
-        journeyStrategy: 'Estrat\u00E9gia',
-        journeyStrategyDesc: 'Mapeamos tudo o que precisa para existir \u2014 \u00E2mbito, funcionalidades, a primeira vers\u00E3o real.',
-        journeyBuild: 'Constru\u00E7\u00E3o',
-        journeyBuildDesc: 'A tua ideia come\u00E7a a tomar forma. Constru\u00EDmos apenas o necess\u00E1rio para aprender depressa.',
-        journeyLaunch: 'Lan\u00E7ar MVP',
-        journeyLaunchDesc: 'Existe. Pessoas reais. Rea\u00E7\u00F5es reais. Dados reais.',
-        // Conclusion
-        conclusionHeading: 'Este n\u00E3o \u00E9 o nosso laborat\u00F3rio.',
-        conclusionBody: '\u00C9 teu. Aplicamos pensamento disciplinado para garantir que o que \u00E9 constru\u00EDdo corresponde ao que imaginaste \u2014 e para testar se essa vis\u00E3o sobrevive ao contacto com o mundo real. N\u00E3o consultamos \u00E0 dist\u00E2ncia. Constru\u00EDmos ao teu lado. Cada funcionalidade \u00E9 definida. Cada marco \u00E9 mensur\u00E1vel. Se est\u00E1s pronto para parar de imaginar e come\u00E7ar a descobrir \u2014 \u00E9 aqui que isso acontece.',
+        headerCta: 'Falar connosco',
 
-        // Slideshow
-        slideshowKicker: 'O CAMINHO DO PENSAMENTO AO PRODUTO',
-        slideshowIntroHeading: 'Segue a jornada de uma ideia enquanto se torna real.',
-        slideshowIntroDesc: 'Cinco cenas. Interage com cada uma. \u00C9 assim que a YourLab trabalha \u2014 e como a tua ideia \u00E9 constru\u00EDda.',
-        slideContinue: 'Continuar',
-        slide1Heading: 'Tens uma ideia.',
-        slide1Lead: 'Cada produto que existe no mundo come\u00E7ou dentro da cabe\u00E7a de algu\u00E9m. A quest\u00E3o nunca foi se a ideia era boa o suficiente. Foi se algu\u00E9m a construiria. Est\u00E1s no s\u00EDtio certo.',
-        slide2Heading: 'O Que Fazemos',
-        slide2Quote: 'Somos o espa\u00E7o entre \u201Ctenho uma ideia\u201D e \u201Cconstu\u00ED-a\u201D.',
-        slide2Item1: 'Pegamos no que est\u00E1 na tua cabe\u00E7a e transformamos em algo acion\u00E1vel \u2014 requisitos, n\u00E3o suposi\u00E7\u00F5es.',
-        slide2Item2: 'Constru\u00EDmos a vers\u00E3o mais pequena que responde \u00E0 maior quest\u00E3o: isto funciona mesmo?',
-        slide2Item3: 'Software, IoT, integra\u00E7\u00F5es \u2014 constru\u00EDdos \u00E0 medida da tua realidade, n\u00E3o de um modelo gen\u00E9rico.',
-        slide3Heading: 'O Nosso Processo',
-        slide3Quote: 'Tudo o que foi alguma vez constru\u00EDdo seguiu uma sequ\u00EAncia. Esta \u00E9 a nossa.',
-        slide3Step1: 'Tu falas. N\u00F3s ouvimos. Mostras a tua ideia numa chamada.',
-        slide3Step2: 'Definimos o que precisa para existir \u2014 requisitos, \u00E2mbito, o MVP.',
-        slide3Step3: 'Constru\u00EDmo-lo. Atualiza\u00E7\u00F5es regulares enquanto a tua ideia toma vida.',
-        slide3Step4: 'Encontra o mundo. Validado. Real. Pronto para crescer.',
-        slide4Heading: 'Porqu\u00EA a YourLab',
-        slide4Item1: 'Um especialista. Um foco. O teu \u2014 n\u00E3o dividimos aten\u00E7\u00E3o por 10 projetos.',
-        slide4Item2: 'Trabalho real apoiado pelas melhores ferramentas. Julgamento humano, velocidade de IA.',
-        slide4Item3: 'Constru\u00EDmos ao teu lado. Este \u00E9 o YourLab \u2014 n\u00E3o o nosso.',
-        slide4Item4: 'Pre\u00E7os constru\u00EDdos \u00E0 volta de onde est\u00E1s agora, n\u00E3o de onde gostar\u00EDamos que estivesses.',
-        slide5Heading: 'Esta ideia j\u00E1 esteve na tua cabe\u00E7a tempo suficiente.',
-        slide5Lead: 'YourLab. Para as pessoas prontas para descobrir se \u00E9 real.',
-        slide5Cta: 'Diz. Vamos constru\u00ED-la.',
-        gameRestart: 'Repetir o desafio',
-        gameContinueLocked: 'Queres aprofundar? Experimenta o desafio abaixo \u2014 ou continua quando estiveres pronto.',
-        gameL1Title: 'O Primeiro Passo: Nomear o caminho',
-        gameL1Hint: 'Antes de qualquer coisa ser constru\u00EDda, tem de ser nomeada. Revela cada passo da jornada.',
-        gameL1ButtonBegin: 'Come\u00E7ar',
-        gameL1ButtonReveal: 'Revelar pr\u00F3ximo cart\u00E3o',
-        gameL1ButtonSolved: 'N\u00EDvel conclu\u00EDdo',
-        gameL1StatusStart: 'Clica em come\u00E7ar para revelar o primeiro cart\u00E3o.',
-        gameL1StatusProgress: 'Cart\u00F5es revelados',
-        gameL1StatusDone: 'O caminho est\u00E1 claro. Tudo come\u00E7a por nomear o que est\u00E1s a construir.',
-        gameL1Hidden: 'Etapa bloqueada',
-        gameRevealCardDiscoveryTitle: 'Descoberta',
-        gameRevealCardDiscoveryBody: 'Identificamos o problema real e o contexto do utilizador.',
-        gameRevealCardScopeTitle: '\u00C2mbito',
-        gameRevealCardScopeBody: 'Definimos um MVP claro com objetivos mensur\u00E1veis.',
-        gameRevealCardBuildTitle: 'Constru\u00E7\u00E3o',
-        gameRevealCardBuildBody: 'Desenvolvemos apenas o necess\u00E1rio para aprender depressa.',
-        gameRevealCardLaunchTitle: 'Lan\u00E7amento',
-        gameRevealCardLaunchBody: 'Validamos no mercado e iteramos com evid\u00EAncia.',
-        gameL2Title: 'Os Alicerces: Combina o que o torna real',
-        gameL2Hint: 'Cada produto \u00E9 montado a partir dos mesmos elementos. Encontra os pares que a tua ideia precisa.',
-        gameL2Moves: 'Jogadas',
-        gameL2Solved: 'Conheces os alicerces. Isso j\u00E1 \u00E9 mais longe do que a maioria das pessoas chega.',
-        gameMemoryHidden: 'Tocar',
-        gameMemoryCardRequirements: 'Requisitos',
-        gameMemoryCardMvp: 'Foco MVP',
-        gameMemoryCardValidation: 'Valida\u00E7\u00E3o',
-        gameMemoryCardDelivery: 'Entrega',
-        gameMemoryCardFeedback: 'Feedback',
-        gameMemoryCardIntegration: 'Integra\u00E7\u00E3o',
-        gameL3Title: 'A Sequ\u00EAncia: Coloca a cria\u00E7\u00E3o em ordem',
-        gameL3Hint: 'Os grandes produtos n\u00E3o s\u00E3o constru\u00EDdos aleatoriamente \u2014 seguem uma sequ\u00EAncia. Acerta.',
-        gameL3Progress: 'Sequ\u00EAncia correta',
-        gameL3Mistakes: 'Rein\u00EDcios',
-        gameL3Solved: 'Entendes a ordem. \u00C9 a compet\u00EAncia mais subestimada em construir qualquer coisa.',
-        gameOrderStepDiscover: 'Entender o problema',
-        gameOrderStepRequirements: 'Definir requisitos',
-        gameOrderStepPrototype: 'Construir prot\u00F3tipo MVP',
-        gameOrderStepTest: 'Testar com utilizadores reais',
-        gameOrderStepIterate: 'Iterar e melhorar',
-        gameOrderStepBusinessCase: 'Clarificar caso de neg\u00F3cio',
-        gameOrderStepArchitecture: 'Mapear arquitetura',
-        gameOrderStepRelease: 'Lan\u00E7ar primeira vers\u00E3o',
-        gameOrderStepMeasure: 'Medir ado\u00E7\u00E3o',
-        gameOrderStepScale: 'Escalar o que funciona',
-        gameOrderStepInterview: 'Entrevistar stakeholders',
-        gameOrderStepPrioritize: 'Priorizar essenciais',
-        gameOrderStepBuild: 'Construir funcionalidades base',
-        gameOrderStepPilot: 'Executar piloto',
-        gameOrderStepLearn: 'Aprender e refinar',
-        gameL4Title: 'O Padr\u00E3o: Interioriza o ritmo da cria\u00E7\u00E3o',
-        gameL4Hint: 'A cria\u00E7\u00E3o tem um ritmo: Conceito \u2192 \u00C2mbito \u2192 Prot\u00F3tipo \u2192 Lan\u00E7amento. Observa. Memoriza. Repete.',
-        gameL4Round: 'Ronda',
-        gameL4Replay: 'Reproduzir sequ\u00EAncia',
-        gameL4Listen: 'Memoriza o padr\u00E3o',
-        gameL4Input: 'Agora repete',
-        gameL4Mistakes: 'Erros',
-        gameL4Solved: 'Esse padr\u00E3o \u00E9 teu agora. \u00C9 o mesmo que est\u00E1 por tr\u00E1s de cada produto que existe.',
-        gameL4Miss: 'N\u00E3o \u00E9 bem isso \u2014 a sequ\u00EAncia importa. Repete e tenta de novo.',
-        gameSymbolConcept: 'Conceito',
-        gameSymbolScope: '\u00C2mbito',
-        gameSymbolPrototype: 'Prot\u00F3tipo',
-        gameSymbolLaunch: 'Lan\u00E7amento',
-        gameFinalTitle: 'Progresso do desafio',
-        gameFinalBody: 'Nomeaste-a. Encontraste os elementos. Ordenaste os passos. Memorizaste o ritmo. \u00C9 assim que as ideias deixam de ser ideias.',
-        gameFinalReady: 'Conclu\u00EDdo',
-        gameFinalPending: 'Pendente',
-        gameFinalLevel1: 'N\u00EDvel 1 \u00B7 Nomear o caminho',
-        gameFinalLevel2: 'N\u00EDvel 2 \u00B7 Encontrar os elementos',
-        gameFinalLevel3: 'N\u00EDvel 3 \u00B7 Ordenar a sequ\u00EAncia',
-        gameFinalLevel4: 'N\u00EDvel 4 \u00B7 Interiorizar o ritmo',
-        // Project Showcase
-        projectShowcaseKicker: 'CASOS COM RESULTADO REAL',
-        projectShowcaseHeading: 'Da dor ao sistema: como ideias viram operacao real',
-        projectShowcaseDescription: 'Cada caso segue um arco simples: dor inicial, construcao do sistema e resultado em uso diario.',
+        // 1. Hero
+        heroH1: 'Transformamos processos confusos em sistemas simples de usar.',
+        heroSub: 'Tem uma ideia para testar, um processo preso em folhas de cálculo e mensagens, ou uma aplicação que ficou a meio? Construímos a primeira versão útil em semanas — com orçamento fechado antes de começar.',
+        heroCtaPrimary: 'Conte-nos o que precisa de melhorar',
+        heroCtaSecondary: 'Ver como trabalhamos',
+        heroMicrocopy: 'Primeira chamada gratuita e sem compromisso. Se não fizer sentido construir, dizemos-lhe isso.',
+
+        // 2. Faixa de confiança
+        trust1: 'Preços confortáveis, pagamento ajustado ao seu negócio',
+        trust2: 'Primeira versão em 4 a 6 semanas',
+        trust3: 'Orçamento fechado antes de começar',
+        trust4: 'O sistema fica seu, incluindo o código',
+        trust5: 'Portugal e Europa · português e inglês',
+
+        // 3. Situações reconhecíveis
+        situationsH2: 'Reconhece alguma destas situações?',
+        situation1Title: 'Tem uma ideia e não sabe por onde começar',
+        situation1Body: 'Sabe o problema que quer resolver, mas não sabe o que construir primeiro, quanto custa nem quanto tempo leva. Ajudamos a definir a primeira versão e a testá-la com pessoas reais.',
+        situation2Title: 'Começou a construir com IA e ficou preso',
+        situation2Body: 'A primeira versão saiu depressa, mas agora há erros que voltam sempre, nada funciona fora do seu computador e ninguém sabe explicar o que está lá dentro. Arrumamos o que já existe e deixamos aquilo a funcionar.',
+        situation3Title: 'A empresa cresceu e o trabalho ficou espalhado',
+        situation3Body: 'Informação em Excel, WhatsApp e e-mail. A equipa copia os mesmos dados, os relatórios são feitos à mão e ninguém consegue ver a operação toda. Juntamos isso num sistema só.',
+        situationsClose: 'Em qualquer destes casos, o primeiro passo é o mesmo: entender bem o que precisa de acontecer.',
+
+        // 4. Como ajudamos
+        helpEyebrow: 'COMO AJUDAMOS',
+        helpH2: 'Organizamos primeiro. Construímos depois.',
+        helpBody1: 'Começamos por entender como a sua empresa trabalha hoje, onde se perde tempo e o que precisa mesmo de mudar.',
+        helpBody2: 'Depois construímos uma primeira versão simples, colocamos em utilização e melhoramos com base no que acontece no dia a dia.',
+        helpType1: 'Digitalizar um processo manual',
+        helpType2: 'Sistemas internos para a equipa',
+        helpType3: 'Portais para clientes',
+        helpType4: 'Ligar ferramentas que não falam entre si',
+        helpType5: 'Relatórios e acompanhamento',
+        helpType6: 'Retomar um projeto parado',
+
+        // 5. Como trabalhamos
+        processEyebrow: 'COMO TRABALHAMOS',
+        processH2: 'Cinco passos. Vê o resultado em cada um.',
+        processStep1Title: 'Entendemos',
+        processStep1Desc: 'falamos com quem faz o trabalho todos os dias',
+        processStep2Title: 'Organizamos',
+        processStep2Desc: 'o que precisa de ser feito, e por que ordem',
+        processStep3Title: 'Construímos',
+        processStep3Desc: 'só o essencial para já poder ser usado',
+        processStep4Title: 'Testamos',
+        processStep4Desc: 'a sua equipa usa, comenta e aprova',
+        processStep5Title: 'Melhoramos',
+        processStep5Desc: 'por etapas, com base no uso real',
+        processAnchor: 'Em cada passo há algo concreto para ver, testar e aprovar. Sabe sempre o que está planeado, o que está a ser feito e o que já foi entregue.',
+
+        // 6. Casos (Project Showcase)
+        projectShowcaseKicker: 'PROJETOS',
+        projectShowcaseHeading: 'Sistemas que já estão a ser usados todos os dias.',
+        projectShowcaseDescription: 'O problema que existia, o que mudou, e o que a equipa consegue fazer agora.',
         projectCaseLabel: 'Caso',
-        projectBuiltForLabel: 'Construido para',
+        projectBuiltForLabel: 'Construído para',
         projectSectorLabel: 'Setor',
         projectTimelineLabel: 'Prazo',
-        projectStoryLabel: 'A historia',
+        projectStoryLabel: 'A história',
         projectSystemLabel: 'Da dor ao sistema',
-        projectFinalResultLabel: 'Resultado em operacao',
+        projectFinalResultLabel: 'Resultado em operação',
         projectRequestLabel: 'Pedido do cliente',
-        projectPainLabel: 'Dor inicial',
-        projectBusinessImpactLabel: 'Impacto no negocio',
-        projectProcessLabel: 'Como construimos',
+        projectPainLabel: 'Situação inicial',
+        projectBusinessImpactLabel: 'Impacto no negócio',
+        projectProcessLabel: 'Como construímos',
         projectResultLabel: 'Sistema entregue',
         projectOutcomesLabel: 'Resultado final',
         projectDailyUseLabel: 'Como funciona no dia a dia',
-        projectCtaText: 'Quer transformar uma dor num sistema pratico? Partilhe o cenario e mapeamos consigo a melhor primeira versao.',
+        projectCtaText: 'Reconhece esta situação na sua empresa? Conte-nos o que está a acontecer e vemos juntos qual é o melhor caminho.',
         projectCtaButton: 'Falar com a equipa',
         projectPrevAria: 'Projeto anterior',
-        projectNextAria: 'Pr\u00F3ximo projeto',
+        projectNextAria: 'Próximo projeto',
         projectDotAriaPrefix: 'Projeto',
-        // NFC Business Card
-        nfcKicker: 'CART\u00C3O NFC',
-        nfcHeading: 'Toca, abre, guarda o contacto',
-        nfcDescription: 'Usa um cart\u00E3o NFC, autocolante NFC ou atalho no iPhone para partilhar instantaneamente o teu perfil de contacto do website.',
-        nfcStep1: '1. Tocar no cart\u00E3o',
-        nfcStep2: '2. Abrir p\u00E1gina',
-        nfcStep3: '3. Guardar contacto',
-        nfcOpenPage: 'Abrir cart\u00E3o digital',
-        nfcDownload: 'Descarregar contacto (.vcf)',
-        nfcNote: 'Dica NFC: grava apenas o URL da p\u00E1gina como registo NDEF URI.',
 
-        // Chat
-        chatHeading: 'Diz em voz alta.',
-        chatDescription: 'Cada produto que existe hoje come\u00E7ou como um pensamento que algu\u00E9m tinha medo de dizer. Diz ao Alex o que tens na cabe\u00E7a. N\u00E3o precisas de argum\u00E3o. S\u00F3 a ideia.',
-        chatGreeting: 'Pensa em algo que tens estado a construir na cabe\u00E7a mas ainda n\u00E3o contaste a ningu\u00E9m. \u00C9 para isso que estou aqui. O que \u00E9?',
-        chatThinking: 'Alex est\u00e1 a pensar...',
-        inputPlaceholder: 'Escreve a tua mensagem aqui...',
+        // 7. O que nos torna diferentes
+        diffEyebrow: 'O QUE NOS TORNA DIFERENTES',
+        diffH2: 'Começamos pelo problema, não pela tecnologia.',
+        diffPoint1: 'Entendemos antes de construir',
+        diffPoint2: 'Começamos pequeno e crescemos depois',
+        diffPoint3: 'Acompanha o trabalho do início ao fim',
+        diffPoint4: 'O sistema fica seu, sem ficar dependente de nós',
+        diffAnchor: 'Usamos inteligência artificial para pesquisar, documentar, construir e testar mais depressa. As decisões, as prioridades e a qualidade continuam com pessoas.',
+        diffNote: 'Mais velocidade na execução, sem passar a responsabilidade para uma ferramenta.',
+
+        // 8. Investimento
+        priceEyebrow: 'INVESTIMENTO',
+        priceH2: 'Preços confortáveis, ajustados à realidade do seu negócio.',
+        priceBody1: 'Os nossos projetos ficam normalmente em valores de quatro dígitos. Quando é só para olhar para um problema e perceber o que está a acontecer, a consultoria começa nos 200 €.',
+        priceBody2: 'A forma de pagamento é combinada consigo — por etapas, à medida que as coisas ficam prontas.',
+        priceItem1: 'Consultoria para um problema, desde 200 €',
+        priceItem2: 'Projetos em valores de quatro dígitos',
+        priceItem3: 'Pagamento por etapas, combinado consigo',
+        priceItem4: 'Orçamento fechado antes de começar',
+        priceAnchor: 'A primeira chamada é gratuita e sem compromisso. Serve para entender o problema e dizer-lhe, com honestidade, o que faz sentido fazer.',
+        priceNote: 'Depois de percebermos o que precisa, recebe um orçamento fechado — sem custos escondidos e sem surpresas a meio do trabalho.',
+
+        // 9. Perguntas frequentes
+        faqH2: 'Perguntas que nos fazem sempre.',
+        faq1Q: 'Quanto tempo leva?',
+        faq1A: 'A primeira versão costuma ficar pronta em 4 a 6 semanas. Damos-lhe um prazo concreto no orçamento.',
+        faq2Q: 'Fico dependente de vocês?',
+        faq2A: 'Não. O sistema e o código são seus, e fica tudo escrito para que outra pessoa consiga continuar o trabalho.',
+        faq3Q: 'Não sei explicar bem o que preciso. É problema?',
+        faq3A: 'Não, essa parte é o nosso trabalho. Conte o que acontece no dia a dia e nós traduzimos isso em algo que pode ser construído.',
+        faq4Q: 'Já construí algo com IA. Conseguem pegar nisso?',
+        faq4A: 'Sim. Começamos por entender o que já existe, corrigimos o essencial e deixamos aquilo estável para poder crescer.',
+        faq5Q: 'E se a minha ideia não fizer sentido?',
+        faq5A: 'Dizemos-lhe. É muito mais barato descobrir isso numa conversa do que depois de investir.',
+        faq6Q: 'Trabalham com empresas pequenas?',
+        faq6A: 'Sim, é com quem trabalhamos a maior parte do tempo — empresas e equipas pequenas, em Portugal e no resto da Europa.',
+
+        // 10. Convite final
+        chatHeading: 'Conte-nos o que precisa de melhorar.',
+        inviteBody: 'A primeira conversa serve para entender o problema. Se fizer sentido construir alguma coisa, explicamos o caminho e o custo. Se não fizer, dizemos isso também.',
+        inviteCta: 'Começar a conversa',
+        chatDescription: 'Descreva a situação da sua empresa e deixe o seu contacto. Alguém da equipa responde-lhe diretamente.',
+        chatGreeting: 'Conte-nos, em poucas palavras, o que está a acontecer na sua empresa.',
+        chatThinking: 'Um momento…',
+        inputPlaceholder: 'Escreva a sua mensagem aqui...',
         sendBtn: 'Enviar',
+        directContactLabel: 'Prefere falar diretamente?',
+        directWhatsapp: 'WhatsApp',
+        directEmail: 'Email',
+
         // Footer
-        footerText: '\u00A9 2025 YourLab. Todos os direitos reservados.',
-        footerContactShortcut: 'Cart\u00E3o de contacto',
+        footerText: '© 2026 YourLab. Todos os direitos reservados.',
+        footerContactShortcut: 'Cartão de contacto',
+
         // Chat bot responses (used as frontend fallback)
         bot: {
-            saved: (name) => `A equipa da YourLab tem a tua ideia agora, ${name}. Espera uma conversa a s\u00e9rio \u2014 n\u00e3o uma resposta autom\u00e1tica, uma real.`,
+            saved: (name) => `A equipa da YourLab tem a sua situação registada, ${name}. Vai receber uma resposta direta de uma pessoa da equipa — não uma resposta automática.`,
             generic: [
-                'O que te fez escolher este problema espec\u00edfico e n\u00e3o outro mais f\u00e1cil?',
-                'Se n\u00e3o pudesses usar c\u00f3digo ou uma app \u2014 como resolverias isto manualmente?',
-                'Quem seria a primeira pessoa a quem mostrarias isto, e qual seria provavelmente a rea\u00e7\u00e3o?',
-                'Se isto falhasse completamente em 6 meses \u2014 qual seria o verdadeiro motivo?',
-                'Qual \u00e9 a vers\u00e3o mais simples e crua desta ideia que poderia realmente funcionar?'
+                'Pode contar-me um pouco mais sobre o que está a acontecer?',
+                'Há quanto tempo isto é um problema na empresa?',
+                'O que já tentou fazer para resolver isto?',
+                'Quem, na empresa, sente mais este problema no dia a dia?',
+                'Se isto continuar assim mais seis meses, o que é que isso custa à empresa?'
             ]
         }
     }
@@ -1185,7 +1120,7 @@ function setChatStatus(mode) {
     if (!dot || !label) return;
     const isPt = currentLang === 'pt';
     const labels = {
-        ai:         isPt ? 'Alex IA · online'        : 'Alex AI · online',
+        ai:         isPt ? 'equipa · online'          : 'team · online',
         server:     isPt ? 'modo offline do servidor' : 'server offline mode',
         offline:    isPt ? 'modo offline'             : 'offline mode',
         connecting: isPt ? 'a ligar…'                 : 'connecting…'
@@ -1301,18 +1236,17 @@ function showSavedConversations() {
 
 console.log('YourLab AI chat ready. Type "showSavedConversations()" in console to view saved inquiries.');
 
-// ===== Scroll Reveal & Counter Animation =====
+// ===== Scroll Reveal =====
 (function () {
     const revealEls = document.querySelectorAll('.reveal-up');
-    const statNumbers = document.querySelectorAll('.stat-number[data-target]');
-    let statsAnimated = false;
 
-    // Intersection Observer for reveal animations
     const revealObserver = new IntersectionObserver((entries) => {
+        // Stagger only within the current batch of elements entering the
+        // viewport together — using the global element index here would make
+        // later sections wait many seconds after a fast scroll or anchor jump.
         entries.forEach((entry, i) => {
             if (entry.isIntersecting) {
-                // Stagger the reveal for sequential elements
-                const delay = Array.from(revealEls).indexOf(entry.target) * 120;
+                const delay = Math.min(i, 5) * 70;
                 setTimeout(() => {
                     entry.target.classList.add('revealed');
                 }, delay);
@@ -1322,863 +1256,6 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
     }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
 
     revealEls.forEach(el => revealObserver.observe(el));
-
-    // Counter animation for stat numbers
-    function animateCounters() {
-        if (statsAnimated) return;
-        statsAnimated = true;
-
-        statNumbers.forEach(num => {
-            const target = parseInt(num.dataset.target, 10);
-            const duration = 2000;
-            const start = performance.now();
-
-            function update(now) {
-                const elapsed = now - start;
-                const progress = Math.min(elapsed / duration, 1);
-                // Ease-out cubic
-                const eased = 1 - Math.pow(1 - progress, 3);
-                num.textContent = Math.round(target * eased);
-                if (progress < 1) requestAnimationFrame(update);
-            }
-
-            requestAnimationFrame(update);
-        });
-    }
-
-    const statsSection = document.querySelector('.about-stats');
-    if (statsSection) {
-        const statsObserver = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-                animateCounters();
-                statsObserver.unobserve(statsSection);
-            }
-        }, { threshold: 0.5 });
-        statsObserver.observe(statsSection);
-    }
-})();
-
-// ===== Immersive Slideshow =====
-(function () {
-    const slides = document.querySelectorAll('.slideshow-section .slide');
-    const dots = document.querySelectorAll('.slideshow-section .dot');
-    const prevBtn = document.querySelector('.slide-prev');
-    const nextBtn = document.querySelector('.slide-next');
-    const progressBar = document.querySelector('.slide-progress-bar');
-    const section = document.querySelector('.slideshow-section');
-    const container = document.querySelector('.slideshow-container');
-    const gameSlots = Array.from(document.querySelectorAll('[data-game-level]'));
-    const finalSlot = document.querySelector('[data-game-finale]');
-    const continueButtons = Array.from(document.querySelectorAll('.scene-next[data-level-next]'));
-    const restartButtons = Array.from(document.querySelectorAll('[data-action="restart-game"]'));
-    if (!slides.length) return;
-
-    const total = slides.length;
-    const GAME_VERSION = 1;
-    const GAME_STORAGE_KEY = 'yourlab_story_game_state_v1';
-    const GAME_SESSION_KEY = 'yourlab_story_game_session_v1';
-
-    const revealCards = [
-        { title: 'gameRevealCardDiscoveryTitle', body: 'gameRevealCardDiscoveryBody' },
-        { title: 'gameRevealCardScopeTitle', body: 'gameRevealCardScopeBody' },
-        { title: 'gameRevealCardBuildTitle', body: 'gameRevealCardBuildBody' },
-        { title: 'gameRevealCardLaunchTitle', body: 'gameRevealCardLaunchBody' }
-    ];
-    const memoryPool = [
-        'gameMemoryCardRequirements',
-        'gameMemoryCardMvp',
-        'gameMemoryCardValidation',
-        'gameMemoryCardDelivery',
-        'gameMemoryCardFeedback',
-        'gameMemoryCardIntegration'
-    ];
-    const orderVariants = [
-        ['gameOrderStepDiscover', 'gameOrderStepRequirements', 'gameOrderStepPrototype', 'gameOrderStepTest', 'gameOrderStepIterate'],
-        ['gameOrderStepBusinessCase', 'gameOrderStepArchitecture', 'gameOrderStepPrototype', 'gameOrderStepRelease', 'gameOrderStepMeasure', 'gameOrderStepScale'],
-        ['gameOrderStepInterview', 'gameOrderStepPrioritize', 'gameOrderStepBuild', 'gameOrderStepPilot', 'gameOrderStepLearn']
-    ];
-    const patternSymbols = ['gameSymbolConcept', 'gameSymbolScope', 'gameSymbolPrototype', 'gameSymbolLaunch'];
-    const finalLevelKeys = ['gameFinalLevel1', 'gameFinalLevel2', 'gameFinalLevel3', 'gameFinalLevel4'];
-
-    let current = 0;
-    let gameState = null;
-    let memoryFlipTimer = null;
-    let patternTimers = [];
-    let patternPlaying = false;
-    let patternActiveSymbol = -1;
-
-    function t(key) {
-        return (translations[currentLang] && translations[currentLang][key]) || key;
-    }
-
-    function clamp(value, min, max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
-    function toInt(value, fallback = 0) {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) ? parsed : fallback;
-    }
-
-    function createRng(seed) {
-        let value = seed >>> 0;
-        return function rng() {
-            value += 0x6D2B79F5;
-            let tValue = value;
-            tValue = Math.imul(tValue ^ (tValue >>> 15), tValue | 1);
-            tValue ^= tValue + Math.imul(tValue ^ (tValue >>> 7), tValue | 61);
-            return ((tValue ^ (tValue >>> 14)) >>> 0) / 4294967296;
-        };
-    }
-
-    function randomSeed() {
-        return Math.floor((Math.random() * 2147483647) + 1);
-    }
-
-    function shuffled(range, rng) {
-        const next = [...range];
-        for (let i = next.length - 1; i > 0; i -= 1) {
-            const j = Math.floor(rng() * (i + 1));
-            [next[i], next[j]] = [next[j], next[i]];
-        }
-        return next;
-    }
-
-    function getSessionId() {
-        let id = sessionStorage.getItem(GAME_SESSION_KEY);
-        if (!id) {
-            id = `visit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-            sessionStorage.setItem(GAME_SESSION_KEY, id);
-        }
-        return id;
-    }
-
-    const sessionId = getSessionId();
-
-    function createVisitState(seedValue = randomSeed()) {
-        const rng = createRng(seedValue);
-        const revealOrder = shuffled([...revealCards.keys()], rng);
-        const memoryChoices = shuffled([...memoryPool.keys()], rng).slice(0, 4);
-        const memoryDeck = shuffled([...memoryChoices, ...memoryChoices], rng);
-        const variant = orderVariants[Math.floor(rng() * orderVariants.length)];
-        const orderBoard = shuffled([...variant.keys()], rng);
-        const rounds = [3, 4, 5].map((length) => {
-            const sequence = [];
-            for (let i = 0; i < length; i += 1) {
-                sequence.push(Math.floor(rng() * patternSymbols.length));
-            }
-            return sequence;
-        });
-
-        return {
-            version: GAME_VERSION,
-            sessionId,
-            seed: seedValue,
-            createdAt: Date.now(),
-            complete: false,
-            currentSlide: 0,
-            unlockedSlide: 0,
-            levels: [
-                {
-                    started: false,
-                    revealedCount: 0,
-                    revealOrder,
-                    solved: false
-                },
-                {
-                    deck: memoryDeck,
-                    matched: [],
-                    flipped: [],
-                    moves: 0,
-                    solved: false
-                },
-                {
-                    sequence: variant,
-                    board: orderBoard,
-                    progress: 0,
-                    picked: [],
-                    mistakes: 0,
-                    solved: false
-                },
-                {
-                    rounds,
-                    currentRound: 0,
-                    inputProgress: 0,
-                    awaitingReplay: true,
-                    mistakes: 0,
-                    feedback: '',
-                    solved: false
-                }
-            ]
-        };
-    }
-
-    function cleanIndexArray(input, max) {
-        if (!Array.isArray(input)) return [];
-        const clean = [];
-        input.forEach((value) => {
-            const index = toInt(value, -1);
-            if (index >= 0 && index < max && !clean.includes(index)) {
-                clean.push(index);
-            }
-        });
-        return clean;
-    }
-
-    function mergeWithTemplate(rawState) {
-        const template = createVisitState(toInt(rawState.seed, randomSeed()));
-        const merged = template;
-
-        merged.sessionId = typeof rawState.sessionId === 'string' ? rawState.sessionId : sessionId;
-        merged.createdAt = toInt(rawState.createdAt, Date.now());
-        merged.complete = Boolean(rawState.complete);
-        merged.currentSlide = clamp(toInt(rawState.currentSlide, 0), 0, total - 1);
-        merged.unlockedSlide = clamp(toInt(rawState.unlockedSlide, 0), 0, total - 1);
-
-        if (Array.isArray(rawState.levels) && rawState.levels.length === merged.levels.length) {
-            const l0 = rawState.levels[0] || {};
-            merged.levels[0].started = Boolean(l0.started);
-            merged.levels[0].revealedCount = clamp(toInt(l0.revealedCount, 0), 0, revealCards.length);
-            merged.levels[0].solved = Boolean(l0.solved) || merged.levels[0].revealedCount >= revealCards.length;
-
-            const l1 = rawState.levels[1] || {};
-            if (Array.isArray(l1.deck) && l1.deck.length === merged.levels[1].deck.length) {
-                merged.levels[1].deck = l1.deck.map((card) => clamp(toInt(card, 0), 0, memoryPool.length - 1));
-            }
-            merged.levels[1].matched = cleanIndexArray(l1.matched, merged.levels[1].deck.length);
-            merged.levels[1].flipped = cleanIndexArray(l1.flipped, merged.levels[1].deck.length).slice(0, 2);
-            merged.levels[1].moves = Math.max(0, toInt(l1.moves, 0));
-            merged.levels[1].solved = Boolean(l1.solved) || merged.levels[1].matched.length === merged.levels[1].deck.length;
-            if (
-                merged.levels[1].flipped.length === 2 &&
-                merged.levels[1].deck[merged.levels[1].flipped[0]] !== merged.levels[1].deck[merged.levels[1].flipped[1]]
-            ) {
-                merged.levels[1].flipped = [];
-            }
-
-            const l2 = rawState.levels[2] || {};
-            if (Array.isArray(l2.sequence) && l2.sequence.length >= 5) {
-                merged.levels[2].sequence = l2.sequence.filter((key) => typeof key === 'string');
-            }
-            if (Array.isArray(l2.board) && l2.board.length === merged.levels[2].sequence.length) {
-                merged.levels[2].board = cleanIndexArray(l2.board, merged.levels[2].sequence.length);
-                if (merged.levels[2].board.length !== merged.levels[2].sequence.length) {
-                    merged.levels[2].board = shuffled([...merged.levels[2].sequence.keys()], createRng(toInt(rawState.seed, randomSeed())));
-                }
-            }
-            merged.levels[2].progress = clamp(toInt(l2.progress, 0), 0, merged.levels[2].sequence.length);
-            merged.levels[2].picked = cleanIndexArray(l2.picked, merged.levels[2].sequence.length).slice(0, merged.levels[2].progress);
-            merged.levels[2].mistakes = Math.max(0, toInt(l2.mistakes, 0));
-            merged.levels[2].solved = Boolean(l2.solved) || merged.levels[2].progress >= merged.levels[2].sequence.length;
-
-            const l3 = rawState.levels[3] || {};
-            if (Array.isArray(l3.rounds) && l3.rounds.length === merged.levels[3].rounds.length) {
-                const allRoundsValid = l3.rounds.every((round, roundIndex) => (
-                    Array.isArray(round)
-                    && round.length === merged.levels[3].rounds[roundIndex].length
-                ));
-                if (allRoundsValid) {
-                    merged.levels[3].rounds = l3.rounds.map((round) => (
-                        round.map((symbol) => clamp(toInt(symbol, 0), 0, patternSymbols.length - 1))
-                    ));
-                }
-            }
-            merged.levels[3].currentRound = clamp(toInt(l3.currentRound, 0), 0, merged.levels[3].rounds.length - 1);
-            const maxInput = merged.levels[3].rounds[merged.levels[3].currentRound].length;
-            merged.levels[3].inputProgress = clamp(toInt(l3.inputProgress, 0), 0, maxInput);
-            merged.levels[3].awaitingReplay = l3.awaitingReplay !== false;
-            merged.levels[3].mistakes = Math.max(0, toInt(l3.mistakes, 0));
-            merged.levels[3].feedback = typeof l3.feedback === 'string' ? l3.feedback : '';
-            merged.levels[3].solved = Boolean(l3.solved);
-        }
-
-        const solvedGate = merged.levels.reduce((acc, level, index) => (level.solved ? index + 1 : acc), 0);
-        merged.unlockedSlide = clamp(Math.max(merged.unlockedSlide, solvedGate), 0, total - 1);
-        if (merged.levels[3].solved) {
-            merged.complete = true;
-            merged.unlockedSlide = total - 1;
-        }
-
-        return merged;
-    }
-
-    function loadState() {
-        const raw = localStorage.getItem(GAME_STORAGE_KEY);
-        if (!raw) return createVisitState();
-
-        try {
-            const parsed = JSON.parse(raw);
-            if (!parsed || parsed.version !== GAME_VERSION) {
-                return createVisitState();
-            }
-            const merged = mergeWithTemplate(parsed);
-            if (merged.complete && merged.sessionId !== sessionId) {
-                return createVisitState();
-            }
-            return merged;
-        } catch (error) {
-            console.warn('Could not parse game state; starting a fresh challenge.', error);
-            return createVisitState();
-        }
-    }
-
-    function saveState() {
-        localStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(gameState));
-    }
-
-    function clearMemoryTimer() {
-        if (memoryFlipTimer) {
-            clearTimeout(memoryFlipTimer);
-            memoryFlipTimer = null;
-        }
-    }
-
-    function clearPatternPlayback() {
-        patternTimers.forEach((timerId) => clearTimeout(timerId));
-        patternTimers = [];
-        patternPlaying = false;
-        patternActiveSymbol = -1;
-    }
-
-    function enhanceWords() {
-        const interactiveNodes = document.querySelectorAll('[data-word-interactive]');
-        interactiveNodes.forEach(node => {
-            const tokens = node.textContent.split(/(\s+)/);
-            const fragment = document.createDocumentFragment();
-
-            tokens.forEach(token => {
-                if (!token.trim()) {
-                    fragment.appendChild(document.createTextNode(token));
-                    return;
-                }
-
-                const span = document.createElement('span');
-                span.className = 'word-node';
-                span.textContent = token;
-                span.addEventListener('mouseenter', () => {
-                    span.classList.add('pulse');
-                    setTimeout(() => span.classList.remove('pulse'), 240);
-                });
-                fragment.appendChild(span);
-            });
-
-            node.textContent = '';
-            node.appendChild(fragment);
-        });
-    }
-
-    function updateProgressBar() {
-        if (!progressBar) return;
-        const solved = gameState.levels.filter((level) => level.solved).length;
-        const pct = (solved / gameState.levels.length) * 100;
-        progressBar.style.width = `${pct}%`;
-    }
-
-    function updateContinueButtons() {
-        continueButtons.forEach((button) => {
-            const levelIndex = toInt(button.dataset.levelNext, -1);
-            const level = gameState.levels[levelIndex];
-            const unlocked = Boolean(level && level.solved);
-            button.disabled = !unlocked;
-            button.classList.toggle('is-locked', !unlocked);
-            button.title = unlocked ? '' : t('gameContinueLocked');
-        });
-    }
-
-    function renderFinalPanel() {
-        if (!finalSlot) return;
-
-        const rows = finalLevelKeys.map((labelKey, index) => {
-            const done = Boolean(gameState.levels[index] && gameState.levels[index].solved);
-            return `
-                <div class="game-final-row ${done ? 'done' : ''}">
-                    <span>${t(labelKey)}</span>
-                    <strong>${done ? t('gameFinalReady') : t('gameFinalPending')}</strong>
-                </div>
-            `;
-        }).join('');
-
-        finalSlot.innerHTML = `
-            <article class="game-panel game-final-panel">
-                <h4>${t('gameFinalTitle')}</h4>
-                <p>${t('gameFinalBody')}</p>
-                <div class="game-final-list">${rows}</div>
-            </article>
-        `;
-    }
-
-    function updateNavigationLockState() {
-        const maxAllowed = clamp(gameState.unlockedSlide, 0, total - 1);
-        if (nextBtn) {
-            nextBtn.disabled = current >= maxAllowed;
-            nextBtn.classList.toggle('is-disabled', current >= maxAllowed);
-        }
-        if (prevBtn) {
-            prevBtn.disabled = current === 0;
-            prevBtn.classList.toggle('is-disabled', current === 0);
-        }
-    }
-
-    function setActiveSlideState() {
-        slides.forEach((slide, index) => {
-            const isActive = index === current;
-            slide.classList.toggle('active', isActive);
-            slide.setAttribute('aria-hidden', String(!isActive));
-        });
-
-        dots.forEach((dot, index) => {
-            dot.classList.toggle('active', index === current);
-            const isLocked = index > gameState.unlockedSlide;
-            dot.classList.toggle('locked', isLocked);
-            dot.setAttribute('aria-disabled', String(isLocked));
-        });
-
-        updateNavigationLockState();
-    }
-
-    function persistState() {
-        gameState.currentSlide = current;
-        saveState();
-    }
-
-    function solveLevel(levelIndex) {
-        const level = gameState.levels[levelIndex];
-        if (!level || level.solved) return;
-
-        level.solved = true;
-        gameState.unlockedSlide = Math.max(gameState.unlockedSlide, levelIndex + 1);
-        if (levelIndex === gameState.levels.length - 1) {
-            gameState.complete = true;
-            gameState.unlockedSlide = total - 1;
-        }
-    }
-
-    function goTo(index) {
-        const maxAllowed = clamp(gameState.unlockedSlide, 0, total - 1);
-        const target = clamp(index, 0, maxAllowed);
-        if (target === current) return;
-        current = target;
-        setActiveSlideState();
-        persistState();
-    }
-
-    function next() {
-        const maxAllowed = clamp(gameState.unlockedSlide, 0, total - 1);
-        if (current >= maxAllowed) {
-            container && container.classList.add('shake-lock');
-            setTimeout(() => container && container.classList.remove('shake-lock'), 280);
-            return;
-        }
-        goTo(current + 1);
-    }
-
-    function prev() {
-        goTo(current - 1);
-    }
-
-    function renderRevealLevel(slot, level) {
-        const revealOrder = level.revealOrder;
-        const totalCards = revealOrder.length;
-        const statusText = level.solved
-            ? t('gameL1StatusDone')
-            : level.started
-                ? `${t('gameL1StatusProgress')}: ${level.revealedCount}/${totalCards}`
-                : t('gameL1StatusStart');
-        const buttonLabel = level.solved
-            ? t('gameL1ButtonSolved')
-            : level.started
-                ? t('gameL1ButtonReveal')
-                : t('gameL1ButtonBegin');
-
-        const cardsMarkup = revealOrder.map((cardIndex, position) => {
-            const card = revealCards[cardIndex];
-            const revealed = position < level.revealedCount;
-            return `
-                <article class="reveal-card ${revealed ? 'is-revealed' : ''}">
-                    ${revealed
-                        ? `<div class="reveal-card-front"><h4>${t(card.title)}</h4><p>${t(card.body)}</p></div>`
-                        : `<div class="reveal-card-back"><span class="reveal-placeholder" aria-hidden="true"></span><small>${t('gameL1Hidden')}</small></div>`}
-                </article>
-            `;
-        }).join('');
-
-        slot.innerHTML = `
-            <article class="game-panel">
-                <header class="game-panel-head">
-                    <h4>${t('gameL1Title')}</h4>
-                    <p>${t('gameL1Hint')}</p>
-                </header>
-                <div class="reveal-grid">${cardsMarkup}</div>
-                <div class="game-panel-footer">
-                    <p class="game-status">${statusText}</p>
-                    <button type="button" class="game-action" data-game-level0 ${level.solved ? 'disabled' : ''}>${buttonLabel}</button>
-                </div>
-            </article>
-        `;
-
-        const action = slot.querySelector('[data-game-level0]');
-        if (!action) return;
-        action.addEventListener('click', () => {
-            if (level.solved) return;
-            level.started = true;
-            level.revealedCount = Math.min(totalCards, level.revealedCount + 1);
-            if (level.revealedCount >= totalCards) {
-                solveLevel(0);
-            }
-            updateProgressBar();
-            updateContinueButtons();
-            setActiveSlideState();
-            saveState();
-            renderRevealLevel(slot, level);
-            renderFinalPanel();
-        });
-    }
-
-    function renderMemoryLevel(slot, level) {
-        const openIndexes = [...level.matched, ...level.flipped];
-        const cardsMarkup = level.deck.map((cardId, index) => {
-            const isOpen = openIndexes.includes(index);
-            const isMatched = level.matched.includes(index);
-            return `
-                <button type="button"
-                    class="memory-card ${isOpen ? 'is-open' : ''} ${isMatched ? 'is-matched' : ''}"
-                    data-memory-index="${index}"
-                    ${isMatched || memoryFlipTimer ? 'disabled' : ''}>
-                    <span class="${isOpen ? 'memory-card-label' : 'memory-card-back'}">${isOpen ? t(memoryPool[cardId]) : t('gameMemoryHidden')}</span>
-                </button>
-            `;
-        }).join('');
-
-        const statusText = level.solved
-            ? t('gameL2Solved')
-            : `${t('gameL2Moves')}: ${level.moves}`;
-
-        slot.innerHTML = `
-            <article class="game-panel">
-                <header class="game-panel-head">
-                    <h4>${t('gameL2Title')}</h4>
-                    <p>${t('gameL2Hint')}</p>
-                </header>
-                <div class="memory-grid">${cardsMarkup}</div>
-                <p class="game-status">${statusText}</p>
-            </article>
-        `;
-
-        slot.querySelectorAll('[data-memory-index]').forEach((cardButton) => {
-            cardButton.addEventListener('click', () => {
-                if (level.solved || memoryFlipTimer) return;
-
-                const cardIndex = toInt(cardButton.dataset.memoryIndex, -1);
-                if (cardIndex < 0 || level.matched.includes(cardIndex) || level.flipped.includes(cardIndex)) return;
-
-                level.flipped.push(cardIndex);
-                if (level.flipped.length === 2) {
-                    level.moves += 1;
-                    const [first, second] = level.flipped;
-                    const isMatch = level.deck[first] === level.deck[second];
-
-                    if (isMatch) {
-                        level.matched = cleanIndexArray([...level.matched, first, second], level.deck.length);
-                        level.flipped = [];
-                        if (level.matched.length === level.deck.length) {
-                            solveLevel(1);
-                        }
-                        updateProgressBar();
-                        updateContinueButtons();
-                        setActiveSlideState();
-                        saveState();
-                        renderMemoryLevel(slot, level);
-                        renderFinalPanel();
-                        return;
-                    }
-
-                    saveState();
-                    renderMemoryLevel(slot, level);
-                    clearMemoryTimer();
-                    memoryFlipTimer = setTimeout(() => {
-                        memoryFlipTimer = null;
-                        level.flipped = [];
-                        saveState();
-                        renderMemoryLevel(slot, level);
-                    }, 700);
-                    return;
-                }
-
-                saveState();
-                renderMemoryLevel(slot, level);
-            });
-        });
-    }
-
-    function renderOrderLevel(slot, level) {
-        const pickedSet = new Set(level.picked);
-        const cardsMarkup = level.board.map((stepIndex, boardIndex) => {
-            const done = pickedSet.has(boardIndex);
-            return `
-                <button type="button"
-                    class="order-card ${done ? 'is-done' : ''}"
-                    data-order-index="${boardIndex}"
-                    ${done || level.solved ? 'disabled' : ''}>
-                    ${t(level.sequence[stepIndex])}
-                </button>
-            `;
-        }).join('');
-
-        const statusText = level.solved
-            ? t('gameL3Solved')
-            : `${t('gameL3Progress')}: ${level.progress}/${level.sequence.length} · ${t('gameL3Mistakes')}: ${level.mistakes}`;
-
-        slot.innerHTML = `
-            <article class="game-panel">
-                <header class="game-panel-head">
-                    <h4>${t('gameL3Title')}</h4>
-                    <p>${t('gameL3Hint')}</p>
-                </header>
-                <div class="order-grid">${cardsMarkup}</div>
-                <p class="game-status">${statusText}</p>
-            </article>
-        `;
-
-        slot.querySelectorAll('[data-order-index]').forEach((button) => {
-            button.addEventListener('click', () => {
-                if (level.solved) return;
-                const boardIndex = toInt(button.dataset.orderIndex, -1);
-                if (boardIndex < 0 || level.picked.includes(boardIndex)) return;
-
-                const expected = level.progress;
-                const selectedStep = level.board[boardIndex];
-                if (selectedStep === expected) {
-                    level.picked.push(boardIndex);
-                    level.progress += 1;
-                    if (level.progress >= level.sequence.length) {
-                        solveLevel(2);
-                    }
-                } else {
-                    level.progress = 0;
-                    level.picked = [];
-                    level.mistakes += 1;
-                }
-
-                updateProgressBar();
-                updateContinueButtons();
-                setActiveSlideState();
-                saveState();
-                renderOrderLevel(slot, level);
-                renderFinalPanel();
-            });
-        });
-    }
-
-    function runPatternPlayback(level, slot) {
-        clearPatternPlayback();
-        patternPlaying = true;
-        patternActiveSymbol = -1;
-        level.awaitingReplay = false;
-        level.feedback = '';
-        level.inputProgress = 0;
-        saveState();
-        renderPatternLevel(slot, level);
-
-        const sequence = level.rounds[level.currentRound];
-        const stepGap = 560;
-        sequence.forEach((symbolIndex, stepIndex) => {
-            patternTimers.push(setTimeout(() => {
-                patternActiveSymbol = symbolIndex;
-                renderPatternLevel(slot, level);
-            }, stepIndex * stepGap));
-
-            patternTimers.push(setTimeout(() => {
-                patternActiveSymbol = -1;
-                renderPatternLevel(slot, level);
-            }, (stepIndex * stepGap) + 320));
-        });
-
-        patternTimers.push(setTimeout(() => {
-            patternPlaying = false;
-            patternActiveSymbol = -1;
-            level.awaitingReplay = false;
-            level.feedback = '';
-            saveState();
-            renderPatternLevel(slot, level);
-        }, sequence.length * stepGap));
-    }
-
-    function renderPatternLevel(slot, level) {
-        const currentRound = level.rounds[level.currentRound] || [];
-        const replayDisabled = patternPlaying || level.solved;
-        const symbolDisabled = replayDisabled || level.awaitingReplay;
-        const statusText = level.solved
-            ? t('gameL4Solved')
-            : level.feedback === 'miss'
-                ? t('gameL4Miss')
-                : patternPlaying
-                    ? t('gameL4Listen')
-                    : level.awaitingReplay
-                        ? t('gameL4Hint')
-                        : `${t('gameL4Input')}: ${level.inputProgress}/${currentRound.length}`;
-
-        const symbolsMarkup = patternSymbols.map((symbolKey, symbolIndex) => `
-            <button type="button"
-                class="pattern-symbol ${patternActiveSymbol === symbolIndex ? 'is-active' : ''}"
-                data-pattern-symbol="${symbolIndex}"
-                ${symbolDisabled ? 'disabled' : ''}>
-                ${t(symbolKey)}
-            </button>
-        `).join('');
-
-        slot.innerHTML = `
-            <article class="game-panel">
-                <header class="game-panel-head">
-                    <h4>${t('gameL4Title')}</h4>
-                    <p>${t('gameL4Hint')}</p>
-                </header>
-                <div class="pattern-meta">
-                    <span>${t('gameL4Round')}: ${level.currentRound + 1}/${level.rounds.length}</span>
-                    <span>${t('gameL4Mistakes')}: ${level.mistakes}</span>
-                </div>
-                <div class="pattern-grid">${symbolsMarkup}</div>
-                <div class="game-panel-footer">
-                    <p class="game-status">${statusText}</p>
-                    <button type="button" class="game-action" data-pattern-replay ${replayDisabled ? 'disabled' : ''}>${t('gameL4Replay')}</button>
-                </div>
-            </article>
-        `;
-
-        const replayButton = slot.querySelector('[data-pattern-replay]');
-        if (replayButton) {
-            replayButton.addEventListener('click', () => {
-                if (level.solved) return;
-                runPatternPlayback(level, slot);
-            });
-        }
-
-        slot.querySelectorAll('[data-pattern-symbol]').forEach((button) => {
-            button.addEventListener('click', () => {
-                if (level.solved || patternPlaying || level.awaitingReplay) return;
-
-                const symbolIndex = toInt(button.dataset.patternSymbol, -1);
-                const expected = currentRound[level.inputProgress];
-                if (symbolIndex === expected) {
-                    level.inputProgress += 1;
-                    level.feedback = '';
-                    if (level.inputProgress >= currentRound.length) {
-                        if (level.currentRound >= level.rounds.length - 1) {
-                            solveLevel(3);
-                        } else {
-                            level.currentRound += 1;
-                            level.inputProgress = 0;
-                            level.awaitingReplay = true;
-                        }
-                    }
-                } else {
-                    level.mistakes += 1;
-                    level.inputProgress = 0;
-                    level.awaitingReplay = true;
-                    level.feedback = 'miss';
-                }
-
-                updateProgressBar();
-                updateContinueButtons();
-                setActiveSlideState();
-                saveState();
-                renderPatternLevel(slot, level);
-                renderFinalPanel();
-            });
-        });
-    }
-
-    function renderGames() {
-        gameSlots.forEach((slot, levelIndex) => {
-            const level = gameState.levels[levelIndex];
-            if (!level) return;
-
-            if (levelIndex === 0) {
-                renderRevealLevel(slot, level);
-            } else if (levelIndex === 1) {
-                renderMemoryLevel(slot, level);
-            } else if (levelIndex === 2) {
-                renderOrderLevel(slot, level);
-            } else if (levelIndex === 3) {
-                renderPatternLevel(slot, level);
-            }
-        });
-    }
-
-    // Events
-    if (nextBtn) nextBtn.addEventListener('click', next);
-    if (prevBtn) prevBtn.addEventListener('click', prev);
-    dots.forEach(dot => {
-        dot.addEventListener('click', () => {
-            const target = toInt(dot.dataset.index, 0);
-            if (target > gameState.unlockedSlide) return;
-            goTo(target);
-        });
-    });
-    continueButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-            const levelIndex = toInt(button.dataset.levelNext, -1);
-            const level = gameState.levels[levelIndex];
-            if (!level || !level.solved) return;
-            goTo(levelIndex + 1);
-        });
-    });
-    restartButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-            clearMemoryTimer();
-            clearPatternPlayback();
-            gameState = createVisitState();
-            current = 0;
-            saveState();
-            renderGames();
-            updateProgressBar();
-            updateContinueButtons();
-            renderFinalPanel();
-            setActiveSlideState();
-        });
-    });
-
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        if (!section) return;
-        const rect = section.getBoundingClientRect();
-        const inView = rect.top < window.innerHeight && rect.bottom > 0;
-        if (!inView) return;
-        if (e.key === 'ArrowRight') next();
-        if (e.key === 'ArrowLeft') prev();
-    });
-
-    if (container) {
-        // Touch / swipe support
-        let touchStartX = 0;
-        container.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, { passive: true });
-        container.addEventListener('touchend', (e) => {
-            const diff = e.changedTouches[0].screenX - touchStartX;
-            if (Math.abs(diff) > 50) {
-                diff < 0 ? next() : prev();
-            }
-        }, { passive: true });
-    }
-
-    document.addEventListener('yourlab:language-changed', () => {
-        renderGames();
-        renderFinalPanel();
-        updateContinueButtons();
-        setActiveSlideState();
-        updateProgressBar();
-        enhanceWords();
-    });
-
-    // Start
-    gameState = loadState();
-    current = clamp(toInt(gameState.currentSlide, 0), 0, gameState.unlockedSlide);
-    enhanceWords();
-    renderGames();
-    renderFinalPanel();
-    updateContinueButtons();
-    updateProgressBar();
-    setActiveSlideState();
 })();
 
 // ===== Global Background: Infinite Sinusoidal Dot Field + Cloud Smoke =====
@@ -2249,11 +1326,11 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
     function createWaveRows() {
         state.waveRows.length = 0;
         if (isCoarsePointer) {
-            state.rows = clamp(Math.floor(state.height / 8) + 54, 86, 132);
-            state.cols = clamp(Math.floor(state.width / 9) + 78, 118, 205);
+            state.rows = clamp(Math.floor(state.height / 12) + 30, 48, 74);
+            state.cols = clamp(Math.floor(state.width / 13) + 48, 68, 120);
         } else {
-            state.rows = clamp(Math.floor(state.height / 6) + 72, 118, 188);
-            state.cols = clamp(Math.floor(state.width / 7) + 110, 170, 320);
+            state.rows = clamp(Math.floor(state.height / 10) + 40, 64, 104);
+            state.cols = clamp(Math.floor(state.width / 11) + 64, 96, 180);
         }
 
         const groupCount = 8;
@@ -2263,7 +1340,7 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
             groups.push({
                 freq: 4.9 + (t * 2.6),
                 amp: 0.62 + (t * 0.48),
-                speed: 0.58 + (t * 0.44),
+                speed: 0.22 + (t * 0.16),
                 phase: g * 0.68
             });
         }
@@ -2293,16 +1370,16 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
     function createClouds() {
         state.clouds.length = 0;
         const cloudCount = isCoarsePointer
-            ? clamp(Math.floor(state.width / 13) + 24, 70, 140)
-            : clamp(Math.floor(state.width / 10) + 40, 110, 220);
+            ? clamp(Math.floor(state.width / 22) + 14, 30, 60)
+            : clamp(Math.floor(state.width / 18) + 20, 40, 80);
         for (let i = 0; i < cloudCount; i += 1) {
             state.clouds.push({
                 x: (Math.random() * 2 - 1) * 2.2,
                 depth: Math.random(),
                 band: Math.random(),
                 size: 0.38 + Math.random() * 0.95,
-                alpha: 0.028 + Math.random() * 0.06,
-                drift: (Math.random() - 0.5) * 0.32,
+                alpha: 0.016 + Math.random() * 0.03,
+                drift: (Math.random() - 0.5) * 0.12,
                 phase: Math.random() * Math.PI * 2
             });
         }
@@ -2374,34 +1451,34 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
             if (c.x < -2.35) c.x = 2.35;
         }
 
-        const pointerEase = isCoarsePointer ? 0.05 : 0.075;
+        const pointerEase = isCoarsePointer ? 0.03 : 0.045;
         state.pointerX = lerp(state.pointerX, state.pointerTargetX, pointerEase);
         state.pointerY = lerp(state.pointerY, state.pointerTargetY, pointerEase);
 
         const px = (state.pointerX - 0.5) * 2;
         const py = (state.pointerY - 0.5) * 2;
-        state.parallaxX = lerp(state.parallaxX, px, 0.06);
-        state.parallaxY = lerp(state.parallaxY, py, 0.06);
+        state.parallaxX = lerp(state.parallaxX, px, 0.03);
+        state.parallaxY = lerp(state.parallaxY, py, 0.03);
     }
 
     function drawAtmosphere() {
         const atmosphere = ctx.createLinearGradient(0, 0, 0, state.height);
-        atmosphere.addColorStop(0, 'rgba(232, 213, 183, 0.07)');
-        atmosphere.addColorStop(0.35, 'rgba(232, 213, 183, 0.03)');
-        atmosphere.addColorStop(1, 'rgba(232, 213, 183, 0.01)');
+        atmosphere.addColorStop(0, 'rgba(238, 237, 233, 0.035)');
+        atmosphere.addColorStop(0.35, 'rgba(238, 237, 233, 0.015)');
+        atmosphere.addColorStop(1, 'rgba(238, 237, 233, 0.005)');
         ctx.fillStyle = atmosphere;
         ctx.fillRect(0, 0, state.width, state.height);
     }
 
     function drawSinusoidLandscape(time, horizonY, floorY) {
-        const t = time * 0.001;
+        const t = time * 0.00035;
 
         for (let row = 0; row < state.rows; row += 1) {
             const r = state.waveRows[row];
             const depth = r.depth;
             const spread = state.width * (0.09 + depth * 0.66);
             const baseY = horizonY + Math.pow(depth, 1.75) * (floorY - horizonY);
-            const ampPx = (2.2 + depth * 56) * r.amp;
+            const ampPx = (1.4 + depth * 34) * r.amp;
 
             for (let col = 0; col < state.cols; col += 1) {
                 const xNorm = ((col / (state.cols - 1)) * 2) - 1;
@@ -2409,47 +1486,40 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
                 const secondary = Math.sin((xNorm * ((r.freq * 0.5) + 1.7)) - (t * (r.speed * 0.7)) + (r.phase * 1.4));
                 const tertiary = Math.sin((xNorm * ((r.freq * 0.3) + 0.95)) + (t * (r.speed * 0.35)) + (r.phase * 0.7));
                 const noise = (valueNoise((xNorm + 2.4) * 1.4, (depth * 3.6) + (t * 0.11)) - 0.5) * 0.12;
-                const ripple = rippleInfluence(xNorm, depth, time) * (0.28 + depth * 0.22);
+                const ripple = rippleInfluence(xNorm, depth, time) * (0.14 + depth * 0.1);
                 const wave = (primary * 0.7) + (secondary * 0.2) + (tertiary * 0.1) + noise + ripple + r.profile;
 
-                const sx = (state.width * 0.5) + (xNorm * spread) + (state.parallaxX * depth * 28);
+                const sx = (state.width * 0.5) + (xNorm * spread) + (state.parallaxX * depth * 14);
                 const sy = baseY - (wave * ampPx) + (r.tilt * xNorm * depth * 42);
                 if (sx < -12 || sx > state.width + 12 || sy < horizonY - 80 || sy > state.height + 28) continue;
 
-                const size = 0.16 + depth * 1.42;
-                const alpha = 0.01 + (depth * 0.18) + (Math.abs(primary) * 0.04);
+                const size = 0.14 + depth * 1.05;
+                const alpha = 0.006 + (depth * 0.09) + (Math.abs(primary) * 0.02);
 
                 ctx.beginPath();
-                ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.35, alpha).toFixed(4)})`;
+                ctx.fillStyle = `rgba(238, 237, 233, ${Math.min(0.18, alpha).toFixed(4)})`;
                 ctx.arc(sx, sy, size, 0, Math.PI * 2);
                 ctx.fill();
-
-                if (Math.abs(primary) > 0.8 && depth > 0.12) {
-                    ctx.beginPath();
-                    ctx.fillStyle = `rgba(232, 213, 183, ${Math.min(0.2, alpha * 0.65).toFixed(4)})`;
-                    ctx.arc(sx, sy, size * 0.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
             }
         }
     }
 
     function drawCloudSmoke(time, horizonY) {
-        const t = time * 0.001;
+        const t = time * 0.00035;
 
         for (let i = 0; i < state.clouds.length; i += 1) {
             const c = state.clouds[i];
             const depth = c.depth;
             const spread = state.width * (0.22 + depth * 0.66);
-            const sx = (state.width * 0.5) + (c.x * spread) + (state.parallaxX * 14 * (0.4 + depth));
-            const sy = horizonY - (state.height * (0.17 - (c.band * 0.24))) + (depth * state.height * 0.06) + (Math.sin((t * 0.55) + c.phase) * 7);
+            const sx = (state.width * 0.5) + (c.x * spread) + (state.parallaxX * 7 * (0.4 + depth));
+            const sy = horizonY - (state.height * (0.17 - (c.band * 0.24))) + (depth * state.height * 0.06) + (Math.sin((t * 0.55) + c.phase) * 4);
             const radius = state.width * (0.015 + c.size * 0.05) * (0.35 + (1 - depth) * 0.95);
             if (sx < -radius || sx > state.width + radius || sy < -radius || sy > state.height + radius) continue;
 
             const gradient = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
-            gradient.addColorStop(0, `rgba(255, 255, 255, ${(c.alpha * 1.35).toFixed(4)})`);
-            gradient.addColorStop(0.42, `rgba(255, 255, 255, ${(c.alpha * 0.55).toFixed(4)})`);
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            gradient.addColorStop(0, `rgba(238, 237, 233, ${(c.alpha * 1.35).toFixed(4)})`);
+            gradient.addColorStop(0.42, `rgba(238, 237, 233, ${(c.alpha * 0.55).toFixed(4)})`);
+            gradient.addColorStop(1, 'rgba(238, 237, 233, 0)');
             ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(sx, sy, radius, 0, Math.PI * 2);
@@ -2457,9 +1527,9 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
         }
 
         const horizonMist = ctx.createLinearGradient(0, horizonY - (state.height * 0.16), 0, horizonY + (state.height * 0.14));
-        horizonMist.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        horizonMist.addColorStop(0.45, 'rgba(232, 213, 183, 0.11)');
-        horizonMist.addColorStop(1, 'rgba(232, 213, 183, 0)');
+        horizonMist.addColorStop(0, 'rgba(238, 237, 233, 0)');
+        horizonMist.addColorStop(0.45, 'rgba(238, 237, 233, 0.05)');
+        horizonMist.addColorStop(1, 'rgba(238, 237, 233, 0)');
         ctx.fillStyle = horizonMist;
         ctx.fillRect(0, horizonY - (state.height * 0.16), state.width, state.height * 0.3);
     }
@@ -2468,15 +1538,15 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
         ctx.clearRect(0, 0, state.width, state.height);
         drawAtmosphere();
 
-        const horizonY = state.height * (0.22 + (state.parallaxY * 0.012));
+        const horizonY = state.height * (0.22 + (state.parallaxY * 0.006));
         const floorY = state.height * 1.04;
 
         drawSinusoidLandscape(time, horizonY, floorY);
         drawCloudSmoke(time, horizonY);
 
         const floorFog = ctx.createLinearGradient(0, state.height * 0.55, 0, state.height);
-        floorFog.addColorStop(0, 'rgba(232, 213, 183, 0)');
-        floorFog.addColorStop(1, 'rgba(232, 213, 183, 0.1)');
+        floorFog.addColorStop(0, 'rgba(238, 237, 233, 0)');
+        floorFog.addColorStop(1, 'rgba(238, 237, 233, 0.045)');
         ctx.fillStyle = floorFog;
         ctx.fillRect(0, state.height * 0.55, state.width, state.height * 0.45);
     }
@@ -2496,11 +1566,11 @@ console.log('YourLab AI chat ready. Type "showSavedConversations()" in console t
         const now = performance.now();
         const dx = state.pointerTargetX - state.lastRippleX;
         const dy = state.pointerTargetY - state.lastRippleY;
-        const movedEnough = ((dx * dx) + (dy * dy)) > (isCoarsePointer ? 0.005 : 0.0025);
-        const rippleGap = isCoarsePointer ? 100 : 70;
+        const movedEnough = ((dx * dx) + (dy * dy)) > (isCoarsePointer ? 0.012 : 0.008);
+        const rippleGap = isCoarsePointer ? 220 : 160;
 
         if (movedEnough && (now - state.lastDisturbAt > rippleGap)) {
-            addRipple(state.pointerTargetX, state.pointerTargetY, isCoarsePointer ? 0.36 : 0.48);
+            addRipple(state.pointerTargetX, state.pointerTargetY, isCoarsePointer ? 0.16 : 0.2);
             state.lastDisturbAt = now;
             state.lastRippleX = state.pointerTargetX;
             state.lastRippleY = state.pointerTargetY;
