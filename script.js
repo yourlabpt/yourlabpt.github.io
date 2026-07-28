@@ -124,28 +124,16 @@ const translations = {
         inviteCta: 'Start the conversation',
         chatDescription: 'Describe your situation and leave your contact. Someone from the team replies to you directly.',
         chatGreeting: 'Tell us, in a few words, what is happening in your company.',
-        chatThinking: 'One moment…',
         inputPlaceholder: 'Type your message here...',
         sendBtn: 'Send',
         directContactLabel: 'Prefer to talk directly?',
         directWhatsapp: 'WhatsApp',
-        directEmail: 'Email',
+        directGmail: 'Write an email',
+        directCopyEmail: 'Copy address',
 
         // Footer
         footerText: '\u00A9 2026 YourLab. All rights reserved.',
-        footerContactShortcut: 'Contacts card',
-
-        // Chat bot responses (used as frontend fallback)
-        bot: {
-            saved: (name) => `The YourLab team has your situation on record, ${name}. You will get a direct reply from a person on the team — not an automated one.`,
-            generic: [
-                'Can you tell me a bit more about what is happening?',
-                'How long has this been a problem in the company?',
-                'What have you already tried in order to fix it?',
-                'Who in the company feels this problem most day to day?',
-                'If this carries on for another six months, what does that cost the company?'
-            ]
-        }
+        footerContactShortcut: 'Contacts card'
     },
     pt: {
         // Header
@@ -269,28 +257,16 @@ const translations = {
         inviteCta: 'Começar a conversa',
         chatDescription: 'Descreva a situação da sua empresa e deixe o seu contacto. Alguém da equipa responde-lhe diretamente.',
         chatGreeting: 'Conte-nos, em poucas palavras, o que está a acontecer na sua empresa.',
-        chatThinking: 'Um momento…',
         inputPlaceholder: 'Escreva a sua mensagem aqui...',
         sendBtn: 'Enviar',
         directContactLabel: 'Prefere falar diretamente?',
         directWhatsapp: 'WhatsApp',
-        directEmail: 'Email',
+        directGmail: 'Escrever email',
+        directCopyEmail: 'Copiar endereço',
 
         // Footer
         footerText: '© 2026 YourLab. Todos os direitos reservados.',
-        footerContactShortcut: 'Cartão de contacto',
-
-        // Chat bot responses (used as frontend fallback)
-        bot: {
-            saved: (name) => `A equipa da YourLab tem a sua situação registada, ${name}. Vai receber uma resposta direta de uma pessoa da equipa — não uma resposta automática.`,
-            generic: [
-                'Pode contar-me um pouco mais sobre o que está a acontecer?',
-                'Há quanto tempo isto é um problema na empresa?',
-                'O que já tentou fazer para resolver isto?',
-                'Quem, na empresa, sente mais este problema no dia a dia?',
-                'Se isto continuar assim mais seis meses, o que é que isso custa à empresa?'
-            ]
-        }
+        footerContactShortcut: 'Cartão de contacto'
     }
 };
 
@@ -720,35 +696,9 @@ function normalizeProjectShowcaseCollection(input) {
     loadProjectsFromApi();
 })();
 
-// Helper to get current bot translations
-function getBotText() {
-    return translations[currentLang].bot;
-}
-
 const chatForm = document.getElementById('chatForm');
 const userInput = document.getElementById('userInput');
 const chatMessages = document.getElementById('chatMessages');
-const sendButton = chatForm.querySelector('.send-btn');
-const CHAT_OFFLINE_MODE_KEY = 'yourlab_chat_offline_mode';
-
-const chatState = {
-    sessionId: localStorage.getItem('yourlab_chat_session_id') || '',
-    processing: false,
-    offlineMode: sessionStorage.getItem(CHAT_OFFLINE_MODE_KEY) === '1',   // once true, skip all server retries for this session
-    turns: [],
-    fallbackConversation: {
-        messages: [],
-        contact: {
-            name: '',
-            email: '',
-            phone: '',
-            callTime: ''
-        },
-        businessIdea: '',
-        submitted: false,
-        contactChannel: 'phone'
-    }
-};
 
 function scrollChatToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -776,81 +726,260 @@ function addUserMessage(text) {
     scrollChatToBottom();
 }
 
-function addTypingIndicator() {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message bot-message';
-    messageDiv.dataset.typing = 'true';
-    const paragraph = document.createElement('p');
-    paragraph.textContent = translations[currentLang].chatThinking;
-    messageDiv.appendChild(paragraph);
-    chatMessages.appendChild(messageDiv);
-    scrollChatToBottom();
-    return messageDiv;
-}
-
-function removeTypingIndicator(indicatorEl) {
-    if (indicatorEl && indicatorEl.parentNode) {
-        indicatorEl.parentNode.removeChild(indicatorEl);
-    }
-}
-
-function updateInputState(disabled) {
-    userInput.disabled = disabled;
-    sendButton.disabled = disabled;
-}
-
-function setOfflineMode(enabled) {
-    chatState.offlineMode = Boolean(enabled);
-    if (chatState.offlineMode) sessionStorage.setItem(CHAT_OFFLINE_MODE_KEY, '1');
-    else sessionStorage.removeItem(CHAT_OFFLINE_MODE_KEY);
-}
-
 function saveConversationLocally(payload) {
     const conversations = JSON.parse(localStorage.getItem('yourlab_conversations') || '[]');
     conversations.push(payload);
     localStorage.setItem('yourlab_conversations', JSON.stringify(conversations));
 }
 
-async function sendMessageToAi(userText) {
-    const apiBase = (window.YOURLAB_API_URL || '').replace(/\/$/, '');
-    // Fetch timeout slightly longer than the server-side model timeout so we see the
-    // server's fallback response rather than a raw network abort
-    const FETCH_TIMEOUT_MS = (window.YOURLAB_FETCH_TIMEOUT_MS || 38000);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+// ===== Conversation engine =====
+// Deliberately rule-based: no language model, no server round-trip for replies.
+// The value here is the sequence of questions, which is fixed and predictable —
+// the same questions a person would ask on a first call. Only the finished lead
+// is sent to the server, so the team gets notified by email.
 
-    let response;
-    try {
-        response = await fetch(`${apiBase}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sessionId: chatState.sessionId,
-                language: currentLang,
-                message: userText
-            }),
-            signal: controller.signal
-        });
-    } finally {
-        clearTimeout(timeoutId);
+const CHAT_TRACK_STEPS = {
+    idea: ['ideaWhat', 'ideaTalked', 'ideaFirst'],
+    stuck: ['stuckTool', 'stuckBreaks', 'stuckUsers'],
+    ops: ['opsProcess', 'opsPeople', 'opsWhere']
+};
+const CHAT_COMMON_STEPS = ['timing', 'name', 'contact', 'recap'];
+
+const chatCopy = {
+    pt: {
+        route: 'Só para eu perceber melhor — qual destes está mais perto do seu caso?',
+        routeChips: ['Tenho uma ideia por começar', 'Construí algo e está preso', 'A empresa está desorganizada'],
+        openers: {
+            idea: 'Boa. É o melhor momento para pensar nisto — antes de gastar dinheiro.',
+            stuck: 'Isso acontece mais vezes do que se imagina. Costuma dar-se a volta.',
+            ops: 'Normalmente é sinal de que a empresa cresceu mais depressa do que os processos.'
+        },
+        ask: {
+            ideaWhat: 'Conte-me a ideia em duas linhas: que problema resolve, e para quem?',
+            ideaTalked: 'Já falou com alguém que tem esse problema?',
+            ideaFirst: 'Se só uma coisa pudesse funcionar na primeira versão, qual seria?',
+            stuckTool: 'Com que ferramenta é que aquilo foi construído?',
+            stuckBreaks: 'O que é que falha exatamente?',
+            stuckUsers: 'Já há alguém a usar isso a sério?',
+            opsProcess: 'Qual é o processo que dá mais dores de cabeça hoje?',
+            opsPeople: 'Quantas pessoas mexem nisso, e com que frequência?',
+            opsWhere: 'Onde é que a informação vive agora?',
+            timing: 'Para quando gostaria de ter isto resolvido?',
+            name: 'Como se chama?',
+            contact: 'E o melhor contacto para lhe responder — email ou telemóvel?',
+            recap: 'Está certo assim?'
+        },
+        chips: {
+            ideaTalked: ['Sim, já falei', 'Ainda não', 'Só com pessoas próximas'],
+            stuckTool: ['ChatGPT ou Claude', 'Cursor, Lovable ou parecido', 'Contratei alguém', 'Outra coisa'],
+            stuckUsers: ['Já há pessoas a usar', 'Só no meu computador', 'Parou a meio'],
+            opsWhere: ['Excel', 'WhatsApp e email', 'Papel', 'Um sistema antigo'],
+            timing: ['O quanto antes', 'Nas próximas semanas', 'Ainda estou a explorar'],
+            recap: ['Está certo', 'Quero corrigir']
+        },
+        retry: {
+            ideaWhat: 'Ajude-me com um pouco mais: o que é que a pessoa não consegue fazer hoje?',
+            ideaFirst: 'Pense na coisa mais simples que já valia a pena — só essa.',
+            stuckBreaks: 'Descreva como se estivesse a contar a um amigo: o que acontece quando falha?',
+            opsProcess: 'Por exemplo: encomendas, turnos, orçamentos, faturação, marcações.',
+            opsPeople: 'Um número aproximado serve — duas pessoas? dez? todos os dias?',
+            name: 'Só o primeiro nome basta.',
+            contact: 'Preciso de um email ou de um número para lhe responder.'
+        },
+        ack: {
+            generic: ['Percebo.', 'Certo.', 'Isso faz sentido.', 'Já vi isto antes.'],
+            excel: 'Excel — clássico. Funciona até deixar de funcionar.',
+            whatsapp: 'Quando as decisões vivem no WhatsApp, ninguém consegue ver o todo.',
+            paper: 'Papel ainda é mais comum do que se pensa.',
+            legacy: 'Sistemas antigos costumam obrigar a inventar atalhos.',
+            billing: 'Orçamentos e faturas à mão são dos sítios onde se perde mais tempo.',
+            orders: 'Encomendas e stock são fáceis de descontrolar quando o volume sobe.',
+            shifts: 'Turnos e horários costumam ser a maior dor de cabeça semanal.',
+            bookings: 'Marcações mal organizadas custam clientes sem ninguém notar.',
+            soon: 'Semanas é um prazo realista para ter a primeira versão a funcionar.',
+            aiTool: 'Isso explica muita coisa — sai depressa, mas ninguém fica a saber o que está lá dentro.',
+            hired: 'Acontece muito: quem construiu foi-se embora e o conhecimento foi com ele.',
+            alone: 'Enquanto ninguém usa, ainda dá para arrumar sem stress.',
+            inUse: 'Estar em uso muda as prioridades — primeiro estabilizar, depois melhorar.',
+            notTalked: 'Vale a pena testar isso cedo. É mais barato que construir e descobrir depois.',
+            talked: 'Ótimo. Isso poupa meio caminho.',
+            urgent: 'Anotado que é urgente.',
+            exploring: 'Explorar também é um bom sítio para começar. Sem pressa.'
+        },
+        faq: {
+            price: 'A resposta honesta é: depende. A consultoria para olhar um problema começa nos 200 €, e os projetos ficam normalmente em valores de quatro dígitos. A primeira chamada é gratuita.',
+            time: 'A primeira versão costuma ficar pronta em 4 a 6 semanas, e o prazo concreto vai no orçamento.',
+            lockin: 'O sistema e o código ficam seus, e fica tudo escrito para outra pessoa poder continuar.',
+            who: 'Somos uma equipa pequena, a trabalhar de Portugal para clientes em Portugal e no resto da Europa.',
+            how: 'Primeiro entendemos, depois organizamos, e só depois construímos — por etapas, para ver resultado cedo.',
+            bot: 'Nem robô, nem inteligência artificial. Mas guardo a explicação completa para o fim da conversa.',
+            human: 'Claro. WhatsApp 927 319 412 ou yourlabpt@gmail.com — e continuo aqui se preferir escrever.',
+            dontKnow: 'Sem problema, isso é normal. Diga só o que nota no dia a dia: quem se queixa, o que atrasa.',
+            thanks: 'De nada.'
+        },
+        back: 'Voltando ao que interessa:',
+        recapIntro: 'Deixe-me resumir, para garantir que entendi:',
+        recapLabels: {
+            situation: 'Situação',
+            ideaWhat: 'A ideia',
+            ideaTalked: 'Já falou com alguém',
+            ideaFirst: 'Primeira versão',
+            stuckTool: 'Construído com',
+            stuckBreaks: 'O que falha',
+            stuckUsers: 'Em uso',
+            opsProcess: 'Processo',
+            opsPeople: 'Quem e com que frequência',
+            opsWhere: 'Onde está a informação',
+            timing: 'Prazo',
+            contact: 'Contacto'
+        },
+        tracks: {
+            idea: 'uma ideia por começar',
+            stuck: 'algo construído que ficou preso',
+            ops: 'uma empresa a precisar de organização'
+        },
+        nameAck: (name) => `Muito bem, ${name}.`,
+        correct: 'Diga-me o que está errado e eu corrijo.',
+        saved: (name) => `Ficou registado${name ? `, ${name}` : ''}. Uma pessoa da equipa responde-lhe diretamente — não é resposta automática.`,
+        savedNote: 'A primeira conversa é gratuita e serve para entender o problema. Se não fizer sentido construir nada, também lhe dizemos isso.',
+        joke1: 'Ah, e uma confissão antes de ir: esta conversa não teve inteligência artificial nenhuma. Nem um bocadinho.',
+        joke2: 'Sou algumas centenas de linhas de código, escritas por alguém que já teve esta conversa muitas vezes e sabe que perguntas fazer. Sem modelo, sem agente, sem nuvem.',
+        joke3: 'E correu bem, não correu? É precisamente esse o ponto: quase nunca falta tecnologia — falta alguém perceber o problema primeiro. 🙂',
+        after: 'Se quiser acrescentar mais alguma coisa, escreva. Fica tudo no mesmo registo.',
+        afterAcks: [
+            'Anotado, isso vai junto com o resto.',
+            'Também fica registado, obrigado.',
+            'Guardado. Daqui para a frente é melhor falarmos a sério: WhatsApp 927 319 412 ou yourlabpt@gmail.com.'
+        ]
+    },
+    en: {
+        route: 'Just so I understand — which of these is closest to your case?',
+        routeChips: ['I have an idea to start', 'I built something and it is stuck', 'The company is disorganised'],
+        openers: {
+            idea: 'Good. This is the best moment to think it through — before spending money.',
+            stuck: 'That happens more often than people think. It is usually recoverable.',
+            ops: 'Usually that means the company grew faster than its processes.'
+        },
+        ask: {
+            ideaWhat: 'Tell me the idea in two lines: what problem does it solve, and for whom?',
+            ideaTalked: 'Have you spoken to anyone who has that problem?',
+            ideaFirst: 'If only one thing could work in the first version, what would it be?',
+            stuckTool: 'What was it built with?',
+            stuckBreaks: 'What exactly breaks?',
+            stuckUsers: 'Is anyone actually using it yet?',
+            opsProcess: 'Which process causes the most headaches today?',
+            opsPeople: 'How many people touch it, and how often?',
+            opsWhere: 'Where does the information live right now?',
+            timing: 'When would you like this sorted?',
+            name: 'What is your name?',
+            contact: 'And the best way to reach you — email or phone?',
+            recap: 'Is that right?'
+        },
+        chips: {
+            ideaTalked: ['Yes, I have', 'Not yet', 'Only with people close to me'],
+            stuckTool: ['ChatGPT or Claude', 'Cursor, Lovable or similar', 'I hired someone', 'Something else'],
+            stuckUsers: ['People are using it', 'Only on my computer', 'It stalled halfway'],
+            opsWhere: ['Excel', 'WhatsApp and email', 'Paper', 'An old system'],
+            timing: ['As soon as possible', 'In the next few weeks', 'Still exploring'],
+            recap: ['That is right', 'I want to correct something']
+        },
+        retry: {
+            ideaWhat: 'Help me a little more: what can the person not do today?',
+            ideaFirst: 'Think of the simplest thing that would already be worth it — just that one.',
+            stuckBreaks: 'Describe it like you would to a friend: what happens when it fails?',
+            opsProcess: 'For example: orders, shifts, quotes, invoicing, bookings.',
+            opsPeople: 'A rough number is fine — two people? ten? every day?',
+            name: 'A first name is enough.',
+            contact: 'I need an email or a phone number to get back to you.'
+        },
+        ack: {
+            generic: ['I see.', 'Right.', 'That makes sense.', 'I have seen this before.'],
+            excel: 'Excel — a classic. It works until it does not.',
+            whatsapp: 'When decisions live in WhatsApp, nobody can see the whole picture.',
+            paper: 'Paper is still more common than people admit.',
+            legacy: 'Old systems usually force people to invent workarounds.',
+            billing: 'Quotes and invoices by hand are where most time quietly disappears.',
+            orders: 'Orders and stock get out of hand quickly once volume goes up.',
+            shifts: 'Shifts and schedules are usually the biggest weekly headache.',
+            bookings: 'Badly organised bookings cost clients without anyone noticing.',
+            soon: 'A few weeks is a realistic window for a first working version.',
+            aiTool: 'That explains a lot — it comes out fast, but nobody ends up knowing what is inside.',
+            hired: 'Happens often: whoever built it left, and the knowledge went with them.',
+            alone: 'While nobody is using it, it can still be sorted out calmly.',
+            inUse: 'Being in use changes the priorities — stabilise first, improve after.',
+            notTalked: 'Worth testing that early. Cheaper than building and finding out later.',
+            talked: 'Good. That saves half the road.',
+            urgent: 'Noted that it is urgent.',
+            exploring: 'Exploring is a fine place to start. No rush.'
+        },
+        faq: {
+            price: 'The honest answer is: it depends. Consulting on a problem starts at €200, and projects usually come in at four-figure amounts. The first call is free.',
+            time: 'The first version is usually ready in 4 to 6 weeks, and the exact deadline goes in the quote.',
+            lockin: 'The system and the code stay yours, and everything is written down so someone else can carry on.',
+            who: 'We are a small team, working from Portugal for clients in Portugal and across Europe.',
+            how: 'First we understand, then we organise, and only then we build — in stages, so you see results early.',
+            bot: 'Neither a robot nor artificial intelligence. But I am saving the full explanation for the end of this conversation.',
+            human: 'Of course. WhatsApp +351 927 319 412 or yourlabpt@gmail.com — and I am still here if you prefer to type.',
+            dontKnow: 'No problem, that is normal. Just tell me what you notice day to day: who complains, what runs late.',
+            thanks: 'You are welcome.'
+        },
+        back: 'Back to what matters:',
+        recapIntro: 'Let me summarise, to make sure I understood:',
+        recapLabels: {
+            situation: 'Situation',
+            ideaWhat: 'The idea',
+            ideaTalked: 'Talked to anyone',
+            ideaFirst: 'First version',
+            stuckTool: 'Built with',
+            stuckBreaks: 'What breaks',
+            stuckUsers: 'In use',
+            opsProcess: 'Process',
+            opsPeople: 'Who and how often',
+            opsWhere: 'Where the information lives',
+            timing: 'Timing',
+            contact: 'Contact'
+        },
+        tracks: {
+            idea: 'an idea to start',
+            stuck: 'something built that got stuck',
+            ops: 'a company that needs organising'
+        },
+        nameAck: (name) => `Good to know, ${name}.`,
+        correct: 'Tell me what is wrong and I will fix it.',
+        saved: (name) => `It is on record${name ? `, ${name}` : ''}. Someone from the team will reply to you directly — not an automated answer.`,
+        savedNote: 'The first conversation is free and exists to understand the problem. If building makes no sense, we will tell you that too.',
+        joke1: 'Oh, and a confession before you go: there was no artificial intelligence in this conversation. Not a drop.',
+        joke2: 'I am a few hundred lines of code, written by someone who has had this conversation many times and knows which questions to ask. No model, no agent, no cloud.',
+        joke3: 'And it went well, did it not? That is exactly the point: technology is rarely what is missing — someone understanding the problem first usually is. 🙂',
+        after: 'If you want to add anything else, type it. It goes into the same record.',
+        afterAcks: [
+            'Noted, that goes in with the rest.',
+            'Recorded as well, thank you.',
+            'Saved. From here it is better to talk properly: WhatsApp +351 927 319 412 or yourlabpt@gmail.com.'
+        ]
     }
+};
 
-    if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-    }
+const chatState = {
+    track: '',
+    step: 'route',
+    stepQueue: [],
+    retries: 0,
+    answers: {},
+    contact: { name: '', email: '', phone: '' },
+    messages: [],
+    lastAck: '',
+    extras: 0,
+    submitted: false,
+    additionSaved: false,
+    correcting: false
+};
 
-    return response.json();
+function chatText() {
+    return chatCopy[currentLang] || chatCopy.pt;
 }
 
-const FALLBACK_NAME_STOP_WORDS = new Set([
-    'hi', 'hello', 'hey', 'ola', 'bom', 'boa', 'sim', 'nao', 'ok', 'okay', 'yes', 'no',
-    'maybe', 'talvez', 'team', 'equipa', 'yourlab', 'alex', 'name', 'nome',
-    'phone', 'number', 'telefone', 'numero', 'email', 'business', 'negocio',
-    'oi', 'tudo', 'bem', 'good', 'morning', 'afternoon', 'evening', 'night',
-    'obrigado', 'obrigada', 'thanks', 'thank', 'you'
-]);
-
-function normalizeFallbackForComparison(value) {
+function normalizeChatText(value) {
     return (value || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -858,367 +987,467 @@ function normalizeFallbackForComparison(value) {
         .trim();
 }
 
-function normalizeFallbackEmail(value) {
-    const text = (value || '').trim().toLowerCase();
-    return /^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(text) ? text : '';
+function chatPickRandom(list) {
+    return list[Math.floor(Math.random() * list.length)];
 }
 
-function normalizeFallbackPhone(value) {
-    const text = (value || '').trim();
-    const digits = text.replace(/\D/g, '');
-    if (digits.length < 8 || digits.length > 16) return '';
-    return text;
+function chatExtractEmail(text) {
+    const match = (text || '').match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+    return match ? match[0].toLowerCase() : '';
 }
 
-function normalizeFallbackNameCandidate(value) {
-    const cleaned = (value || '')
-        .trim()
-        .replace(/[.,;:!?]+$/g, '')
-        .replace(/^['"`]+|['"`]+$/g, '');
-    if (!cleaned || /\d|@/.test(cleaned)) return '';
+function chatExtractPhone(text) {
+    const match = (text || '').match(/(?:\+?\d[\d\s().-]{6,}\d)/);
+    if (!match) return '';
+    const digits = match[0].replace(/\D/g, '');
+    return digits.length >= 8 && digits.length <= 16 ? match[0].trim() : '';
+}
 
-    const tokens = cleaned
-        .split(/\s+/)
-        .map((token) => token.replace(/[^A-Za-zÀ-ÿ'-]/g, ''))
-        .filter(Boolean);
-    if (tokens.length < 2 || tokens.length > 4) return '';
-    if (tokens.some((token) => token.length < 2 || token.length > 24)) return '';
+// Words that show up in answers to the other questions, so they can never be a name.
+const CHAT_NOT_A_NAME = new Set([
+    'o', 'a', 'os', 'as', 'e', 'de', 'da', 'do', 'em', 'sim', 'nao', 'ok', 'talvez',
+    'quanto', 'antes', 'agora', 'hoje', 'amanha', 'semanas', 'semana', 'proximas', 'meses', 'dias',
+    'excel', 'whatsapp', 'email', 'papel', 'sistema', 'antigo', 'outra', 'coisa',
+    'chatgpt', 'claude', 'gemini', 'cursor', 'lovable', 'bolt', 'replit',
+    'contratei', 'alguem', 'pessoas', 'pessoa', 'usar', 'computador', 'meu', 'parou', 'meio',
+    'ainda', 'estou', 'explorar', 'certo', 'esta', 'quero', 'corrigir', 'falei', 'proximos',
+    'obrigado', 'obrigada', 'ola', 'oi', 'bom', 'boa', 'dia', 'tarde', 'noite', 'empresa',
+    'hi', 'hello', 'hey', 'yes', 'no', 'not', 'yet', 'asap', 'soon', 'possible', 'weeks',
+    'next', 'few', 'still', 'exploring', 'right', 'correct', 'want', 'something', 'people',
+    'using', 'only', 'computer', 'stalled', 'halfway', 'else', 'hired', 'someone', 'similar',
+    'paper', 'old', 'system', 'and', 'the', 'that', 'is', 'with', 'close', 'me', 'have', 'or'
+]);
 
-    const joined = normalizeFallbackForComparison(tokens.join(' '));
-    if (FALLBACK_NAME_STOP_WORDS.has(joined)) return '';
-    if (tokens.some((token) => FALLBACK_NAME_STOP_WORDS.has(normalizeFallbackForComparison(token)))) return '';
-    if (/(^| )(contact|contacto|email|telefone|numero|phone|number|name|nome)( |$)/.test(joined)) return '';
-
+function chatExtractName(text) {
+    const cleaned = (text || '')
+        .replace(/(?:o meu nome e|meu nome e|chamo-me|chamo me|sou o|sou a|eu sou|my name is|i am|i'm|call me|this is)/i, ' ')
+        .replace(/[^A-Za-zÀ-ÿ' -]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!cleaned) return '';
+    const tokens = cleaned.split(' ').filter((token) => token.length >= 2 && token.length <= 24);
+    if (!tokens.length || tokens.length > 4) return '';
+    if (tokens.some((token) => CHAT_NOT_A_NAME.has(normalizeChatText(token)))) return '';
     return tokens
-        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+        .slice(0, 3)
+        .map((token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase())
         .join(' ');
 }
 
-function extractFallbackName(text) {
-    const source = (text || '').trim();
-    if (!source) return '';
+// ── Routing: which of the three doors on the page is this person coming through?
+function chatDetectTrack(text) {
+    const value = normalizeChatText(text);
+    if (!value) return '';
 
-    const patterns = [
-        /(?:my name is|i am|i'm|this is|call me)\s+([A-Za-zÀ-ÿ' -]{2,80})/i,
-        /(?:meu nome e|o meu nome e|chamo-me|chamo me|eu sou|sou o|sou a|pode chamar(?:-me)?)\s+([A-Za-zÀ-ÿ' -]{2,80})/i
-    ];
-    for (const pattern of patterns) {
-        const match = source.match(pattern);
-        if (!match) continue;
-        const candidate = normalizeFallbackNameCandidate(match[1]);
-        if (candidate) return candidate;
-    }
+    const ideaHints = /\b(ideia|idea|comecar|come[cç]ar|start|startup|validar|validate|testar|test|nova|new|do zero|from scratch|lancar|launch|projeto novo|mvp|prototipo|prototype)\b/;
+    const stuckHints = /\b(bug|bugs|erro|erros|error|errors|preso|travado|stuck|parou|stalled|nao funciona|not working|broken|quebrado|deploy|publicar|servidor|server|lento|slow|chatgpt|claude|cursor|lovable|bolt|replit|copilot|gemini|vibe|no-?code|wordpress|bubble)\b/;
+    const opsHints = /\b(excel|folhas de calculo|spreadsheet|whatsapp|email|manual|papel|paper|cresceu|grew|equipa|team|funcionarios|staff|relatorios|reports|organizar|organise|organize|desorganiz|processo|process|clientes|customers|faturacao|invoicing|turnos|shifts|encomendas|orders|stock|marcacoes|bookings|sistema antigo|legacy)\b/;
 
-    const standalone = source
-        .replace(/[!?.,;:()[\]{}"]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    if (!standalone || standalone.split(' ').length > 4) return '';
-    if (!/^[A-Za-zÀ-ÿ' -]{2,80}$/.test(standalone)) return '';
-    return normalizeFallbackNameCandidate(standalone);
+    const scores = {
+        stuck: (value.match(stuckHints) || []).length,
+        ops: (value.match(opsHints) || []).length,
+        idea: (value.match(ideaHints) || []).length
+    };
+    // "stuck" wins ties: someone with a broken build usually mentions the idea too.
+    const best = ['stuck', 'ops', 'idea'].reduce((a, b) => (scores[b] > scores[a] ? b : a), 'stuck');
+    return scores[best] > 0 ? best : '';
 }
 
-function isFallbackPhoneRefusal(text) {
-    const value = normalizeFallbackForComparison(text);
-    return /\b(no phone|no number|d(?:on'?t|o not) share.*(phone|number)|prefer email|sem telefone|sem numero|nao quero.*(telefone|numero)|prefiro email)\b/.test(value);
+function chatMatchTrackChip(text) {
+    const value = normalizeChatText(text);
+    const chips = chatCopy.pt.routeChips.concat(chatCopy.en.routeChips).map(normalizeChatText);
+    const index = chips.indexOf(value);
+    if (index === -1) return '';
+    return ['idea', 'stuck', 'ops'][index % 3];
 }
 
-function isFallbackEmailRefusal(text) {
-    const value = normalizeFallbackForComparison(text);
-    return /\b(no email|d(?:on'?t|o not) share.*email|nao tenho email|nao quero.*email|sem email|prefiro telefone|prefiro numero)\b/.test(value);
+// ── Side questions the visitor may ask at any point, answered without derailing.
+// Patterns stay narrow on purpose: a visitor answering "orçamentos" or "WhatsApp
+// e email" is describing their business, not asking about price or contacts.
+function chatDetectQuestion(text) {
+    const value = normalizeChatText(text);
+    if (!value) return '';
+    if (/(quanto custa|quanto fica|quanto cobram|quanto e que custa|qual o (preco|valor|custo)|how much|what does it cost|pricing|e muito caro|e caro\b)/.test(value)) return 'price';
+    if (/(quanto tempo|em quanto tempo|qual o prazo|prazo de entrega|demora quanto|quantas semanas|how long|what is the timeline|when would it be ready)/.test(value)) return 'time';
+    if (/(fico dependente|ficamos dependentes|dependencia do fornecedor|lock-?in|o codigo e meu|codigo fica meu|is the code mine|do i own|ownership)/.test(value)) return 'lockin';
+    if (/(quem sao voces|quem e que voces|who are you|onde ficam|onde estao|de onde sao|where are you (based|from)|voces sao de onde)/.test(value)) return 'who';
+    if (/(como funciona|como e que funciona|como trabalham|how do you work|how does it work|qual e o processo|qual o metodo)/.test(value)) return 'how';
+    if (/(es um (robo|bot)|e um (robo|bot)|isto e um (robo|bot)|are you (a )?(bot|robot|human|real)|falo com (uma )?maquina|estou a falar com (um )?(robo|computador)|usam (ia|inteligencia artificial|ai)|isto (e|usa) (ia|inteligencia artificial)|do you use ai|is this ai)/.test(value)) return 'bot';
+    if (/(falar com (uma )?pessoa|falar com alguem|quero falar com|talk to (a )?(human|person|someone)|posso ligar|qual o (vosso|seu) (numero|telefone)|your phone number)/.test(value)) return 'human';
+    if (/^(obrigad[oa]|thanks|thank you|ty|valeu)\b/.test(value)) return 'thanks';
+    if (/^(nao sei|n sei|sei la|no idea|not sure|i dont know|dont know|do not know|nao tenho certeza|nao faco ideia)\b/.test(value)) return 'dontKnow';
+    return '';
 }
 
-function isFallbackGreetingOnly(text) {
-    const value = normalizeFallbackForComparison(text)
-        .replace(/[!?.;,]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    if (!value) return false;
-    return /^(oi|ola|hello|hi|hey|bom dia|boa tarde|boa noite|good morning|good afternoon|good evening|good night)$/.test(value)
-        || /^(oi|ola|hello|hi|hey) (tudo bem|how are you)$/.test(value);
+// Clicking a suggested answer is always an answer, never a question.
+function chatIsSuggestedAnswer(step, text) {
+    const value = normalizeChatText(text);
+    const pools = [chatCopy.pt, chatCopy.en].map((copy) => (step === 'route' ? copy.routeChips : copy.chips[step] || []));
+    return pools.some((pool) => pool.map(normalizeChatText).includes(value));
 }
 
-function isValidFallbackBusinessBrief(text) {
-    const value = (text || '').trim();
-    if (!value) return false;
-    if (/^(yes|no|sim|nao|ok|talvez|maybe|none|n\/a|nada)$/i.test(value)) return false;
-    if (normalizeFallbackEmail(value) || normalizeFallbackPhone(value)) return false;
-    const words = value.split(/\s+/).filter(Boolean);
-    const alphaChars = (value.match(/[A-Za-zÀ-ÿ]/g) || []).length;
-    return value.length >= 18 && words.length >= 4 && alphaChars >= 12;
-}
+// ── Acknowledgements that prove the answer was actually read.
+function chatAcknowledge(step, text) {
+    const value = normalizeChatText(text);
+    const ack = chatText().ack;
 
-function looksLikeFallbackCallTime(text) {
-    const value = normalizeFallbackForComparison(text);
-    if (!value) return false;
-    const hasDayWord = /\b(today|tomorrow|tonight|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|hoje|amanha|logo|depois|segunda|terca|quarta|quinta|sexta|sabado|domingo|proxima)\b/.test(value);
-    const hasHour = /\b\d{1,2}(?::\d{2})?\s?(am|pm|h)?\b/.test(value);
-    const hasMeetingWord = /\b(video|zoom|meet|teams|online|in person|in-person|presencial|call|chamada|reuniao)\b/.test(value);
-    return hasDayWord || hasHour || hasMeetingWord;
-}
-
-function parseFallbackInput(text, field) {
-    const fc = chatState.fallbackConversation;
-    const clean = (text || '').trim();
-    const emailMatch = clean.match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
-    const phoneMatch = clean.match(/(?:\+?\d[\d\s().-]{6,}\d)/);
-    const parsedEmail = emailMatch ? normalizeFallbackEmail(emailMatch[0]) : '';
-    const parsedPhone = phoneMatch ? normalizeFallbackPhone(phoneMatch[0]) : '';
-
-    if (!fc.contact.email && parsedEmail) fc.contact.email = parsedEmail;
-    if (!fc.contact.phone && parsedPhone) fc.contact.phone = parsedPhone;
-    if (!fc.contact.name) {
-        const parsedName = extractFallbackName(clean);
-        if (parsedName) fc.contact.name = parsedName;
-    }
-
-    const hasContact = Boolean(fc.contact.phone || fc.contact.email);
-    if (field === 'phone' && !hasContact && isFallbackPhoneRefusal(clean)) {
-        fc.contactChannel = 'email';
-    }
-    if (field === 'email' && !hasContact && isFallbackEmailRefusal(clean)) {
-        fc.contactChannel = 'phone';
-    }
-
-    if ((field === 'business' || field === 'idea') && !fc.businessIdea && isValidFallbackBusinessBrief(clean)) {
-        fc.businessIdea = clean;
-    }
-    if (field === 'callTime' && !fc.contact.callTime && looksLikeFallbackCallTime(clean)) {
-        fc.contact.callTime = clean;
-    }
-}
-
-function getFallbackStep() {
-    const fc = chatState.fallbackConversation;
-    const c = fc.contact;
-    if (!c.name) return 'name';
-    if (!c.phone && !c.email) return fc.contactChannel === 'email' ? 'email' : 'phone';
-    if (!isValidFallbackBusinessBrief(fc.businessIdea)) return 'business';
-    if (!c.callTime) return 'callTime';
-    return 'done';
-}
-
-function processFallbackUserMessage(userText) {
-    const fc = chatState.fallbackConversation;
-    const isPt = currentLang === 'pt';
-    const stepBefore = getFallbackStep();
-
-    parseFallbackInput(userText, stepBefore);
-
-    const contact = fc.contact;
-    const name = contact.name || '';
-    const stepAfter = getFallbackStep();
-    const hasContact = Boolean(contact.phone || contact.email);
-
-    const askName = isPt
-        ? 'Para avancarmos, diz-me o teu nome e apelido.'
-        : 'To move forward, tell me your first and last name.';
-    const greetAndAskName = isPt
-        ? 'Ola! Para avancarmos, diz-me o teu nome e apelido.'
-        : 'Hello! To move forward, tell me your first and last name.';
-    const askPhone = isPt
-        ? 'Qual e o melhor numero de telefone para contacto? Se preferires, responde "prefiro email".'
-        : 'What is the best phone number to reach you? If you prefer, reply with "I prefer email".';
-    const askEmail = isPt
-        ? 'Sem problema. Partilha um email valido para contacto.'
-        : 'No problem. Share a valid email address for contact.';
-    const askBusiness = isPt
-        ? 'Em 2-4 frases, descreve o negocio, o problema principal e para quem e.'
-        : 'In 2-4 sentences, describe the business, the main problem, and who it is for.';
-    const askBusinessRetry = isPt
-        ? 'Preciso de mais contexto para validar: problema, cliente alvo e impacto no negocio.'
-        : 'I need a bit more context to validate: problem, target customer, and business impact.';
-    const askCallTime = isPt
-        ? 'Qual o melhor dia e horario para uma chamada curta? Exemplo: quarta 15h, amanha de manha.'
-        : 'What day and time work best for a short call? Example: Wednesday 3pm, tomorrow morning.';
-    const askCallTimeRetry = isPt
-        ? 'Nao consegui validar o horario. Indica dia e hora aproximada.'
-        : 'I could not validate the time. Please share a day and approximate hour.';
-    const requireContact = isPt
-        ? 'Preciso de pelo menos um contacto valido para continuar: telefone ou email.'
-        : 'I need at least one valid contact to continue: phone number or email.';
-
-    const nextQuestionByStep = (step) => {
-        if (step === 'phone') return askPhone;
-        if (step === 'email') return askEmail;
-        if (step === 'business') return askBusiness;
-        if (step === 'callTime') return askCallTime;
+    const specific = (() => {
+        if (step === 'opsWhere') {
+            if (/excel|folha|spreadsheet/.test(value)) return ack.excel;
+            if (/whatsapp|email|mensagen|messages/.test(value)) return ack.whatsapp;
+            if (/papel|paper|caderno|livro/.test(value)) return ack.paper;
+            if (/antigo|legacy|velho|old|software/.test(value)) return ack.legacy;
+        }
+        if (step === 'opsProcess') {
+            if (/orcament|fatura|invoic|quote|recibo|cobranc|billing/.test(value)) return ack.billing;
+            if (/encomend|stock|order|entrega|deliver|armazem/.test(value)) return ack.orders;
+            if (/turno|shift|horario|schedule|escala/.test(value)) return ack.shifts;
+            if (/marcac|agenda|booking|appointment|reserva/.test(value)) return ack.bookings;
+            if (/excel|folha|spreadsheet/.test(value)) return ack.excel;
+            if (/whatsapp/.test(value)) return ack.whatsapp;
+        }
+        if (step === 'stuckTool') {
+            if (/chatgpt|claude|gemini|cursor|lovable|bolt|replit|copilot|vibe|no-?code|bubble/.test(value)) return ack.aiTool;
+            if (/contratei|hired|freelancer|agencia|agency|empresa/.test(value)) return ack.hired;
+        }
+        if (step === 'stuckUsers') {
+            if (/so no meu|only on my|ninguem|nobody|nao|not yet/.test(value)) return ack.alone;
+            if (/usar|using|clientes|customers|equipa|team|sim|yes/.test(value)) return ack.inUse;
+        }
+        if (step === 'ideaTalked') {
+            if (/ainda nao|not yet|nao|^no\b/.test(value)) return ack.notTalked;
+            if (/sim|yes|ja falei|have/.test(value)) return ack.talked;
+        }
+        if (step === 'timing') {
+            if (/quanto antes|urgente|asap|as soon|agora|now/.test(value)) return ack.urgent;
+            if (/explorar|exploring|sem pressa|no rush/.test(value)) return ack.exploring;
+            if (/semana|weeks|mes\b|month/.test(value)) return ack.soon;
+        }
         return '';
+    })();
+
+    // The same line twice in a row would give the game away too early.
+    const chosen = specific && specific !== chatState.lastAck
+        ? specific
+        : chatPickRandom(ack.generic.filter((line) => line !== chatState.lastAck));
+    chatState.lastAck = chosen;
+    return chosen;
+}
+
+function chatAnswerIsThin(step, text) {
+    const openSteps = ['ideaWhat', 'ideaFirst', 'stuckBreaks', 'opsProcess', 'opsPeople'];
+    if (!openSteps.includes(step)) return false;
+    const value = (text || '').trim();
+    const words = value.split(/\s+/).filter(Boolean);
+    return value.length < 12 || words.length < 3;
+}
+
+function chatBuildRecap() {
+    const copy = chatText();
+    const labels = copy.recapLabels;
+    const answers = chatState.answers;
+    const contact = [chatState.contact.email, chatState.contact.phone].filter(Boolean).join(' · ');
+
+    const lines = [copy.recapIntro, '', `${labels.situation}: ${copy.tracks[chatState.track]}`];
+    (CHAT_TRACK_STEPS[chatState.track] || []).concat('timing').forEach((step) => {
+        if (answers[step]) lines.push(`${labels[step]}: ${answers[step]}`);
+    });
+    if (contact) lines.push(`${labels.contact}: ${contact}`);
+    return lines.join('\n');
+}
+
+function chatSaveLead(options) {
+    const isAddition = Boolean(options && options.addition);
+    if (chatState.submitted && !isAddition) return;
+    chatState.submitted = true;
+
+    const a = chatState.answers;
+    const story = CHAT_TRACK_STEPS[chatState.track]
+        .map((step) => a[step])
+        .filter(Boolean)
+        .join(' · ');
+
+    const payload = {
+        source: isAddition ? 'website-chat-addition' : 'website-chat',
+        language: currentLang,
+        contact: { ...chatState.contact },
+        businessIdea: story,
+        preferredCallTime: a.timing || '',
+        lead: {
+            name: chatState.contact.name,
+            email: chatState.contact.email,
+            phone: chatState.contact.phone,
+            problem: story,
+            goal: a.timing || '',
+            track: chatState.track
+        },
+        messages: [...chatState.messages]
     };
 
-    let botResponse = '';
-    if (stepBefore === stepAfter) {
-        if (stepAfter === 'name') botResponse = isFallbackGreetingOnly(userText) ? greetAndAskName : askName;
-        else if (stepAfter === 'phone') botResponse = fc.contactChannel === 'email' ? askEmail : askPhone;
-        else if (stepAfter === 'email') botResponse = `${requireContact} ${askEmail}`;
-        else if (stepAfter === 'business') botResponse = askBusinessRetry;
-        else if (stepAfter === 'callTime') botResponse = askCallTimeRetry;
-        else botResponse = isPt
-            ? 'Ja temos tudo. A equipa vai entrar em contacto em breve.'
-            : 'We already have everything. The team will contact you shortly.';
-    } else if (stepAfter === 'done') {
-        const contactTarget = contact.phone || contact.email || '';
-        botResponse = isPt
-            ? `Obrigado, ${name}. Ja temos contacto e contexto. A equipa da YourLab envia os proximos passos em ate 1 dia util. Contacto registado: ${contactTarget}.`
-            : `Thanks, ${name}. We now have contact and context. The YourLab team will send next steps within 1 business day. Contact saved: ${contactTarget}.`;
-    } else if ((stepBefore === 'phone' || stepBefore === 'email') && !hasContact) {
-        botResponse = `${requireContact} ${nextQuestionByStep(stepAfter)}`;
-    } else {
-        const ack = isPt
-            ? `Perfeito${name ? `, ${name}` : ''}.`
-            : `Perfect${name ? `, ${name}` : ''}.`;
-        botResponse = `${ack} ${nextQuestionByStep(stepAfter)}`.trim();
-    }
+    saveConversationLocally({ timestamp: new Date().toISOString(), ...payload });
 
-    const messageRecord = {
-        user: userText,
-        bot: botResponse,
-        timestamp: new Date().toISOString()
-    };
-
-    if (stepAfter === 'done' && !fc.submitted) {
-        fc.submitted = true;
-
-        saveConversationLocally({
-            timestamp: new Date().toISOString(),
-            contact: { ...contact },
-            businessIdea: fc.businessIdea,
-            messages: [...fc.messages, messageRecord],
-            source: 'frontend-offline-bot'
-        });
-
-        const apiBase = (window.YOURLAB_API_URL || '').replace(/\/$/, '');
-        fetch(`${apiBase}/api/save-inquiry`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                source: 'offline-chat',
-                contact: { name: contact.name, email: contact.email, phone: contact.phone },
-                businessIdea: fc.businessIdea,
-                preferredCallTime: contact.callTime,
-                lead: {
-                    name: contact.name,
-                    email: contact.email,
-                    phone: contact.phone,
-                    problem: fc.businessIdea,
-                    goal: fc.businessIdea,
-                    callTime: contact.callTime
-                },
-                messages: [...fc.messages, messageRecord]
-            })
-        }).catch((err) => console.warn('Could not reach server to save offline lead:', err.message));
-    }
-
-    fc.messages.push(messageRecord);
-    return botResponse;
+    const apiBase = (window.YOURLAB_API_URL || '').replace(/\/$/, '');
+    fetch(`${apiBase}/api/save-inquiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).catch((err) => console.warn('Could not reach server to save the lead:', err.message));
 }
 
 function setChatStatus(mode) {
-    // mode: 'ai' | 'server' | 'offline' | 'connecting'
-    const dot   = document.getElementById('chatStatusDot');
+    const dot = document.getElementById('chatStatusDot');
     const label = document.getElementById('chatStatusLabel');
     if (!dot || !label) return;
     const isPt = currentLang === 'pt';
     const labels = {
-        ai:         isPt ? 'equipa · online'          : 'team · online',
-        server:     isPt ? 'modo offline do servidor' : 'server offline mode',
-        offline:    isPt ? 'modo offline'             : 'offline mode',
-        connecting: isPt ? 'a ligar…'                 : 'connecting…'
+        ready: isPt ? 'pronto para falar' : 'ready to talk',
+        typing: isPt ? 'a escrever…' : 'typing…'
     };
-    dot.className = 'chat-status-dot ' + (mode === 'connecting' ? '' : mode);
-    label.textContent = labels[mode] || labels.connecting;
+    dot.className = 'chat-status-dot ' + (mode === 'typing' ? 'server' : 'ai');
+    label.textContent = labels[mode] || labels.ready;
 }
 
-async function processUserMessage(userText) {
-    addUserMessage(userText);
+function renderQuickReplies(options) {
+    const box = document.getElementById('chatQuickReplies');
+    if (!box) return;
+    box.innerHTML = '';
+    (options || []).forEach((option) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chat-quick-reply';
+        button.textContent = option;
+        button.addEventListener('click', () => {
+            renderQuickReplies([]);
+            handleChatInput(option);
+        });
+        box.appendChild(button);
+    });
+}
 
-    // If the server already failed this session, stay offline — never retry
-    if (chatState.offlineMode) {
-        setChatStatus('offline');
-        const fallbackReply = processFallbackUserMessage(userText);
-        setTimeout(() => addBotMessage(fallbackReply), 250);
+function chatQuickRepliesFor(step) {
+    if (step === 'route') return chatText().routeChips;
+    return chatText().chips[step] || [];
+}
+
+function chatCurrentQuestion() {
+    const copy = chatText();
+    if (chatState.step === 'route') return copy.route;
+    if (chatState.step === 'after') return '';
+    return copy.ask[chatState.step] || '';
+}
+
+function chatAdvanceStep() {
+    chatState.retries = 0;
+    while (chatState.stepQueue.length) {
+        const next = chatState.stepQueue.shift();
+        // Anything already given earlier in the conversation is not asked again.
+        if (next === 'name' && chatState.contact.name) continue;
+        if (next === 'contact' && (chatState.contact.email || chatState.contact.phone)) continue;
+        chatState.step = next;
+        return;
+    }
+    chatState.step = 'after';
+}
+
+// Replies are queued so they arrive one at a time, like someone typing.
+function chatSay(messages, options) {
+    const list = Array.isArray(messages) ? messages.filter(Boolean) : [messages].filter(Boolean);
+    const quickReplies = (options && options.quickReplies) || [];
+    let delay = 0;
+
+    list.forEach((text, index) => {
+        chatState.messages.push({ bot: text, timestamp: new Date().toISOString() });
+        delay += Math.min(1100, 320 + String(text).length * 8);
+        setTimeout(() => {
+            addBotMessage(text);
+            if (index === list.length - 1) {
+                setChatStatus('ready');
+                renderQuickReplies(quickReplies);
+            }
+        }, delay);
+    });
+
+    if (list.length) setChatStatus('typing');
+    return delay;
+}
+
+// Asks whatever the current step needs, optionally after an acknowledgement.
+function chatPrompt(prefix) {
+    const copy = chatText();
+    const messages = (Array.isArray(prefix) ? prefix : [prefix]).filter(Boolean);
+    if (chatState.step === 'recap') {
+        messages.push(chatBuildRecap(), copy.ask.recap);
+    } else {
+        messages.push(chatCurrentQuestion());
+    }
+    chatSay(messages, { quickReplies: chatQuickRepliesFor(chatState.step) });
+}
+
+function chatFinish() {
+    const copy = chatText();
+    chatSaveLead();
+    const closing = [
+        copy.saved(chatState.contact.name),
+        copy.savedNote,
+        copy.joke1,
+        copy.joke2,
+        copy.joke3,
+        copy.after
+    ];
+    chatState.step = 'after';
+    chatSay(closing);
+}
+
+function handleChatInput(rawText) {
+    const userText = (rawText || '').trim();
+    if (!userText) return;
+
+    addUserMessage(userText);
+    renderQuickReplies([]);
+    const copy = chatText();
+    const step = chatState.step;
+
+    // Contact details are captured whenever they appear, not only when asked.
+    const email = chatExtractEmail(userText);
+    const phone = chatExtractPhone(userText);
+    if (email) chatState.contact.email = email;
+    if (phone) chatState.contact.phone = phone;
+
+    chatState.messages.push({ user: userText, timestamp: new Date().toISOString() });
+
+    // Side questions get a real answer, then the pending question comes back.
+    const question = chatDetectQuestion(userText);
+    if (question && !chatIsSuggestedAnswer(step, userText) && !(step === 'contact' && (email || phone))) {
+        const pending = chatCurrentQuestion();
+        const replies = [copy.faq[question]];
+        if (pending) replies.push(`${copy.back} ${pending}`);
+        chatSay(replies, { quickReplies: chatQuickRepliesFor(chatState.step) });
         return;
     }
 
-    const typingIndicator = addTypingIndicator();
-    setChatStatus('connecting');
-
-    // Show a reassurance message if the model takes more than 8 seconds
-    const isPt = currentLang === 'pt';
-    const slowMessageDelay = 8000;
-    const slowMessageTimer = setTimeout(() => {
-        const p = typingIndicator.querySelector('p');
-        if (p) p.textContent = isPt ? 'A pensar… (o modelo demora uns segundos)' : 'Thinking… (the model is loading, hang on a sec)';
-    }, slowMessageDelay);
-
-    try {
-        const result = await sendMessageToAi(userText);
-        clearTimeout(slowMessageTimer);
-        removeTypingIndicator(typingIndicator);
-
-        if (result.sessionId) {
-            chatState.sessionId = result.sessionId;
-            localStorage.setItem('yourlab_chat_session_id', chatState.sessionId);
+    if (step === 'route') {
+        const suggested = chatIsSuggestedAnswer('route', userText);
+        const track = chatMatchTrackChip(userText) || chatDetectTrack(userText);
+        if (!track) {
+            chatSay([copy.route], { quickReplies: copy.routeChips });
+            return;
         }
+        chatState.track = track;
+        chatState.stepQueue = CHAT_TRACK_STEPS[track].concat(CHAT_COMMON_STEPS);
 
-        setChatStatus(result.usingFallback ? 'server' : 'ai');
-
-        const botResponse = (result.reply || '').trim() || getBotText().generic[0];
-        addBotMessage(botResponse);
-
-        chatState.turns.push({
-            user: userText,
-            bot: botResponse,
-            timestamp: new Date().toISOString(),
-            stage: result.stage || '',
-            leadScore: result.leadScore || 0
-        });
-
-        if (result.saved) {
-            saveConversationLocally({
-                timestamp: new Date().toISOString(),
-                sessionId: chatState.sessionId,
-                contact: {
-                    name: (result.lead && result.lead.name) || '',
-                    email: (result.lead && result.lead.email) || '',
-                    phone: (result.lead && result.lead.phone) || ''
-                },
-                businessIdea: chatState.turns.map(turn => turn.user).join(' ').trim(),
-                messages: [...chatState.turns],
-                summary: {
-                    stage: result.stage || '',
-                    score: result.leadScore || 0
-                },
-                source: result.usingFallback ? 'backend-fallback-flow' : 'backend-ai-flow'
-            });
+        // Someone who typed their story already answered the first question;
+        // someone who clicked a suggestion still has to tell it.
+        const firstStep = chatState.stepQueue[0];
+        const alreadyTold = !suggested && !chatAnswerIsThin(firstStep, userText);
+        if (alreadyTold) {
+            chatState.answers[firstStep] = userText;
+            chatState.stepQueue.shift();
         }
-    } catch (error) {
-        clearTimeout(slowMessageTimer);
-        console.warn('AI backend unavailable, switching to offline mode:', error.message);
-        removeTypingIndicator(typingIndicator);
-        setChatStatus('offline');
-        setOfflineMode(true);
-        const fallbackReply = processFallbackUserMessage(userText);
-        setTimeout(() => addBotMessage(fallbackReply), 250);
+        chatAdvanceStep();
+        chatPrompt(alreadyTold ? chatAcknowledge(firstStep, userText) : copy.openers[track]);
+        return;
     }
+
+    if (step === 'name') {
+        const name = chatExtractName(userText);
+        if (!name) {
+            chatState.retries += 1;
+            chatSay([copy.retry.name], {});
+            return;
+        }
+        chatState.contact.name = name;
+        chatAdvanceStep();
+        chatPrompt(copy.nameAck(name));
+        return;
+    }
+
+    if (step === 'contact') {
+        if (!chatState.contact.email && !chatState.contact.phone) {
+            chatState.retries += 1;
+            chatSay([copy.retry.contact], {});
+            return;
+        }
+        chatAdvanceStep();
+        chatPrompt('');
+        return;
+    }
+
+    if (step === 'recap') {
+        const value = normalizeChatText(userText);
+        const wantsFix = /corrigir|corrige|errado|nao|correct|wrong|change|mudar/.test(value);
+        if (wantsFix && !chatState.correcting) {
+            chatState.correcting = true;
+            chatSay([copy.correct], {});
+            return;
+        }
+        if (chatState.correcting) {
+            // Whatever they correct is appended to the story rather than overwritten,
+            // so nothing they said is silently dropped.
+            const firstStep = CHAT_TRACK_STEPS[chatState.track][0];
+            chatState.answers[firstStep] = `${chatState.answers[firstStep] || ''} — ${userText}`.trim();
+            chatState.correcting = false;
+        }
+        chatFinish();
+        return;
+    }
+
+    if (step === 'after') {
+        const firstStep = CHAT_TRACK_STEPS[chatState.track] ? CHAT_TRACK_STEPS[chatState.track][0] : '';
+        if (firstStep) {
+            chatState.answers[firstStep] = `${chatState.answers[firstStep] || ''} — ${userText}`.trim();
+        }
+        // Everything after the closing is still kept, but the reply stops being
+        // the same sentence over and over and ends up pointing to a real person.
+        const acks = copy.afterAcks;
+        chatSay([acks[Math.min(chatState.extras, acks.length - 1)]], {});
+        chatState.extras += 1;
+        if (!chatState.additionSaved) {
+            chatState.additionSaved = true;
+            chatSaveLead({ addition: true });
+        }
+        return;
+    }
+
+    // Remaining steps are the track questions plus timing.
+    if (chatAnswerIsThin(step, userText) && chatState.retries === 0 && copy.retry[step]) {
+        chatState.retries += 1;
+        chatSay([copy.retry[step]], { quickReplies: chatQuickRepliesFor(step) });
+        return;
+    }
+
+    chatState.answers[step] = userText;
+    const acknowledgement = chatAcknowledge(step, userText);
+    chatAdvanceStep();
+    chatPrompt(acknowledgement);
 }
 
-chatForm.addEventListener('submit', async (e) => {
+function resetChat() {
+    chatState.track = '';
+    chatState.step = 'route';
+    chatState.stepQueue = [];
+    chatState.retries = 0;
+    chatState.answers = {};
+    chatState.contact = { name: '', email: '', phone: '' };
+    chatState.messages = [];
+    chatState.lastAck = '';
+    chatState.extras = 0;
+    chatState.submitted = false;
+    chatState.additionSaved = false;
+    chatState.correcting = false;
+
+    chatMessages.innerHTML = '';
+    addBotMessage(translations[currentLang].chatGreeting);
+    setChatStatus('ready');
+    renderQuickReplies(chatText().routeChips);
+}
+
+chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const userText = userInput.value.trim();
-    if (!userText || chatState.processing) return;
-
-    chatState.processing = true;
-    updateInputState(true);
+    if (!userText) return;
     userInput.value = '';
-
-    try {
-        await processUserMessage(userText);
-    } finally {
-        chatState.processing = false;
-        updateInputState(false);
-        userInput.focus();
-    }
+    handleChatInput(userText);
+    userInput.focus();
 });
 
 userInput.addEventListener('keydown', (e) => {
@@ -1228,13 +1457,90 @@ userInput.addEventListener('keydown', (e) => {
     }
 });
 
+// Switching language mid-conversation should not throw away what was typed:
+// only an untouched chat is restarted, otherwise just the buttons are relabelled.
+document.addEventListener('yourlab:language-changed', () => {
+    if (chatState.step === 'route' && !chatState.messages.length) {
+        resetChat();
+        return;
+    }
+    setChatStatus('ready');
+    renderQuickReplies(chatQuickRepliesFor(chatState.step));
+});
+
+resetChat();
+
+// ===== Direct contact: copy address =====
+(function setupCopyEmail() {
+    const button = document.getElementById('copyEmailBtn');
+    const feedback = document.getElementById('copyEmailFeedback');
+    if (!button || !feedback) return;
+
+    const address = button.dataset.email || 'yourlabpt@gmail.com';
+    let resetTimer = null;
+
+    async function copyAddress() {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(address);
+                return true;
+            }
+        } catch (err) {
+            // Falls through to the textarea approach below.
+        }
+        const helper = document.createElement('textarea');
+        helper.value = address;
+        helper.setAttribute('readonly', '');
+        helper.style.position = 'fixed';
+        helper.style.opacity = '0';
+        document.body.appendChild(helper);
+        helper.select();
+        let ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch (err) {
+            ok = false;
+        }
+        document.body.removeChild(helper);
+        return ok;
+    }
+
+    // When the clipboard is refused (older browsers, blocked permission), the
+    // address is selected instead so a manual copy is one shortcut away.
+    function selectAddress() {
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = document.createRange();
+        range.selectNodeContents(feedback);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    async function handleCopy() {
+        const copied = await copyAddress();
+        const isPt = currentLang === 'pt';
+        feedback.textContent = copied
+            ? `${address} — ${isPt ? 'copiado' : 'copied'} ✓`
+            : `${address} — ${isPt ? 'selecione e copie' : 'select and copy'}`;
+        feedback.classList.add('is-copied');
+        if (!copied) selectAddress();
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => {
+            feedback.textContent = address;
+            feedback.classList.remove('is-copied');
+        }, 4000);
+    }
+
+    button.addEventListener('click', handleCopy);
+    feedback.addEventListener('click', handleCopy);
+    feedback.style.cursor = 'pointer';
+})();
+
 function showSavedConversations() {
     const conversations = JSON.parse(localStorage.getItem('yourlab_conversations') || '[]');
     console.log('Saved Conversations:', conversations);
     return conversations;
 }
-
-console.log('YourLab AI chat ready. Type "showSavedConversations()" in console to view saved inquiries.');
 
 // ===== Scroll Reveal =====
 (function () {

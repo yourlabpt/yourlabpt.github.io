@@ -6389,6 +6389,98 @@ body.help-drawer-open {
   font-size: 0.9rem;
 }
 
+.idea-workflow-choices {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+
+.idea-workflow-choice {
+  display: grid;
+  gap: 6px 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 90%, var(--accent) 4%);
+}
+
+@media (min-width: 720px) {
+  .idea-workflow-choice {
+    grid-template-columns: minmax(180px, 1.1fr) minmax(200px, 1.4fr) minmax(160px, 1fr);
+    align-items: start;
+  }
+}
+
+.idea-workflow-choice-action strong {
+  display: inline;
+}
+
+.idea-workflow-choice-when,
+.idea-workflow-choice-result {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.idea-workflow-badge {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.idea-workflow-choice-result code {
+  font-size: 0.82em;
+}
+
+.idea-transition-progress {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.idea-workflow-progress-line {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.idea-workflow-progress-line .btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  margin-left: 4px;
+  text-decoration: underline;
+}
+
+.idea-discovery-callout {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.idea-discovery-regen-hint {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+}
+
+.pdos-transition-advanced {
+  margin-top: 8px;
+}
+
 .idea-guidance-actions {
   display: flex;
   flex-wrap: wrap;

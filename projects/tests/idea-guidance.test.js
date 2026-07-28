@@ -18,7 +18,7 @@ test('Idea page exposes augment and Discovery workflow without legacy prompt con
   assert.match(ideaUi, /Expandir ideia com IA/);
   assert.match(ideaUi, /work-items\/idea-augment\/requests/);
   assert.match(ideaUi, /data-idea-open-discovery/);
-  assert.match(ideaUi, /openTransitionPicker\('idea', 'discovery', project\)/);
+  assert.match(ideaUi, /openTransitionPicker\('idea', 'discovery', project, \{ source: 'idea-open-discovery' \}\)/);
   assert.match(ideaUi, /Criar plano Idea → Discovery/);
   assert.doesNotMatch(ideaUi, /data-agent="reverse_idea"/);
   assert.doesNotMatch(ideaUi, /data-idea-manual/);
@@ -34,4 +34,25 @@ test('idea section acceptance survives vision normalization and ignores unknown 
     acceptedSections: ['mainIdeaMarkdown', 'targetUsers', 'unknownField', 'mainIdeaMarkdown'],
   });
   assert.deepEqual(vision.acceptedSections, ['mainIdeaMarkdown', 'targetUsers']);
+});
+
+test('stage hints describe augment-first idea workflow and discovery task path', () => {
+  assert.match(deliveryOs.STAGE_NEXT_HINT.idea, /Expandir ideia com IA/);
+  assert.match(deliveryOs.STAGE_NEXT_HINT.idea, /Idea → Discovery/);
+  assert.match(deliveryOs.STAGE_NEXT_HINT.discovery, /Gerar descoberta com IA/);
+  assert.match(deliveryOs.STAGE_NEXT_HINT.discovery, /Tarefas/);
+
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),
+    'utf8',
+  );
+  const ideaUi = source.slice(
+    source.indexOf('function renderIdeaStage'),
+    source.indexOf('function renderDiscoveryStage'),
+  );
+  assert.match(ideaUi, /idea-workflow-choices/);
+  assert.match(source, /hydrateIdeaWorkflowProgress/);
+  assert.match(source, /transitionPickerDescription/);
+  assert.match(source, /source: 'idea-open-discovery'/);
+  assert.match(source, /source: 'discovery-research'/);
 });

@@ -832,11 +832,14 @@
 
       if (index < stages.length - 1) {
         const next = stages[index + 1];
+        const connectorTitle = (stage.id === 'idea' && next.id === 'discovery')
+          ? 'Transição Ideia ↔ Discovery — Avançar = plano Discovery (6 tarefas); Retroceder = regenerar ideia (1 tarefa)'
+          : `Transição ${stage.label} ↔ ${next.label} — agente de apoio à mudança de fase`;
         parts.push(`
           <button type="button" class="golden-connector"
             data-from-stage="${escapeHtml(stage.id)}"
             data-to-stage="${escapeHtml(next.id)}"
-            title="Transição ${escapeHtml(stage.label)} ↔ ${escapeHtml(next.label)} — agente de apoio à mudança de fase">
+            title="${escapeHtml(connectorTitle)}">
             <span class="golden-connector-line"></span>
             <span class="golden-connector-icon">⟷</span>
           </button>
@@ -880,7 +883,8 @@
         e.stopPropagation();
         const selectedStageId = window.state.deliverySelectedStageId;
         const defaultDirection = selectedStageId === btn.dataset.toStage ? 'backward' : 'forward';
-        openTransitionPicker(btn.dataset.fromStage, btn.dataset.toStage, project, { defaultDirection });
+        const source = defaultDirection === 'backward' ? 'golden-connector-backward' : 'golden-connector-forward';
+        openTransitionPicker(btn.dataset.fromStage, btn.dataset.toStage, project, { defaultDirection, source });
       });
     });
 
@@ -982,6 +986,26 @@
     });
   }
 
+  function transitionPickerDescription(source, project, fromStageId, toStageId, defaultDirection) {
+    const isIdeaDiscovery = fromStageId === 'idea' && toStageId === 'discovery';
+    const isDiscoveryIdea = fromStageId === 'discovery' && toStageId === 'idea';
+    if (source === 'discovery-research' || source === 'idea-open-discovery') {
+      return 'Cria um plano com cerca de 6 subtarefas de investigação de mercado. Cada uma fica na tab Tarefas para executar, pausar e rever.'
+        + (source === 'discovery-research' ? ' Equivalente a «Criar plano Idea → Discovery» na fase Ideia.' : '');
+    }
+    if (source === 'golden-connector-backward' || (isDiscoveryIdea && defaultDirection === 'backward')) {
+      let desc = 'Regenera a visão da ideia a partir da Discovery (1 tarefa). Os prompts e resultados ficam na tab Tarefas.';
+      if (!discoveryHasContent(discoveryData(project))) {
+        desc += ' Aviso: ainda não há conteúdo de descoberta — o pedido pode ser rejeitado.';
+      }
+      return desc;
+    }
+    if (source === 'golden-connector-forward' || (isIdeaDiscovery && defaultDirection === 'forward')) {
+      return 'Avança para Discovery com um plano de cerca de 6 subtarefas rastreáveis. Execute cada uma na tab Tarefas.';
+    }
+    return 'Configure o pedido. Os prompts e resultados serão tratados dentro das tarefas.';
+  }
+
   function openTransitionPicker(fromStageId, toStageId, project, options = {}) {
     const modal = $('pdosTransitionModal');
     if (!modal) return;
@@ -990,7 +1014,13 @@
     const to = stages.find((s) => s.id === toStageId);
     const defaultDirection = options.defaultDirection === 'backward' ? 'backward' : 'forward';
     $('pdosTransitionTitle').textContent = `${from?.label || fromStageId} ↔ ${to?.label || toStageId}`;
-    $('pdosTransitionDesc').textContent = 'Configure o pedido. Os prompts e resultados serão tratados dentro das tarefas.';
+    $('pdosTransitionDesc').textContent = transitionPickerDescription(
+      options.source,
+      project,
+      fromStageId,
+      toStageId,
+      defaultDirection,
+    );
     $('pdosTransitionForwardLabel').textContent = `Avançar para ${to?.label || toStageId}`;
     $('pdosTransitionBackwardLabel').textContent = `Regenerar ${from?.label || fromStageId}`;
     modal.classList.remove('hidden');
@@ -1329,20 +1359,58 @@
     }
   }
 
-  async function hydrateIdeaTransitionProgress(project) {
+  function ideaWorkflowTaskStatusLabel(status) {
+    if (status === 'waiting_review' || status === 'completed') return 'concluída';
+    if (status === 'in_progress' || status === 'running') return 'em curso';
+    if (status === 'blocked' || status === 'failed') return 'bloqueada';
+    return 'planeada';
+  }
+
+  function isIdeaAugmentTask(task) {
+    return task.agentType === 'idea_augment' || task.agentId === 'idea-augment';
+  }
+
+  async function hydrateIdeaWorkflowProgress(project) {
     const host = $('pdosCardFeed')?.querySelector('[data-idea-transition-progress]');
     if (!host) return;
     try {
-      const payload = await apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?transitionFromStageId=${encodeURIComponent('idea')}&showCompleted=true&limit=200`);
-      const children = ensureArray(payload.workItems).filter((task) => task.taskRole !== 'coordination');
-      if (!children.length) {
-        host.textContent = '';
-        return;
+      const [discoveryPayload, ideaPayload] = await Promise.all([
+        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?transitionFromStageId=${encodeURIComponent('idea')}&showCompleted=true&limit=200`),
+        apiRequest(`/projects/${encodeURIComponent(project.id)}/work-items?stage=${encodeURIComponent('idea')}&showCompleted=true&limit=50`),
+      ]);
+      const discoveryChildren = ensureArray(discoveryPayload.workItems).filter((task) => task.taskRole !== 'coordination');
+      const augmentTasks = ensureArray(ideaPayload.workItems).filter(isIdeaAugmentTask);
+      const lines = [];
+
+      if (augmentTasks.length) {
+        const augmentTask = augmentTasks.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
+        const augmentStatus = ideaWorkflowTaskStatusLabel(augmentTask.status);
+        lines.push(`<span class="idea-workflow-progress-line">Expansão da ideia: <strong>${escapeHtml(augmentStatus)}</strong> <button type="button" class="btn-link" data-idea-open-augment-task data-task-id="${escapeHtml(augmentTask.id)}">Abrir tarefa</button></span>`);
       }
-      const done = children.filter((task) => ['completed', 'waiting_review'].includes(task.status)).length;
-      host.textContent = `Plano Idea → Discovery: ${done}/${children.length} subtarefas concluídas ou em revisão`;
+
+      if (discoveryChildren.length) {
+        const done = discoveryChildren.filter((task) => ['completed', 'waiting_review'].includes(task.status)).length;
+        lines.push(`<span class="idea-workflow-progress-line">Plano Idea → Discovery: <strong>${done}/${discoveryChildren.length}</strong> subtarefas concluídas ou em revisão <button type="button" class="btn-link" data-idea-open-discovery-tasks>Ver subtarefas</button></span>`);
+      }
+
+      host.innerHTML = lines.join('');
+      host.querySelector('[data-idea-open-augment-task]')?.addEventListener('click', async (event) => {
+        const taskId = event.currentTarget.dataset.taskId;
+        if (!taskId) return;
+        window.switchToTab?.('tarefas');
+        if (window.WorkItemsUI?.refreshTasks) {
+          await window.WorkItemsUI.refreshTasks(project, { resetFilters: true, openTaskId: taskId });
+        } else {
+          await window.WorkItemsUI?.openTask?.(project, taskId);
+        }
+      });
+      host.querySelector('[data-idea-open-discovery-tasks]')?.addEventListener('click', () => {
+        window.switchToTab?.('tarefas');
+        window.navigateToFilteredTab?.('tarefas', { deliveryStageId: 'discovery' });
+        window.WorkItemsUI?.openFiltered?.(project, { deliveryStageId: 'discovery' });
+      });
     } catch {
-      host.textContent = '';
+      host.innerHTML = '';
     }
   }
 
@@ -1408,7 +1476,7 @@
     } else if (stageId === 'idea') {
       hydrateIdeaStage(project);
       wireIdeaStageEvents(project);
-      hydrateIdeaTransitionProgress(project);
+      hydrateIdeaWorkflowProgress(project);
     } else if (stageId === 'discovery') {
       hydrateDiscoveryStage(project);
     } else if (stageId === 'roadmap') {
@@ -1598,9 +1666,21 @@
         </article>
 
         <article class="pdos-card idea-workspace-panel idea-panel-workflow">
-          <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE PELO WORKFLOW</span><h3>Preparar a Discovery</h3></div></header>
+          <header class="idea-panel-head"><div><span class="idea-eyebrow">3 · CONTINUE PELO WORKFLOW</span><h3>Próximos passos com IA</h3></div></header>
           <p class="muted-text">Expanda primeiro a visão narrativa da ideia. A investigação de mercado (Discovery) é um passo separado, com tarefas rastreáveis que pode acompanhar, pausar e rever.</p>
-          <p class="muted-text idea-transition-progress" data-idea-transition-progress></p>
+          <div class="idea-workflow-choices" role="table" aria-label="Escolha de fluxo com IA">
+            <div class="idea-workflow-choice" role="row">
+              <div class="idea-workflow-choice-action" role="cell"><strong>Expandir ideia com IA</strong> <span class="idea-workflow-badge">1 tarefa</span></div>
+              <div class="idea-workflow-choice-when" role="cell">Ideia original escrita; quer narrativa (problema, utilizadores, valor)</div>
+              <div class="idea-workflow-choice-result" role="cell">Agente <code>idea-augment</code> na tab Tarefas</div>
+            </div>
+            <div class="idea-workflow-choice" role="row">
+              <div class="idea-workflow-choice-action" role="cell"><strong>Criar plano Idea → Discovery</strong> <span class="idea-workflow-badge">6 tarefas</span></div>
+              <div class="idea-workflow-choice-when" role="cell">Visão da ideia revista/aceite; quer mercado e contexto</div>
+              <div class="idea-workflow-choice-result" role="cell">Plano rastreável via modal de transição</div>
+            </div>
+          </div>
+          <div class="idea-transition-progress" data-idea-transition-progress></div>
           <div class="pdos-card-actions">
             ${canEdit ? `<button type="button" class="btn primary" data-idea-augment ${original ? '' : 'disabled title="Descreva a ideia original antes de expandir com IA."'}>Expandir ideia com IA</button>` : ''}
             ${canEdit ? '<button type="button" class="btn ghost" data-idea-open-discovery>Criar plano Idea → Discovery</button>' : ''}
@@ -1844,11 +1924,12 @@
       }
     });
     root.querySelector('[data-idea-open-discovery]')?.addEventListener('click', () => {
-      openTransitionPicker('idea', 'discovery', project);
+      openTransitionPicker('idea', 'discovery', project, { source: 'idea-open-discovery' });
     });
     root.querySelector('[data-idea-open-tasks]')?.addEventListener('click', () => {
-      window.navigateToFilteredTab?.('tarefas', { deliveryStageId: 'discovery' });
-      window.WorkItemsUI?.openFiltered?.(project, { deliveryStageId: 'discovery' });
+      window.switchToTab?.('tarefas');
+      window.navigateToFilteredTab?.('tarefas', { deliveryStageId: 'idea' });
+      window.WorkItemsUI?.openFiltered?.(project, { deliveryStageId: 'idea' });
     });
   }
 
@@ -1926,6 +2007,7 @@
         <article class="pdos-card idea-empty">
           <h4>A descoberta de mercado ainda não foi feita</h4>
           <p class="muted-text">Gere uma análise estruturada — dimensão de mercado (TAM/SAM/SOM), segmentos, concorrência, modelo de negócio, impacto comercial e SWOT — a partir da ideia.</p>
+          <p class="idea-discovery-callout">Ainda sem conteúdo de descoberta. Complete primeiro a expansão da ideia (fase Ideia) ou crie o plano Idea → Discovery.</p>
           <div class="pdos-card-actions">
             <button type="button" class="btn primary" data-agent="discovery_research">${genLabel}</button>
           </div>
@@ -2082,6 +2164,7 @@
         <header class="idea-hero">
           <span class="idea-eyebrow">DESCOBERTA</span>
           <h2 class="idea-headline">Mercado &amp; negócio</h2>
+          <p class="muted-text idea-discovery-regen-hint">Regenerar via plano de tarefas Idea → Discovery.</p>
           <div class="pdos-card-actions">
             <button type="button" class="btn tiny" data-agent="discovery_research">${genLabel}</button>
           </div>
@@ -4527,7 +4610,7 @@
 
   async function runAgent(agentType, project) {
     if (agentType === 'discovery_research') {
-      openTransitionPicker('idea', 'discovery', project);
+      openTransitionPicker('idea', 'discovery', project, { source: 'discovery-research' });
       return undefined;
     }
     if (agentType === 'requirements_to_architecture') {

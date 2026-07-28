@@ -551,23 +551,41 @@ body {
 .yl-direct-contact-links {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 12px;
 }
 
-.yl-direct-contact-links a {
+.yl-direct-contact-links a,
+.yl-copy-email {
     padding: 8px 18px;
     border: 1px solid rgba(232, 213, 183, 0.3);
     border-radius: 999px;
+    background: transparent;
     color: var(--text-light);
     text-decoration: none;
+    font-family: inherit;
     font-size: 0.85rem;
+    cursor: pointer;
     transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
 }
 
-.yl-direct-contact-links a:hover {
+.yl-direct-contact-links a:hover,
+.yl-copy-email:hover {
     border-color: var(--accent-color);
     color: var(--accent-color);
     background: rgba(232, 213, 183, 0.06);
+}
+
+.yl-direct-contact .yl-email-address {
+    margin-top: 12px;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    color: rgba(232, 213, 183, 0.55);
+    transition: color 0.2s ease;
+}
+
+.yl-direct-contact .yl-email-address.is-copied {
+    color: var(--accent-color);
 }
 
 /* Projects Showcase Section */
@@ -1122,6 +1140,8 @@ body {
     color: var(--text-light);
     border-left: 2px solid var(--accent-color);
     font-size: 0.9rem;
+    text-align: left;
+    line-height: 1.55;
 }
 
 .user-message {
@@ -1136,6 +1156,42 @@ body {
     color: var(--primary-dark);
     font-weight: 500;
     font-size: 0.9rem;
+    text-align: left;
+    line-height: 1.55;
+}
+
+/* Suggested answers under the conversation */
+.chat-quick-replies {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.chat-quick-replies:empty {
+    display: none;
+}
+
+.chat-quick-reply {
+    padding: 7px 14px;
+    background: rgba(232, 213, 183, 0.05);
+    border: 1px solid rgba(232, 213, 183, 0.26);
+    border-radius: 999px;
+    color: var(--text-light);
+    font-family: inherit;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    text-align: left;
+    cursor: pointer;
+    animation: fadeInUp 0.35s ease both;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.chat-quick-reply:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    background: rgba(232, 213, 183, 0.1);
+    transform: translateY(-1px);
 }
 
 .chat-form {
@@ -1378,6 +1434,11 @@ body {
     .bot-message p,
     .user-message p {
         max-width: 100%;
+    }
+
+    .chat-quick-reply {
+        font-size: 0.8rem;
+        padding: 8px 13px;
     }
 
     .chat-form {

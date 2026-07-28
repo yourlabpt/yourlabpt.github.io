@@ -148,7 +148,7 @@ const STAGE_CONCEPT_KEYS = {
 };
 
 const STAGE_FOCUS = {
-  idea: 'Clarificar o problema, para quem é a solução e o que entra no primeiro release.',
+  idea: 'Clarificar o problema, para quem é a solução e o que entra no primeiro release — primeiro a narrativa da ideia, depois a investigação de mercado.',
   discovery: 'Recolher contexto do cliente, atas e pedidos antes de escrever requisitos.',
   requirements: 'Organizar requisitos por funcionalidade do produto e validar o que falta clarificar.',
   architecture: 'Definir componentes, dados e APIs por módulo técnico (Frontend, Backend, etc.).',
@@ -160,8 +160,8 @@ const STAGE_FOCUS = {
 };
 
 const STAGE_NEXT_HINT = {
-  idea: 'Completa o resumo da ideia (Idea Brief) e avança para Descoberta para mapear o contexto.',
-  discovery: 'Consolida atas e feedback; depois agrupa requisitos por funcionalidade do produto.',
+  idea: '1) Descreva a ideia original. 2) Use «Expandir ideia com IA» (1 tarefa). 3) Quando a visão estiver aceite, crie o plano Idea → Discovery (6 tarefas) e execute-as em Tarefas.',
+  discovery: 'O botão «Gerar descoberta com IA» abre o plano Idea → Discovery. Acompanhe e execute cada subtarefa na tab Tarefas antes de avançar para Requisitos.',
   requirements: 'Aprova os grupos de requisitos e avança para Arquitectura — use «Gerar prompt de arquitectura» no painel de diagramas.',
   architecture: 'Valida o desenho técnico e monta o roadmap de implementação.',
   roadmap: 'Divide a fase actual em tarefas pequenas para desenvolvimento.',

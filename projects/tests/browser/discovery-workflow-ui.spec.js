@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test('Idea page has one Task-based path and no legacy prompt controls', async ({ page }) => {
+test('Discovery empty state opens contextual transition modal', async ({ page }) => {
   await page.route('**/api/projects/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname.endsWith('/work-items/stage-transitions/config')) {
@@ -20,7 +20,7 @@ test('Idea page has one Task-based path and no legacy prompt controls', async ({
   await page.evaluate(() => {
     window.state = {
       ...(window.state || {}),
-      deliverySelectedStageId: 'idea',
+      deliverySelectedStageId: 'discovery',
       config: {
         ...((window.state || {}).config || {}),
         stageOrder: ['idea', 'discovery', 'requirements', 'architecture', 'roadmap', 'implementation', 'validation', 'delivery', 'operations'],
@@ -31,8 +31,9 @@ test('Idea page has one Task-based path and no legacy prompt controls', async ({
     document.querySelector('[data-panel="deliveryos"]')?.classList.remove('hidden');
     document.getElementById('deliveryOsLayout')?.classList.remove('hidden');
     window.PdosUI.renderPdosShell({
-      id: 'prj-idea-browser', name: 'Idea browser project', originalIdeaText: 'An explicit initial idea.',
+      id: 'prj-discovery-browser', name: 'Discovery browser project', originalIdeaText: 'An explicit initial idea.',
       vision: { mainIdeaMarkdown: 'Current understanding', acceptedSections: [] },
+      discovery: {},
       stages: [{ id: 'idea', label: 'Idea', status: 'in_progress' }, { id: 'discovery', label: 'Discovery', status: 'not_started' }],
       workItems: [], humanReviews: [], requirements: [], capabilities: [], clarificationQuestions: [],
       assumptions: [], risks: [], documents: [], informationEntries: [], meetingMinutes: [], artifacts: [],
@@ -41,17 +42,9 @@ test('Idea page has one Task-based path and no legacy prompt controls', async ({
   });
 
   const feed = page.locator('#pdosCardFeed');
-  await expect(feed.locator('[data-idea-augment]')).toHaveText('Expandir ideia com IA');
-  await expect(feed.locator('[data-idea-open-discovery]')).toHaveText('Criar plano Idea → Discovery');
-  await expect(feed.locator('.idea-workflow-choices')).toHaveCount(1);
-  await expect(feed.locator('[data-idea-open-tasks]')).toHaveCount(1);
-  await expect(feed.locator('[data-agent="reverse_idea"]')).toHaveCount(0);
-  await expect(feed.locator('[data-idea-manual]')).toHaveCount(0);
-  await expect(feed).not.toContainText('Acção avançada');
-  await expect(feed).not.toContainText('Prompt gerado');
-
-  await feed.locator('[data-idea-open-discovery]').click();
+  await expect(feed.locator('.idea-discovery-callout')).toContainText('expansão da ideia');
+  await feed.locator('[data-agent="discovery_research"]').click();
   await expect(page.locator('#pdosTransitionModal')).toBeVisible();
   await expect(page.locator('#pdosTransitionDesc')).toContainText('6 subtarefas');
-  await expect(page.locator('#pdosTransitionDesc')).toContainText('Tarefas');
+  await expect(page.locator('#pdosTransitionDesc')).toContainText('Criar plano Idea → Discovery');
 });

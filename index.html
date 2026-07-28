@@ -265,6 +265,8 @@
                     </div>
                 </div>
 
+                <div class="chat-quick-replies" id="chatQuickReplies"></div>
+
                 <form class="chat-form" id="chatForm">
                     <input
                         type="text"
@@ -281,8 +283,10 @@
                 <p data-i18n="directContactLabel">Prefere falar diretamente?</p>
                 <div class="yl-direct-contact-links">
                     <a href="https://wa.me/351927319412" target="_blank" rel="noopener noreferrer" data-i18n="directWhatsapp">WhatsApp</a>
-                    <a href="mailto:yourlabpt@gmail.com" data-i18n="directEmail">Email</a>
+                    <a href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=yourlabpt@gmail.com" target="_blank" rel="noopener noreferrer" data-i18n="directGmail">Escrever email</a>
+                    <button type="button" class="yl-copy-email" id="copyEmailBtn" data-email="yourlabpt@gmail.com" data-i18n="directCopyEmail">Copiar endereço</button>
                 </div>
+                <p class="yl-email-address" id="copyEmailFeedback">yourlabpt@gmail.com</p>
             </div>
         </section>
 

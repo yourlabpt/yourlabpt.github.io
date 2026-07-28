@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects – YourLab</title>
-  <link rel="stylesheet" href="/projects/static/styles.css?v=85" />
+  <link rel="stylesheet" href="/projects/static/styles.css?v=86" />
 </head>
 <body>
   <div class="page-bg"></div>
@@ -1021,18 +1021,21 @@
           <label>O que pretende gerar?<textarea id="pdosTransitionRequest" rows="3" required></textarea></label>
           <label>Resultado esperado<input id="pdosTransitionOutcome" type="text" required /></label>
         </div>
-        <div class="pdos-agent-config-grid">
-          <label>Perfil do modelo<select id="pdosTransitionModelProfile"><option value="small">small</option><option value="medium">medium</option><option value="large">large</option><option value="long_context">long_context</option></select></label>
-          <label>Input alvo / tarefa<input type="number" id="pdosTransitionInputTokens" min="1000" max="200000" step="1000" /></label>
-          <label>Output alvo / tarefa<input type="number" id="pdosTransitionOutputTokens" min="500" max="50000" step="500" /></label>
-          <label>Tokens máximos (0 = sem limite)<input type="number" id="pdosTransitionMaxTokens" min="0" step="5000" /></label>
-          <label>Tempo máximo (0 = sem limite)<input type="number" id="pdosTransitionMaxMinutes" min="0" step="5" /></label>
-          <label>Subtarefas máximas<input type="number" id="pdosTransitionMaxSubtasks" min="2" max="24" step="1" /></label>
-        </div>
-        <div class="pdos-transition-options">
-          <label class="checkline"><input type="checkbox" id="pdosTransitionWebSearch" /> Permitir pesquisa web</label>
-          <label>Regeneração<select id="pdosTransitionRegeneration"><option value="affected">Apenas trabalho afectado</option><option value="full">Transição completa</option></select></label>
-        </div>
+        <details class="ado-advanced-details pdos-transition-advanced">
+          <summary>Opções avançadas (modelo, tokens, pesquisa web)</summary>
+          <div class="pdos-agent-config-grid">
+            <label>Perfil do modelo<select id="pdosTransitionModelProfile"><option value="small">small</option><option value="medium">medium</option><option value="large">large</option><option value="long_context">long_context</option></select></label>
+            <label>Input alvo / tarefa<input type="number" id="pdosTransitionInputTokens" min="1000" max="200000" step="1000" /></label>
+            <label>Output alvo / tarefa<input type="number" id="pdosTransitionOutputTokens" min="500" max="50000" step="500" /></label>
+            <label>Tokens máximos (0 = sem limite)<input type="number" id="pdosTransitionMaxTokens" min="0" step="5000" /></label>
+            <label>Tempo máximo (0 = sem limite)<input type="number" id="pdosTransitionMaxMinutes" min="0" step="5" /></label>
+            <label>Subtarefas máximas<input type="number" id="pdosTransitionMaxSubtasks" min="2" max="24" step="1" /></label>
+          </div>
+          <div class="pdos-transition-options">
+            <label class="checkline"><input type="checkbox" id="pdosTransitionWebSearch" /> Permitir pesquisa web</label>
+            <label>Regeneração<select id="pdosTransitionRegeneration"><option value="affected">Apenas trabalho afectado</option><option value="full">Transição completa</option></select></label>
+          </div>
+        </details>
         <p id="pdosTransitionChangeSummary" class="pdos-transition-change-summary" role="status"></p>
       <div id="pdosTransitionPlanWrap" class="pdos-agent-plan-wrap hidden">
         <p class="pdos-agent-plan-heading" id="pdosTransitionPlanHeading">Subtarefas previstas</p>
@@ -1366,7 +1369,7 @@
   <script src="/projects/static/documents-ui.js?v=5" defer></script>
   <script src="/projects/static/minutes-ui.js?v=3" defer></script>
   <script src="/projects/static/diagrams-ui.js?v=8" defer></script>
-  <script src="/projects/static/delivery-os-ui.js?v=73" defer></script>
+  <script src="/projects/static/delivery-os-ui.js?v=74" defer></script>
   <script src="/projects/static/engineering-state-ui.js?v=3" defer></script>
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
   <script src="/projects/static/work-items-ui.js?v=32" defer></script>

@@ -37,8 +37,8 @@ test('Idea section actions use a stable delegated controller with visible feedba
   assert.match(source, /openIdeaInlineEditor\(sectionEl, project, button\.dataset\.ideaEdit\)/);
   assert.match(source, /setIdeaSectionBusy\(sectionEl, 'A remover esta secção…'\)/);
   assert.match(source, /window\.applyProjectPatch\(updated/);
-  assert.match(html, /styles\.css\?v=85/);
-  assert.match(html, /delivery-os-ui\.js\?v=73/);
+  assert.match(html, /styles\.css\?v=86/);
+  assert.match(html, /delivery-os-ui\.js\?v=74/);
 });
 
 test('runtime monitoring is idempotent across Idea page re-renders', () => {
@@ -55,16 +55,21 @@ test('runtime monitoring is idempotent across Idea page re-renders', () => {
   assert.match(source, /!pdosState\.terminalRuntimeRuns\.has\(runId\)/);
 });
 
-test('Idea page shows Idea→Discovery transition progress and task visibility', () => {
+test('Idea page shows augment and discovery workflow progress with task links', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'delivery-os-ui.js'),
     'utf8',
   );
 
   assert.match(source, /data-idea-transition-progress/);
-  assert.match(source, /hydrateIdeaTransitionProgress/);
+  assert.match(source, /hydrateIdeaWorkflowProgress/);
   assert.match(source, /transitionFromStageId=\$\{encodeURIComponent\('idea'\)\}/);
+  assert.match(source, /stage=\$\{encodeURIComponent\('idea'\)\}/);
+  assert.match(source, /data-idea-open-augment-task/);
+  assert.match(source, /data-idea-open-discovery-tasks/);
+  assert.match(source, /Plano Idea → Discovery:/);
+  assert.match(source, /Expansão da ideia:/);
+  assert.match(source, /deliveryStageId: 'idea'/);
   assert.match(source, /ideaDiscoveryBrief/);
   assert.match(source, /discovery\.marketSummaryMarkdown/);
-  assert.match(source, /Plano Idea → Discovery:/);
 });
