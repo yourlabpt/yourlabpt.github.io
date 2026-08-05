@@ -43,7 +43,7 @@ body {
 
 /* Language Toggle (hidden for now — PT-only launch; infra kept for later) */
 .lang-toggle {
-    display: none;
+    display: flex;
     position: fixed;
     top: 20px;
     right: 24px;
@@ -322,11 +322,6 @@ body {
     margin-top: 18px;
     font-size: 0.85rem !important;
     color: rgba(169, 168, 163, 0.8) !important;
-}
-
-/* Trust strip — thin band, no heading */
-.yl-section--strip {
-    padding: 26px 24px;
 }
 
 .scroll-hint {
@@ -1386,6 +1381,12 @@ body {
 }
 
 @media (max-width: 768px) {
+    .lang-toggle {
+        top: 12px;
+        right: 12px;
+        padding: 6px 10px;
+    }
+
     .header {
         padding: 30px 20px 20px;
     }
@@ -1396,11 +1397,6 @@ body {
 
     .yl-section--hero {
         padding: 120px 20px 90px;
-    }
-
-    /* Keep the trust strip a thin band — the generic .yl-section padding above would inflate it */
-    .yl-section--strip {
-        padding: 22px 20px;
     }
 
     .yl-cta-row {

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intent Signals — Configuration | Your Lab Technologies</title>
+    <meta name="description" content="A purchase-intent signal engine. Which companies on your list are buying media right now, and the sentence to open with.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" type="image/png" href="/favicon.png?v=2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+    <div id="boot" class="shell">
+        <div class="empty">Loading…</div>
+    </div>
+
+    <noscript>
+        <div class="shell">
+            <div class="empty">This demo needs JavaScript. Everything runs in your browser — nothing is uploaded anywhere.</div>
+        </div>
+    </noscript>
+
+    <script type="module">
+        import { mountConfigPage } from './ui/config-page.js';
+
+        const boot = document.getElementById('boot');
+        try {
+            mountConfigPage(boot);
+        } catch (err) {
+            boot.innerHTML = '';
+            const box = document.createElement('div');
+            box.className = 'callout bad';
+            box.textContent = 'Could not start: ' + (err && err.message ? err.message : err);
+            boot.appendChild(box);
+            throw err;
+        }
+    </script>
+</body>
+</html>

@@ -1,8 +1,27 @@
 // ===== Internationalization (i18n) =====
-let currentLang = localStorage.getItem('yourlab_lang_v2') || 'pt';
+const SUPPORTED_LANGS = ['pt', 'en'];
+
+// A shared link wins over a stored choice, and a first-time visitor gets the
+// language their browser asks for rather than always landing on Portuguese.
+function resolveInitialLang() {
+    const fromUrl = new URLSearchParams(window.location.search).get('lang');
+    if (SUPPORTED_LANGS.includes(fromUrl)) return fromUrl;
+
+    const stored = localStorage.getItem('yourlab_lang_v2');
+    if (SUPPORTED_LANGS.includes(stored)) return stored;
+
+    const preferred = navigator.languages || [navigator.language || ''];
+    return preferred.some((tag) => String(tag).toLowerCase().startsWith('pt')) ? 'pt' : 'en';
+}
+
+let currentLang = resolveInitialLang();
 
 const translations = {
     en: {
+        // Document
+        pageTitle: 'YourLab — We turn messy processes into systems that are simple to use',
+        metaDescription: 'We test ideas, organise companies and fix half-finished applications. First useful version in weeks, with a fixed quote before we start. Portugal and Europe.',
+
         // Header
         headerCta: 'Talk to us',
 
@@ -11,23 +30,16 @@ const translations = {
         heroSub: 'Have an idea to test, a process stuck in spreadsheets and messages, or an application left half-finished? We build the first useful version in weeks — with a fixed quote before we start.',
         heroCtaPrimary: 'Tell us what needs improving',
         heroCtaSecondary: 'See how we work',
-        heroMicrocopy: 'First call is free, with no strings attached. If building makes no sense, we say so.',
+        heroMicrocopy: 'First call is free and carries no obligation. If building makes no sense, we tell you.',
 
-        // 2. Trust strip
-        trust1: 'Comfortable pricing, payment shaped around your business',
-        trust2: 'First version in 4 to 6 weeks',
-        trust3: 'Fixed quote before we start',
-        trust4: 'The system is yours, source code included',
-        trust5: 'Portugal and Europe · Portuguese and English',
-
-        // 3. Situations
+        // 2. Situations
         situationsH2: 'Does any of this sound familiar?',
         situation1Title: "You have an idea and don't know where to start",
         situation1Body: "You know the problem you want to solve, but not what to build first, what it costs, or how long it takes. We help define the first version and test it with real people.",
         situation2Title: 'You started building with AI and got stuck',
-        situation2Body: "The first version came out fast, but now errors keep coming back, nothing works outside your own computer, and nobody can explain what is inside it. We sort out what already exists and get it working.",
+        situation2Body: "The first version came out fast, but now the same errors keep coming back, nothing works outside your own computer, and nobody can explain what's inside it. We sort out what's already there and get it running properly.",
         situation3Title: 'The company grew and the work is scattered',
-        situation3Body: 'Information in Excel, WhatsApp and email. The team copies the same data, reports are built by hand, and nobody can see the whole operation. We bring that together into one system.',
+        situation3Body: "Information spread across Excel, WhatsApp and email. The team copies the same data twice, reports are built by hand, and nobody can see the whole operation. We bring it together into one system.",
         situationsClose: 'In all three cases the first step is the same: properly understanding what needs to happen.',
 
         // 4. How we help
@@ -38,7 +50,7 @@ const translations = {
         helpType1: 'Digitising a manual process',
         helpType2: 'Internal systems for your team',
         helpType3: 'Client portals',
-        helpType4: 'Connecting tools that do not talk to each other',
+        helpType4: "Connecting tools that don't talk to each other",
         helpType5: 'Reporting and tracking',
         helpType6: 'Picking up a stalled project',
 
@@ -50,12 +62,12 @@ const translations = {
         processStep2Title: 'Organise',
         processStep2Desc: 'what needs doing, and in what order',
         processStep3Title: 'Build',
-        processStep3Desc: 'only what is needed to start using it',
+        processStep3Desc: "only what's needed to start using it",
         processStep4Title: 'Test',
-        processStep4Desc: 'your team uses it, comments and approves',
+        processStep4Desc: 'your team uses it, comments and signs off',
         processStep5Title: 'Improve',
         processStep5Desc: 'in stages, based on real use',
-        processAnchor: 'Every step produces something concrete to see, test and approve. You always know what is planned, what is being done, and what has been delivered.',
+        processAnchor: "Every step produces something concrete to see, test and approve. You always know what's planned, what's being worked on, and what's been delivered.",
 
         // 6. Projects (Showcase)
         projectShowcaseKicker: 'PROJECTS',
@@ -75,7 +87,7 @@ const translations = {
         projectResultLabel: 'System delivered',
         projectOutcomesLabel: 'Final result',
         projectDailyUseLabel: 'How it runs today',
-        projectCtaText: 'Recognise this situation in your company? Tell us what is happening and we work out the best first step together.',
+        projectCtaText: "Does this sound like your company? Tell us what's happening and we'll work out the best first step together.",
         projectCtaButton: 'Talk to the team',
         projectPrevAria: 'Previous project',
         projectNextAria: 'Next project',
@@ -89,18 +101,18 @@ const translations = {
         diffPoint3: 'You follow the work from start to finish',
         diffPoint4: 'The system is yours, with no dependency on us',
         diffAnchor: 'We use artificial intelligence to research, document, build and test faster. Decisions, priorities and quality stay with people.',
-        diffNote: 'More speed in execution, without handing responsibility to a tool.',
+        diffNote: 'More speed in the doing, without handing responsibility to a tool.',
 
         // 8. Investment
         priceEyebrow: 'INVESTMENT',
         priceH2: 'Comfortable pricing, shaped around the reality of your business.',
-        priceBody1: 'Our projects usually come in at four-figure amounts. When it is only a matter of looking at a problem and working out what is going on, consulting starts at €200.',
+        priceBody1: "Our projects usually come in at four-figure amounts. When it's just a matter of looking at a problem and working out what's going on, consulting starts at €200.",
         priceBody2: 'How you pay is agreed with you — in stages, as things get finished.',
         priceItem1: 'Consulting on a problem, from €200',
         priceItem2: 'Projects at four-figure amounts',
         priceItem3: 'Payment in stages, agreed with you',
         priceItem4: 'Fixed quote before we start',
-        priceAnchor: 'The first call is free and carries no obligation. It exists to understand the problem and tell you honestly what is worth doing.',
+        priceAnchor: "The first call is free and carries no obligation. It's there to understand the problem and tell you honestly what's worth doing.",
         priceNote: 'Once we understand what you need, you get a fixed quote — no hidden costs and no surprises halfway through.',
 
         // 9. FAQ
@@ -108,19 +120,19 @@ const translations = {
         faq1Q: 'How long does it take?',
         faq1A: 'The first version is usually ready in 4 to 6 weeks. You get a concrete deadline in the quote.',
         faq2Q: 'Will I be dependent on you?',
-        faq2A: 'No. The system and the source code are yours, and everything is written down so someone else can carry the work on.',
-        faq3Q: 'I cannot explain exactly what I need. Is that a problem?',
+        faq2A: 'No. The system and the source code are yours, and everything is written down so someone else can pick the work up.',
+        faq3Q: "I can't explain exactly what I need. Is that a problem?",
         faq3A: 'No, that part is our job. Tell us what happens day to day and we translate it into something that can be built.',
         faq4Q: 'I already built something with AI. Can you take it over?',
         faq4A: 'Yes. We start by understanding what already exists, fix the essentials, and leave it stable enough to grow.',
-        faq5Q: 'What if my idea does not make sense?',
-        faq5A: 'We tell you. It is far cheaper to find that out in a conversation than after investing.',
+        faq5Q: "What if my idea doesn't make sense?",
+        faq5A: "We tell you. It's far cheaper to find that out in a conversation than after spending the money.",
         faq6Q: 'Do you work with small companies?',
-        faq6A: 'Yes, that is who we work with most of the time — small companies and teams, in Portugal and across Europe.',
+        faq6A: "Yes, that's who we work with most of the time — small companies and teams, in Portugal and across Europe.",
 
         // 10. Invitation
         chatHeading: 'Tell us what needs improving.',
-        inviteBody: 'The first conversation is for understanding the problem. If building something makes sense, we explain the path and the cost. If it does not, we say that too.',
+        inviteBody: "The first conversation is for understanding the problem. If building something makes sense, we explain the path and the cost. If it doesn't, we say that too.",
         inviteCta: 'Start the conversation',
         chatDescription: 'Describe your situation and leave your contact. Someone from the team replies to you directly.',
         chatGreeting: 'Tell us, in a few words, what is happening in your company.',
@@ -133,9 +145,13 @@ const translations = {
 
         // Footer
         footerText: '\u00A9 2026 YourLab. All rights reserved.',
-        footerContactShortcut: 'Contacts card'
+        footerContactShortcut: 'Contact card'
     },
     pt: {
+        // Documento
+        pageTitle: 'YourLab — Transformamos processos confusos em sistemas simples de usar',
+        metaDescription: 'Testamos ideias, organizamos empresas e corrigimos aplicações. Primeira versão útil em semanas, com orçamento fechado antes de começar. Portugal e Europa.',
+
         // Header
         headerCta: 'Falar connosco',
 
@@ -146,14 +162,7 @@ const translations = {
         heroCtaSecondary: 'Ver como trabalhamos',
         heroMicrocopy: 'Primeira chamada gratuita e sem compromisso. Se não fizer sentido construir, dizemos-lhe isso.',
 
-        // 2. Faixa de confiança
-        trust1: 'Preços confortáveis, pagamento ajustado ao seu negócio',
-        trust2: 'Primeira versão em 4 a 6 semanas',
-        trust3: 'Orçamento fechado antes de começar',
-        trust4: 'O sistema fica seu, incluindo o código',
-        trust5: 'Portugal e Europa · português e inglês',
-
-        // 3. Situações reconhecíveis
+        // 2. Situações reconhecíveis
         situationsH2: 'Reconhece alguma destas situações?',
         situation1Title: 'Tem uma ideia e não sabe por onde começar',
         situation1Body: 'Sabe o problema que quer resolver, mas não sabe o que construir primeiro, quanto custa nem quanto tempo leva. Ajudamos a definir a primeira versão e a testá-la com pessoas reais.',
@@ -274,6 +283,19 @@ function setLanguage(lang) {
     currentLang = lang;
     localStorage.setItem('yourlab_lang_v2', lang);
     document.documentElement.lang = lang;
+    document.title = translations[lang].pageTitle;
+
+    const description = document.querySelector('meta[name="description"]');
+    if (description) description.setAttribute('content', translations[lang].metaDescription);
+
+    // Keeps the address bar in sync so the page can be shared in the language being read.
+    if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('lang') !== lang) {
+            url.searchParams.set('lang', lang);
+            window.history.replaceState({}, '', url);
+        }
+    }
 
     // Update toggle UI
     document.querySelectorAll('.lang-option').forEach(opt => {
@@ -854,10 +876,10 @@ const chatCopy = {
     },
     en: {
         route: 'Just so I understand — which of these is closest to your case?',
-        routeChips: ['I have an idea to start', 'I built something and it is stuck', 'The company is disorganised'],
+        routeChips: ['I have an idea, not started yet', "I built something and it's stuck", 'The company is disorganised'],
         openers: {
             idea: 'Good. This is the best moment to think it through — before spending money.',
-            stuck: 'That happens more often than people think. It is usually recoverable.',
+            stuck: "That happens more often than people think. It's usually fixable.",
             ops: 'Usually that means the company grew faster than its processes.'
         },
         ask: {
@@ -871,7 +893,7 @@ const chatCopy = {
             opsPeople: 'How many people touch it, and how often?',
             opsWhere: 'Where does the information live right now?',
             timing: 'When would you like this sorted?',
-            name: 'What is your name?',
+            name: 'What should I call you?',
             contact: 'And the best way to reach you — email or phone?',
             recap: 'Is that right?'
         },
@@ -881,10 +903,10 @@ const chatCopy = {
             stuckUsers: ['People are using it', 'Only on my computer', 'It stalled halfway'],
             opsWhere: ['Excel', 'WhatsApp and email', 'Paper', 'An old system'],
             timing: ['As soon as possible', 'In the next few weeks', 'Still exploring'],
-            recap: ['That is right', 'I want to correct something']
+            recap: ["That's right", 'I want to correct something']
         },
         retry: {
-            ideaWhat: 'Help me a little more: what can the person not do today?',
+            ideaWhat: "Help me a little more: what can't that person do today?",
             ideaFirst: 'Think of the simplest thing that would already be worth it — just that one.',
             stuckBreaks: 'Describe it like you would to a friend: what happens when it fails?',
             opsProcess: 'For example: orders, shifts, quotes, invoicing, bookings.',
@@ -893,8 +915,8 @@ const chatCopy = {
             contact: 'I need an email or a phone number to get back to you.'
         },
         ack: {
-            generic: ['I see.', 'Right.', 'That makes sense.', 'I have seen this before.'],
-            excel: 'Excel — a classic. It works until it does not.',
+            generic: ['I see.', 'Right.', 'That makes sense.', "I've seen this before."],
+            excel: "Excel — a classic. It works until it doesn't.",
             whatsapp: 'When decisions live in WhatsApp, nobody can see the whole picture.',
             paper: 'Paper is still more common than people admit.',
             legacy: 'Old systems usually force people to invent workarounds.',
@@ -903,25 +925,25 @@ const chatCopy = {
             shifts: 'Shifts and schedules are usually the biggest weekly headache.',
             bookings: 'Badly organised bookings cost clients without anyone noticing.',
             soon: 'A few weeks is a realistic window for a first working version.',
-            aiTool: 'That explains a lot — it comes out fast, but nobody ends up knowing what is inside.',
+            aiTool: "That explains a lot — it comes out fast, but nobody ends up knowing what's inside.",
             hired: 'Happens often: whoever built it left, and the knowledge went with them.',
             alone: 'While nobody is using it, it can still be sorted out calmly.',
             inUse: 'Being in use changes the priorities — stabilise first, improve after.',
             notTalked: 'Worth testing that early. Cheaper than building and finding out later.',
-            talked: 'Good. That saves half the road.',
-            urgent: 'Noted that it is urgent.',
+            talked: 'Good. That saves half the work.',
+            urgent: "Noted, it's urgent.",
             exploring: 'Exploring is a fine place to start. No rush.'
         },
         faq: {
             price: 'The honest answer is: it depends. Consulting on a problem starts at €200, and projects usually come in at four-figure amounts. The first call is free.',
             time: 'The first version is usually ready in 4 to 6 weeks, and the exact deadline goes in the quote.',
             lockin: 'The system and the code stay yours, and everything is written down so someone else can carry on.',
-            who: 'We are a small team, working from Portugal for clients in Portugal and across Europe.',
+            who: "We're a small team, working from Portugal for clients in Portugal and across Europe.",
             how: 'First we understand, then we organise, and only then we build — in stages, so you see results early.',
-            bot: 'Neither a robot nor artificial intelligence. But I am saving the full explanation for the end of this conversation.',
-            human: 'Of course. WhatsApp +351 927 319 412 or yourlabpt@gmail.com — and I am still here if you prefer to type.',
-            dontKnow: 'No problem, that is normal. Just tell me what you notice day to day: who complains, what runs late.',
-            thanks: 'You are welcome.'
+            bot: "Neither a robot nor artificial intelligence. But I'm saving the full explanation for the end of this conversation.",
+            human: "Of course. WhatsApp +351 927 319 412 or yourlabpt@gmail.com — and I'm still here if you'd rather type.",
+            dontKnow: "No problem, that's normal. Just tell me what you notice day to day: who complains, what runs late.",
+            thanks: "You're welcome."
         },
         back: 'Back to what matters:',
         recapIntro: 'Let me summarise, to make sure I understood:',
@@ -940,17 +962,17 @@ const chatCopy = {
             contact: 'Contact'
         },
         tracks: {
-            idea: 'an idea to start',
+            idea: 'an idea not started yet',
             stuck: 'something built that got stuck',
             ops: 'a company that needs organising'
         },
-        nameAck: (name) => `Good to know, ${name}.`,
-        correct: 'Tell me what is wrong and I will fix it.',
-        saved: (name) => `It is on record${name ? `, ${name}` : ''}. Someone from the team will reply to you directly — not an automated answer.`,
+        nameAck: (name) => `Good to meet you, ${name}.`,
+        correct: "Tell me what's wrong and I'll fix it.",
+        saved: (name) => `It's on record${name ? `, ${name}` : ''}. Someone from the team will reply to you directly — not an automated answer.`,
         savedNote: 'The first conversation is free and exists to understand the problem. If building makes no sense, we will tell you that too.',
         joke1: 'Oh, and a confession before you go: there was no artificial intelligence in this conversation. Not a drop.',
-        joke2: 'I am a few hundred lines of code, written by someone who has had this conversation many times and knows which questions to ask. No model, no agent, no cloud.',
-        joke3: 'And it went well, did it not? That is exactly the point: technology is rarely what is missing — someone understanding the problem first usually is. 🙂',
+        joke2: "I'm a few hundred lines of code, written by someone who has had this conversation many times and knows which questions to ask. No model, no agent, no cloud.",
+        joke3: "And it went well, didn't it? That's exactly the point: technology is rarely the thing that's missing — someone understanding the problem first usually is. 🙂",
         after: 'If you want to add anything else, type it. It goes into the same record.',
         afterAcks: [
             'Noted, that goes in with the rest.',
@@ -1039,9 +1061,9 @@ function chatDetectTrack(text) {
     const value = normalizeChatText(text);
     if (!value) return '';
 
-    const ideaHints = /\b(ideia|idea|comecar|come[cç]ar|start|startup|validar|validate|testar|test|nova|new|do zero|from scratch|lancar|launch|projeto novo|mvp|prototipo|prototype)\b/;
-    const stuckHints = /\b(bug|bugs|erro|erros|error|errors|preso|travado|stuck|parou|stalled|nao funciona|not working|broken|quebrado|deploy|publicar|servidor|server|lento|slow|chatgpt|claude|cursor|lovable|bolt|replit|copilot|gemini|vibe|no-?code|wordpress|bubble)\b/;
-    const opsHints = /\b(excel|folhas de calculo|spreadsheet|whatsapp|email|manual|papel|paper|cresceu|grew|equipa|team|funcionarios|staff|relatorios|reports|organizar|organise|organize|desorganiz|processo|process|clientes|customers|faturacao|invoicing|turnos|shifts|encomendas|orders|stock|marcacoes|bookings|sistema antigo|legacy)\b/;
+    const ideaHints = /\b(ideia|idea|comecar|come[cç]ar|start|startup|validar|validate|testar|test|nova|new|do zero|from scratch|lancar|launch|projeto novo|mvp|prototipo|prototype|want to build|thinking of building)\b/;
+    const stuckHints = /\b(bug|bugs|erro|erros|error|errors|preso|travado|stuck|parou|stalled|nao funciona|not working|broken|quebrado|deploy|publicar|servidor|server|lento|slow|crashes|half.?finished|abandoned|chatgpt|claude|cursor|lovable|bolt|replit|copilot|gemini|vibe|no-?code|wordpress|bubble)\b/;
+    const opsHints = /(\b(excel|folhas de calculo|spreadsheet|whatsapp|manual|papel|paper|cresceu|grew|equipa|team|funcionarios|staff|relatorios|reports|organizar|organise|organize|processo|process|clientes|customers|faturacao|invoicing|turnos|shifts|encomendas|orders|stock|marcacoes|bookings|sistema antigo|legacy|scattered|by hand)\b|desorganiz|disorganis|disorganiz)/;
 
     const scores = {
         stuck: (value.match(stuckHints) || []).length,

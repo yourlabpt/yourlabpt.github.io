@@ -1,0 +1,6 @@
+{
+  "name": "spyfu-intent-signals-demo",
+  "private": true,
+  "type": "module",
+  "description": "Scopes ES modules to this folder only. Deliberately does NOT touch the site package.json."
+}
