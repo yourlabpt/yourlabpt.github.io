@@ -13,7 +13,6 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { toCsv } from '../lib/csv.js';
-import { CURATED } from '../lib/mock.js';
 import { rngFor } from '../lib/util.js';
 
 const rng = rngFor('sample-list', 'v2');

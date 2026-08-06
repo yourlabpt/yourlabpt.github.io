@@ -1,54 +1,26 @@
 /**
- * Exports.
- *
- * FR-17 / NFR-11: the original uploaded columns are preserved all the way
- * through to export. No silent row loss — the "why" line travels with the row.
+ * Exports. Original uploaded columns are preserved all the way through — no
+ * silent row loss.
  */
 
 import { toCsv } from './csv.js';
-import { SEGMENT_LABELS } from './score.js';
+import { SEGMENT_LABELS } from './spend-check.js';
 
-export function buildExportRows(results, config) {
+export function buildExportRows(results) {
   return results.map((r) => {
     const base = { ...(r.original || {}) };
+    const byCountry = Object.entries(r.byCountry || {})
+      .map(([code, v]) => `${code}: $${Math.round(v.budget).toLocaleString()}`)
+      .join(' | ');
     return {
       ...base,
       'Domain': r.domain,
-      'Intent Score': r.score,
-      'Segment': SEGMENT_LABELS[r.segment],
-      'Top Signal': r.topSignal || '',
-      'Why (outreach line)': r.whyLine || '',
-      'Signals': r.chips.map((c) => c.text).join(' | '),
-      'Monthly Budget (USD)': Math.round(r.kpi.budget),
-      'Budget Change MoM': isFinite(r.kpi.budgetDelta)
-        ? `${(r.kpi.budgetDelta * 100).toFixed(0)}%` : 'new',
-      'Paid Keywords': r.kpi.paidKeywords,
-      'Paid Clicks': r.kpi.paidClicks,
-      'Organic Clicks': r.kpi.organicClicks,
-      'Domain Strength': r.kpi.strength,
-      'Market': r.market,
-      'Run Date': (config && config.runAt) || new Date().toISOString().slice(0, 10),
+      'Status': SEGMENT_LABELS[r.segment],
+      'Monthly Spend (USD)': Math.round(r.budget),
+      'Paid Keywords': r.paidKeywords,
+      'Spend by Country': byCountry,
     };
   });
-}
-
-/** Narrow CSV shaped for Skylead / CRM import. */
-export function buildSkyleadRows(results) {
-  return results
-    .filter((r) => r.score > 0)
-    .map((r) => ({
-      website: `https://${r.domain}`,
-      company: pickCompanyName(r.original) || r.domain,
-      intent_score: r.score,
-      top_signal: r.topSignal || '',
-      first_line: r.whyLine || '',
-      monthly_budget_usd: Math.round(r.kpi.budget),
-    }));
-}
-
-function pickCompanyName(original = {}) {
-  const key = Object.keys(original).find((k) => /company|name|organisation|organization|account/i.test(k));
-  return key ? original[key] : null;
 }
 
 export function downloadCsv(filename, rows, columns) {
@@ -69,8 +41,7 @@ export function triggerDownload(blob, filename) {
 
 /**
  * XLSX via SheetJS, lazy-loaded from CDN so the app keeps zero npm runtime
- * dependencies (decision D-02). Degrades to CSV if the CDN is unreachable —
- * an offline demo must never hit a dead export button.
+ * dependencies. Degrades to CSV if the CDN is unreachable.
  */
 let sheetJsPromise = null;
 export function loadSheetJs() {
@@ -87,8 +58,8 @@ export function loadSheetJs() {
   return sheetJsPromise;
 }
 
-export async function exportWorkbook(results, config, filename = 'intent-signals.xlsx') {
-  const rows = buildExportRows(results, config);
+export async function exportWorkbook(results, filename = 'spyfu-spend-check.xlsx') {
+  const rows = buildExportRows(results);
   try {
     const XLSX = await loadSheetJs();
     const wb = XLSX.utils.book_new();
@@ -96,10 +67,9 @@ export async function exportWorkbook(results, config, filename = 'intent-signals
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name.slice(0, 31));
 
     add('All prospects', rows);
-    add('Qualified', rows.filter((r) => r.Segment === SEGMENT_LABELS.qualified));
-    add('Below threshold', rows.filter((r) => r.Segment === SEGMENT_LABELS.below));
-    add('No paid search', rows.filter((r) => r.Segment === SEGMENT_LABELS.no_paid));
-    add('Skylead', buildSkyleadRows(results));
+    add('Qualified', rows.filter((r) => r.Status === SEGMENT_LABELS.qualified));
+    add('Below threshold', rows.filter((r) => r.Status === SEGMENT_LABELS.below));
+    add('No paid search', rows.filter((r) => r.Status === SEGMENT_LABELS.no_paid));
 
     XLSX.writeFile(wb, filename);
     return { ok: true, format: 'xlsx' };

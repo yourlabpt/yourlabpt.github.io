@@ -79,21 +79,16 @@ export function toast(message) {
   toastTimer = setTimeout(() => node.remove(), 2800);
 }
 
-/** Shared top bar. `current` is 'config' or 'signals'. */
-export function topbar(current) {
+/** Shared top bar. */
+export function topbar() {
   return el('div', { class: 'topbar' },
     el('div', { class: 'topbar-inner' },
       el('div', { class: 'brand' },
-        el('span', { class: 'brand-mark' }, 'INTENT SIGNALS'),
+        el('span', { class: 'brand-mark' }, 'SPYFU SPEND CHECK'),
         el('span', { class: 'brand-sub' }, 'by Your Lab Technologies'),
       ),
+      el('span', { class: 'spacer' }),
       el('a', { class: 'site-back', href: '/' }, '← yourlabpt.com'),
-      el('nav', { class: 'steps' },
-        el('a', { class: 'step', href: 'index.html', 'data-active': String(current === 'config') },
-          el('span', { class: 'step-num' }, '1'), 'Configuration'),
-        el('a', { class: 'step', href: 'signals.html', 'data-active': String(current === 'signals') },
-          el('span', { class: 'step-num' }, '2'), 'Signals'),
-      ),
     ),
   );
 }
