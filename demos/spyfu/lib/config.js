@@ -23,7 +23,6 @@ export function defaultConfig() {
   return {
     apiId: '',
     secretKey: '',
-    proxyUrl: '',
     countries: ['UK', 'US'],
     threshold: DEFAULT_THRESHOLD,
   };

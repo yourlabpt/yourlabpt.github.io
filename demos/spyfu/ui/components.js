@@ -50,15 +50,6 @@ export function chip(id, text, opts = {}) {
   return node;
 }
 
-export function scoreBar(score) {
-  const colour = score >= 40 ? 'var(--green)' : score >= 20 ? 'var(--accent-color)' : 'var(--slate)';
-  return el('div', { class: 'score-cell' },
-    el('span', { class: 'score-num', style: { color: score > 0 ? colour : 'var(--muted)' } }, score),
-    el('span', { class: 'score-bar' },
-      el('i', { style: { width: `${score}%`, background: colour } })),
-  );
-}
-
 export function progressBar() {
   const bar = el('i');
   const node = el('div', { class: 'progress' }, bar);
@@ -66,36 +57,8 @@ export function progressBar() {
   return node;
 }
 
-export function copyButton(text, label = 'Copy') {
-  const btn = el('button', {
-    class: 'btn btn-sm btn-ghost',
-    type: 'button',
-    onclick: async () => {
-      try {
-        await navigator.clipboard.writeText(text);
-        btn.textContent = 'Copied';
-        setTimeout(() => { btn.textContent = label; }, 1400);
-      } catch {
-        // Clipboard blocked (insecure context or permission) — select instead
-        // of failing silently, so the text is still one keystroke away.
-        btn.textContent = 'Select it manually';
-        setTimeout(() => { btn.textContent = label; }, 2000);
-      }
-    },
-  }, label);
-  return btn;
-}
-
 export function input(props) {
   return el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', ...props });
-}
-
-export function select(options, props) {
-  return el('select', props, ...options.map((o) => {
-    const value = typeof o === 'string' ? o : o.value;
-    const label = typeof o === 'string' ? o : o.label;
-    return el('option', { value, selected: props && props.value === value }, label);
-  }));
 }
 
 export function numberInput(props) {

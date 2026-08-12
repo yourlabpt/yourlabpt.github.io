@@ -73,10 +73,10 @@ await t('toggling a country updates the chip state', () => {
   after.click(); // back to default for later assertions
 });
 
-await t('test connection is honest when no proxy is set', async () => {
+await t('test connection is honest when no key is entered', async () => {
   byText('button', 'Test connection').click();
   await tick(30);
-  assert.ok(text(document.body).includes('No proxy URL set'), 'expected message about missing proxy');
+  assert.ok(text(document.body).includes('No key entered'), 'expected message about missing credentials');
 });
 
 await t('run is disabled before a list is uploaded', () => {

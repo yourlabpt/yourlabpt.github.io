@@ -14,16 +14,6 @@ export function el(tag, props, ...children) {
   return node;
 }
 
-export function svgEl(tag, props, ...children) {
-  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for (const [k, v] of Object.entries(props || {})) {
-    if (v === null || v === undefined || v === false) continue;
-    node.setAttribute(k, String(v));
-  }
-  append(node, children);
-  return node;
-}
-
 function applyProps(node, props) {
   for (const [k, v] of Object.entries(props || {})) {
     if (v === null || v === undefined || v === false) continue;
@@ -52,12 +42,6 @@ export function fill(node, ...children) {
   clear(node);
   append(node, children);
   return node;
-}
-
-export function frag(...children) {
-  const f = document.createDocumentFragment();
-  append(f, children);
-  return f;
 }
 
 /** Debounce for text inputs that trigger recalculation. */

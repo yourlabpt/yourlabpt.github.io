@@ -79,7 +79,7 @@ export function mountApp(root) {
       head.append(el('span', { class: 'spacer' }), badge);
     }
     const paintBadge = () => {
-      const live = Boolean(config.proxyUrl);
+      const live = Boolean(config.apiId && config.secretKey);
       badge.className = `badge ${live ? 'badge-live' : 'badge-demo'}`;
       badge.textContent = live ? 'Live API' : 'Demo data';
     };
@@ -87,19 +87,15 @@ export function mountApp(root) {
 
     const result = el('div', {});
     const apiId = input({ value: config.apiId, placeholder: 'SPYFU_API_ID',
-      oninput: (e) => { config.apiId = e.target.value; } });
+      oninput: (e) => { config.apiId = e.target.value; paintBadge(); } });
     const secret = el('input', { type: 'password', autocomplete: 'off', value: config.secretKey,
-      placeholder: '••••••••••••••••', oninput: (e) => { config.secretKey = e.target.value; } });
-    const proxy = input({ value: config.proxyUrl, placeholder: 'http://localhost:8787',
-      oninput: (e) => { config.proxyUrl = e.target.value; paintBadge(); } });
+      placeholder: '••••••••••••••••', oninput: (e) => { config.secretKey = e.target.value; paintBadge(); } });
 
     body.append(
-      el('div', { class: 'grid grid-3' },
+      el('div', { class: 'grid grid-2' },
         field({ label: 'SpyFu API ID', control: apiId,
           hint: 'Account Settings → API Usage. Kept in this page only, never stored.' }),
         field({ label: 'Secret key', control: secret, hint: 'Masked, never saved.' }),
-        field({ label: 'Proxy URL', control: proxy,
-          hint: 'Your browser can’t call SpyFu directly. Run "node server/proxy.mjs" from this folder and paste the address it prints.' }),
       ),
       el('div', { class: 'inline' },
         el('button', { class: 'btn btn-sm', type: 'button',
@@ -107,9 +103,10 @@ export function mountApp(root) {
       ),
       result,
       callout(null,
-        'With no Proxy URL set, results come from ', el('strong', {}, 'demo data'),
+        'With no key entered, results come from ', el('strong', {}, 'demo data'),
         ' — deterministic, so the same list always gives the same answer, and nothing is sent anywhere. '
-        + 'Fill in all three fields once you have a running proxy to switch to your real SpyFu account.'),
+        + 'Fill in both fields to switch to your real SpyFu account — your browser never talks to SpyFu '
+        + 'directly, this page relays through yourlabpt.com\'s own server.'),
     );
   }
 
@@ -118,12 +115,12 @@ export function mountApp(root) {
     btn.textContent = 'Testing…';
     clear(target);
     try {
-      if (!config.proxyUrl) {
+      if (!config.apiId || !config.secretKey) {
         fill(target, el('div', { class: 'callout bad mt' },
-          el('strong', {}, 'No proxy URL set.'), ' Demo data mode is active — nothing to test yet.'));
+          el('strong', {}, 'No key entered.'), ' Demo data mode is active — nothing to test yet.'));
       } else {
         const r = await createSpyfuClient({
-          proxyUrl: config.proxyUrl, apiId: config.apiId, secretKey: config.secretKey,
+          apiId: config.apiId, secretKey: config.secretKey,
         }).testConnection();
         const spend = r.monthToDateUsd !== null && r.monthToDateUsd !== undefined
           ? `Month-to-date API spend: $${Number(r.monthToDateUsd).toFixed(2)}`

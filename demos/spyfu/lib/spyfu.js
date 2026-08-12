@@ -3,21 +3,19 @@
  *
  * The browser never calls api.spyfu.com directly — SpyFu doesn't allow
  * browser-origin requests, and Basic auth would expose the key in every
- * request. Instead the browser calls `server/proxy.mjs`, which forwards to
- * SpyFu and attaches auth server-side.
+ * request. Instead the browser calls a same-origin route mounted on the
+ * site's own server (see server/server.js, "SpyFu demo proxy"), which
+ * forwards to SpyFu and attaches auth server-side.
  *
- * The API ID / secret typed into the page are sent to the proxy as request
- * headers (never as URL query params, never logged) so the proxy doesn't need
- * to be preconfigured per client. If the proxy was started with
- * SPYFU_API_ID / SPYFU_SECRET_KEY in its own environment, those headers are
- * optional and the proxy's own credentials are used instead.
+ * The API ID / secret typed into the page are sent to that route as request
+ * headers (never as URL query params, never logged) so nothing needs to be
+ * preconfigured per client — paste a key, click run.
  */
 
+const PROXY_BASE = '/demos/spyfu/api/spyfu';
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 
-export function createSpyfuClient({ proxyUrl, apiId, secretKey }) {
-  const base = String(proxyUrl || '').replace(/\/+$/, '');
-
+export function createSpyfuClient({ apiId, secretKey }) {
   async function call(endpoint, params, { retries = 4 } = {}) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
@@ -25,7 +23,7 @@ export function createSpyfuClient({ proxyUrl, apiId, secretKey }) {
       if (Array.isArray(v)) v.forEach((x) => qs.append(k, x));
       else qs.append(k, String(v));
     }
-    const url = `${base}/api/spyfu/${endpoint}?${qs.toString()}`;
+    const url = `${PROXY_BASE}/${endpoint}?${qs.toString()}`;
     const headers = { accept: 'application/json' };
     if (apiId) headers['x-spyfu-api-id'] = apiId;
     if (secretKey) headers['x-spyfu-secret-key'] = secretKey;

@@ -1,25 +1,19 @@
 #!/usr/bin/env node
 /**
- * SpyFu proxy. Zero dependencies — plain Node http.
+ * Standalone SpyFu proxy. Zero dependencies — plain Node http.
  *
- * WHY THIS EXISTS: SpyFu doesn't accept browser-origin requests, and its
- * Basic-auth key must never be visible in a request the browser makes
- * directly (URL, browser history, any script on the page). The static app
- * calls this proxy instead; the proxy attaches Basic auth and forwards to
- * SpyFu.
+ * NOT USED BY THE LIVE DEMO — the page calls the same route mounted directly
+ * on server/server.js ("SpyFu demo proxy" in that file), which is always
+ * running wherever the site is deployed. This standalone copy exists only for
+ * exercising lib/spend-check.js against real SpyFu without booting the full
+ * site server:
  *
- * Credentials can come from either place:
- *   - typed into the page (sent as x-spyfu-api-id / x-spyfu-secret-key
- *     headers, never as a query param, never logged)
- *   - SPYFU_API_ID / SPYFU_SECRET_KEY in this process's environment, used
- *     whenever a request doesn't carry its own headers
- *
- * Run it:
  *   node server/proxy.mjs
- *   # or, to avoid retyping a key every demo:
- *   SPYFU_API_ID=xxx SPYFU_SECRET_KEY=yyy node server/proxy.mjs
+ *   # or: SPYFU_API_ID=xxx SPYFU_SECRET_KEY=yyy node server/proxy.mjs
  *
- * Then paste the printed address into "Proxy URL" on the page.
+ * Same credential rules as the mounted route: x-spyfu-api-id /
+ * x-spyfu-secret-key headers per request, falling back to
+ * SPYFU_API_ID / SPYFU_SECRET_KEY in this process's environment.
  */
 
 import http from 'node:http';

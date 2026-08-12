@@ -30,12 +30,12 @@ export const SEGMENT_LABELS = {
  * @param prospects  [{ domain, original }]
  * @param countries  ['UK', 'US', ...]
  * @param threshold  USD/month
- * @param config     { proxyUrl, apiId, secretKey }
+ * @param config     { apiId, secretKey }
  */
 export async function runSpendCheck({ prospects, countries, threshold, config, onProgress }) {
-  const live = Boolean(config && config.proxyUrl);
+  const live = Boolean(config && config.apiId && config.secretKey);
   const client = live
-    ? createSpyfuClient({ proxyUrl: config.proxyUrl, apiId: config.apiId, secretKey: config.secretKey })
+    ? createSpyfuClient({ apiId: config.apiId, secretKey: config.secretKey })
     : null;
 
   const domains = prospects.map((p) => p.domain);
