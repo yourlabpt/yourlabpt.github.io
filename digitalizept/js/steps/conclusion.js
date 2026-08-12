@@ -163,6 +163,21 @@ async function render(body, ctx) {
     dl.addEventListener('click', () => downloadContract(ctx.state, catalog, config));
     body.appendChild(dl);
 
+    // The only way out of a closed deal. Without it the next shop starts on this
+    // screen with the previous client's data still loaded.
+    const novo = document.createElement('button');
+    novo.type = 'button';
+    novo.className = 'btn-secondary';
+    novo.style.width = '100%';
+    novo.style.marginTop = '10px';
+    novo.textContent = 'Novo negócio';
+    novo.addEventListener('click', () => {
+        if (window.confirm('Começar um negócio novo? Os dados deste cliente já foram guardados e enviados.')) {
+            ctx.reset();
+        }
+    });
+    body.appendChild(novo);
+
     ctx.setValid(true);
 }
 
