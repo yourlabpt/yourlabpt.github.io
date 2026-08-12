@@ -216,6 +216,23 @@ async function render(body, ctx) {
     buildUrgencia(body, catalog, proposta, persist);
     buildManutencao(body, catalog, proposta, persist);
 
+    const contra = document.createElement('div');
+    contra.className = 'id-section';
+    contra.appendChild(groupTitle('Contrapartida (opcional)'));
+    const hint = document.createElement('p');
+    hint.className = 'id-disclaimer';
+    hint.textContent = 'O que o cliente oferece em troca de um desconto — fotos, depoimento, indicação.';
+    const input = document.createElement('textarea');
+    input.className = 'field-input';
+    input.rows = 2;
+    input.value = proposta.contrapartida || '';
+    input.addEventListener('input', () => {
+        proposta.contrapartida = input.value;
+        persist();
+    });
+    contra.append(hint, input);
+    body.appendChild(contra);
+
     persist();
 }
 

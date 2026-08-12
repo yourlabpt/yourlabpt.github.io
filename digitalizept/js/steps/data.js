@@ -14,7 +14,10 @@ function getDados(state) {
 // Which required fields (standard + specific) still need a value.
 function requiredFieldIds(businessType) {
     const standard = Array.isArray(businessType.campos_obrigatorios) ? businessType.campos_obrigatorios : [];
-    return standard;
+    const specific = Array.isArray(businessType.perguntas_especificas)
+        ? businessType.perguntas_especificas.map((q) => q.id)
+        : [];
+    return [...standard, ...specific];
 }
 
 function isValid(state) {

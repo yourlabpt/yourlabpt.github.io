@@ -10,6 +10,9 @@ const nodemailer = require('nodemailer');
 const { createAdminAuth } = require('./lib/admin-auth');
 const { createProjectShowcaseStore } = require('./lib/project-showcase-store');
 const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalizeptLogEvento } = require('./lib/digitalizept-db');
+const { renderContractPdf } = require('./lib/digitalizept-pdf');
+const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
+const { createRateLimiter } = require('./lib/rate-limit');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -62,6 +65,12 @@ const requireAdmin = adminAuth.requireAdmin;
 // Digitalize Portugal — sales app master key. Separate from ADMIN_PASSWORD on purpose:
 // this key gets shared with whoever is out selling, admin access does not.
 const DIGITALIZEPT_KEY = process.env.DIGITALIZEPT_KEY || 'digitalizept-key';
+if (process.env.NODE_ENV === 'production' && DIGITALIZEPT_KEY === 'digitalizept-key') {
+    throw new Error('DIGITALIZEPT_KEY must be set to a non-default value in production.');
+}
+if (DIGITALIZEPT_KEY === 'digitalizept-key') {
+    console.warn('digitalizept: using the default key. Set DIGITALIZEPT_KEY before sharing this app.');
+}
 const digitalizeptAuth = createAdminAuth({
     password: DIGITALIZEPT_KEY,
     tokenTtlMs: 12 * 60 * 60 * 1000
@@ -203,6 +212,12 @@ app.use('/projects/uploads', (req, res) => res.status(403).json({ error: 'Forbid
 app.use('/diario-tcc-secure', (req, res, next) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     res.setHeader('Service-Worker-Allowed', '/diario-tcc-secure/');
+    next();
+});
+
+app.use('/digitalizept', (req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Service-Worker-Allowed', '/digitalizept/');
     next();
 });
 
@@ -1194,14 +1209,21 @@ function getOrCreateTransporter() {
     return mailTransporter;
 }
 
-async function sendProjectNotificationEmail({ to, subject, text, html }) {
+async function sendProjectNotificationEmail({ to, subject, text, html, attachments }) {
     const recipient = cleanText(to, 600);
     if (!recipient) return { sent: false, reason: 'Recipient is missing.' };
     const transporter = getOrCreateTransporter();
     if (!transporter) return { sent: false, reason: 'SMTP settings are not configured.' };
     const from = cleanText(process.env.SMTP_FROM, 300) || cleanText(process.env.SMTP_USER, 200);
     try {
-        await transporter.sendMail({ from, to: recipient, subject: cleanText(subject, 240), text: String(text || ''), html: html || undefined });
+        await transporter.sendMail({
+            from,
+            to: recipient,
+            subject: cleanText(subject, 240),
+            text: String(text || ''),
+            html: html || undefined,
+            attachments: Array.isArray(attachments) && attachments.length ? attachments : undefined
+        });
         return { sent: true };
     } catch (error) {
         return { sent: false, reason: error.message };
@@ -1635,7 +1657,14 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 // Digitalize Portugal — master key login
+const digitalizeptLoginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
+
 app.post('/api/digitalizept/login', (req, res) => {
+    const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
+    if (digitalizeptLoginLimiter.isLimited(ip)) {
+        res.setHeader('retry-after', '900');
+        return res.status(429).json({ error: 'Demasiadas tentativas. Espere alguns minutos.' });
+    }
     const key = cleanText(req.body && req.body.password, 300);
     if (!digitalizeptAuth.validatePassword(key)) {
         return res.status(401).json({ error: 'Invalid key.' });
@@ -1708,6 +1737,283 @@ app.get('/api/digitalizept/catalog', requireDigitalizept, (req, res) => {
     }
 });
 
+function digitalizeptSlug(value) {
+    const base = String(value || 'negocio')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'negocio';
+    return `${base}-${crypto.randomBytes(3).toString('hex')}`;
+}
+
+function parseJsonSafe(raw, fallback) {
+    try {
+        const parsed = JSON.parse(raw || '');
+        return parsed && typeof parsed === 'object' ? parsed : fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function splitDados(dados, businessType) {
+    const required = new Set([
+        ...(Array.isArray(businessType.campos_obrigatorios) ? businessType.campos_obrigatorios : []),
+        ...((businessType.perguntas_especificas || []).map((q) => q.id))
+    ]);
+    const obrigatorios = {};
+    const opcionais = {};
+    Object.entries(dados || {}).forEach(([key, value]) => {
+        if (required.has(key)) obrigatorios[key] = value;
+        else opcionais[key] = value;
+    });
+    return { obrigatorios, opcionais };
+}
+
+let digitalizeptParseDemo = null;
+async function parseDemoFromRaw(raw) {
+    if (!digitalizeptParseDemo) {
+        const mod = await import('../digitalizept/js/demo/parse.js');
+        digitalizeptParseDemo = mod.parseDemoOutput;
+    }
+    return digitalizeptParseDemo(raw);
+}
+
+async function generateDemoCopy(prompt) {
+    if (!ollamaClient) {
+        return { ok: false, fallback: true, error: 'Modelo indisponível. Use o fluxo manual.' };
+    }
+    const abortController = new AbortController();
+    const timeoutHandle = setTimeout(() => abortController.abort(), MODEL_TIMEOUT_MS);
+    try {
+        const response = await ollamaClient.chat.completions.create(
+            {
+                model: OLLAMA_MODEL_BIG,
+                messages: [
+                    { role: 'system', content: 'Responde apenas com JSON válido, sem markdown.' },
+                    { role: 'user', content: String(prompt || '') }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.4,
+                max_tokens: 1200,
+                stream: false
+            },
+            { signal: abortController.signal }
+        );
+        const raw = response && response.choices && response.choices[0]
+            && response.choices[0].message && response.choices[0].message.content;
+        const parsed = await parseDemoFromRaw(raw);
+        if (!parsed.ok) return { ok: false, fallback: true, error: parsed.error };
+        return { ok: true, demo: parsed.demo, raw };
+    } catch (err) {
+        return { ok: false, fallback: true, error: err.message || 'Falha a gerar a demonstração.' };
+    } finally {
+        clearTimeout(timeoutHandle);
+    }
+}
+
+app.post('/api/digitalizept/demo', requireDigitalizept, async (req, res) => {
+    const prompt = String((req.body && req.body.prompt) || '');
+    if (!prompt.trim()) {
+        return res.status(400).json({ error: 'Falta o prompt.', fallback: true });
+    }
+    const result = await generateDemoCopy(prompt);
+    if (!result.ok) {
+        return res.status(503).json(result);
+    }
+    return res.json(result);
+});
+
+app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
+    try {
+        const body = req.body || {};
+        const businessType = body.businessType || {};
+        const dados = body.dados || {};
+        const nome = cleanText(dados.nome_negocio, 200);
+        if (!nome) {
+            return res.status(400).json({ error: 'Falta o nome do negócio.' });
+        }
+        const db = getDigitalizeptDb();
+        const now = digitalizeptNow();
+        const { obrigatorios, opcionais } = splitDados(dados, businessType);
+        let leadId = cleanText(body.leadId, 80);
+
+        const persist = db.transaction(() => {
+            if (leadId) {
+                const existing = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
+                if (!existing) leadId = '';
+            }
+            if (!leadId) {
+                leadId = crypto.randomUUID();
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, 'rascunho', ?)`).run(
+                    leadId, cleanText(businessType.id, 80), nome,
+                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60),
+                    cleanText(dados.whatsapp, 60), now);
+                db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?)`).run(
+                    crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+            } else {
+                db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, telefone = ?, whatsapp = ?
+                    WHERE id = ?`).run(
+                    cleanText(businessType.id, 80), nome, cleanText(dados.morada, 300),
+                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), leadId);
+                const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
+                if (dadosRow) {
+                    db.prepare(`UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?`)
+                        .run(JSON.stringify(obrigatorios), JSON.stringify(opcionais), dadosRow.id);
+                } else {
+                    db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                        VALUES (?, ?, ?, ?, ?)`).run(
+                        crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+                }
+            }
+            digitalizeptLogEvento(db, 'lead', leadId, 'rascunho', { nome });
+        });
+        persist();
+        return res.json({ ok: true, leadId });
+    } catch (err) {
+        console.error('digitalizept draft lead error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar o rascunho.' });
+    }
+});
+
+app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const rows = db.prepare(`
+            SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
+                   l.demo_slug, l.criado_em, p.total_com_iva_centimos, p.iva_rate
+            FROM lead l
+            LEFT JOIN proposta p ON p.lead_id = l.id
+            ORDER BY l.criado_em DESC
+            LIMIT 200
+        `).all();
+        return res.json({ leads: rows });
+    } catch (err) {
+        console.error('digitalizept leads error:', err.message);
+        return res.status(500).json({ error: 'Failed to load leads.' });
+    }
+});
+
+app.get('/api/digitalizept/deals', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const rows = db.prepare(`
+            SELECT pr.id AS projectId, pr.estado, pr.estado_google, pr.estado_dominio, pr.criado_em,
+                   l.id AS leadId, l.nome, l.business_type, l.demo_slug, l.work_path,
+                   p.total_centimos, p.iva_centimos, p.total_com_iva_centimos, p.iva_rate,
+                   c.id AS contratoId, c.pdf_path, c.html_path, c.hash_sha256,
+                   cl.nome AS cliente_nome, cl.email AS cliente_email, cl.nif
+            FROM projeto pr
+            JOIN contrato c ON c.id = pr.contrato_id
+            JOIN proposta p ON p.id = c.proposta_id
+            JOIN lead l ON l.id = p.lead_id
+            LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
+            ORDER BY pr.criado_em DESC
+            LIMIT 200
+        `).all();
+        return res.json({ deals: rows });
+    } catch (err) {
+        console.error('digitalizept deals error:', err.message);
+        return res.status(500).json({ error: 'Failed to load deals.' });
+    }
+});
+
+app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const row = db.prepare(`
+            SELECT c.pdf_path, c.html_path, l.nome
+            FROM projeto pr
+            JOIN contrato c ON c.id = pr.contrato_id
+            JOIN proposta p ON p.id = c.proposta_id
+            JOIN lead l ON l.id = p.lead_id
+            WHERE pr.id = ?
+        `).get(req.params.projectId);
+        if (!row) return res.status(404).json({ error: 'Contrato não encontrado.' });
+        const pdf = row.pdf_path && row.pdf_path.endsWith('.pdf') && fs.existsSync(row.pdf_path) ? row.pdf_path : '';
+        const html = row.html_path && fs.existsSync(row.html_path) ? row.html_path : (row.pdf_path && row.pdf_path.endsWith('.html') && fs.existsSync(row.pdf_path) ? row.pdf_path : '');
+        const file = pdf || html;
+        if (!file) return res.status(404).json({ error: 'Ficheiro do contrato em falta.' });
+        return res.download(file);
+    } catch (err) {
+        console.error('digitalizept contract download error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível descarregar o contrato.' });
+    }
+});
+
+app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
+    try {
+        const body = req.body || {};
+        const dados = body.dados || {};
+        const businessType = body.businessType || {};
+        const demo = body.demo;
+        if (!demo || !demo.hero || !demo.hero.titulo) {
+            return res.status(400).json({ error: 'Falta a demonstração.' });
+        }
+        const db = getDigitalizeptDb();
+        const now = digitalizeptNow();
+        let leadId = cleanText(body.leadId, 80);
+        const existing = leadId ? db.prepare('SELECT id, demo_slug FROM lead WHERE id = ?').get(leadId) : null;
+        if (!existing) leadId = crypto.randomUUID();
+        const slug = (existing && existing.demo_slug) || digitalizeptSlug(dados.nome_negocio);
+        const persist = db.transaction(() => {
+            if (existing) {
+                db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?
+                    WHERE id = ?`).run(
+                    JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug,
+                    cleanText(dados.nome_negocio, 200), leadId);
+            } else {
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, demo_json, identidade_json, demo_slug, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, 'demonstracao', ?, ?, ?, ?)`).run(
+                    leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
+                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
+                    JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug, now);
+            }
+        });
+        persist();
+        return res.json({ ok: true, leadId, slug, url: `/d/${slug}` });
+    } catch (err) {
+        console.error('digitalizept publish demo error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível publicar a demonstração.' });
+    }
+});
+
+app.get('/api/digitalizept/public/:slug', (req, res) => {
+    try {
+        const slug = cleanText(req.params.slug, 80);
+        const db = getDigitalizeptDb();
+        const row = db.prepare(`
+            SELECT l.nome, l.business_type, l.demo_json, l.identidade_json,
+                   d.obrigatorios_json, d.opcionais_json
+            FROM lead l
+            LEFT JOIN dados_negocio d ON d.lead_id = l.id
+            WHERE l.demo_slug = ?
+        `).get(slug);
+        if (!row || !row.demo_json || row.demo_json === '{}') {
+            return res.status(404).json({ error: 'Demonstração não encontrada.' });
+        }
+        const types = loadBusinessTypes();
+        const businessType = types.find((t) => t.id === row.business_type) || { id: row.business_type, nome: row.business_type };
+        const dados = {
+            nome_negocio: row.nome,
+            ...parseJsonSafe(row.obrigatorios_json, {}),
+            ...parseJsonSafe(row.opcionais_json, {})
+        };
+        return res.json({
+            nome: row.nome,
+            businessType,
+            demo: parseJsonSafe(row.demo_json, null),
+            identidade: parseJsonSafe(row.identidade_json, {}),
+            dados
+        });
+    } catch (err) {
+        console.error('digitalizept public demo error:', err.message);
+        return res.status(500).json({ error: 'Failed to load demo.' });
+    }
+});
+
 // Digitalize Portugal — finalize a signed deal: persist, archive the contract, email, create project.
 const digitalizeptContractsDir = path.join(__dirname, 'data', 'digitalizept-contracts');
 
@@ -1770,33 +2076,80 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         }
 
         const now = digitalizeptNow();
-        const leadId = crypto.randomUUID();
+        const incomingLeadId = cleanText(body.leadId, 80);
+        const existingLead = incomingLeadId
+            ? db.prepare('SELECT id, demo_slug FROM lead WHERE id = ?').get(incomingLeadId)
+            : null;
+        const leadId = existingLead ? existingLead.id : crypto.randomUUID();
         const dadosId = crypto.randomUUID();
         const propostaId = crypto.randomUUID();
         const clienteId = crypto.randomUUID();
         const contratoId = crypto.randomUUID();
         const assinaturaId = crypto.randomUUID();
         const projetoId = crypto.randomUUID();
+        const { obrigatorios, opcionais } = splitDados(dados, btConfig);
+        const demoSlug = (existingLead && existingLead.demo_slug)
+            || (body.demo ? digitalizeptSlug(dados.nome_negocio) : '');
 
-        const contractPath = path.join(digitalizeptContractsDir, `${contratoId}.html`);
-        fs.writeFileSync(contractPath, String(contrato.html));
+        const htmlPath = path.join(digitalizeptContractsDir, `${contratoId}.html`);
+        fs.writeFileSync(htmlPath, String(contrato.html));
         const pngPath = path.join(digitalizeptContractsDir, `${contratoId}-assinatura.png`);
-        saveDataUrlPng(assinatura.pngDataUrl, pngPath);
+        if (!saveDataUrlPng(assinatura.pngDataUrl, pngPath)) {
+            return res.status(400).json({ error: 'A assinatura não é uma imagem PNG válida.' });
+        }
+
+        const pdfPath = path.join(digitalizeptContractsDir, `${contratoId}.pdf`);
+        const pdfOk = await renderContractPdf(String(contrato.html), pdfPath);
+        const storedPdfPath = pdfOk ? pdfPath : '';
+
+        let workPath = '';
+        try {
+            workPath = scaffoldClosedDeal({
+                projetoId,
+                negocio: cleanText(dados.nome_negocio, 200) || clienteNome,
+                clienteNome,
+                clienteEmail,
+                verified,
+                contractHtmlPath: htmlPath,
+                contractPdfPath: storedPdfPath,
+                dados,
+                proposta
+            });
+        } catch (err) {
+            console.error(`digitalizept: work scaffold failed (${err.message})`);
+        }
 
         const persist = db.transaction(() => {
-            db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, criado_em)
-                VALUES (?, ?, ?, ?, ?, ?, 'fechado', ?)`).run(
-                leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
-                cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), now);
+            if (existingLead) {
+                db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, telefone = ?, whatsapp = ?,
+                    estado = 'fechado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?
+                    WHERE id = ?`).run(
+                    cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
+                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
+                    JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),
+                    demoSlug, workPath, leadId);
+                const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
+                if (dadosRow) {
+                    db.prepare(`UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?`)
+                        .run(JSON.stringify(obrigatorios), JSON.stringify(opcionais), dadosRow.id);
+                } else {
+                    db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                        VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+                }
+            } else {
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, demo_json, identidade_json, demo_slug, work_path, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, 'fechado', ?, ?, ?, ?, ?)`).run(
+                    leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
+                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
+                    JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),
+                    demoSlug, workPath, now);
+                db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+            }
 
-            db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
-                VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(dados), '{}', now);
-
-            // iva_rate is stored, not looked up at read time: the regime changes when
-            // the threshold is crossed and an old contract must stay reproducible.
             db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, iva_rate, iva_centimos, total_com_iva_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
-                propostaId, leadId, JSON.stringify({ pacote: proposta.pacote, extras: proposta.extras, urgencia: proposta.urgencia, manutencao: proposta.manutencao }),
+                propostaId, leadId, JSON.stringify({ pacote: proposta.pacote, extras: proposta.extras, urgencia: proposta.urgencia, manutencao: proposta.manutencao, contrapartida: proposta.contrapartida }),
                 verified.subtotal, verified.descontoPct, verified.desconto,
                 verified.totalSemIva, verified.ivaRate, verified.iva, verified.totalComIva,
                 cleanText(proposta.contrapartida, 300), verified.valorHora, now);
@@ -1806,9 +2159,9 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 clienteId, leadId, clienteNome, cleanText(clienteLegal.nif, 20),
                 cleanText(clienteLegal.morada, 300), clienteEmail, cleanText(clienteLegal.telefone, 60));
 
-            db.prepare(`INSERT INTO contrato (id, proposta_id, template_versao, pdf_path, hash_sha256, assinado_em, estado, criado_em)
-                VALUES (?, ?, 'v1', ?, ?, ?, 'assinado', ?)`).run(
-                contratoId, propostaId, contractPath, cleanText(contrato.hash, 128), now, now);
+            db.prepare(`INSERT INTO contrato (id, proposta_id, template_versao, pdf_path, html_path, hash_sha256, assinado_em, estado, criado_em)
+                VALUES (?, ?, 'v1', ?, ?, ?, ?, 'assinado', ?)`).run(
+                contratoId, propostaId, storedPdfPath || htmlPath, htmlPath, cleanText(contrato.hash, 128), now, now);
 
             db.prepare(`INSERT INTO assinatura (id, contrato_id, png_path, geo, ip, dispositivo, timestamp, hash_documento)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
@@ -1825,21 +2178,33 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         });
         persist();
 
-        // Email the signed contract to the client and to the YourLab archive.
         const archive = cleanText(process.env.LEAD_NOTIFY_TO, 200) || cleanText(process.env.SMTP_USER, 200);
         const subject = `Contrato — ${cleanText(dados.nome_negocio, 120) || clienteNome}`;
         const text = `Contrato assinado com ${clienteNome}. Documento em anexo.`;
-        const clientResult = await sendProjectNotificationEmail({ to: clienteEmail, subject, text, html: String(contrato.html) });
+        const attachmentFile = storedPdfPath || htmlPath;
+        const attachments = [{
+            filename: storedPdfPath ? 'contrato.pdf' : 'contrato.html',
+            path: attachmentFile
+        }];
+        const clientResult = await sendProjectNotificationEmail({
+            to: clienteEmail, subject, text, html: String(contrato.html), attachments
+        });
         const archiveResult = archive
-            ? await sendProjectNotificationEmail({ to: archive, subject: `[Arquivo] ${subject}`, text, html: String(contrato.html) })
+            ? await sendProjectNotificationEmail({
+                to: archive, subject: `[Arquivo] ${subject}`, text, html: String(contrato.html), attachments
+            })
             : { sent: false, reason: 'No archive address.' };
 
         return res.json({
             ok: true,
             projectId: projetoId,
+            leadId,
             estado: 'contrato_assinado',
             estados: { google: 'por_criar', dominio: 'por_comprar' },
-            email: { clientSent: clientResult.sent, archiveSent: archiveResult.sent }
+            email: { clientSent: clientResult.sent, archiveSent: archiveResult.sent },
+            contractDownload: `/api/digitalizept/deals/${projetoId}/contract`,
+            demoUrl: demoSlug ? `/d/${demoSlug}` : '',
+            pdf: Boolean(storedPdfPath)
         });
     } catch (err) {
         console.error('digitalizept deal error:', err.message);
@@ -2086,13 +2451,17 @@ app.get('/admin/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'admin', 'index.html'));
 });
 
-// Explicit digitalizept routes
 app.get('/digitalizept', (req, res) => {
     res.redirect('/digitalizept/');
 });
 
 app.get('/digitalizept/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'digitalizept', 'index.html'));
+});
+
+app.get('/d/:slug', (req, res) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.sendFile(path.join(__dirname, '..', 'digitalizept', 'public.html'));
 });
 
 // Serve index.html for any unmatched routes

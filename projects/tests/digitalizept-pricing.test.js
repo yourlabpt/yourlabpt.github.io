@@ -10,14 +10,17 @@ let computeProposta;
 let refreshCalc;
 let guardrailLevel;
 let validateNif;
+let parseDemoOutput;
 
 before(async () => {
     const calc = await import(pathToFileURL(path.join(appDir, 'proposal-calc.js')).href);
     const nif = await import(pathToFileURL(path.join(appDir, 'deal', 'nif.js')).href);
+    const parse = await import(pathToFileURL(path.join(appDir, 'demo', 'parse.js')).href);
     computeProposta = calc.computeProposta;
     refreshCalc = calc.refreshCalc;
     guardrailLevel = calc.guardrailLevel;
     validateNif = nif.validateNif;
+    parseDemoOutput = parse.parseDemoOutput;
 });
 
 const IVA = 0.23;
@@ -182,5 +185,40 @@ describe('digitalizept NIF validation', () => {
 
     it('ignores spaces and punctuation around the digits', () => {
         assert.equal(validateNif(' 123 456 789 '), true);
+    });
+});
+
+describe('digitalizept demo parse', () => {
+    const valid = {
+        hero: { titulo: 'Café da Praça', subtitulo: 'No centro', cta: 'Visitar' },
+        sobre: { titulo: 'Sobre', texto: 'Café de bairro.' },
+        servicos: {
+            titulo: 'Serviços',
+            itens: [
+                { nome: 'Café', descricao: 'Expresso' },
+                { nome: 'Pastelaria', descricao: 'Doçaria' },
+                { nome: 'Pequeno-almoço', descricao: 'Menu' }
+            ]
+        },
+        diferenciais: { titulo: 'Porquê', itens: ['Local', 'Fresco', 'Atendimento'] },
+        rodape: { texto: 'Braga' }
+    };
+
+    it('accepts a complete JSON payload', () => {
+        const result = parseDemoOutput(JSON.stringify(valid));
+        assert.equal(result.ok, true);
+        assert.equal(result.demo.hero.titulo, 'Café da Praça');
+    });
+
+    it('rejects fewer than three serviços', () => {
+        const raw = JSON.stringify({ ...valid, servicos: { itens: [{ nome: 'Café' }] } });
+        const result = parseDemoOutput(raw);
+        assert.equal(result.ok, false);
+    });
+
+    it('rejects fewer than three diferenciais', () => {
+        const raw = JSON.stringify({ ...valid, diferenciais: { itens: ['Local'] } });
+        const result = parseDemoOutput(raw);
+        assert.equal(result.ok, false);
     });
 });

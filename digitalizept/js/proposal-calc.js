@@ -27,6 +27,7 @@ export function ensureProposta(state) {
     if (typeof p.urgencia !== 'boolean') p.urgencia = false;
     if (p.manutencao === undefined) p.manutencao = null;
     if (typeof p.descontoPct !== 'number') p.descontoPct = 0;
+    if (typeof p.contrapartida !== 'string') p.contrapartida = '';
     return p;
 }
 

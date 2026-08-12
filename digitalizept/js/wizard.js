@@ -7,6 +7,7 @@ import { proposalStep } from './steps/proposal.js';
 import { acceptanceStep } from './steps/acceptance.js';
 import { signatureStep } from './steps/signature.js';
 import { conclusionStep } from './steps/conclusion.js';
+import { saveDraftLead } from './draft.js';
 
 // localStorage, not sessionStorage: a locked phone or a tab the browser evicts
 // mid-visit must not cost a deal that is halfway to a signature.
@@ -131,8 +132,12 @@ export function createWizard({ onUnauthorized, showToast }) {
         render();
     }
 
-    function goNext() {
+    async function goNext() {
         if (state.step >= STEPS.length - 1 || !currentValid) return;
+        if (STEPS[state.step] === dataStep) {
+            try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
+            catch (_) { /* a missed draft must not block the visit */ }
+        }
         state.step += 1;
         persist();
         render();

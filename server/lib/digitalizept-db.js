@@ -3,6 +3,7 @@
  * One file, one vendedor (owner) for now — see 06 · Plano de Execução da Plataforma on Notion.
  */
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
@@ -148,6 +149,17 @@ function migrate(db) {
         iva_centimos: 'INTEGER NOT NULL DEFAULT 0',
         total_com_iva_centimos: 'INTEGER NOT NULL DEFAULT 0'
     });
+    addMissingColumns(db, 'lead', {
+        demo_json: "TEXT NOT NULL DEFAULT '{}'",
+        identidade_json: "TEXT NOT NULL DEFAULT '{}'",
+        demo_slug: "TEXT NOT NULL DEFAULT ''",
+        work_path: "TEXT NOT NULL DEFAULT ''"
+    });
+    addMissingColumns(db, 'contrato', {
+        html_path: "TEXT NOT NULL DEFAULT ''"
+    });
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lead_demo_slug
+        ON lead(demo_slug) WHERE demo_slug != ''`);
 }
 
 // The seed is the source of truth for pricing, so it is re-applied on every boot
@@ -186,6 +198,7 @@ let dbInstance = null;
 function getDb() {
     if (dbInstance) return dbInstance;
 
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     dbInstance = new Database(DB_PATH);
     dbInstance.pragma('journal_mode = WAL');
     dbInstance.exec(SCHEMA);

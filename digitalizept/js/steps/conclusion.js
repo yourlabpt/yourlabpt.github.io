@@ -3,6 +3,7 @@ import { getToken } from '../auth.js';
 import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { buildContractModel, buildContractDocument } from '../deal/contract.js';
+import { enqueueDeal } from '../offline-queue.js';
 
 const PROJECT_STATES = [
     'Demonstração criada', 'Proposta enviada', 'Contrato assinado', 'Entrada recebida',
@@ -23,7 +24,28 @@ function buildFinalDocument(state, catalog, config) {
     });
 }
 
-function downloadContract(state, catalog, config) {
+async function downloadContract(state, catalog, config, result) {
+    if (result && result.contractDownload) {
+        try {
+            const response = await fetch(result.contractDownload, {
+                headers: { 'x-admin-token': getToken() }
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const ext = (response.headers.get('content-type') || '').includes('pdf') ? 'pdf' : 'html';
+                const name = (state.data.dados && state.data.dados.nome_negocio || 'contrato')
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^\w-]+/g, '_');
+                a.href = url;
+                a.download = `${name}-contrato.${ext}`;
+                a.click();
+                URL.revokeObjectURL(url);
+                return;
+            }
+        } catch (_) { /* fall through to local HTML */ }
+    }
     const doc = buildFinalDocument(state, catalog, config);
     const blob = new Blob([doc], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -91,8 +113,11 @@ async function render(body, ctx) {
             const a = ctx.state.data.assinatura;
             const bt = ctx.state.data.businessType || {};
             const payload = {
+                leadId: ctx.state.data.leadId || '',
                 businessType: { id: bt.id, nome: bt.nome },
                 dados: ctx.state.data.dados,
+                identidade: ctx.state.data.identidade,
+                demo: ctx.state.data.demo,
                 proposta: ctx.state.data.proposta,
                 clienteLegal: ctx.state.data.clienteLegal,
                 contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash },
@@ -112,6 +137,16 @@ async function render(body, ctx) {
                 body.innerHTML = '';
                 render(body, ctx);
             } catch (err) {
+                const offline = !navigator.onLine || err.name === 'TypeError';
+                if (offline) {
+                    enqueueDeal(payload);
+                    ctx.state.data.dealResult = { ok: true, queued: true, projectId: 'pendente' };
+                    ctx.update({ dealResult: ctx.state.data.dealResult });
+                    body.innerHTML = '';
+                    render(body, ctx);
+                    ctx.showToast('Sem rede. O contrato fica na fila e envia-se quando houver ligação.', true);
+                    return;
+                }
                 sendBtn.disabled = false;
                 status.className = 'demo-status demo-status-error';
                 status.textContent = err.message || 'Não foi possível finalizar.';
@@ -130,7 +165,9 @@ async function render(body, ctx) {
     const ok = document.createElement('div');
     ok.className = 'demo-status demo-status-ok';
     ok.style.marginBottom = '14px';
-    const emailMsg = result.email && result.email.clientSent
+    const emailMsg = result.queued
+        ? 'Contrato na fila. Envia-se automaticamente quando houver rede.'
+        : result.email && result.email.clientSent
         ? 'Contrato enviado ao cliente e arquivado.'
         : 'Projeto criado. Email não enviado (configure o SMTP para envio automático).';
     ok.textContent = `✓ ${emailMsg}`;
@@ -160,8 +197,21 @@ async function render(body, ctx) {
     dl.className = 'btn-primary';
     dl.style.width = '100%';
     dl.textContent = 'Descarregar contrato';
-    dl.addEventListener('click', () => downloadContract(ctx.state, catalog, config));
+    dl.addEventListener('click', () => downloadContract(ctx.state, catalog, config, result));
     body.appendChild(dl);
+
+    const demoUrl = result.demoUrl || ctx.state.data.demoUrl;
+    if (demoUrl) {
+        const link = document.createElement('a');
+        link.className = 'id-disclaimer';
+        link.href = demoUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.style.display = 'block';
+        link.style.marginTop = '10px';
+        link.textContent = `Demonstração pública: ${demoUrl}`;
+        body.appendChild(link);
+    }
 
     // The only way out of a closed deal. Without it the next shop starts on this
     // screen with the previous client's data still loaded.

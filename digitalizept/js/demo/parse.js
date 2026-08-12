@@ -49,14 +49,18 @@ export function parseDemoOutput(raw) {
         .filter((item) => item.nome)
         .slice(0, L.servicos.maxItens);
 
-    if (servicosItens.length < 1) {
-        return { ok: false, error: 'Nenhum serviço encontrado (servicos.itens). Verifique o conteúdo colado.' };
+    if (servicosItens.length < L.servicos.minItens) {
+        return { ok: false, error: `São precisos pelo menos ${L.servicos.minItens} serviços.` };
     }
 
     const diferenciaisItens = (Array.isArray(diferenciais.itens) ? diferenciais.itens : [])
         .map((item) => clamp(item, L.diferenciais.item))
         .filter(Boolean)
         .slice(0, L.diferenciais.maxItens);
+
+    if (diferenciaisItens.length < L.diferenciais.minItens) {
+        return { ok: false, error: `São precisos pelo menos ${L.diferenciais.minItens} diferenciais.` };
+    }
 
     const demo = {
         hero: {

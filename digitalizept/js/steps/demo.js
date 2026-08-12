@@ -1,6 +1,8 @@
 import { buildPrompt } from '../demo/prompt.js';
 import { parseDemoOutput } from '../demo/parse.js';
 import { renderLanding } from '../demo/landing.js';
+import { apiRequest } from '../api.js';
+import { getToken } from '../auth.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -8,6 +10,27 @@ function getBusinessType(state) {
 
 function isValid(state) {
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
+}
+
+async function publishDemo(ctx) {
+    try {
+        const { response, data } = await apiRequest('/api/digitalizept/demos', {
+            method: 'POST',
+            token: getToken(),
+            body: {
+                leadId: ctx.state.data.leadId || '',
+                businessType: ctx.state.data.businessType,
+                dados: ctx.state.data.dados,
+                identidade: ctx.state.data.identidade,
+                demo: ctx.state.data.demo
+            }
+        });
+        if (response.ok && data.url) {
+            ctx.update({ leadId: data.leadId || ctx.state.data.leadId, demoUrl: data.url });
+            return data.url;
+        }
+    } catch (_) { /* publishing is best-effort during the visit */ }
+    return '';
 }
 
 function openPreview(state, ctx) {
@@ -61,7 +84,7 @@ function render(body, ctx) {
     promptTitle.textContent = '1 · Copie o prompt';
     const promptHint = document.createElement('p');
     promptHint.className = 'id-disclaimer';
-    promptHint.textContent = 'Cole no seu assistente (ChatGPT, Claude, etc.), gere o conteúdo e traga o resultado de volta. Pode ajustar o prompt antes de copiar.';
+    promptHint.textContent = 'Gere aqui, ou cole no seu assistente se o modelo local não estiver disponível.';
 
     const promptArea = document.createElement('textarea');
     promptArea.className = 'field-input demo-prompt';
@@ -94,7 +117,39 @@ function render(body, ctx) {
         ctx.update({ demoPrompt: fresh });
         ctx.showToast('Prompt reposto a partir dos dados.');
     });
-    promptActions.append(copyBtn, regenBtn);
+    const genNowBtn = document.createElement('button');
+    genNowBtn.type = 'button';
+    genNowBtn.className = 'btn-primary';
+    genNowBtn.textContent = 'Gerar agora';
+    genNowBtn.addEventListener('click', async () => {
+        genNowBtn.disabled = true;
+        showStatus('A gerar o conteúdo…', 'ok');
+        try {
+            const { response, data } = await apiRequest('/api/digitalizept/demo', {
+                method: 'POST',
+                token: getToken(),
+                body: { prompt: promptArea.value }
+            });
+            if (response.status === 401) { ctx.onUnauthorized(); return; }
+            if (!response.ok || !data.demo) {
+                showStatus(data.error || 'Modelo indisponível. Cole o JSON abaixo.', 'error');
+                return;
+            }
+            ctx.state.data.demoRaw = data.raw || JSON.stringify(data.demo, null, 2);
+            ctx.state.data.demo = data.demo;
+            pasteArea.value = ctx.state.data.demoRaw;
+            ctx.update({ demoRaw: ctx.state.data.demoRaw, demo: data.demo });
+            ctx.setValid(true);
+            previewBtn.disabled = false;
+            showStatus(`Demonstração pronta — ${data.demo.servicos.itens.length} serviços.`, 'ok');
+            await publishDemo(ctx);
+        } catch (_) {
+            showStatus('Sem rede. Use o fluxo manual abaixo.', 'error');
+        } finally {
+            genNowBtn.disabled = false;
+        }
+    });
+    promptActions.append(copyBtn, regenBtn, genNowBtn);
     promptGroup.append(promptTitle, promptHint, promptArea, promptActions);
     body.appendChild(promptGroup);
 
@@ -145,6 +200,9 @@ function render(body, ctx) {
         ctx.setValid(true);
         showStatus(`Demonstração pronta — ${result.demo.servicos.itens.length} serviços.`, 'ok');
         previewBtn.disabled = false;
+        publishDemo(ctx).then((url) => {
+            if (url) showStatus(`Demonstração pronta. Link: ${url}`, 'ok');
+        });
     });
 
     const pasteActions = document.createElement('div');

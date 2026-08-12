@@ -2,7 +2,8 @@ import { apiRequest } from './api.js';
 import { getToken, setToken, clearToken } from './auth.js';
 import { createWizard, clearWizardState, hasWizardProgress } from './wizard.js';
 import { clearSettingsCache, fetchSettings } from './settings.js';
-import { clearCatalogCache } from './catalog.js';
+import { clearCatalogCache, fetchCatalog } from './catalog.js';
+import { flushDealQueue, queuedDealCount } from './offline-queue.js';
 
 const el = {
     loginOverlay: document.getElementById('login-overlay'),
@@ -123,12 +124,21 @@ async function boot() {
             handleUnauthorized();
             return;
         }
+        await fetchCatalog({ onUnauthorized: () => {} });
     } catch (_) {
         // Unreachable server (no signal in a shop). Trust the stored token and
         // let the app run from cache rather than locking the vendedor out.
     }
 
     startApp();
+    window.addEventListener('online', () => {
+        flushDealQueue().then((sent) => {
+            if (sent.length) showToast(`${sent.length} contrato(s) enviado(s) após recuperar a rede.`);
+        }).catch(() => {});
+    });
+    if (queuedDealCount()) {
+        flushDealQueue().catch(() => {});
+    }
 }
 
 boot();

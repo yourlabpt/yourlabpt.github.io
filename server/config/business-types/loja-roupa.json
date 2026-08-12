@@ -5,18 +5,89 @@
   "tom": "elegante, atual, convidativo",
   "prompt_contexto": "Loja de roupa e acessórios em Portugal. O texto transmite estilo, cuidado com a seleção de peças e atendimento próximo. Fala de coleções, tendências e do prazer de vestir bem, sem soar a grande cadeia.",
   "publico_alvo": "Clientes locais que procuram roupa e acessórios com estilo e um atendimento pessoal que as grandes cadeias não dão.",
-  "servicos_tipicos": ["Roupa de senhora", "Roupa de homem", "Acessórios", "Novas coleções", "Peças exclusivas", "Aconselhamento de imagem"],
-  "diferenciais_sugeridos": ["Peças selecionadas", "Atendimento personalizado", "Novidades frequentes", "Marcas exclusivas", "Provador confortável"],
-  "palavras_chave": ["loja de roupa", "moda", "vestuário", "acessórios", "novas coleções"],
-  "categorias_google": ["clothing_store", "boutique"],
-  "imagens_demo": ["stock/roupa/1.jpg", "stock/roupa/2.jpg", "stock/roupa/3.jpg"],
-  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
-  "cores_sugeridas": ["#1e1a1c", "#c48ba0", "#d8c7b0"],
-  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
-  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "servicos_tipicos": [
+    "Roupa de senhora",
+    "Roupa de homem",
+    "Acessórios",
+    "Novas coleções",
+    "Peças exclusivas",
+    "Aconselhamento de imagem"
+  ],
+  "diferenciais_sugeridos": [
+    "Peças selecionadas",
+    "Atendimento personalizado",
+    "Novidades frequentes",
+    "Marcas exclusivas",
+    "Provador confortável"
+  ],
+  "palavras_chave": [
+    "loja de roupa",
+    "moda",
+    "vestuário",
+    "acessórios",
+    "novas coleções"
+  ],
+  "categorias_google": [
+    "clothing_store",
+    "boutique"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "servicos",
+    "diferenciais",
+    "galeria",
+    "contactos",
+    "mapa",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#1e1a1c",
+    "#c48ba0",
+    "#d8c7b0"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "mbway",
+    "wifi",
+    "reservas",
+    "entregas",
+    "anos_experiencia",
+    "certificacoes"
+  ],
   "perguntas_especificas": [
-    { "id": "publico", "label": "Público (senhora, homem, criança…)", "tipo": "texto" },
-    { "id": "marcas", "label": "Marcas que vende", "tipo": "texto_longo" },
-    { "id": "vende_online", "label": "Vende também online?", "tipo": "sim_nao" }
+    {
+      "id": "publico",
+      "label": "Público (senhora, homem, criança…)",
+      "tipo": "texto"
+    },
+    {
+      "id": "marcas",
+      "label": "Marcas que vende",
+      "tipo": "texto_longo"
+    },
+    {
+      "id": "vende_online",
+      "label": "Vende também online?",
+      "tipo": "sim_nao"
+    }
   ]
 }

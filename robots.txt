@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /digitalizept/
+Disallow: /d/
+Disallow: /admin/
+Disallow: /admin.html
