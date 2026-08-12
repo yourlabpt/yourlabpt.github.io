@@ -1,4 +1,6 @@
 import { fetchCatalog } from '../catalog.js';
+import { fetchConfig } from '../settings.js';
+import { refreshCalc } from '../proposal-calc.js';
 import { buildContractModel, contractInnerHtml } from '../deal/contract.js';
 
 function isValid(state) {
@@ -85,17 +87,33 @@ function buildPad(body, onSigned) {
 
 async function render(body, ctx) {
     let catalog = [];
-    try { catalog = await fetchCatalog(ctx) || []; } catch (_) { /* ignore */ }
+    let config = null;
+    try {
+        catalog = await fetchCatalog(ctx) || [];
+        config = await fetchConfig(ctx);
+    } catch (_) { /* ignore */ }
 
-    const model = buildContractModel(ctx.state, catalog);
+    const signed = isValid(ctx.state);
+    // Only before signing. Re-pricing a signed contract would change the document
+    // out from under the signature and invalidate its hash.
+    if (config && !signed) {
+        refreshCalc(ctx.state, catalog, ctx.state.data.businessType || {}, config.ivaRate);
+        ctx.update({ proposta: ctx.state.data.proposta });
+    }
+
+    const model = buildContractModel(ctx.state, catalog, config);
 
     const recap = document.createElement('div');
     recap.className = 'sign-recap';
-    const total = (model.calc && model.calc.total) ? (model.calc.total / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—';
-    recap.innerHTML = `<strong>${model.cliente.nome || 'Cliente'}</strong> · Total ${total} · Entrada 50% na assinatura`;
+    const c = model.calc || {};
+    const total = c.totalComIva
+        ? (c.totalComIva / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })
+        : '—';
+    const ivaLabel = c.iva > 0 ? ' c/ IVA' : '';
+    recap.innerHTML = `<strong>${model.cliente.nome || 'Cliente'}</strong> · Total${ivaLabel} ${total} · Entrada 50% na assinatura`;
     body.appendChild(recap);
 
-    if (isValid(ctx.state)) {
+    if (signed) {
         // Already signed — show the captured signature with a re-sign option.
         const box = document.createElement('div');
         box.className = 'sign-done';

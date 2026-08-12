@@ -68,6 +68,33 @@ const digitalizeptAuth = createAdminAuth({
 });
 const requireDigitalizept = digitalizeptAuth.requireAdmin;
 
+// IVA regime for Digitalize Portugal. A fraction, not a percentage. Set to 0 for
+// the art. 53.o isencao regime: no IVA is charged and the contract says so.
+// Crossing the threshold is a one-line change here, no code edit.
+const DIGITALIZEPT_IVA_RATE = (() => {
+    const raw = process.env.DIGITALIZEPT_IVA_RATE;
+    if (raw === undefined || raw === '') return 0.23;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+        console.error(`digitalizept: invalid DIGITALIZEPT_IVA_RATE "${raw}", falling back to 0.23`);
+        return 0.23;
+    }
+    return parsed;
+})();
+
+// Prestador fiscal identity. Kept in env so a contract is never signed against a
+// placeholder and the NIF is not baked into client-side JS.
+const DIGITALIZEPT_PROVIDER = {
+    nome: cleanText(process.env.YOURLAB_NOME, 120) || 'YourLab',
+    responsavel: cleanText(process.env.YOURLAB_RESPONSAVEL, 120) || 'Túlio Soares',
+    nif: cleanText(process.env.YOURLAB_NIF, 20),
+    morada: cleanText(process.env.YOURLAB_MORADA, 300),
+    email: cleanText(process.env.YOURLAB_EMAIL, 160) || cleanText(process.env.SMTP_USER, 160),
+    site: cleanText(process.env.YOURLAB_SITE, 120) || 'yourlabpt.com',
+    iban: cleanText(process.env.YOURLAB_IBAN, 40),
+    mbway: cleanText(process.env.YOURLAB_MBWAY, 40)
+};
+
 const ollamaClient = FORCE_OFFLINE_CHAT
     ? null
     : new OpenAI({
@@ -1657,7 +1684,11 @@ app.get('/api/digitalizept/business-types', requireDigitalizept, (req, res) => {
     try {
         return res.json({
             businessTypes: loadBusinessTypes(),
-            standardFields: loadStandardFields()
+            standardFields: loadStandardFields(),
+            config: {
+                ivaRate: DIGITALIZEPT_IVA_RATE,
+                provider: DIGITALIZEPT_PROVIDER
+            }
         });
     } catch (err) {
         console.error('digitalizept business-types error:', err.message);
@@ -1679,6 +1710,16 @@ app.get('/api/digitalizept/catalog', requireDigitalizept, (req, res) => {
 
 // Digitalize Portugal — finalize a signed deal: persist, archive the contract, email, create project.
 const digitalizeptContractsDir = path.join(__dirname, 'data', 'digitalizept-contracts');
+
+// The exact module the browser prices with, so a submitted total can be
+// re-derived here rather than trusted. Dynamic import because the app is ESM.
+let digitalizeptPricing = null;
+async function getDigitalizeptPricing() {
+    if (!digitalizeptPricing) {
+        digitalizeptPricing = await import('../digitalizept/js/proposal-calc.js');
+    }
+    return digitalizeptPricing;
+}
 
 function saveDataUrlPng(dataUrl, filePath) {
     const match = /^data:image\/png;base64,(.+)$/.exec(String(dataUrl || ''));
@@ -1707,11 +1748,27 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             return res.status(400).json({ error: 'Falta o contrato assinado ou a assinatura.' });
         }
 
+        const db = getDigitalizeptDb();
+
+        // Re-price from the live catalog. A mismatch means the signed document and
+        // what we are about to store disagree, so it is refused rather than
+        // reconciled — the record has to match the paper the client signed.
+        const { computeProposta } = await getDigitalizeptPricing();
+        const servicos = db.prepare('SELECT * FROM servico WHERE ativo = 1').all();
+        const btConfig = loadBusinessTypes().find((t) => t.id === businessType.id) || {};
+        const verified = computeProposta(proposta, servicos, btConfig, DIGITALIZEPT_IVA_RATE);
+
+        if (Math.round(calc.totalComIva || 0) !== verified.totalComIva) {
+            console.error(`digitalizept: total mismatch, client ${calc.totalComIva} vs server ${verified.totalComIva}`);
+            return res.status(409).json({
+                error: 'Os valores não coincidem com o catálogo atual. Volte à proposta para a recalcular e assine de novo.'
+            });
+        }
+
         if (!fs.existsSync(digitalizeptContractsDir)) {
             fs.mkdirSync(digitalizeptContractsDir, { recursive: true });
         }
 
-        const db = getDigitalizeptDb();
         const now = digitalizeptNow();
         const leadId = crypto.randomUUID();
         const dadosId = crypto.randomUUID();
@@ -1735,11 +1792,14 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
                 VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(dados), '{}', now);
 
-            db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
+            // iva_rate is stored, not looked up at read time: the regime changes when
+            // the threshold is crossed and an old contract must stay reproducible.
+            db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, iva_rate, iva_centimos, total_com_iva_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
                 propostaId, leadId, JSON.stringify({ pacote: proposta.pacote, extras: proposta.extras, urgencia: proposta.urgencia, manutencao: proposta.manutencao }),
-                Math.round(calc.subtotal || 0), Number(calc.descontoPct || 0), Math.round(calc.desconto || 0),
-                Math.round(calc.total || 0), cleanText(proposta.contrapartida, 300), Number(calc.valorHora || 0), now);
+                verified.subtotal, verified.descontoPct, verified.desconto,
+                verified.totalSemIva, verified.ivaRate, verified.iva, verified.totalComIva,
+                cleanText(proposta.contrapartida, 300), verified.valorHora, now);
 
             db.prepare(`INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
@@ -1760,7 +1820,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 VALUES (?, ?, 'contrato_assinado', 'por_criar', 'por_comprar', ?)`).run(projetoId, contratoId, now);
 
             digitalizeptLogEvento(db, 'contrato', contratoId, 'assinado', {
-                cliente: clienteNome, total_centimos: Math.round(calc.total || 0), ip: req.ip
+                cliente: clienteNome, total_centimos: verified.totalComIva, ip: req.ip
             });
         });
         persist();

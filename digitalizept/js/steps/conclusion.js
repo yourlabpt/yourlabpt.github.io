@@ -1,6 +1,7 @@
 import { apiRequest } from '../api.js';
 import { getToken } from '../auth.js';
 import { fetchCatalog } from '../catalog.js';
+import { fetchConfig } from '../settings.js';
 import { buildContractModel, buildContractDocument } from '../deal/contract.js';
 
 const PROJECT_STATES = [
@@ -13,8 +14,8 @@ function isValid() {
     return true; // final step; advancing is disabled anyway
 }
 
-function buildFinalDocument(state, catalog) {
-    const model = buildContractModel(state, catalog);
+function buildFinalDocument(state, catalog, config) {
+    const model = buildContractModel(state, catalog, config);
     const a = state.data.assinatura || {};
     return buildContractDocument(model, {
         signaturePng: a.pngDataUrl,
@@ -22,8 +23,8 @@ function buildFinalDocument(state, catalog) {
     });
 }
 
-function downloadContract(state, catalog) {
-    const doc = buildFinalDocument(state, catalog);
+function downloadContract(state, catalog, config) {
+    const doc = buildFinalDocument(state, catalog, config);
     const blob = new Blob([doc], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -38,18 +39,26 @@ function downloadContract(state, catalog) {
 
 async function render(body, ctx) {
     let catalog = [];
-    try { catalog = await fetchCatalog(ctx) || []; } catch (_) { /* ignore */ }
+    let config = null;
+    try {
+        catalog = await fetchCatalog(ctx) || [];
+        config = await fetchConfig(ctx);
+    } catch (_) { /* ignore */ }
 
+    // Deliberately no refreshCalc here: this screen reproduces the signed deal.
     const signed = Boolean(ctx.state.data.assinatura && ctx.state.data.assinatura.pngDataUrl);
-    const model = buildContractModel(ctx.state, catalog);
-    const total = (model.calc && model.calc.total) ? (model.calc.total / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—';
-    const entrada = (model.calc && model.calc.entrada) ? (model.calc.entrada / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—';
+    const model = buildContractModel(ctx.state, catalog, config);
+    const c = model.calc || {};
+    const euros = (cents) => (cents ? (cents / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—');
+    const total = euros(c.totalComIva);
+    const entrada = euros(c.entrada);
 
     const recap = document.createElement('div');
     recap.className = 'sum-card';
     recap.innerHTML = `
         <div class="sum-line"><span>Cliente</span><span class="sum-value">${model.cliente.nome || '—'}</span></div>
-        <div class="sum-line sum-strong"><span>Total</span><span class="sum-value">${total}</span></div>
+        ${c.iva > 0 ? `<div class="sum-line"><span>IVA (${Math.round(c.ivaRate * 100)}%)</span><span class="sum-value">${euros(c.iva)}</span></div>` : ''}
+        <div class="sum-line sum-strong"><span>Total${c.iva > 0 ? ' c/ IVA' : ''}</span><span class="sum-value">${total}</span></div>
         <div class="sum-line"><span>Entrada hoje (50%)</span><span class="sum-value">${entrada}</span></div>`;
     body.appendChild(recap);
 
@@ -86,7 +95,7 @@ async function render(body, ctx) {
                 dados: ctx.state.data.dados,
                 proposta: ctx.state.data.proposta,
                 clienteLegal: ctx.state.data.clienteLegal,
-                contrato: { html: buildFinalDocument(ctx.state, catalog), hash: a.hash },
+                contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash },
                 assinatura: { pngDataUrl: a.pngDataUrl, geo: a.geo, dispositivo: a.dispositivo, timestamp: a.timestamp }
             };
 
@@ -151,7 +160,7 @@ async function render(body, ctx) {
     dl.className = 'btn-primary';
     dl.style.width = '100%';
     dl.textContent = 'Descarregar contrato';
-    dl.addEventListener('click', () => downloadContract(ctx.state, catalog));
+    dl.addEventListener('click', () => downloadContract(ctx.state, catalog, config));
     body.appendChild(dl);
 
     ctx.setValid(true);

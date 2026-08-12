@@ -1,5 +1,4 @@
-import { apiRequest } from '../api.js';
-import { getToken } from '../auth.js';
+import { fetchSettings } from '../settings.js';
 
 function isValid(state) {
     return Boolean(state.data.businessType && state.data.businessType.id);
@@ -16,22 +15,13 @@ async function render(body, ctx) {
     body.appendChild(loading);
 
     try {
-        const { response, data } = await apiRequest('/api/digitalizept/business-types', {
-            token: getToken()
-        });
-
-        if (response.status === 401) {
-            ctx.onUnauthorized();
-            return;
-        }
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to load business types.');
-        }
+        const settings = await fetchSettings(ctx);
+        if (!settings) return;
 
         loading.remove();
         body.appendChild(grid);
 
-        const types = Array.isArray(data.businessTypes) ? data.businessTypes : [];
+        const types = settings.businessTypes;
         if (!types.length) {
             const empty = document.createElement('div');
             empty.className = 'placeholder';

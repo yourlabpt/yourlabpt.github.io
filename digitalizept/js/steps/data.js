@@ -1,8 +1,4 @@
-import { apiRequest } from '../api.js';
-import { getToken } from '../auth.js';
-
-// Cached across renders so returning to this step doesn't refetch the dictionary.
-let standardFieldsCache = null;
+import { fetchSettings } from '../settings.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -140,16 +136,8 @@ function renderGroup(container, titleText) {
 }
 
 async function ensureStandardFields(ctx) {
-    if (standardFieldsCache) return standardFieldsCache;
-    const { response, data } = await apiRequest('/api/digitalizept/business-types', {
-        token: getToken()
-    });
-    if (response.status === 401) {
-        ctx.onUnauthorized();
-        return null;
-    }
-    standardFieldsCache = (data && data.standardFields) || {};
-    return standardFieldsCache;
+    const settings = await fetchSettings(ctx);
+    return settings ? settings.standardFields : null;
 }
 
 async function render(body, ctx) {
