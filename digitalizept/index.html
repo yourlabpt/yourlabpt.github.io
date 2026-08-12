@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Digitalize Portugal</title>
+    <link rel="stylesheet" href="./digitalizept.css">
+</head>
+<body>
+    <div id="login-overlay" class="overlay">
+        <div class="login-box">
+            <h1>Digitalize Portugal</h1>
+            <p>Introduza a chave para continuar</p>
+            <form id="login-form">
+                <input type="password" id="key-input" placeholder="Chave" autocomplete="current-password" required>
+                <button type="submit">Entrar</button>
+            </form>
+            <div id="login-error"></div>
+        </div>
+    </div>
+
+    <div id="app" class="app hidden">
+        <header class="app-header">
+            <div class="progress">
+                <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+                <div class="progress-label">
+                    <span id="stepNum">Passo 1 de 9</span>
+                    <span class="progress-sep">·</span>
+                    <span id="stepName">Tipo de negócio</span>
+                </div>
+            </div>
+            <button id="logout-btn" type="button" class="btn-icon" aria-label="Sair">✕</button>
+        </header>
+
+        <main id="stepContainer" class="app-main"></main>
+
+        <footer class="wizard-nav">
+            <button id="backBtn" type="button" class="btn-secondary">Voltar</button>
+            <button id="nextBtn" type="button" class="btn-primary">Continuar</button>
+        </footer>
+    </div>
+
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>

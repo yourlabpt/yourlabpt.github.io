@@ -9,6 +9,7 @@ const OpenAI = require('openai');
 const nodemailer = require('nodemailer');
 const { createAdminAuth } = require('./lib/admin-auth');
 const { createProjectShowcaseStore } = require('./lib/project-showcase-store');
+const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalizeptLogEvento } = require('./lib/digitalizept-db');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -57,6 +58,15 @@ const adminAuth = createAdminAuth({
     tokenTtlMs: 8 * 60 * 60 * 1000
 });
 const requireAdmin = adminAuth.requireAdmin;
+
+// Digitalize Portugal — sales app master key. Separate from ADMIN_PASSWORD on purpose:
+// this key gets shared with whoever is out selling, admin access does not.
+const DIGITALIZEPT_KEY = process.env.DIGITALIZEPT_KEY || 'digitalizept-key';
+const digitalizeptAuth = createAdminAuth({
+    password: DIGITALIZEPT_KEY,
+    tokenTtlMs: 12 * 60 * 60 * 1000
+});
+const requireDigitalizept = digitalizeptAuth.requireAdmin;
 
 const ollamaClient = FORCE_OFFLINE_CHAT
     ? null
@@ -175,6 +185,80 @@ app.get(['/diario-tcc-secure', '/diario-tcc-secure/'], (req, res) => {
         return res.redirect(301, '/diario-tcc-secure/');
     }
     res.sendFile(path.join(__dirname, '..', 'diario-tcc-secure', 'index.html'));
+});
+
+// SpyFu demo proxy — the browser can't call api.spyfu.com directly (no CORS,
+// and Basic auth would expose the key in a request the page makes itself).
+// The demo page calls this same-origin route instead; it forwards to SpyFu
+// with Basic auth attached server-side. Credentials come from the page as
+// x-spyfu-api-id / x-spyfu-secret-key headers (never a query param, never
+// logged), falling back to SPYFU_API_ID / SPYFU_SECRET_KEY in this process's
+// environment if the page didn't send its own. Only what the spend-check demo
+// needs is allow-listed — see demos/spyfu/lib/spend-check.js.
+const SPYFU_ROUTES = {
+    'account/usage': { path: 'accountapi/getApiUsageForMonth', allow: [] },
+    'bulk-domain-stats': {
+        path: 'domain_stats_api/v2/getBulkDomainStats',
+        allow: ['domains', 'countryCode', 'showOnlyLatest'],
+    },
+};
+const SPYFU_RPS = { 'bulk-domain-stats': 300, 'account/usage': 5 };
+const spyfuBuckets = new Map();
+function spyfuRateLimited(key, perSecond) {
+    const now = Date.now();
+    const b = spyfuBuckets.get(key) || { count: 0, windowStart: now };
+    if (now - b.windowStart >= 1000) { b.count = 0; b.windowStart = now; }
+    b.count += 1;
+    spyfuBuckets.set(key, b);
+    return b.count > perSecond;
+}
+
+app.get('/demos/spyfu/api/spyfu/*', async (req, res) => {
+    const match = req.params[0];
+    const route = SPYFU_ROUTES[match];
+    if (!route) {
+        return res.status(404).json({ error: `Unknown endpoint: ${match}` });
+    }
+    if (spyfuRateLimited(match, SPYFU_RPS[match] || 5)) {
+        res.setHeader('retry-after', '1');
+        return res.status(429).json({ error: 'Rate limited. Back off and retry.' });
+    }
+
+    const apiId = req.headers['x-spyfu-api-id'] || process.env.SPYFU_API_ID || '';
+    const secret = req.headers['x-spyfu-secret-key'] || process.env.SPYFU_SECRET_KEY || '';
+    if (!apiId || !secret) {
+        return res.status(401).json({ error: 'No SpyFu credentials. Fill in API ID and secret key on the page.' });
+    }
+    const auth = 'Basic ' + Buffer.from(`${apiId}:${secret}`).toString('base64');
+
+    const out = new URLSearchParams();
+    for (const [k, v] of Object.entries(req.query)) {
+        if (!route.allow.includes(k)) continue;
+        if (Array.isArray(v)) v.forEach((x) => out.append(k, x));
+        else out.append(k, String(v));
+    }
+
+    const target = `https://api.spyfu.com/apis/${route.path}?${out.toString()}`;
+    const started = Date.now();
+    try {
+        const upstream = await fetch(target, {
+            headers: { authorization: auth, accept: 'application/json' },
+        });
+        const text = await upstream.text();
+        let payload;
+        try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
+
+        const rows = Array.isArray(payload.results) ? payload.results.length
+            : Array.isArray(payload) ? payload.length : 1;
+        // Never log the query string or headers — the query string carries the
+        // customer's domain list, and headers now carry the key itself.
+        console.log(`spyfu-proxy ${upstream.status} ${match} rows=${rows} ${Date.now() - started}ms`);
+
+        res.status(upstream.status).json(payload);
+    } catch (err) {
+        console.error(`spyfu-proxy ERR ${match}: ${err.message}`);
+        res.status(502).json({ error: 'Upstream request failed' });
+    }
 });
 
 // Serve static files
@@ -1523,6 +1607,186 @@ app.post('/api/admin/logout', (req, res) => {
     return res.json({ success: true });
 });
 
+// Digitalize Portugal — master key login
+app.post('/api/digitalizept/login', (req, res) => {
+    const key = cleanText(req.body && req.body.password, 300);
+    if (!digitalizeptAuth.validatePassword(key)) {
+        return res.status(401).json({ error: 'Invalid key.' });
+    }
+    const token = digitalizeptAuth.issueToken();
+    return res.json({ token });
+});
+
+app.post('/api/digitalizept/logout', (req, res) => {
+    const token = (req.headers['x-admin-token'] || '').trim();
+    if (token) digitalizeptAuth.revokeToken(token);
+    return res.json({ success: true });
+});
+
+// Digitalize Portugal — business-type configs. Adding a type = adding a file, no deploy.
+const digitalizeptConfigDir = path.join(__dirname, 'config', 'business-types');
+
+function loadBusinessTypes() {
+    if (!fs.existsSync(digitalizeptConfigDir)) return [];
+    return fs.readdirSync(digitalizeptConfigDir)
+        .filter((file) => file.endsWith('.json'))
+        .map((file) => {
+            try {
+                return JSON.parse(fs.readFileSync(path.join(digitalizeptConfigDir, file), 'utf8'));
+            } catch (err) {
+                console.error(`digitalizept: invalid config ${file}: ${err.message}`);
+                return null;
+            }
+        })
+        .filter(Boolean)
+        .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt'));
+}
+
+function loadStandardFields() {
+    const fieldsPath = path.join(__dirname, 'config', 'fields.json');
+    if (!fs.existsSync(fieldsPath)) return {};
+    try {
+        return JSON.parse(fs.readFileSync(fieldsPath, 'utf8'));
+    } catch (err) {
+        console.error(`digitalizept: invalid fields.json: ${err.message}`);
+        return {};
+    }
+}
+
+app.get('/api/digitalizept/business-types', requireDigitalizept, (req, res) => {
+    try {
+        return res.json({
+            businessTypes: loadBusinessTypes(),
+            standardFields: loadStandardFields()
+        });
+    } catch (err) {
+        console.error('digitalizept business-types error:', err.message);
+        return res.status(500).json({ error: 'Failed to load business types.' });
+    }
+});
+
+// Digitalize Portugal — service catalog (servico table), price changes here need no deploy
+app.get('/api/digitalizept/catalog', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const rows = db.prepare('SELECT * FROM servico WHERE ativo = 1 ORDER BY ordem ASC').all();
+        return res.json({ servicos: rows });
+    } catch (err) {
+        console.error('digitalizept catalog error:', err.message);
+        return res.status(500).json({ error: 'Failed to load catalog.' });
+    }
+});
+
+// Digitalize Portugal — finalize a signed deal: persist, archive the contract, email, create project.
+const digitalizeptContractsDir = path.join(__dirname, 'data', 'digitalizept-contracts');
+
+function saveDataUrlPng(dataUrl, filePath) {
+    const match = /^data:image\/png;base64,(.+)$/.exec(String(dataUrl || ''));
+    if (!match) return false;
+    fs.writeFileSync(filePath, Buffer.from(match[1], 'base64'));
+    return true;
+}
+
+app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const businessType = body.businessType || {};
+        const dados = body.dados || {};
+        const proposta = body.proposta || {};
+        const calc = proposta._calc || {};
+        const clienteLegal = body.clienteLegal || {};
+        const contrato = body.contrato || {};
+        const assinatura = body.assinatura || {};
+
+        const clienteNome = cleanText(clienteLegal.nome, 200);
+        const clienteEmail = cleanText(clienteLegal.email, 200);
+        if (!clienteNome || !clienteEmail) {
+            return res.status(400).json({ error: 'Dados do cliente incompletos (nome e email).' });
+        }
+        if (!contrato.html || !assinatura.pngDataUrl) {
+            return res.status(400).json({ error: 'Falta o contrato assinado ou a assinatura.' });
+        }
+
+        if (!fs.existsSync(digitalizeptContractsDir)) {
+            fs.mkdirSync(digitalizeptContractsDir, { recursive: true });
+        }
+
+        const db = getDigitalizeptDb();
+        const now = digitalizeptNow();
+        const leadId = crypto.randomUUID();
+        const dadosId = crypto.randomUUID();
+        const propostaId = crypto.randomUUID();
+        const clienteId = crypto.randomUUID();
+        const contratoId = crypto.randomUUID();
+        const assinaturaId = crypto.randomUUID();
+        const projetoId = crypto.randomUUID();
+
+        const contractPath = path.join(digitalizeptContractsDir, `${contratoId}.html`);
+        fs.writeFileSync(contractPath, String(contrato.html));
+        const pngPath = path.join(digitalizeptContractsDir, `${contratoId}-assinatura.png`);
+        saveDataUrlPng(assinatura.pngDataUrl, pngPath);
+
+        const persist = db.transaction(() => {
+            db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?, 'fechado', ?)`).run(
+                leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
+                cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), now);
+
+            db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(dados), '{}', now);
+
+            db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
+                propostaId, leadId, JSON.stringify({ pacote: proposta.pacote, extras: proposta.extras, urgencia: proposta.urgencia, manutencao: proposta.manutencao }),
+                Math.round(calc.subtotal || 0), Number(calc.descontoPct || 0), Math.round(calc.desconto || 0),
+                Math.round(calc.total || 0), cleanText(proposta.contrapartida, 300), Number(calc.valorHora || 0), now);
+
+            db.prepare(`INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+                clienteId, leadId, clienteNome, cleanText(clienteLegal.nif, 20),
+                cleanText(clienteLegal.morada, 300), clienteEmail, cleanText(clienteLegal.telefone, 60));
+
+            db.prepare(`INSERT INTO contrato (id, proposta_id, template_versao, pdf_path, hash_sha256, assinado_em, estado, criado_em)
+                VALUES (?, ?, 'v1', ?, ?, ?, 'assinado', ?)`).run(
+                contratoId, propostaId, contractPath, cleanText(contrato.hash, 128), now, now);
+
+            db.prepare(`INSERT INTO assinatura (id, contrato_id, png_path, geo, ip, dispositivo, timestamp, hash_documento)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                assinaturaId, contratoId, pngPath, cleanText(assinatura.geo, 120),
+                cleanText(req.ip, 60), cleanText(assinatura.dispositivo, 300),
+                cleanText(assinatura.timestamp, 60) || now, cleanText(contrato.hash, 128));
+
+            db.prepare(`INSERT INTO projeto (id, contrato_id, estado, estado_google, estado_dominio, criado_em)
+                VALUES (?, ?, 'contrato_assinado', 'por_criar', 'por_comprar', ?)`).run(projetoId, contratoId, now);
+
+            digitalizeptLogEvento(db, 'contrato', contratoId, 'assinado', {
+                cliente: clienteNome, total_centimos: Math.round(calc.total || 0), ip: req.ip
+            });
+        });
+        persist();
+
+        // Email the signed contract to the client and to the YourLab archive.
+        const archive = cleanText(process.env.LEAD_NOTIFY_TO, 200) || cleanText(process.env.SMTP_USER, 200);
+        const subject = `Contrato — ${cleanText(dados.nome_negocio, 120) || clienteNome}`;
+        const text = `Contrato assinado com ${clienteNome}. Documento em anexo.`;
+        const clientResult = await sendProjectNotificationEmail({ to: clienteEmail, subject, text, html: String(contrato.html) });
+        const archiveResult = archive
+            ? await sendProjectNotificationEmail({ to: archive, subject: `[Arquivo] ${subject}`, text, html: String(contrato.html) })
+            : { sent: false, reason: 'No archive address.' };
+
+        return res.json({
+            ok: true,
+            projectId: projetoId,
+            estado: 'contrato_assinado',
+            estados: { google: 'por_criar', dominio: 'por_comprar' },
+            email: { clientSent: clientResult.sent, archiveSent: archiveResult.sent }
+        });
+    } catch (err) {
+        console.error('digitalizept deal error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível finalizar o contrato.' });
+    }
+});
+
 // Get all inquiries (admin endpoint)
 app.get('/api/inquiries', requireAdmin, (req, res) => {
     try {
@@ -1760,6 +2024,15 @@ app.get('/admin', (req, res) => {
 
 app.get('/admin/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'admin', 'index.html'));
+});
+
+// Explicit digitalizept routes
+app.get('/digitalizept', (req, res) => {
+    res.redirect('/digitalizept/');
+});
+
+app.get('/digitalizept/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'digitalizept', 'index.html'));
 });
 
 // Serve index.html for any unmatched routes

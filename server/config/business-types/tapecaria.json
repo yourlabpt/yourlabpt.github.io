@@ -1,0 +1,22 @@
+{
+  "id": "tapecaria",
+  "nome": "Tapeçaria",
+  "icone": "🪡",
+  "tom": "artesanal, cuidado, orgulhoso do ofício",
+  "prompt_contexto": "Tapeçaria e estofos em Portugal. O texto valoriza o trabalho manual, a durabilidade e a recuperação de peças com valor. Fala de restauro, estofos à medida e cuidado com cada detalhe. Tom de ofício e orgulho artesanal.",
+  "publico_alvo": "Clientes particulares e profissionais que querem restaurar, estofar ou personalizar mobiliário e peças de decoração.",
+  "servicos_tipicos": ["Estofos à medida", "Restauro de mobiliário", "Cortinados", "Estofos automóvel", "Reparação de sofás", "Tapeçaria decorativa"],
+  "diferenciais_sugeridos": ["Trabalho artesanal", "Materiais à escolha", "Restauro de peças antigas", "Orçamento personalizado", "Anos de experiência"],
+  "palavras_chave": ["tapeçaria", "estofos", "restauro de mobiliário", "estofador", "cortinados"],
+  "categorias_google": ["upholstery_shop", "furniture_repair"],
+  "imagens_demo": ["stock/tapecaria/1.jpg", "stock/tapecaria/2.jpg", "stock/tapecaria/3.jpg"],
+  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
+  "cores_sugeridas": ["#241a1a", "#8a5a3c", "#b8935f"],
+  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
+  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "perguntas_especificas": [
+    { "id": "tipos_trabalho", "label": "Tipos de trabalho que faz", "tipo": "texto_longo" },
+    { "id": "faz_automovel", "label": "Faz estofos de automóvel?", "tipo": "sim_nao" },
+    { "id": "recolha_entrega", "label": "Faz recolha e entrega?", "tipo": "sim_nao" }
+  ]
+}

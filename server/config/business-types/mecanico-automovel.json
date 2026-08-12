@@ -1,0 +1,22 @@
+{
+  "id": "mecanico-automovel",
+  "nome": "Mecânico Automóvel",
+  "icone": "🔧",
+  "tom": "sério, competente, de confiança",
+  "prompt_contexto": "Oficina de mecânica automóvel em Portugal. O texto transmite competência técnica, honestidade e confiança — o cliente deixa o carro em boas mãos. Fala de diagnóstico, reparação e manutenção com clareza, sem jargão excessivo.",
+  "publico_alvo": "Automobilistas locais que precisam de manutenção, inspeção ou reparação com preço justo e sem surpresas.",
+  "servicos_tipicos": ["Manutenção e revisões", "Diagnóstico eletrónico", "Travões e suspensão", "Mudança de óleo", "Pré-inspeção IPO", "Ar condicionado"],
+  "diferenciais_sugeridos": ["Orçamento sem compromisso", "Trabalho garantido", "Peças de qualidade", "Rapidez", "Preços transparentes"],
+  "palavras_chave": ["oficina automóvel", "mecânico", "revisão", "reparação de carros", "pré-inspeção"],
+  "categorias_google": ["car_repair"],
+  "imagens_demo": ["stock/mecanico/1.jpg", "stock/mecanico/2.jpg", "stock/mecanico/3.jpg"],
+  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
+  "cores_sugeridas": ["#15181c", "#3b82c4", "#e0a020"],
+  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
+  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "perguntas_especificas": [
+    { "id": "marcas_especializacao", "label": "Marcas ou especialização", "tipo": "texto" },
+    { "id": "faz_ipo", "label": "Faz pré-inspeção (IPO)?", "tipo": "sim_nao" },
+    { "id": "carro_substituicao", "label": "Disponibiliza carro de substituição?", "tipo": "sim_nao" }
+  ]
+}

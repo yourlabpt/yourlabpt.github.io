@@ -1,0 +1,23 @@
+{
+  "id": "restaurante",
+  "nome": "Restaurante",
+  "icone": "🍽️",
+  "tom": "acolhedor, apetitoso, próximo",
+  "prompt_contexto": "Restaurante local em Portugal. O texto deve dar vontade de reservar mesa: fala da cozinha, dos pratos, do ambiente e do serviço. Valoriza a experiência à mesa e a hospitalidade portuguesa. Evita superlativos vazios e linguagem de marketing agressiva.",
+  "publico_alvo": "Famílias, grupos de amigos, casais e trabalhadores da zona à procura de uma refeição de qualidade perto de casa ou do trabalho.",
+  "servicos_tipicos": ["Almoços", "Jantares", "Menu do dia", "Take-away", "Eventos e grupos", "Carta de vinhos"],
+  "diferenciais_sugeridos": ["Cozinha caseira", "Produtos frescos e locais", "Receitas tradicionais", "Ambiente familiar", "Esplanada"],
+  "palavras_chave": ["restaurante", "comida tradicional portuguesa", "menu do dia", "reservas", "almoços e jantares"],
+  "categorias_google": ["restaurant", "meal_takeaway"],
+  "imagens_demo": ["stock/restaurante/1.jpg", "stock/restaurante/2.jpg", "stock/restaurante/3.jpg"],
+  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
+  "cores_sugeridas": ["#2a1a12", "#e0a458", "#a63d40"],
+  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
+  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "perguntas_especificas": [
+    { "id": "tipo_cozinha", "label": "Tipo de cozinha", "tipo": "texto" },
+    { "id": "pratos_destaque", "label": "Pratos em destaque", "tipo": "texto_longo" },
+    { "id": "faz_reservas", "label": "Aceita reservas?", "tipo": "sim_nao" },
+    { "id": "tem_esplanada", "label": "Tem esplanada?", "tipo": "sim_nao" }
+  ]
+}

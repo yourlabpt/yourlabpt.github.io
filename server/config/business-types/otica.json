@@ -1,0 +1,22 @@
+{
+  "id": "otica",
+  "nome": "Ótica",
+  "icone": "👓",
+  "tom": "profissional, confiável, atencioso",
+  "prompt_contexto": "Ótica em Portugal. O texto combina rigor técnico (exames, lentes, saúde visual) com cuidado no atendimento e variedade de armações. Transmite confiança clínica e proximidade. Evita promessas médicas exageradas.",
+  "publico_alvo": "Pessoas que precisam de óculos, lentes de contacto ou exame de visão e valorizam aconselhamento profissional e boa relação qualidade-preço.",
+  "servicos_tipicos": ["Exames de visão", "Óculos graduados", "Óculos de sol", "Lentes de contacto", "Armações de marca", "Reparações"],
+  "diferenciais_sugeridos": ["Exame de visão gratuito", "Marcas reconhecidas", "Aconselhamento profissional", "Entrega rápida", "Garantia nas lentes"],
+  "palavras_chave": ["ótica", "óculos graduados", "exame de visão", "lentes de contacto", "óculos de sol"],
+  "categorias_google": ["optician", "health"],
+  "imagens_demo": ["stock/otica/1.jpg", "stock/otica/2.jpg", "stock/otica/3.jpg"],
+  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
+  "cores_sugeridas": ["#111a22", "#2f8fbf", "#dce4e8"],
+  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
+  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "perguntas_especificas": [
+    { "id": "faz_exames", "label": "Faz exames de visão?", "tipo": "sim_nao" },
+    { "id": "marcas", "label": "Marcas de armações", "tipo": "texto_longo" },
+    { "id": "convencoes", "label": "Trabalha com que convenções/seguros?", "tipo": "texto" }
+  ]
+}

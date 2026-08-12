@@ -1,0 +1,22 @@
+{
+  "id": "drogaria-ferragens",
+  "nome": "Drogaria / Ferragens",
+  "icone": "🔩",
+  "tom": "prático, prestável, resolvedor",
+  "prompt_contexto": "Drogaria e loja de ferragens em Portugal. O texto foca na variedade de produtos, no aconselhamento prático e em resolver o problema do cliente — da tinta ao parafuso. Tom de quem sabe do assunto e ajuda.",
+  "publico_alvo": "Residentes e profissionais que procuram materiais de bricolage, ferramentas, tintas e produtos de casa com bom aconselhamento.",
+  "servicos_tipicos": ["Ferragens e ferramentas", "Tintas e vernizes", "Material elétrico", "Canalização", "Produtos de limpeza", "Duplicação de chaves"],
+  "diferenciais_sugeridos": ["Grande variedade", "Aconselhamento técnico", "Marcas de confiança", "Encomendas rápidas", "Atendimento próximo"],
+  "palavras_chave": ["drogaria", "ferragens", "bricolage", "ferramentas", "tintas"],
+  "categorias_google": ["hardware_store", "home_goods_store"],
+  "imagens_demo": ["stock/ferragens/1.jpg", "stock/ferragens/2.jpg", "stock/ferragens/3.jpg"],
+  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
+  "cores_sugeridas": ["#1c1a17", "#c25b2a", "#3f6f52"],
+  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
+  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "perguntas_especificas": [
+    { "id": "categorias_produto", "label": "Principais categorias de produto", "tipo": "texto_longo" },
+    { "id": "faz_chaves", "label": "Faz duplicação de chaves?", "tipo": "sim_nao" },
+    { "id": "faz_encomendas", "label": "Faz encomendas por pedido?", "tipo": "sim_nao" }
+  ]
+}

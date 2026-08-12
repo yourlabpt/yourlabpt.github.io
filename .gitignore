@@ -46,3 +46,8 @@ projects/data/platform.db-*
 projects/data/blobs/
 projects/data/snapshots/
 projects/data/store.json.bak
+
+# Digitalize Portugal sales app (local runtime)
+server/data/digitalizept.db
+server/data/digitalizept.db-*
+server/data/digitalizept-contracts/
