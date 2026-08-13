@@ -300,6 +300,14 @@ button, input, textarea, select {
     color: var(--text-muted);
 }
 
+.field-req {
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+    color: var(--accent-color);
+    opacity: 0.85;
+}
+
 .field-input {
     width: 100%;
     padding: 13px 14px;
@@ -1423,4 +1431,176 @@ button, input, textarea, select {
 .toast.error {
     border-color: var(--danger-color);
     color: var(--danger-color);
+}
+
+/* ---------- Desktop: same language, more room ---------- */
+@media (min-width: 900px) {
+    html, body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    body {
+        background:
+            radial-gradient(1100px 640px at 8% -12%, rgba(232, 213, 183, 0.14), transparent 58%),
+            radial-gradient(900px 520px at 108% 18%, rgba(122, 138, 153, 0.14), transparent 52%),
+            radial-gradient(700px 480px at 70% 115%, rgba(232, 213, 183, 0.07), transparent 60%),
+            var(--primary-dark);
+    }
+
+    body::before,
+    body::after {
+        content: "";
+        position: fixed;
+        pointer-events: none;
+        z-index: 0;
+        border-radius: 50%;
+        filter: blur(56px);
+    }
+
+    body::before {
+        width: 42vw;
+        height: 42vw;
+        top: -12vh;
+        left: -8vw;
+        background: rgba(232, 213, 183, 0.09);
+        animation: dp-drift-a 28s ease-in-out infinite alternate;
+    }
+
+    body::after {
+        width: 36vw;
+        height: 36vw;
+        right: -10vw;
+        bottom: -16vh;
+        background: rgba(122, 138, 153, 0.1);
+        animation: dp-drift-b 34s ease-in-out infinite alternate;
+    }
+
+    .overlay {
+        background: rgba(27, 27, 27, 0.42);
+        backdrop-filter: blur(10px);
+    }
+
+    .login-box {
+        max-width: 420px;
+        padding: 36px 32px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    .app {
+        position: relative;
+        z-index: 1;
+        max-width: 1080px;
+        width: calc(100% - 48px);
+        min-height: calc(100vh - 48px);
+        max-height: calc(100vh - 48px);
+        margin: 24px auto;
+        background: rgba(27, 27, 27, 0.92);
+        border: 1px solid var(--accent-soft);
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+    }
+
+    .app-header {
+        padding: 16px 28px;
+        background: transparent;
+    }
+
+    .app-main {
+        padding: 28px 36px 20px;
+        overflow: auto;
+        min-height: 0;
+        flex: 1;
+    }
+
+    .step-title {
+        font-size: 1.55rem;
+    }
+
+    .step-subtitle {
+        max-width: 42em;
+        margin-bottom: 22px;
+    }
+
+    .type-grid {
+        grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+        gap: 14px;
+    }
+
+    .type-card {
+        min-height: 124px;
+    }
+
+    .type-card:hover,
+    .svc-card:hover,
+    .style-card:hover {
+        border-color: rgba(232, 213, 183, 0.45);
+        background: var(--accent-dark);
+    }
+
+    .type-card.selected:hover,
+    .svc-card.selected:hover,
+    .style-card.selected:hover {
+        border-color: var(--accent-color);
+    }
+
+    .field-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px 24px;
+        align-items: start;
+    }
+
+    .field-grid > .field-group-title {
+        grid-column: 1 / -1;
+        margin-bottom: 0;
+    }
+
+    .field-grid > .field:has(textarea),
+    .field-grid > .field:has(.field-voice-row) {
+        grid-column: 1 / -1;
+    }
+
+    .style-preview {
+        height: 72px;
+    }
+
+    .svc-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .wizard-nav {
+        position: relative;
+        left: auto;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        border-radius: 0 0 18px 18px;
+        padding: 14px 28px;
+    }
+
+    .toast {
+        bottom: 28px;
+        max-width: 480px;
+    }
+}
+
+@media (min-width: 900px) and (prefers-reduced-motion: reduce) {
+    body::before,
+    body::after {
+        animation: none;
+    }
+}
+
+@keyframes dp-drift-a {
+    from { transform: translate(0, 0); }
+    to { transform: translate(6vw, 4vh); }
+}
+
+@keyframes dp-drift-b {
+    from { transform: translate(0, 0); }
+    to { transform: translate(-5vw, -3vh); }
 }

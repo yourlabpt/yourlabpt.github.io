@@ -11,16 +11,27 @@ let refreshCalc;
 let guardrailLevel;
 let validateNif;
 let parseDemoOutput;
+let dataStep;
 
 before(async () => {
+    if (typeof globalThis.sessionStorage === 'undefined') {
+        const store = new Map();
+        globalThis.sessionStorage = {
+            getItem: (k) => (store.has(k) ? store.get(k) : null),
+            setItem: (k, v) => { store.set(k, String(v)); },
+            removeItem: (k) => { store.delete(k); }
+        };
+    }
     const calc = await import(pathToFileURL(path.join(appDir, 'proposal-calc.js')).href);
     const nif = await import(pathToFileURL(path.join(appDir, 'deal', 'nif.js')).href);
     const parse = await import(pathToFileURL(path.join(appDir, 'demo', 'parse.js')).href);
+    const data = await import(pathToFileURL(path.join(appDir, 'steps', 'data.js')).href);
     computeProposta = calc.computeProposta;
     refreshCalc = calc.refreshCalc;
     guardrailLevel = calc.guardrailLevel;
     validateNif = nif.validateNif;
     parseDemoOutput = parse.parseDemoOutput;
+    dataStep = data.dataStep;
 });
 
 const IVA = 0.23;
@@ -261,5 +272,58 @@ ${q}rodape${p}: { ${q}texto${p}: ${q}Venha conhecer o teste.${p} }
         const raw = '```json\n' + JSON.stringify(valid).replace(/}$/, ',}\n') + '```';
         const result = parseDemoOutput(raw);
         assert.equal(result.ok, true, result.error);
+    });
+});
+
+describe('digitalizept data step — public shopfront is enough', () => {
+    const businessType = {
+        id: 'restaurante',
+        campos_obrigatorios: [
+            'nome_negocio', 'responsavel', 'telefone', 'whatsapp',
+            'morada', 'cidade', 'horario', 'o_que_faz', 'principais_servicos', 'diferencial'
+        ]
+    };
+
+    it('lets Continuar unlock with name, address and business phone', () => {
+        assert.equal(dataStep.isValid({
+            data: {
+                businessType,
+                dados: {
+                    nome_negocio: 'Café Central',
+                    morada: 'Rua A 1',
+                    cidade: 'Lisboa',
+                    telefone: '210000000'
+                }
+            }
+        }), true);
+    });
+
+    it('still blocks Continuar when the public contact is missing', () => {
+        assert.equal(dataStep.isValid({
+            data: {
+                businessType,
+                dados: {
+                    nome_negocio: 'Café Central',
+                    morada: 'Rua A 1',
+                    cidade: 'Lisboa'
+                }
+            }
+        }), false);
+    });
+
+    it('does not require the owner name or a written pitch', () => {
+        assert.equal(dataStep.isValid({
+            data: {
+                businessType,
+                dados: {
+                    nome_negocio: 'Café Central',
+                    morada: 'Rua A 1',
+                    cidade: 'Lisboa',
+                    telefone: '210000000',
+                    responsavel: '',
+                    o_que_faz: ''
+                }
+            }
+        }), true);
     });
 });
