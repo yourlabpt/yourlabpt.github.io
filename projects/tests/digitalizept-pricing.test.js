@@ -11,27 +11,19 @@ let refreshCalc;
 let guardrailLevel;
 let validateNif;
 let parseDemoOutput;
-let dataStep;
+let isDataStepValid;
 
 before(async () => {
-    if (typeof globalThis.sessionStorage === 'undefined') {
-        const store = new Map();
-        globalThis.sessionStorage = {
-            getItem: (k) => (store.has(k) ? store.get(k) : null),
-            setItem: (k, v) => { store.set(k, String(v)); },
-            removeItem: (k) => { store.delete(k); }
-        };
-    }
     const calc = await import(pathToFileURL(path.join(appDir, 'proposal-calc.js')).href);
     const nif = await import(pathToFileURL(path.join(appDir, 'deal', 'nif.js')).href);
     const parse = await import(pathToFileURL(path.join(appDir, 'demo', 'parse.js')).href);
-    const data = await import(pathToFileURL(path.join(appDir, 'steps', 'data.js')).href);
+    const dataValid = await import(pathToFileURL(path.join(appDir, 'steps', 'data-valid.js')).href);
     computeProposta = calc.computeProposta;
     refreshCalc = calc.refreshCalc;
     guardrailLevel = calc.guardrailLevel;
     validateNif = nif.validateNif;
     parseDemoOutput = parse.parseDemoOutput;
-    dataStep = data.dataStep;
+    isDataStepValid = dataValid.isDataStepValid;
 });
 
 const IVA = 0.23;
@@ -285,7 +277,7 @@ describe('digitalizept data step — public shopfront is enough', () => {
     };
 
     it('lets Continuar unlock with name, address and business phone', () => {
-        assert.equal(dataStep.isValid({
+        assert.equal(isDataStepValid({
             data: {
                 businessType,
                 dados: {
@@ -299,7 +291,7 @@ describe('digitalizept data step — public shopfront is enough', () => {
     });
 
     it('still blocks Continuar when the public contact is missing', () => {
-        assert.equal(dataStep.isValid({
+        assert.equal(isDataStepValid({
             data: {
                 businessType,
                 dados: {
@@ -312,7 +304,7 @@ describe('digitalizept data step — public shopfront is enough', () => {
     });
 
     it('does not require the owner name or a written pitch', () => {
-        assert.equal(dataStep.isValid({
+        assert.equal(isDataStepValid({
             data: {
                 businessType,
                 dados: {

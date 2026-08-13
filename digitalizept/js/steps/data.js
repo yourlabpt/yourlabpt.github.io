@@ -1,4 +1,5 @@
 import { fetchSettings } from '../settings.js';
+import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -11,20 +12,8 @@ function getDados(state) {
     return state.data.dados;
 }
 
-// Public shopfront — enough to generate a demo and come back later for the rest.
-// Owner name, long descriptions and sector questions stay on the form, optional.
-const PUBLIC_REQUIRED = ['nome_negocio', 'morada', 'cidade', 'telefone'];
-const PUBLIC_EXTRA = ['horario', 'whatsapp'];
-
-function requiredFieldIds() {
-    return PUBLIC_REQUIRED;
-}
-
 function isValid(state) {
-    const businessType = getBusinessType(state);
-    if (!businessType) return false;
-    const dados = getDados(state);
-    return requiredFieldIds().every((id) => String(dados[id] || '').trim().length > 0);
+    return isDataStepValid(state);
 }
 
 function speechAvailable() {
