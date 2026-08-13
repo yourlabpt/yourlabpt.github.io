@@ -62,23 +62,33 @@ CONTEXTO DO NEGÓCIO
 ${contextLines}${specific ? `\n${specific}` : ''}
 
 TAREFA
-Preenche o conteúdo de uma landing page para este negócio. Responde APENAS com um objeto JSON válido — sem texto antes ou depois, sem blocos de código, sem comentários.
+Devolve UM objeto JSON. Nada antes, nada depois. Sem markdown. Sem blocos de código. Sem comentários.
 
-FORMATO EXATO (respeita os limites de caracteres de cada campo):
+ASPAS
+Usa apenas a aspa ASCII " (código 34) em chaves e valores.
+Proibido: aspas curvas, « », ou aspas tipográficas.
+Não uses aspas dentro dos textos. Se precisares de ênfase, usa travessão ou vírgulas.
+
+FORMA ACEITE
 {
-  "hero": { "titulo": "máx ${SECTION_LIMITS.hero.titulo}", "subtitulo": "máx ${SECTION_LIMITS.hero.subtitulo}", "cta": "máx ${SECTION_LIMITS.hero.cta}" },
-  "sobre": { "titulo": "máx ${SECTION_LIMITS.sobre.titulo}", "texto": "máx ${SECTION_LIMITS.sobre.texto}" },
-  "servicos": { "titulo": "máx ${SECTION_LIMITS.servicos.titulo}", "itens": [ { "nome": "máx ${SECTION_LIMITS.servicos.nome}", "descricao": "máx ${SECTION_LIMITS.servicos.descricao}" } ] },
-  "diferenciais": { "titulo": "máx ${SECTION_LIMITS.diferenciais.titulo}", "itens": [ "máx ${SECTION_LIMITS.diferenciais.item}" ] },
-  "rodape": { "texto": "máx ${SECTION_LIMITS.rodape.texto}" }
+  "hero": { "titulo": string máx ${SECTION_LIMITS.hero.titulo}, "subtitulo": string máx ${SECTION_LIMITS.hero.subtitulo}, "cta": string máx ${SECTION_LIMITS.hero.cta} },
+  "sobre": { "titulo": string máx ${SECTION_LIMITS.sobre.titulo}, "texto": string máx ${SECTION_LIMITS.sobre.texto} },
+  "servicos": { "titulo": string máx ${SECTION_LIMITS.servicos.titulo}, "itens": [ { "nome": string máx ${SECTION_LIMITS.servicos.nome}, "descricao": string máx ${SECTION_LIMITS.servicos.descricao} } ] },
+  "diferenciais": { "titulo": string máx ${SECTION_LIMITS.diferenciais.titulo}, "itens": [ string máx ${SECTION_LIMITS.diferenciais.item} ] },
+  "rodape": { "texto": string máx ${SECTION_LIMITS.rodape.texto} }
 }
 
-REGRAS
-- "servicos.itens": entre ${SECTION_LIMITS.servicos.minItens} e ${SECTION_LIMITS.servicos.maxItens} itens.
-- "diferenciais.itens": entre ${SECTION_LIMITS.diferenciais.minItens} e ${SECTION_LIMITS.diferenciais.maxItens} itens (frases curtas).
+CONTAS
+- servicos.itens: ${SECTION_LIMITS.servicos.minItens} a ${SECTION_LIMITS.servicos.maxItens} objetos com nome e descricao.
+- diferenciais.itens: ${SECTION_LIMITS.diferenciais.minItens} a ${SECTION_LIMITS.diferenciais.maxItens} frases.
+- Sem vírgula depois do último item de um array ou objeto.
+
+EXEMPLO (copie a pontuação, mude o texto)
+{"hero":{"titulo":"Mesa posta todos os dias","subtitulo":"Cozinha de proximidade, ambiente calmo e uma esplanada para ficar.","cta":"Reservar mesa"},"sobre":{"titulo":"À mesa","texto":"Um restaurante de bairro para almoços, jantares e encontros sem pressa."},"servicos":{"titulo":"O que servimos","itens":[{"nome":"Almoços","descricao":"Refeição de semana, perto de casa ou do trabalho."},{"nome":"Jantares","descricao":"Mesa para o fim do dia, em boa companhia."},{"nome":"Take-away","descricao":"A mesma cozinha, para levar."}]},"diferenciais":{"titulo":"Porquê vir","itens":["Cozinha de inspiração portuguesa","Produtos frescos sempre que possível","Esplanada para refeições ao ar livre"]},"rodape":{"texto":"Reserve mesa ou passe quando quiser."}}
+
+REGRAS DE CONTEÚDO
 - Português de Portugal — nunca português do Brasil.
 - Não inventes factos que não estejam no contexto (moradas, preços, prémios, anos).
 - Usa o nome real do negócio.
-- Não uses aspas duplas dentro dos textos.
-- Responde só com o JSON, começando por { e terminando por }.`;
+- A primeira e a última letra da resposta são { e }.`;
 }

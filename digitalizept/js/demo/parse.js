@@ -1,32 +1,54 @@
 import { SECTION_LIMITS } from './prompt.js';
 
-// Strict parse of the pasted LLM output. Only the accepted sections survive;
-// anything else is ignored, and every string is clamped to its limit.
+// Strict schema, tolerant punctuation. Assistants often return curly quotes
+// (“ ”) or wrap the object in markdown; the accepted shape is still exact.
 
 function clamp(value, max) {
     const text = String(value == null ? '' : value).trim();
     return text.length > max ? `${text.slice(0, max - 1).trim()}…` : text;
 }
 
-function extractJson(raw) {
-    let text = String(raw || '').trim();
-    // strip ```json ... ``` or ``` ... ``` fences
-    text = text.replace(/```(?:json)?/gi, '');
+function stripFences(text) {
+    return String(text || '')
+        .replace(/^\uFEFF/, '')
+        .replace(/```(?:json)?/gi, '')
+        .trim();
+}
+
+function sliceObject(text) {
     const first = text.indexOf('{');
     const last = text.lastIndexOf('}');
-    if (first === -1 || last === -1 || last <= first) return null;
-    const slice = text.slice(first, last + 1);
+    if (first === -1 || last === -1 || last <= first) return '';
+    return text.slice(first, last + 1);
+}
+
+// Turn the punctuation models actually emit into JSON the parser can read.
+// Schema validation after this step stays strict.
+function normalizeJsonText(text) {
+    return text
+        .replace(/[\u201C\u201D\u201E\u00AB\u00BB]/g, '"')
+        .replace(/[\u2018\u2019\u201A]/g, "'")
+        .replace(/,\s*([}\]])/g, '$1');
+}
+
+function parseObject(raw) {
+    const sliced = sliceObject(stripFences(raw));
+    if (!sliced) return null;
     try {
-        return JSON.parse(slice);
+        return JSON.parse(sliced);
     } catch (_) {
-        return null;
+        try {
+            return JSON.parse(normalizeJsonText(sliced));
+        } catch (_ignored) {
+            return null;
+        }
     }
 }
 
 export function parseDemoOutput(raw) {
-    const json = extractJson(raw);
-    if (!json || typeof json !== 'object') {
-        return { ok: false, error: 'Não encontrei um JSON válido. Cole o resultado completo do assistente.' };
+    const json = parseObject(raw);
+    if (!json || typeof json !== 'object' || Array.isArray(json)) {
+        return { ok: false, error: 'Não encontrei um JSON válido. Cole o objeto completo, de { a }.' };
     }
 
     const L = SECTION_LIMITS;
@@ -36,9 +58,13 @@ export function parseDemoOutput(raw) {
     const diferenciais = json.diferenciais || {};
     const rodape = json.rodape || {};
 
+    if (!hero || typeof hero !== 'object') {
+        return { ok: false, error: 'Falta o objeto hero.' };
+    }
+
     const heroTitulo = clamp(hero.titulo, L.hero.titulo);
     if (!heroTitulo) {
-        return { ok: false, error: 'Falta o título principal (hero.titulo). Verifique o conteúdo colado.' };
+        return { ok: false, error: 'Falta hero.titulo.' };
     }
 
     const servicosItens = (Array.isArray(servicos.itens) ? servicos.itens : [])
@@ -50,7 +76,7 @@ export function parseDemoOutput(raw) {
         .slice(0, L.servicos.maxItens);
 
     if (servicosItens.length < L.servicos.minItens) {
-        return { ok: false, error: `São precisos pelo menos ${L.servicos.minItens} serviços.` };
+        return { ok: false, error: `servicos.itens: mínimo ${L.servicos.minItens}, máximo ${L.servicos.maxItens}.` };
     }
 
     const diferenciaisItens = (Array.isArray(diferenciais.itens) ? diferenciais.itens : [])
@@ -59,7 +85,7 @@ export function parseDemoOutput(raw) {
         .slice(0, L.diferenciais.maxItens);
 
     if (diferenciaisItens.length < L.diferenciais.minItens) {
-        return { ok: false, error: `São precisos pelo menos ${L.diferenciais.minItens} diferenciais.` };
+        return { ok: false, error: `diferenciais.itens: mínimo ${L.diferenciais.minItens}, máximo ${L.diferenciais.maxItens}.` };
     }
 
     const demo = {

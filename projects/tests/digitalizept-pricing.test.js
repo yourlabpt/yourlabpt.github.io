@@ -221,4 +221,45 @@ describe('digitalizept demo parse', () => {
         const result = parseDemoOutput(raw);
         assert.equal(result.ok, false);
     });
+
+    it('accepts curly quotes of the kind assistants actually emit', () => {
+        const q = '\u201C';
+        const p = '\u201D';
+        const raw = `{
+${q}hero${p}: {
+${q}titulo${p}: ${q}Sabor português à sua mesa${p},
+${q}subtitulo${p}: ${q}Cozinha de inspiração portuguesa.${p},
+${q}cta${p}: ${q}Reservar mesa${p}
+},
+${q}sobre${p}: { ${q}titulo${p}: ${q}Uma mesa para todos${p}, ${q}texto${p}: ${q}No teste, juntamos o prazer de uma boa refeição.${p} },
+${q}servicos${p}: {
+${q}titulo${p}: ${q}Para cada momento à mesa${p},
+${q}itens${p}: [
+{ ${q}nome${p}: ${q}Almoços${p}, ${q}descricao${p}: ${q}Uma pausa saborosa.${p} },
+{ ${q}nome${p}: ${q}Jantares${p}, ${q}descricao${p}: ${q}Um ambiente acolhedor.${p} },
+{ ${q}nome${p}: ${q}Take-away${p}, ${q}descricao${p}: ${q}Leve o sabor consigo.${p} }
+]
+},
+${q}diferenciais${p}: {
+${q}titulo${p}: ${q}O prazer de comer bem${p},
+${q}itens${p}: [
+${q}Cozinha caseira${p},
+${q}Produtos frescos${p},
+${q}Ambiente familiar${p}
+]
+},
+${q}rodape${p}: { ${q}texto${p}: ${q}Venha conhecer o teste.${p} }
+}`;
+        const result = parseDemoOutput(raw);
+        assert.equal(result.ok, true, result.error);
+        assert.equal(result.demo.hero.titulo, 'Sabor português à sua mesa');
+        assert.equal(result.demo.hero.cta, 'Reservar mesa');
+        assert.equal(result.demo.servicos.itens.length, 3);
+    });
+
+    it('accepts a trailing comma and a markdown fence', () => {
+        const raw = '```json\n' + JSON.stringify(valid).replace(/}$/, ',}\n') + '```';
+        const result = parseDemoOutput(raw);
+        assert.equal(result.ok, true, result.error);
+    });
 });

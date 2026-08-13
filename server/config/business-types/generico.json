@@ -1,7 +1,7 @@
 {
   "id": "generico",
   "nome": "Genérico",
-  "icone": "🏪",
+  "icone": "GE",
   "tom": "claro, próximo, profissional",
   "prompt_contexto": "Pequeno negócio local em Portugal, sem categoria específica. O texto apresenta o negócio de forma clara e honesta, destaca os serviços e o que o distingue, e convida ao contacto. Adapta o tom à informação recolhida.",
   "publico_alvo": "Clientes locais que procuram o serviço ou produto do negócio e valorizam proximidade e confiança.",

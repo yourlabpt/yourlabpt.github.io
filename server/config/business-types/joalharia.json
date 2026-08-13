@@ -1,7 +1,7 @@
 {
   "id": "joalharia",
   "nome": "Joalharia",
-  "icone": "💍",
+  "icone": "JO",
   "tom": "elegante, sofisticado, de confiança",
   "prompt_contexto": "Joalharia e relojoaria em Portugal. O texto transmite elegância, valor e confiança — peças que marcam momentos. Fala de ouro, prata, relógios e serviço de reparação com discrição e requinte. Tom refinado, nunca ostensivo.",
   "publico_alvo": "Clientes que procuram joias, relógios ou presentes especiais, e serviço de reparação e avaliação de confiança.",

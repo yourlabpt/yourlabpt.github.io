@@ -1,7 +1,7 @@
 {
   "id": "mecanico-automovel",
   "nome": "Mecânico Automóvel",
-  "icone": "🔧",
+  "icone": "MA",
   "tom": "sério, competente, de confiança",
   "prompt_contexto": "Oficina de mecânica automóvel em Portugal. O texto transmite competência técnica, honestidade e confiança — o cliente deixa o carro em boas mãos. Fala de diagnóstico, reparação e manutenção com clareza, sem jargão excessivo.",
   "publico_alvo": "Automobilistas locais que precisam de manutenção, inspeção ou reparação com preço justo e sem surpresas.",

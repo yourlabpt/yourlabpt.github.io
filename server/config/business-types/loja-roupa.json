@@ -1,7 +1,7 @@
 {
   "id": "loja-roupa",
   "nome": "Loja de Roupa",
-  "icone": "👗",
+  "icone": "LR",
   "tom": "elegante, atual, convidativo",
   "prompt_contexto": "Loja de roupa e acessórios em Portugal. O texto transmite estilo, cuidado com a seleção de peças e atendimento próximo. Fala de coleções, tendências e do prazer de vestir bem, sem soar a grande cadeia.",
   "publico_alvo": "Clientes locais que procuram roupa e acessórios com estilo e um atendimento pessoal que as grandes cadeias não dão.",

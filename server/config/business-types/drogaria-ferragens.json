@@ -1,7 +1,7 @@
 {
   "id": "drogaria-ferragens",
   "nome": "Drogaria / Ferragens",
-  "icone": "🔩",
+  "icone": "DF",
   "tom": "prático, prestável, resolvedor",
   "prompt_contexto": "Drogaria e loja de ferragens em Portugal. O texto foca na variedade de produtos, no aconselhamento prático e em resolver o problema do cliente — da tinta ao parafuso. Tom de quem sabe do assunto e ajuda.",
   "publico_alvo": "Residentes e profissionais que procuram materiais de bricolage, ferramentas, tintas e produtos de casa com bom aconselhamento.",

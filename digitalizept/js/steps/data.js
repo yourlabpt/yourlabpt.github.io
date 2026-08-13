@@ -114,7 +114,7 @@ function buildField(def, id, value, onChange) {
         mic.type = 'button';
         mic.className = 'mic-btn';
         mic.setAttribute('aria-label', 'Ditar por voz');
-        mic.textContent = '🎤';
+        mic.textContent = 'voz';
         attachDictation(input, mic);
         row.append(input, mic);
         wrap.appendChild(row);

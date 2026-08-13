@@ -86,7 +86,7 @@ function buildDiferenciais(demo) {
     const list = el('ul', 'dpl-dif-list');
     demo.diferenciais.itens.forEach((item) => {
         const li = el('li', 'dpl-dif-item');
-        li.appendChild(el('span', 'dpl-dif-check', '✓'));
+        li.appendChild(el('span', 'dpl-dif-mark'));
         li.appendChild(el('span', null, item));
         list.appendChild(li);
     });
@@ -101,7 +101,8 @@ function buildGaleria(businessType) {
     // Placeholder tiles for the demo — real photos slot in on delivery.
     for (let i = 0; i < 3; i += 1) {
         const tile = el('div', `dpl-galeria-tile dpl-galeria-tile-${i}`);
-        tile.appendChild(el('span', 'dpl-galeria-icon', businessType.icone || '📷'));
+        const n = String(i + 1).padStart(2, '0');
+        tile.appendChild(el('span', 'dpl-galeria-mark', n));
         grid.appendChild(tile);
     }
     s.appendChild(grid);
@@ -162,14 +163,14 @@ function buildRodape(dados, demo) {
 function buildFab(dados) {
     const fab = el('div', 'dpl-fab');
     if (dados.telefone) {
-        const call = el('a', 'dpl-fab-btn dpl-fab-call', '📞');
+        const call = el('a', 'dpl-fab-btn dpl-fab-call', 'Tel');
         call.href = `tel:${digitsOnly(dados.telefone)}`;
         call.setAttribute('aria-label', 'Ligar');
         fab.appendChild(call);
     }
     const wa = waNumber(dados.whatsapp || dados.telefone);
     if (wa) {
-        const w = el('a', 'dpl-fab-btn dpl-fab-wa', '💬');
+        const w = el('a', 'dpl-fab-btn dpl-fab-wa', 'WA');
         w.href = `https://wa.me/${wa}`;
         w.target = '_blank';
         w.rel = 'noopener';

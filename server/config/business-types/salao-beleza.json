@@ -1,7 +1,7 @@
 {
   "id": "salao-beleza",
   "nome": "Salão de Beleza",
-  "icone": "✂️",
+  "icone": "SB",
   "tom": "cuidado, profissional, inspirador",
   "prompt_contexto": "Salão de beleza ou cabeleireiro em Portugal. O texto transmite confiança, cuidado e resultado. Destaca a experiência da equipa, as especialidades e a atenção a cada cliente. Fala em bem-estar e autoestima sem exageros.",
   "publico_alvo": "Clientes locais que procuram cuidar da imagem — cortes, coloração, tratamentos e estética — com confiança e proximidade.",

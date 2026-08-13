@@ -1,7 +1,7 @@
 {
   "id": "cafe-pastelaria",
   "nome": "Café / Pastelaria",
-  "icone": "☕",
+  "icone": "CA",
   "tom": "quente, familiar, convidativo",
   "prompt_contexto": "Café ou pastelaria de bairro em Portugal. O texto evoca o cheiro a café e a pastelaria fresca, o pequeno-almoço e o lanche, o ponto de encontro do dia a dia. Tom simples e caloroso.",
   "publico_alvo": "Clientes de passagem e habituais que procuram pequeno-almoço, lanche, um café rápido ou doçaria fresca.",

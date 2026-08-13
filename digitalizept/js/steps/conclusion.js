@@ -170,7 +170,7 @@ async function render(body, ctx) {
         : result.email && result.email.clientSent
         ? 'Contrato enviado ao cliente e arquivado.'
         : 'Projeto criado. Email não enviado (configure o SMTP para envio automático).';
-    ok.textContent = `✓ ${emailMsg}`;
+    ok.textContent = emailMsg;
     body.appendChild(ok);
 
     const project = document.createElement('div');

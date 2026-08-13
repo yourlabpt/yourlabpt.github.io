@@ -80,7 +80,7 @@ function buildExtras(body, catalog, proposta, persist) {
 
         const check = document.createElement('span');
         check.className = 'svc-check';
-        check.textContent = active ? '✓' : '';
+        check.textContent = '';
 
         const info = document.createElement('div');
         info.className = 'svc-info';
@@ -95,11 +95,9 @@ function buildExtras(body, catalog, proposta, persist) {
             if (idx === -1) {
                 proposta.extras.push(servico.codigo);
                 row.classList.add('selected');
-                check.textContent = '✓';
             } else {
                 proposta.extras.splice(idx, 1);
                 row.classList.remove('selected');
-                check.textContent = '';
             }
             persist();
         });
@@ -123,7 +121,6 @@ function buildUrgencia(body, catalog, proposta, persist) {
     row.className = `svc-row${proposta.urgencia ? ' selected' : ''}`;
     const check = document.createElement('span');
     check.className = 'svc-check';
-    check.textContent = proposta.urgencia ? '✓' : '';
     const info = document.createElement('div');
     info.className = 'svc-info';
     info.appendChild(Object.assign(document.createElement('div'), { className: 'svc-name', textContent: 'Urgência — entrega em 48h' }));
@@ -131,7 +128,6 @@ function buildUrgencia(body, catalog, proposta, persist) {
     row.addEventListener('click', () => {
         proposta.urgencia = !proposta.urgencia;
         row.classList.toggle('selected', proposta.urgencia);
-        check.textContent = proposta.urgencia ? '✓' : '';
         persist();
     });
 

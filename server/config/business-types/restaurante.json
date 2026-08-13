@@ -1,7 +1,7 @@
 {
   "id": "restaurante",
   "nome": "Restaurante",
-  "icone": "🍽️",
+  "icone": "RE",
   "tom": "acolhedor, apetitoso, próximo",
   "prompt_contexto": "Restaurante local em Portugal. O texto deve dar vontade de reservar mesa: fala da cozinha, dos pratos, do ambiente e do serviço. Valoriza a experiência à mesa e a hospitalidade portuguesa. Evita superlativos vazios e linguagem de marketing agressiva.",
   "publico_alvo": "Famílias, grupos de amigos, casais e trabalhadores da zona à procura de uma refeição de qualidade perto de casa ou do trabalho.",

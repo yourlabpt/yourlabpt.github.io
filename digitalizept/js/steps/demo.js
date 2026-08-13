@@ -44,7 +44,7 @@ function openPreview(state, ctx) {
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'dp-preview-close';
-    close.textContent = '✕ Fechar';
+    close.textContent = 'Fechar';
     close.addEventListener('click', () => overlay.remove());
     bar.append(label, close);
 

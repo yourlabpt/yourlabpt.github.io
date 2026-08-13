@@ -1,7 +1,7 @@
 {
   "id": "mercadinho",
   "nome": "Mercadinho",
-  "icone": "🛒",
+  "icone": "ME",
   "tom": "próximo, prático, de confiança",
   "prompt_contexto": "Mercearia ou minimercado de bairro em Portugal. O texto valoriza a proximidade, a frescura dos produtos, o atendimento familiar e a conveniência do dia a dia. Fala como quem conhece os clientes pelo nome.",
   "publico_alvo": "Vizinhança e clientes habituais que compram o essencial do dia a dia e valorizam o trato próximo e a frescura.",
