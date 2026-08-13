@@ -1,22 +1,93 @@
 {
   "id": "salao-beleza",
   "nome": "Salão de Beleza",
-  "icone": "✂️",
+  "icone": "SB",
   "tom": "cuidado, profissional, inspirador",
   "prompt_contexto": "Salão de beleza ou cabeleireiro em Portugal. O texto transmite confiança, cuidado e resultado. Destaca a experiência da equipa, as especialidades e a atenção a cada cliente. Fala em bem-estar e autoestima sem exageros.",
   "publico_alvo": "Clientes locais que procuram cuidar da imagem — cortes, coloração, tratamentos e estética — com confiança e proximidade.",
-  "servicos_tipicos": ["Corte", "Coloração", "Brushing", "Manicure e pedicure", "Tratamentos capilares", "Penteados para eventos"],
-  "diferenciais_sugeridos": ["Profissionais certificados", "Marcas de qualidade", "Atendimento personalizado", "Marcação online", "Ambiente relaxante"],
-  "palavras_chave": ["cabeleireiro", "salão de beleza", "coloração", "manicure", "marcações"],
-  "categorias_google": ["beauty_salon", "hair_care"],
-  "imagens_demo": ["stock/beleza/1.jpg", "stock/beleza/2.jpg", "stock/beleza/3.jpg"],
-  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
-  "cores_sugeridas": ["#2a2a2a", "#e8d5b7", "#c98b7a"],
-  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
-  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "servicos_tipicos": [
+    "Corte",
+    "Coloração",
+    "Brushing",
+    "Manicure e pedicure",
+    "Tratamentos capilares",
+    "Penteados para eventos"
+  ],
+  "diferenciais_sugeridos": [
+    "Profissionais certificados",
+    "Marcas de qualidade",
+    "Atendimento personalizado",
+    "Marcação online",
+    "Ambiente relaxante"
+  ],
+  "palavras_chave": [
+    "cabeleireiro",
+    "salão de beleza",
+    "coloração",
+    "manicure",
+    "marcações"
+  ],
+  "categorias_google": [
+    "beauty_salon",
+    "hair_care"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "servicos",
+    "diferenciais",
+    "galeria",
+    "contactos",
+    "mapa",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#2a2a2a",
+    "#e8d5b7",
+    "#c98b7a"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "mbway",
+    "wifi",
+    "reservas",
+    "entregas",
+    "anos_experiencia",
+    "certificacoes"
+  ],
   "perguntas_especificas": [
-    { "id": "servicos_principais", "label": "Serviços principais", "tipo": "texto_longo" },
-    { "id": "marcas_usadas", "label": "Trabalha com marcas específicas?", "tipo": "texto" },
-    { "id": "faz_marcacoes", "label": "Faz marcações?", "tipo": "sim_nao" }
+    {
+      "id": "servicos_principais",
+      "label": "Serviços principais",
+      "tipo": "texto_longo"
+    },
+    {
+      "id": "marcas_usadas",
+      "label": "Trabalha com marcas específicas?",
+      "tipo": "texto"
+    },
+    {
+      "id": "faz_marcacoes",
+      "label": "Faz marcações?",
+      "tipo": "sim_nao"
+    }
   ]
 }

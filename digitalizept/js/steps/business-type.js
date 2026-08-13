@@ -1,5 +1,13 @@
-import { apiRequest } from '../api.js';
-import { getToken } from '../auth.js';
+import { fetchSettings } from '../settings.js';
+
+function marca(type) {
+    const raw = String((type && type.icone) || '').trim();
+    if (/^[A-Za-z0-9]{1,4}$/.test(raw)) return raw.toUpperCase();
+    const nome = String((type && (type.nome || type.id)) || '');
+    const words = nome.split(/[^\p{L}]+/u).filter(Boolean);
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return (nome.slice(0, 2) || 'GE').toUpperCase();
+}
 
 function isValid(state) {
     return Boolean(state.data.businessType && state.data.businessType.id);
@@ -16,22 +24,13 @@ async function render(body, ctx) {
     body.appendChild(loading);
 
     try {
-        const { response, data } = await apiRequest('/api/digitalizept/business-types', {
-            token: getToken()
-        });
-
-        if (response.status === 401) {
-            ctx.onUnauthorized();
-            return;
-        }
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to load business types.');
-        }
+        const settings = await fetchSettings(ctx);
+        if (!settings) return;
 
         loading.remove();
         body.appendChild(grid);
 
-        const types = Array.isArray(data.businessTypes) ? data.businessTypes : [];
+        const types = settings.businessTypes;
         if (!types.length) {
             const empty = document.createElement('div');
             empty.className = 'placeholder';
@@ -49,7 +48,7 @@ async function render(body, ctx) {
 
             const icon = document.createElement('span');
             icon.className = 'type-card-icon';
-            icon.textContent = type.icone || '🏪';
+            icon.textContent = marca(type);
 
             const name = document.createElement('span');
             name.className = 'type-card-name';

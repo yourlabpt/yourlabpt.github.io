@@ -7,25 +7,31 @@ import { proposalStep } from './steps/proposal.js';
 import { acceptanceStep } from './steps/acceptance.js';
 import { signatureStep } from './steps/signature.js';
 import { conclusionStep } from './steps/conclusion.js';
+import { saveDraftLead } from './draft.js';
 
+// localStorage, not sessionStorage: a locked phone or a tab the browser evicts
+// mid-visit must not cost a deal that is halfway to a signature.
 const STORAGE_KEY = 'yourlab_digitalizept_wizard';
 
-function placeholderStep(name) {
-    return {
-        name,
-        title: name,
-        subtitle: 'Este passo é construído nas próximas fases.',
-        isValid() { return true; },
-        render(body) {
-            const div = document.createElement('div');
-            div.className = 'placeholder';
-            div.textContent = `Em construção — ${name}`;
-            body.appendChild(div);
-        }
-    };
+export function clearWizardState() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch (_) { /* ignore */ }
 }
 
-// The 9 guided steps. Only Etapa 1 is live; the rest are placeholders for now.
+// Used to decide whether discarding needs a confirmation.
+export function hasWizardProgress() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        return Boolean(parsed && parsed.data && Object.keys(parsed.data).length > 0);
+    } catch (_) {
+        return false;
+    }
+}
+
+// The 9 guided steps.
 const STEPS = [
     businessTypeStep,
     dataStep,
@@ -40,7 +46,7 @@ const STEPS = [
 
 function loadState() {
     try {
-        const raw = sessionStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) return JSON.parse(raw);
     } catch (_) { /* ignore */ }
     return { step: 0, data: {} };
@@ -62,7 +68,7 @@ export function createWizard({ onUnauthorized, showToast }) {
 
     function persist() {
         try {
-            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (_) { /* ignore */ }
     }
 
@@ -110,14 +116,28 @@ export function createWizard({ onUnauthorized, showToast }) {
         currentValid = typeof step.isValid === 'function' ? step.isValid(state) : true;
         syncNav();
 
-        const ctx = { state, update, setValid, onUnauthorized, showToast };
+        const ctx = { state, update, setValid, onUnauthorized, showToast, reset };
         Promise.resolve(step.render(body, ctx)).catch(() => {
             showToast('Ocorreu um erro neste passo.', true);
         });
     }
 
-    function goNext() {
+    // Start a fresh deal. Without this the next shop inherits the previous
+    // client's answers, because the stored state outlives the sale.
+    function reset() {
+        clearWizardState();
+        state.step = 0;
+        state.data = {};
+        currentValid = false;
+        render();
+    }
+
+    async function goNext() {
         if (state.step >= STEPS.length - 1 || !currentValid) return;
+        if (STEPS[state.step] === dataStep) {
+            try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
+            catch (_) { /* a missed draft must not block the visit */ }
+        }
         state.step += 1;
         persist();
         render();
@@ -133,5 +153,5 @@ export function createWizard({ onUnauthorized, showToast }) {
     els.backBtn.addEventListener('click', goBack);
     els.nextBtn.addEventListener('click', goNext);
 
-    return { render };
+    return { render, reset };
 }

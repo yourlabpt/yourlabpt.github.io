@@ -1,7 +1,9 @@
 import { apiRequest } from '../api.js';
 import { getToken } from '../auth.js';
 import { fetchCatalog } from '../catalog.js';
+import { fetchConfig } from '../settings.js';
 import { buildContractModel, buildContractDocument } from '../deal/contract.js';
+import { enqueueDeal } from '../offline-queue.js';
 
 const PROJECT_STATES = [
     'Demonstração criada', 'Proposta enviada', 'Contrato assinado', 'Entrada recebida',
@@ -13,8 +15,8 @@ function isValid() {
     return true; // final step; advancing is disabled anyway
 }
 
-function buildFinalDocument(state, catalog) {
-    const model = buildContractModel(state, catalog);
+function buildFinalDocument(state, catalog, config) {
+    const model = buildContractModel(state, catalog, config);
     const a = state.data.assinatura || {};
     return buildContractDocument(model, {
         signaturePng: a.pngDataUrl,
@@ -22,8 +24,29 @@ function buildFinalDocument(state, catalog) {
     });
 }
 
-function downloadContract(state, catalog) {
-    const doc = buildFinalDocument(state, catalog);
+async function downloadContract(state, catalog, config, result) {
+    if (result && result.contractDownload) {
+        try {
+            const response = await fetch(result.contractDownload, {
+                headers: { 'x-admin-token': getToken() }
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const ext = (response.headers.get('content-type') || '').includes('pdf') ? 'pdf' : 'html';
+                const name = (state.data.dados && state.data.dados.nome_negocio || 'contrato')
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^\w-]+/g, '_');
+                a.href = url;
+                a.download = `${name}-contrato.${ext}`;
+                a.click();
+                URL.revokeObjectURL(url);
+                return;
+            }
+        } catch (_) { /* fall through to local HTML */ }
+    }
+    const doc = buildFinalDocument(state, catalog, config);
     const blob = new Blob([doc], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -38,18 +61,26 @@ function downloadContract(state, catalog) {
 
 async function render(body, ctx) {
     let catalog = [];
-    try { catalog = await fetchCatalog(ctx) || []; } catch (_) { /* ignore */ }
+    let config = null;
+    try {
+        catalog = await fetchCatalog(ctx) || [];
+        config = await fetchConfig(ctx);
+    } catch (_) { /* ignore */ }
 
+    // Deliberately no refreshCalc here: this screen reproduces the signed deal.
     const signed = Boolean(ctx.state.data.assinatura && ctx.state.data.assinatura.pngDataUrl);
-    const model = buildContractModel(ctx.state, catalog);
-    const total = (model.calc && model.calc.total) ? (model.calc.total / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—';
-    const entrada = (model.calc && model.calc.entrada) ? (model.calc.entrada / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—';
+    const model = buildContractModel(ctx.state, catalog, config);
+    const c = model.calc || {};
+    const euros = (cents) => (cents ? (cents / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—');
+    const total = euros(c.totalComIva);
+    const entrada = euros(c.entrada);
 
     const recap = document.createElement('div');
     recap.className = 'sum-card';
     recap.innerHTML = `
         <div class="sum-line"><span>Cliente</span><span class="sum-value">${model.cliente.nome || '—'}</span></div>
-        <div class="sum-line sum-strong"><span>Total</span><span class="sum-value">${total}</span></div>
+        ${c.iva > 0 ? `<div class="sum-line"><span>IVA (${Math.round(c.ivaRate * 100)}%)</span><span class="sum-value">${euros(c.iva)}</span></div>` : ''}
+        <div class="sum-line sum-strong"><span>Total${c.iva > 0 ? ' c/ IVA' : ''}</span><span class="sum-value">${total}</span></div>
         <div class="sum-line"><span>Entrada hoje (50%)</span><span class="sum-value">${entrada}</span></div>`;
     body.appendChild(recap);
 
@@ -82,11 +113,14 @@ async function render(body, ctx) {
             const a = ctx.state.data.assinatura;
             const bt = ctx.state.data.businessType || {};
             const payload = {
+                leadId: ctx.state.data.leadId || '',
                 businessType: { id: bt.id, nome: bt.nome },
                 dados: ctx.state.data.dados,
+                identidade: ctx.state.data.identidade,
+                demo: ctx.state.data.demo,
                 proposta: ctx.state.data.proposta,
                 clienteLegal: ctx.state.data.clienteLegal,
-                contrato: { html: buildFinalDocument(ctx.state, catalog), hash: a.hash },
+                contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash },
                 assinatura: { pngDataUrl: a.pngDataUrl, geo: a.geo, dispositivo: a.dispositivo, timestamp: a.timestamp }
             };
 
@@ -103,6 +137,16 @@ async function render(body, ctx) {
                 body.innerHTML = '';
                 render(body, ctx);
             } catch (err) {
+                const offline = !navigator.onLine || err.name === 'TypeError';
+                if (offline) {
+                    enqueueDeal(payload);
+                    ctx.state.data.dealResult = { ok: true, queued: true, projectId: 'pendente' };
+                    ctx.update({ dealResult: ctx.state.data.dealResult });
+                    body.innerHTML = '';
+                    render(body, ctx);
+                    ctx.showToast('Sem rede. O contrato fica na fila e envia-se quando houver ligação.', true);
+                    return;
+                }
                 sendBtn.disabled = false;
                 status.className = 'demo-status demo-status-error';
                 status.textContent = err.message || 'Não foi possível finalizar.';
@@ -121,10 +165,12 @@ async function render(body, ctx) {
     const ok = document.createElement('div');
     ok.className = 'demo-status demo-status-ok';
     ok.style.marginBottom = '14px';
-    const emailMsg = result.email && result.email.clientSent
+    const emailMsg = result.queued
+        ? 'Contrato na fila. Envia-se automaticamente quando houver rede.'
+        : result.email && result.email.clientSent
         ? 'Contrato enviado ao cliente e arquivado.'
         : 'Projeto criado. Email não enviado (configure o SMTP para envio automático).';
-    ok.textContent = `✓ ${emailMsg}`;
+    ok.textContent = emailMsg;
     body.appendChild(ok);
 
     const project = document.createElement('div');
@@ -151,8 +197,36 @@ async function render(body, ctx) {
     dl.className = 'btn-primary';
     dl.style.width = '100%';
     dl.textContent = 'Descarregar contrato';
-    dl.addEventListener('click', () => downloadContract(ctx.state, catalog));
+    dl.addEventListener('click', () => downloadContract(ctx.state, catalog, config, result));
     body.appendChild(dl);
+
+    const demoUrl = result.demoUrl || ctx.state.data.demoUrl;
+    if (demoUrl) {
+        const link = document.createElement('a');
+        link.className = 'id-disclaimer';
+        link.href = demoUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.style.display = 'block';
+        link.style.marginTop = '10px';
+        link.textContent = `Demonstração pública: ${demoUrl}`;
+        body.appendChild(link);
+    }
+
+    // The only way out of a closed deal. Without it the next shop starts on this
+    // screen with the previous client's data still loaded.
+    const novo = document.createElement('button');
+    novo.type = 'button';
+    novo.className = 'btn-secondary';
+    novo.style.width = '100%';
+    novo.style.marginTop = '10px';
+    novo.textContent = 'Novo negócio';
+    novo.addEventListener('click', () => {
+        if (window.confirm('Começar um negócio novo? Os dados deste cliente já foram guardados e enviados.')) {
+            ctx.reset();
+        }
+    });
+    body.appendChild(novo);
 
     ctx.setValid(true);
 }

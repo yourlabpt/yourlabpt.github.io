@@ -1,22 +1,93 @@
 {
   "id": "mercadinho",
   "nome": "Mercadinho",
-  "icone": "🛒",
+  "icone": "ME",
   "tom": "próximo, prático, de confiança",
   "prompt_contexto": "Mercearia ou minimercado de bairro em Portugal. O texto valoriza a proximidade, a frescura dos produtos, o atendimento familiar e a conveniência do dia a dia. Fala como quem conhece os clientes pelo nome.",
   "publico_alvo": "Vizinhança e clientes habituais que compram o essencial do dia a dia e valorizam o trato próximo e a frescura.",
-  "servicos_tipicos": ["Mercearia", "Frutas e legumes", "Talho", "Padaria", "Bebidas", "Entregas ao domicílio"],
-  "diferenciais_sugeridos": ["Produtos frescos", "Fornecedores locais", "Atendimento familiar", "Preços justos", "Entregas ao domicílio"],
-  "palavras_chave": ["mercearia", "minimercado", "produtos frescos", "entregas ao domicílio", "loja de bairro"],
-  "categorias_google": ["grocery_store", "supermarket"],
-  "imagens_demo": ["stock/mercadinho/1.jpg", "stock/mercadinho/2.jpg", "stock/mercadinho/3.jpg"],
-  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
-  "cores_sugeridas": ["#1f2d1a", "#8bbf5a", "#e0b44a"],
-  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
-  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "servicos_tipicos": [
+    "Mercearia",
+    "Frutas e legumes",
+    "Talho",
+    "Padaria",
+    "Bebidas",
+    "Entregas ao domicílio"
+  ],
+  "diferenciais_sugeridos": [
+    "Produtos frescos",
+    "Fornecedores locais",
+    "Atendimento familiar",
+    "Preços justos",
+    "Entregas ao domicílio"
+  ],
+  "palavras_chave": [
+    "mercearia",
+    "minimercado",
+    "produtos frescos",
+    "entregas ao domicílio",
+    "loja de bairro"
+  ],
+  "categorias_google": [
+    "grocery_store",
+    "supermarket"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "servicos",
+    "diferenciais",
+    "galeria",
+    "contactos",
+    "mapa",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#1f2d1a",
+    "#8bbf5a",
+    "#e0b44a"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "mbway",
+    "wifi",
+    "reservas",
+    "entregas",
+    "anos_experiencia",
+    "certificacoes"
+  ],
   "perguntas_especificas": [
-    { "id": "produtos_destaque", "label": "Produtos em destaque", "tipo": "texto_longo" },
-    { "id": "faz_entregas", "label": "Faz entregas ao domicílio?", "tipo": "sim_nao" },
-    { "id": "produtos_locais", "label": "Vende produtos locais/regionais?", "tipo": "sim_nao" }
+    {
+      "id": "produtos_destaque",
+      "label": "Produtos em destaque",
+      "tipo": "texto_longo"
+    },
+    {
+      "id": "faz_entregas",
+      "label": "Faz entregas ao domicílio?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "produtos_locais",
+      "label": "Vende produtos locais/regionais?",
+      "tipo": "sim_nao"
+    }
   ]
 }

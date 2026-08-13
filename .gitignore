@@ -51,3 +51,4 @@ projects/data/store.json.bak
 server/data/digitalizept.db
 server/data/digitalizept.db-*
 server/data/digitalizept-contracts/
+server/data/digitalizept-work/

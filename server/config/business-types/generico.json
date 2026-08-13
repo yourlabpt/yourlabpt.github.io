@@ -1,21 +1,83 @@
 {
   "id": "generico",
   "nome": "Genérico",
-  "icone": "🏪",
+  "icone": "GE",
   "tom": "claro, próximo, profissional",
   "prompt_contexto": "Pequeno negócio local em Portugal, sem categoria específica. O texto apresenta o negócio de forma clara e honesta, destaca os serviços e o que o distingue, e convida ao contacto. Adapta o tom à informação recolhida.",
   "publico_alvo": "Clientes locais que procuram o serviço ou produto do negócio e valorizam proximidade e confiança.",
-  "servicos_tipicos": ["Serviço principal", "Serviço secundário", "Atendimento ao cliente"],
-  "diferenciais_sugeridos": ["Atendimento próximo", "Qualidade", "Confiança", "Bom preço", "Experiência"],
-  "palavras_chave": ["negócio local", "serviços", "perto de si"],
-  "categorias_google": ["point_of_interest", "establishment"],
-  "imagens_demo": ["stock/generico/1.jpg", "stock/generico/2.jpg", "stock/generico/3.jpg"],
-  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
-  "cores_sugeridas": ["#1b1b1b", "#e8d5b7", "#7a8a99"],
-  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
-  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "servicos_tipicos": [
+    "Serviço principal",
+    "Serviço secundário",
+    "Atendimento ao cliente"
+  ],
+  "diferenciais_sugeridos": [
+    "Atendimento próximo",
+    "Qualidade",
+    "Confiança",
+    "Bom preço",
+    "Experiência"
+  ],
+  "palavras_chave": [
+    "negócio local",
+    "serviços",
+    "perto de si"
+  ],
+  "categorias_google": [
+    "point_of_interest",
+    "establishment"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "servicos",
+    "diferenciais",
+    "galeria",
+    "contactos",
+    "mapa",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#1b1b1b",
+    "#e8d5b7",
+    "#7a8a99"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "mbway",
+    "wifi",
+    "reservas",
+    "entregas",
+    "anos_experiencia",
+    "certificacoes"
+  ],
   "perguntas_especificas": [
-    { "id": "setor", "label": "Setor de atividade", "tipo": "texto" },
-    { "id": "publico", "label": "Quem são os seus clientes?", "tipo": "texto_longo" }
+    {
+      "id": "setor",
+      "label": "Setor de atividade",
+      "tipo": "texto"
+    },
+    {
+      "id": "publico",
+      "label": "Quem são os seus clientes?",
+      "tipo": "texto_longo"
+    }
   ]
 }

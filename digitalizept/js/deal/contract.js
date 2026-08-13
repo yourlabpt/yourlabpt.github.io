@@ -1,14 +1,21 @@
 import { formatEuros } from '../format.js';
 
-// YourLab (prestador) — fiscal fields left to fill so nothing is fabricated in a legal doc.
-const PROVIDER = {
+// YourLab (prestador). Fiscal identity comes from the server so a contract is
+// never signed against a placeholder; these are only the non-fiscal defaults.
+const PROVIDER_DEFAULTS = {
     nome: 'YourLab',
     responsavel: 'Túlio Soares',
-    nif: '(a preencher)',
-    morada: '(a preencher)',
+    nif: '',
+    morada: '',
     email: 'yourlabpt@gmail.com',
-    site: 'yourlabpt.com'
+    site: 'yourlabpt.com',
+    iban: '',
+    mbway: ''
 };
+
+// Shown in place of a missing fiscal field so the gap is obvious on screen
+// during the sale rather than discovered on a signed document.
+const MISSING = '(em falta)';
 
 const CLAUSES = [
     'Apenas os serviços contratados fazem parte deste acordo.',
@@ -29,7 +36,7 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-export function buildContractModel(state, catalog) {
+export function buildContractModel(state, catalog, config) {
     const dados = state.data.dados || {};
     const proposta = state.data.proposta || {};
     const calc = proposta._calc || {};
@@ -45,15 +52,21 @@ export function buildContractModel(state, catalog) {
         if (s) items.push({ nome: s.nome, valor: formatEuros(s.preco_centimos) });
     });
     if (proposta.urgencia && byCode.urgencia) {
-        items.push({ nome: 'Urgência (entrega em 48h)', valor: '+30%' });
+        const pct = Math.round((calc.urgenciaPct || Number(byCode.urgencia.percentual) || 0) * 100);
+        items.push({ nome: byCode.urgencia.nome, valor: `+${pct}%` });
     }
     if (proposta.manutencao && byCode[proposta.manutencao]) {
         const m = byCode[proposta.manutencao];
-        items.push({ nome: m.nome, valor: `${formatEuros(m.preco_centimos)}/mês` });
+        const mensal = calc.iva > 0 && calc.manutencaoMensalComIva
+            ? calc.manutencaoMensalComIva
+            : m.preco_centimos;
+        items.push({ nome: m.nome, valor: `${formatEuros(mensal)}/mês` });
     }
 
+    const provider = { ...PROVIDER_DEFAULTS, ...((config && config.provider) || {}) };
+
     return {
-        provider: PROVIDER,
+        provider,
         cliente: {
             nome: cliente.nome || '',
             nif: cliente.nif || '',
@@ -74,14 +87,31 @@ export function contractInnerHtml(model) {
     const itemsRows = model.items.map((i) => `
         <tr><td>${escapeHtml(i.nome)}</td><td class="c-right">${escapeHtml(i.valor)}</td></tr>`).join('');
 
+    // With IVA the total has to be broken out; under isencao there is a single
+    // total and no "s/ IVA" wording, which would imply an IVA line that never comes.
+    const comIva = c.iva > 0;
     const valuesRows = [
         ['Subtotal', formatEuros(c.subtotal)],
         c.urgencia > 0 ? [`Urgência (+${Math.round((c.urgenciaPct || 0) * 100)}%)`, `+${formatEuros(c.urgencia)}`] : null,
         c.desconto > 0 ? [`Desconto (−${c.descontoPct}%)`, `−${formatEuros(c.desconto)}`] : null,
-        ['Total', formatEuros(c.total)],
+        comIva ? ['Total s/ IVA', formatEuros(c.totalSemIva)] : null,
+        comIva ? [`IVA (${Math.round((c.ivaRate || 0) * 100)}%)`, `+${formatEuros(c.iva)}`] : null,
+        [comIva ? 'Total c/ IVA' : 'Total', formatEuros(c.totalComIva)],
         ['Entrada na assinatura (50%)', formatEuros(c.entrada)],
         ['Na entrega (50%)', formatEuros(c.final)]
     ].filter(Boolean).map(([l, v]) => `<tr><td>${escapeHtml(l)}</td><td class="c-right">${escapeHtml(v)}</td></tr>`).join('');
+
+    const ivaNote = comIva
+        ? `Valores com IVA à taxa legal de ${Math.round((c.ivaRate || 0) * 100)}%.`
+        : 'IVA — regime de isenção nos termos do art. 53.º do CIVA.';
+
+    const payment = [
+        model.provider.iban ? `IBAN: ${model.provider.iban}` : '',
+        model.provider.mbway ? `MB WAY: ${model.provider.mbway}` : ''
+    ].filter(Boolean).join(' · ');
+    const paymentNote = payment
+        ? `${payment}. Indique como referência o nome do estabelecimento.`
+        : '';
 
     const clausesList = model.clauses.map((cl) => `<li>${escapeHtml(cl)}</li>`).join('');
 
@@ -93,7 +123,7 @@ export function contractInnerHtml(model) {
         <div class="c-party">
             <div class="c-party-role">Prestador</div>
             <strong>${escapeHtml(model.provider.nome)}</strong> — ${escapeHtml(model.provider.responsavel)}<br>
-            NIF: ${escapeHtml(model.provider.nif)} · ${escapeHtml(model.provider.morada)}<br>
+            NIF: ${escapeHtml(model.provider.nif || MISSING)} · ${escapeHtml(model.provider.morada || MISSING)}<br>
             ${escapeHtml(model.provider.email)} · ${escapeHtml(model.provider.site)}
         </div>
         <div class="c-party">
@@ -109,7 +139,9 @@ export function contractInnerHtml(model) {
 
     <h2 class="c-h2">Valores e pagamento</h2>
     <table class="c-table c-values">${valuesRows}</table>
+    <p class="c-note">${escapeHtml(ivaNote)}</p>
     <p class="c-note">Pagamento: 50% na assinatura, 50% na entrega. A produção inicia após receção da entrada.</p>
+    ${paymentNote ? `<p class="c-note">${escapeHtml(paymentNote)}</p>` : ''}
 
     <h2 class="c-h2">Responsabilidades e limitações</h2>
     <ul class="c-clauses">${clausesList}</ul>`;

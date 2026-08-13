@@ -1,6 +1,9 @@
 import { apiRequest } from './api.js';
 import { getToken, setToken, clearToken } from './auth.js';
-import { createWizard } from './wizard.js';
+import { createWizard, clearWizardState, hasWizardProgress } from './wizard.js';
+import { clearSettingsCache, fetchSettings } from './settings.js';
+import { clearCatalogCache, fetchCatalog } from './catalog.js';
+import { flushDealQueue, queuedDealCount } from './offline-queue.js';
 
 const el = {
     loginOverlay: document.getElementById('login-overlay'),
@@ -75,6 +78,11 @@ async function handleLoginSubmit(event) {
 }
 
 async function logout() {
+    // Signing out drops the deal on screen, which during a visit is unrecoverable.
+    if (hasWizardProgress() && !window.confirm('Sair vai apagar os dados deste negócio. Continuar?')) {
+        return;
+    }
+
     try {
         await apiRequest('/api/digitalizept/logout', {
             method: 'POST',
@@ -85,6 +93,12 @@ async function logout() {
     }
 
     clearToken();
+    // Without this the wizard singleton and the stored state survive the logout
+    // and the next login resumes the previous client's deal.
+    clearWizardState();
+    clearSettingsCache();
+    clearCatalogCache();
+    wizard = null;
     showLoginOverlay();
 }
 
@@ -93,13 +107,37 @@ function bindEvents() {
     el.logoutBtn.addEventListener('click', logout);
 }
 
-function boot() {
+async function boot() {
     bindEvents();
 
-    if (getToken()) {
-        startApp();
-    } else {
+    if (!getToken()) {
         showLoginOverlay();
+        return;
+    }
+
+    // Tokens live in server memory with a 12h TTL, so a restart invalidates them
+    // without the client knowing. Probe once here rather than letting the first
+    // step render and fail. This also warms the config cache for offline use.
+    try {
+        const settings = await fetchSettings({ onUnauthorized: () => {} });
+        if (!settings) {
+            handleUnauthorized();
+            return;
+        }
+        await fetchCatalog({ onUnauthorized: () => {} });
+    } catch (_) {
+        // Unreachable server (no signal in a shop). Trust the stored token and
+        // let the app run from cache rather than locking the vendedor out.
+    }
+
+    startApp();
+    window.addEventListener('online', () => {
+        flushDealQueue().then((sent) => {
+            if (sent.length) showToast(`${sent.length} contrato(s) enviado(s) após recuperar a rede.`);
+        }).catch(() => {});
+    });
+    if (queuedDealCount()) {
+        flushDealQueue().catch(() => {});
     }
 }
 

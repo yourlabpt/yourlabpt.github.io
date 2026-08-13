@@ -20,6 +20,10 @@ export async function fetchCatalog(ctx) {
     return cache;
 }
 
+export function clearCatalogCache() {
+    cache = null;
+}
+
 export function catalogByCode(catalog) {
     const map = {};
     (catalog || []).forEach((servico) => { map[servico.codigo] = servico; });

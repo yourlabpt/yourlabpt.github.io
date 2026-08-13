@@ -1,22 +1,92 @@
 {
   "id": "joalharia",
   "nome": "Joalharia",
-  "icone": "💍",
+  "icone": "JO",
   "tom": "elegante, sofisticado, de confiança",
   "prompt_contexto": "Joalharia e relojoaria em Portugal. O texto transmite elegância, valor e confiança — peças que marcam momentos. Fala de ouro, prata, relógios e serviço de reparação com discrição e requinte. Tom refinado, nunca ostensivo.",
   "publico_alvo": "Clientes que procuram joias, relógios ou presentes especiais, e serviço de reparação e avaliação de confiança.",
-  "servicos_tipicos": ["Joias em ouro e prata", "Relógios", "Alianças", "Reparações", "Gravações", "Avaliação de peças"],
-  "diferenciais_sugeridos": ["Peças exclusivas", "Reparação e restauro", "Gravação personalizada", "Marcas de prestígio", "Anos de confiança"],
-  "palavras_chave": ["joalharia", "relojoaria", "alianças", "ouro e prata", "reparação de relógios"],
-  "categorias_google": ["jewelry_store"],
-  "imagens_demo": ["stock/joalharia/1.jpg", "stock/joalharia/2.jpg", "stock/joalharia/3.jpg"],
-  "seccoes_landing": ["hero", "sobre", "servicos", "diferenciais", "galeria", "contactos", "mapa", "rodape"],
-  "cores_sugeridas": ["#17130d", "#c9a24b", "#e8dcc0"],
-  "campos_obrigatorios": ["nome_negocio", "responsavel", "telefone", "whatsapp", "morada", "cidade", "horario", "o_que_faz", "principais_servicos", "diferencial"],
-  "campos_opcionais": ["email", "instagram", "facebook", "tiktok", "website_atual", "idiomas", "estacionamento", "mbway", "wifi", "reservas", "entregas", "anos_experiencia", "certificacoes"],
+  "servicos_tipicos": [
+    "Joias em ouro e prata",
+    "Relógios",
+    "Alianças",
+    "Reparações",
+    "Gravações",
+    "Avaliação de peças"
+  ],
+  "diferenciais_sugeridos": [
+    "Peças exclusivas",
+    "Reparação e restauro",
+    "Gravação personalizada",
+    "Marcas de prestígio",
+    "Anos de confiança"
+  ],
+  "palavras_chave": [
+    "joalharia",
+    "relojoaria",
+    "alianças",
+    "ouro e prata",
+    "reparação de relógios"
+  ],
+  "categorias_google": [
+    "jewelry_store"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "servicos",
+    "diferenciais",
+    "galeria",
+    "contactos",
+    "mapa",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#17130d",
+    "#c9a24b",
+    "#e8dcc0"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "mbway",
+    "wifi",
+    "reservas",
+    "entregas",
+    "anos_experiencia",
+    "certificacoes"
+  ],
   "perguntas_especificas": [
-    { "id": "especialidade", "label": "Especialidade (joias, relógios, ambos)", "tipo": "texto" },
-    { "id": "faz_reparacoes", "label": "Faz reparações?", "tipo": "sim_nao" },
-    { "id": "faz_avaliacoes", "label": "Faz avaliação de peças?", "tipo": "sim_nao" }
+    {
+      "id": "especialidade",
+      "label": "Especialidade (joias, relógios, ambos)",
+      "tipo": "texto"
+    },
+    {
+      "id": "faz_reparacoes",
+      "label": "Faz reparações?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "faz_avaliacoes",
+      "label": "Faz avaliação de peças?",
+      "tipo": "sim_nao"
+    }
   ]
 }

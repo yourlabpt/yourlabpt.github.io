@@ -3,6 +3,7 @@
  * One file, one vendedor (owner) for now — see 06 · Plano de Execução da Plataforma on Notion.
  */
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
@@ -131,26 +132,65 @@ function nowIso() {
     return new Date().toISOString();
 }
 
-function seedCatalog(db) {
-    const count = db.prepare('SELECT COUNT(*) AS n FROM servico').get().n;
-    if (count > 0) return;
+// CREATE TABLE IF NOT EXISTS never alters an existing table, so new columns have
+// to be added explicitly or an already-created DB silently keeps the old shape.
+function addMissingColumns(db, table, columns) {
+    const existing = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+    Object.entries(columns).forEach(([name, definition]) => {
+        if (!existing.has(name)) {
+            db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+        }
+    });
+}
 
+function migrate(db) {
+    addMissingColumns(db, 'proposta', {
+        iva_rate: 'REAL NOT NULL DEFAULT 0',
+        iva_centimos: 'INTEGER NOT NULL DEFAULT 0',
+        total_com_iva_centimos: 'INTEGER NOT NULL DEFAULT 0'
+    });
+    addMissingColumns(db, 'lead', {
+        demo_json: "TEXT NOT NULL DEFAULT '{}'",
+        identidade_json: "TEXT NOT NULL DEFAULT '{}'",
+        demo_slug: "TEXT NOT NULL DEFAULT ''",
+        work_path: "TEXT NOT NULL DEFAULT ''"
+    });
+    addMissingColumns(db, 'contrato', {
+        html_path: "TEXT NOT NULL DEFAULT ''"
+    });
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lead_demo_slug
+        ON lead(demo_slug) WHERE demo_slug != ''`);
+}
+
+// The seed is the source of truth for pricing, so it is re-applied on every boot
+// rather than only into an empty table — otherwise a price change here would
+// never reach a machine that already has a DB. `ativo` is left alone because
+// that is a local toggle, not a price.
+function seedCatalog(db) {
     const insert = db.prepare(`
         INSERT INTO servico (id, codigo, nome, descricao_cliente, preco_centimos, percentual, tipo, ativo, ordem)
         VALUES (@id, @codigo, @nome, @descricao_cliente, @preco_centimos, @percentual, @tipo, 1, @ordem)
     `);
+    const update = db.prepare(`
+        UPDATE servico SET nome = @nome, descricao_cliente = @descricao_cliente,
+            preco_centimos = @preco_centimos, percentual = @percentual,
+            tipo = @tipo, ordem = @ordem
+        WHERE codigo = @codigo
+    `);
+    const findByCode = db.prepare('SELECT id FROM servico WHERE codigo = ?');
 
-    const insertAll = db.transaction((items) => {
+    const sync = db.transaction((items) => {
         items.forEach((item) => {
-            insert.run({
-                id: crypto.randomUUID(),
-                percentual: null,
-                ...item
-            });
+            const row = { id: crypto.randomUUID(), percentual: null, ...item };
+            if (findByCode.get(item.codigo)) {
+                update.run(row);
+            } else {
+                insert.run(row);
+            }
         });
     });
 
-    insertAll(CATALOG_SEED);
+    sync(CATALOG_SEED);
 }
 
 let dbInstance = null;
@@ -158,9 +198,11 @@ let dbInstance = null;
 function getDb() {
     if (dbInstance) return dbInstance;
 
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     dbInstance = new Database(DB_PATH);
     dbInstance.pragma('journal_mode = WAL');
     dbInstance.exec(SCHEMA);
+    migrate(dbInstance);
     seedCatalog(dbInstance);
 
     return dbInstance;

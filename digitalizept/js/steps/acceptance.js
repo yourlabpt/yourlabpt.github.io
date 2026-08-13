@@ -1,4 +1,6 @@
 import { fetchCatalog } from '../catalog.js';
+import { fetchConfig } from '../settings.js';
+import { refreshCalc } from '../proposal-calc.js';
 import { validateNif } from '../deal/nif.js';
 import { buildContractModel, contractInnerHtml } from '../deal/contract.js';
 
@@ -80,12 +82,19 @@ async function render(body, ctx) {
     body.appendChild(previewSection);
 
     let catalog = [];
+    let config = null;
     try {
         catalog = await fetchCatalog(ctx) || [];
+        config = await fetchConfig(ctx);
     } catch (_) { /* preview still renders with empty items */ }
+    if (config) {
+        // The client may have gone back and changed services since the proposal.
+        refreshCalc(ctx.state, catalog, ctx.state.data.businessType || {}, config.ivaRate);
+        ctx.update({ proposta: ctx.state.data.proposta });
+    }
 
     function refreshContract() {
-        const model = buildContractModel(ctx.state, catalog);
+        const model = buildContractModel(ctx.state, catalog, config);
         contractBox.innerHTML = contractInnerHtml(model);
     }
     refreshContract();

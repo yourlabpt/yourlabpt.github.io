@@ -1,8 +1,5 @@
-import { apiRequest } from '../api.js';
-import { getToken } from '../auth.js';
-
-// Cached across renders so returning to this step doesn't refetch the dictionary.
-let standardFieldsCache = null;
+import { fetchSettings } from '../settings.js';
+import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -15,17 +12,8 @@ function getDados(state) {
     return state.data.dados;
 }
 
-// Which required fields (standard + specific) still need a value.
-function requiredFieldIds(businessType) {
-    const standard = Array.isArray(businessType.campos_obrigatorios) ? businessType.campos_obrigatorios : [];
-    return standard;
-}
-
 function isValid(state) {
-    const businessType = getBusinessType(state);
-    if (!businessType) return false;
-    const dados = getDados(state);
-    return requiredFieldIds(businessType).every((id) => String(dados[id] || '').trim().length > 0);
+    return isDataStepValid(state);
 }
 
 function speechAvailable() {
@@ -60,13 +48,19 @@ function attachDictation(inputEl, micBtn) {
     });
 }
 
-function buildField(def, id, value, onChange) {
+function buildField(def, id, value, onChange, required) {
     const wrap = document.createElement('label');
     wrap.className = 'field';
 
     const labelRow = document.createElement('span');
     labelRow.className = 'field-label';
     labelRow.textContent = def.label || id;
+    if (required) {
+        const mark = document.createElement('span');
+        mark.className = 'field-req';
+        mark.textContent = ' obrigatório';
+        labelRow.appendChild(mark);
+    }
     wrap.appendChild(labelRow);
 
     const tipo = def.tipo || 'texto';
@@ -115,7 +109,7 @@ function buildField(def, id, value, onChange) {
         mic.type = 'button';
         mic.className = 'mic-btn';
         mic.setAttribute('aria-label', 'Ditar por voz');
-        mic.textContent = '🎤';
+        mic.textContent = 'voz';
         attachDictation(input, mic);
         row.append(input, mic);
         wrap.appendChild(row);
@@ -140,16 +134,8 @@ function renderGroup(container, titleText) {
 }
 
 async function ensureStandardFields(ctx) {
-    if (standardFieldsCache) return standardFieldsCache;
-    const { response, data } = await apiRequest('/api/digitalizept/business-types', {
-        token: getToken()
-    });
-    if (response.status === 401) {
-        ctx.onUnauthorized();
-        return null;
-    }
-    standardFieldsCache = (data && data.standardFields) || {};
-    return standardFieldsCache;
+    const settings = await fetchSettings(ctx);
+    return settings ? settings.standardFields : null;
 }
 
 async function render(body, ctx) {
@@ -173,6 +159,15 @@ async function render(body, ctx) {
     loading.remove();
 
     const dados = getDados(ctx.state);
+    const used = new Set();
+
+    function take(ids) {
+        return (ids || []).filter((id) => {
+            if (!id || used.has(id)) return false;
+            used.add(id);
+            return true;
+        });
+    }
 
     function onFieldChange(id, val) {
         dados[id] = val;
@@ -180,36 +175,45 @@ async function render(body, ctx) {
         ctx.setValid(isValid(ctx.state));
     }
 
-    // Obrigatórios
-    const reqGroup = renderGroup(body, 'Obrigatórios');
-    (businessType.campos_obrigatorios || []).forEach((id) => {
-        const def = standardFields[id] || { label: id, tipo: 'texto' };
-        reqGroup.appendChild(buildField(def, id, dados[id], (v) => onFieldChange(id, v)));
-    });
-
-    // Perguntas específicas do setor
-    const specific = Array.isArray(businessType.perguntas_especificas) ? businessType.perguntas_especificas : [];
-    if (specific.length) {
-        const specGroup = renderGroup(body, `Sobre o negócio · ${businessType.nome}`);
-        specific.forEach((q) => {
-            specGroup.appendChild(buildField(q, q.id, dados[q.id], (v) => onFieldChange(q.id, v)));
+    function appendFields(group, ids, required) {
+        ids.forEach((id) => {
+            const def = standardFields[id] || { label: id, tipo: 'texto' };
+            group.appendChild(buildField(def, id, dados[id], (v) => onFieldChange(id, v), required));
         });
     }
 
-    // Opcionais (collapsible)
-    const optIds = businessType.campos_opcionais || [];
-    if (optIds.length) {
+    // Same fields as before, public shopfront first so Continuar unlocks without
+    // the owner's name or a written pitch.
+    const publicIds = take([...PUBLIC_REQUIRED, ...PUBLIC_EXTRA]);
+    const laterFromRequired = take(businessType.campos_obrigatorios || []);
+    const specific = Array.isArray(businessType.perguntas_especificas) ? businessType.perguntas_especificas : [];
+    const restOptional = take(businessType.campos_opcionais || []);
+
+    const mainGroup = renderGroup(body, 'Estabelecimento');
+    mainGroup.classList.add('field-grid');
+    publicIds.forEach((id) => {
+        const def = standardFields[id] || { label: id, tipo: 'texto' };
+        mainGroup.appendChild(buildField(def, id, dados[id], (v) => onFieldChange(id, v), PUBLIC_REQUIRED.includes(id)));
+    });
+    appendFields(mainGroup, laterFromRequired, false);
+
+    if (specific.length) {
+        const specGroup = renderGroup(body, `Sobre o negócio · ${businessType.nome}`);
+        specGroup.classList.add('field-grid');
+        specific.forEach((q) => {
+            specGroup.appendChild(buildField(q, q.id, dados[q.id], (v) => onFieldChange(q.id, v), false));
+        });
+    }
+
+    if (restOptional.length) {
         const details = document.createElement('details');
         details.className = 'field-optional';
         const summary = document.createElement('summary');
         summary.textContent = 'Opcionais (recomendado preencher o que souber)';
         details.appendChild(summary);
         const optGroup = document.createElement('div');
-        optGroup.className = 'field-group';
-        optIds.forEach((id) => {
-            const def = standardFields[id] || { label: id, tipo: 'texto' };
-            optGroup.appendChild(buildField(def, id, dados[id], (v) => onFieldChange(id, v)));
-        });
+        optGroup.className = 'field-group field-grid';
+        appendFields(optGroup, restOptional, false);
         details.appendChild(optGroup);
         body.appendChild(details);
     }
@@ -220,7 +224,7 @@ async function render(body, ctx) {
 export const dataStep = {
     name: 'Dados do estabelecimento',
     title: 'Dados do estabelecimento',
-    subtitle: 'Preencha o essencial. Não saia da visita sem o conteúdo — é o que garante o prazo.',
+    subtitle: 'Nome, morada e contacto do negócio chegam para avançar. O resto pode ficar para depois do fecho.',
     isValid,
     render
 };

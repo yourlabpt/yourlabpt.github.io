@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Demonstração — Digitalize Portugal</title>
+    <link rel="stylesheet" href="/digitalizept/digitalizept.css">
+</head>
+<body>
+    <div id="root" class="dp-public">A carregar a demonstração…</div>
+    <script type="module">
+        import { renderLanding } from '/digitalizept/js/demo/landing.js';
+
+        const slug = window.location.pathname.split('/').filter(Boolean).pop();
+        const root = document.getElementById('root');
+
+        try {
+            const response = await fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}`);
+            const data = await response.json();
+            if (!response.ok || !data.demo) {
+                root.textContent = data.error || 'Demonstração não encontrada.';
+            } else {
+                document.title = `${data.nome || 'Demonstração'} — Digitalize Portugal`;
+                root.replaceWith(renderLanding({
+                    data: {
+                        businessType: data.businessType,
+                        dados: data.dados,
+                        identidade: data.identidade,
+                        demo: data.demo
+                    }
+                }));
+            }
+        } catch (_) {
+            root.textContent = 'Não foi possível carregar a demonstração.';
+        }
+    </script>
+</body>
+</html>

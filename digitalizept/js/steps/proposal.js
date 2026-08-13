@@ -1,4 +1,5 @@
 import { fetchCatalog } from '../catalog.js';
+import { fetchConfig } from '../settings.js';
 import { formatEuros } from '../format.js';
 import { ensureProposta, computeProposta, guardrailLevel } from '../proposal-calc.js';
 
@@ -26,14 +27,16 @@ async function render(body, ctx) {
     body.appendChild(loading);
 
     let catalog;
+    let config;
     try {
         catalog = await fetchCatalog(ctx);
+        config = await fetchConfig(ctx);
     } catch (_) {
         loading.textContent = 'Não foi possível carregar o catálogo.';
         ctx.setValid(false);
         return;
     }
-    if (!catalog) return;
+    if (!catalog || !config) return;
     loading.remove();
 
     // --- Discount selector ---
@@ -55,7 +58,7 @@ async function render(body, ctx) {
     const summaryWrap = document.createElement('div');
 
     function recompute() {
-        const c = computeProposta(proposta, catalog, businessType);
+        const c = computeProposta(proposta, catalog, businessType, config.ivaRate);
 
         // persist computed values for later slices
         ctx.update({
@@ -80,11 +83,16 @@ async function render(body, ctx) {
         const divider = document.createElement('div');
         divider.className = 'sum-divider';
         card.appendChild(divider);
-        card.appendChild(summaryLine('Total', formatEuros(c.total), { strong: true }));
+        if (c.iva > 0) {
+            card.appendChild(summaryLine('Total s/ IVA', formatEuros(c.totalSemIva)));
+            card.appendChild(summaryLine(`IVA (${Math.round(c.ivaRate * 100)}%)`, `+${formatEuros(c.iva)}`, { muted: true }));
+        }
+        card.appendChild(summaryLine(c.iva > 0 ? 'Total c/ IVA' : 'Total', formatEuros(c.totalComIva), { strong: true }));
         card.appendChild(summaryLine('Entrada hoje (50%)', formatEuros(c.entrada)));
         card.appendChild(summaryLine('Na entrega (50%)', formatEuros(c.final)));
         if (c.manutencaoMensal > 0) {
-            card.appendChild(summaryLine('Manutenção', `${formatEuros(c.manutencaoMensal)}/mês`, { muted: true }));
+            const mensal = c.iva > 0 ? c.manutencaoMensalComIva : c.manutencaoMensal;
+            card.appendChild(summaryLine('Manutenção', `${formatEuros(mensal)}/mês`, { muted: true }));
         }
         summaryWrap.appendChild(card);
 

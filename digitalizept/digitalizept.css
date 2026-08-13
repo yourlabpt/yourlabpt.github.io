@@ -169,16 +169,30 @@ button, input, textarea, select {
     margin: 0 5px;
 }
 
-.btn-icon {
-    width: 38px;
-    height: 38px;
+.btn-icon,
+.btn-text {
     flex-shrink: 0;
-    border-radius: 50%;
     border: 1px solid var(--accent-soft);
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
+}
+
+.btn-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
     font-size: 1rem;
+}
+
+.btn-text {
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .app-main {
@@ -242,8 +256,16 @@ button, input, textarea, select {
 }
 
 .type-card-icon {
-    font-size: 2rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
     line-height: 1;
+    text-transform: uppercase;
+    color: var(--accent-color);
+    border: 1px solid var(--accent-soft);
+    border-radius: 4px;
+    padding: 7px 8px;
+    min-width: 2.6em;
 }
 
 .type-card-name {
@@ -278,6 +300,14 @@ button, input, textarea, select {
     color: var(--text-muted);
 }
 
+.field-req {
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+    color: var(--accent-color);
+    opacity: 0.85;
+}
+
 .field-input {
     width: 100%;
     padding: 13px 14px;
@@ -305,13 +335,18 @@ button, input, textarea, select {
 
 .mic-btn {
     flex-shrink: 0;
-    width: 46px;
+    width: auto;
+    min-width: 46px;
+    padding: 0 10px;
     border-radius: 10px;
     border: 1px solid var(--accent-soft);
     background: var(--secondary-dark);
-    color: var(--text-light);
+    color: var(--text-muted);
     cursor: pointer;
-    font-size: 1.1rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
 }
 
 .mic-btn.listening {
@@ -774,18 +809,16 @@ button, input, textarea, select {
     line-height: 1.45;
 }
 
-.dpl-dif-check {
+.dpl-dif-check,
+.dpl-dif-mark {
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    width: 14px;
+    height: 1px;
+    margin-top: 0.7em;
     background: var(--l-destaque);
-    color: var(--l-base);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 700;
+    border: 0;
+    border-radius: 0;
+    font-size: 0;
 }
 
 /* Gallery */
@@ -797,13 +830,21 @@ button, input, textarea, select {
 
 .dpl-galeria-tile {
     aspect-ratio: 1;
-    border-radius: 10px;
+    border-radius: 4px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8rem;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 10px 12px;
     background: linear-gradient(135deg, var(--l-base), var(--l-secundaria));
     opacity: 0.9;
+}
+
+.dpl-galeria-mark {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: #fff;
+    opacity: 0.85;
 }
 
 .dpl-galeria-tile-1 {
@@ -904,14 +945,19 @@ button, input, textarea, select {
 }
 
 .dpl-fab-btn {
-    width: 54px;
-    height: 54px;
-    border-radius: 50%;
+    min-width: 48px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     text-decoration: none;
+    color: #fff;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
@@ -1019,7 +1065,6 @@ button, input, textarea, select {
 
 .svc-row.selected .svc-check {
     background: var(--accent-color);
-    color: var(--primary-dark);
     border-color: var(--accent-color);
 }
 
@@ -1307,8 +1352,13 @@ button, input, textarea, select {
 }
 
 .proj-state-active::before {
-    content: "● ";
-    color: var(--accent-color);
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 8px;
+    background: var(--accent-color);
+    vertical-align: middle;
 }
 
 /* ---------- Wizard footer nav ---------- */
@@ -1381,4 +1431,176 @@ button, input, textarea, select {
 .toast.error {
     border-color: var(--danger-color);
     color: var(--danger-color);
+}
+
+/* ---------- Desktop: same language, more room ---------- */
+@media (min-width: 900px) {
+    html, body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    body {
+        background:
+            radial-gradient(1100px 640px at 8% -12%, rgba(232, 213, 183, 0.14), transparent 58%),
+            radial-gradient(900px 520px at 108% 18%, rgba(122, 138, 153, 0.14), transparent 52%),
+            radial-gradient(700px 480px at 70% 115%, rgba(232, 213, 183, 0.07), transparent 60%),
+            var(--primary-dark);
+    }
+
+    body::before,
+    body::after {
+        content: "";
+        position: fixed;
+        pointer-events: none;
+        z-index: 0;
+        border-radius: 50%;
+        filter: blur(56px);
+    }
+
+    body::before {
+        width: 42vw;
+        height: 42vw;
+        top: -12vh;
+        left: -8vw;
+        background: rgba(232, 213, 183, 0.09);
+        animation: dp-drift-a 28s ease-in-out infinite alternate;
+    }
+
+    body::after {
+        width: 36vw;
+        height: 36vw;
+        right: -10vw;
+        bottom: -16vh;
+        background: rgba(122, 138, 153, 0.1);
+        animation: dp-drift-b 34s ease-in-out infinite alternate;
+    }
+
+    .overlay {
+        background: rgba(27, 27, 27, 0.42);
+        backdrop-filter: blur(10px);
+    }
+
+    .login-box {
+        max-width: 420px;
+        padding: 36px 32px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    .app {
+        position: relative;
+        z-index: 1;
+        max-width: 1080px;
+        width: calc(100% - 48px);
+        min-height: calc(100vh - 48px);
+        max-height: calc(100vh - 48px);
+        margin: 24px auto;
+        background: rgba(27, 27, 27, 0.92);
+        border: 1px solid var(--accent-soft);
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+    }
+
+    .app-header {
+        padding: 16px 28px;
+        background: transparent;
+    }
+
+    .app-main {
+        padding: 28px 36px 20px;
+        overflow: auto;
+        min-height: 0;
+        flex: 1;
+    }
+
+    .step-title {
+        font-size: 1.55rem;
+    }
+
+    .step-subtitle {
+        max-width: 42em;
+        margin-bottom: 22px;
+    }
+
+    .type-grid {
+        grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+        gap: 14px;
+    }
+
+    .type-card {
+        min-height: 124px;
+    }
+
+    .type-card:hover,
+    .svc-card:hover,
+    .style-card:hover {
+        border-color: rgba(232, 213, 183, 0.45);
+        background: var(--accent-dark);
+    }
+
+    .type-card.selected:hover,
+    .svc-card.selected:hover,
+    .style-card.selected:hover {
+        border-color: var(--accent-color);
+    }
+
+    .field-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px 24px;
+        align-items: start;
+    }
+
+    .field-grid > .field-group-title {
+        grid-column: 1 / -1;
+        margin-bottom: 0;
+    }
+
+    .field-grid > .field:has(textarea),
+    .field-grid > .field:has(.field-voice-row) {
+        grid-column: 1 / -1;
+    }
+
+    .style-preview {
+        height: 72px;
+    }
+
+    .svc-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .wizard-nav {
+        position: relative;
+        left: auto;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        border-radius: 0 0 18px 18px;
+        padding: 14px 28px;
+    }
+
+    .toast {
+        bottom: 28px;
+        max-width: 480px;
+    }
+}
+
+@media (min-width: 900px) and (prefers-reduced-motion: reduce) {
+    body::before,
+    body::after {
+        animation: none;
+    }
+}
+
+@keyframes dp-drift-a {
+    from { transform: translate(0, 0); }
+    to { transform: translate(6vw, 4vh); }
+}
+
+@keyframes dp-drift-b {
+    from { transform: translate(0, 0); }
+    to { transform: translate(-5vw, -3vh); }
 }

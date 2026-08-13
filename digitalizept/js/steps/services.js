@@ -80,7 +80,7 @@ function buildExtras(body, catalog, proposta, persist) {
 
         const check = document.createElement('span');
         check.className = 'svc-check';
-        check.textContent = active ? '✓' : '';
+        check.textContent = '';
 
         const info = document.createElement('div');
         info.className = 'svc-info';
@@ -95,11 +95,9 @@ function buildExtras(body, catalog, proposta, persist) {
             if (idx === -1) {
                 proposta.extras.push(servico.codigo);
                 row.classList.add('selected');
-                check.textContent = '✓';
             } else {
                 proposta.extras.splice(idx, 1);
                 row.classList.remove('selected');
-                check.textContent = '';
             }
             persist();
         });
@@ -123,7 +121,6 @@ function buildUrgencia(body, catalog, proposta, persist) {
     row.className = `svc-row${proposta.urgencia ? ' selected' : ''}`;
     const check = document.createElement('span');
     check.className = 'svc-check';
-    check.textContent = proposta.urgencia ? '✓' : '';
     const info = document.createElement('div');
     info.className = 'svc-info';
     info.appendChild(Object.assign(document.createElement('div'), { className: 'svc-name', textContent: 'Urgência — entrega em 48h' }));
@@ -131,7 +128,6 @@ function buildUrgencia(body, catalog, proposta, persist) {
     row.addEventListener('click', () => {
         proposta.urgencia = !proposta.urgencia;
         row.classList.toggle('selected', proposta.urgencia);
-        check.textContent = proposta.urgencia ? '✓' : '';
         persist();
     });
 
@@ -215,6 +211,23 @@ async function render(body, ctx) {
     buildExtras(body, catalog, proposta, persist);
     buildUrgencia(body, catalog, proposta, persist);
     buildManutencao(body, catalog, proposta, persist);
+
+    const contra = document.createElement('div');
+    contra.className = 'id-section';
+    contra.appendChild(groupTitle('Contrapartida (opcional)'));
+    const hint = document.createElement('p');
+    hint.className = 'id-disclaimer';
+    hint.textContent = 'O que o cliente oferece em troca de um desconto — fotos, depoimento, indicação.';
+    const input = document.createElement('textarea');
+    input.className = 'field-input';
+    input.rows = 2;
+    input.value = proposta.contrapartida || '';
+    input.addEventListener('input', () => {
+        proposta.contrapartida = input.value;
+        persist();
+    });
+    contra.append(hint, input);
+    body.appendChild(contra);
 
     persist();
 }
