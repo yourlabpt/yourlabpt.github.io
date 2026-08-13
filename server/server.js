@@ -13,6 +13,14 @@ const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalize
 const { renderContractPdf } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
+const {
+    mapsApiKey,
+    isValidCobertura,
+    geocodeLeadRow,
+    COBERTURA_VALUES,
+    COBERTURA_LABELS,
+    COBERTURA_COLORS
+} = require('./lib/digitalizept-geocode');
 const { createRateLimiter } = require('./lib/rate-limit');
 const { findAvailableDomains } = require('./lib/digitalizept-domains');
 const { registerRequirementsPlatform } = require('../projects/api');
@@ -1873,6 +1881,37 @@ function digitalizeptSlug(value) {
     return `${base}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
+function scheduleLeadGeocode(leadId, { force = false } = {}) {
+    setImmediate(() => {
+        try {
+            const db = getDigitalizeptDb();
+            geocodeLeadRow(db, leadId, { force, nowIso: digitalizeptNow }).catch((err) => {
+                console.error(`digitalizept geocode ${leadId}:`, err.message);
+            });
+        } catch (err) {
+            console.error(`digitalizept geocode schedule ${leadId}:`, err.message);
+        }
+    });
+}
+
+function applyAutoCobertura(db, leadId, nextAuto) {
+    const row = db.prepare('SELECT cobertura, cobertura_locked FROM lead WHERE id = ?').get(leadId);
+    if (!row || row.cobertura_locked) return;
+    db.prepare('UPDATE lead SET cobertura = ? WHERE id = ?').run(nextAuto, leadId);
+}
+
+function clearGeocodeIfAddressChanged(db, leadId, morada, cidade) {
+    const prev = db.prepare('SELECT morada, cidade FROM lead WHERE id = ?').get(leadId);
+    if (!prev) return;
+    if (String(prev.morada || '') !== String(morada || '')
+        || String(prev.cidade || '') !== String(cidade || '')) {
+        db.prepare(`
+            UPDATE lead SET lat = NULL, lng = NULL, geocode_status = '', geocoded_at = ''
+            WHERE id = ?
+        `).run(leadId);
+    }
+}
+
 function parseJsonSafe(raw, fallback) {
     try {
         const parsed = JSON.parse(raw || '');
@@ -1963,6 +2002,10 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
         const now = digitalizeptNow();
         const { obrigatorios, opcionais } = splitDados(dados, businessType);
         let leadId = cleanText(body.leadId, 80);
+        const morada = cleanText(dados.morada, 300);
+        const cidade = cleanText(dados.cidade, 120);
+        const telefone = cleanText(dados.telefone, 60);
+        const whatsapp = cleanText(dados.whatsapp, 60);
 
         const persist = db.transaction(() => {
             if (leadId) {
@@ -1971,19 +2014,18 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
             }
             if (!leadId) {
                 leadId = crypto.randomUUID();
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, 'rascunho', ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'rascunho', 'contacto', ?)`).run(
                     leadId, cleanText(businessType.id, 80), nome,
-                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60),
-                    cleanText(dados.whatsapp, 60), now);
+                    morada, cidade, telefone, whatsapp, now);
                 db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
                     VALUES (?, ?, ?, ?, ?)`).run(
                     crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
             } else {
-                db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, telefone = ?, whatsapp = ?
+                clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+                db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?
                     WHERE id = ?`).run(
-                    cleanText(businessType.id, 80), nome, cleanText(dados.morada, 300),
-                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), leadId);
+                    cleanText(businessType.id, 80), nome, morada, cidade, telefone, whatsapp, leadId);
                 const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
                 if (dadosRow) {
                     db.prepare(`UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?`)
@@ -1994,9 +2036,14 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                         crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
                 }
             }
+            if (body.wizard && typeof body.wizard === 'object') {
+                db.prepare('UPDATE lead SET wizard_json = ? WHERE id = ?')
+                    .run(JSON.stringify(body.wizard), leadId);
+            }
             digitalizeptLogEvento(db, 'lead', leadId, 'rascunho', { nome });
         });
         persist();
+        scheduleLeadGeocode(leadId);
         return res.json({ ok: true, leadId });
     } catch (err) {
         console.error('digitalizept draft lead error:', err.message);
@@ -2008,8 +2055,9 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
-            SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
-                   l.demo_slug, l.notas_admin, l.criado_em, p.total_com_iva_centimos, p.iva_rate
+            SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
+                   l.cobertura, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng,
+                   p.total_com_iva_centimos, p.iva_rate
             FROM lead l
             LEFT JOIN proposta p ON p.lead_id = l.id
             ORDER BY l.criado_em DESC
@@ -2019,6 +2067,152 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     } catch (err) {
         console.error('digitalizept leads error:', err.message);
         return res.status(500).json({ error: 'Failed to load leads.' });
+    }
+});
+
+app.get('/api/digitalizept/maps-config', requireDigitalizept, (req, res) => {
+    const apiKey = mapsApiKey();
+    return res.json({
+        configured: Boolean(apiKey),
+        apiKey: apiKey || '',
+        cobertura: COBERTURA_VALUES.map((id) => ({
+            id,
+            label: COBERTURA_LABELS[id],
+            color: COBERTURA_COLORS[id]
+        }))
+    });
+});
+
+app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const rows = db.prepare(`
+            SELECT id, business_type, nome, morada, cidade, telefone, whatsapp, estado,
+                   cobertura, cobertura_locked, demo_slug, lat, lng, geocode_status, criado_em
+            FROM lead
+            ORDER BY criado_em DESC
+            LIMIT 500
+        `).all();
+        return res.json({
+            pins: rows.map((r) => ({
+                id: r.id,
+                nome: r.nome,
+                business_type: r.business_type,
+                morada: r.morada,
+                cidade: r.cidade,
+                telefone: r.telefone,
+                estado: r.estado,
+                cobertura: r.cobertura || 'contacto',
+                cobertura_locked: Boolean(r.cobertura_locked),
+                demo_slug: r.demo_slug,
+                lat: r.lat,
+                lng: r.lng,
+                geocode_status: r.geocode_status,
+                criado_em: r.criado_em,
+                color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.contacto
+            })),
+            legend: COBERTURA_VALUES.map((id) => ({
+                id,
+                label: COBERTURA_LABELS[id],
+                color: COBERTURA_COLORS[id]
+            }))
+        });
+    } catch (err) {
+        console.error('digitalizept coverage error:', err.message);
+        return res.status(500).json({ error: 'Failed to load coverage.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/geocode', requireDigitalizept, async (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const lead = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const result = await geocodeLeadRow(db, leadId, { force: true, nowIso: digitalizeptNow });
+        const updated = db.prepare(`
+            SELECT id, lat, lng, geocode_status, morada, cidade FROM lead WHERE id = ?
+        `).get(leadId);
+        if (!result || result.ok === false) {
+            return res.status(422).json({
+                error: (result && result.error) || 'Geocoding falhou.',
+                lead: updated
+            });
+        }
+        return res.json({ ok: true, lead: updated });
+    } catch (err) {
+        console.error('digitalizept geocode post error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível geocodificar.' });
+    }
+});
+
+// Hydrate an unfinished lead so the sales wizard can restart with fields filled.
+app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const row = db.prepare(`
+            SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
+                   l.demo_slug, l.demo_json, l.identidade_json, l.google_presence_json, l.wizard_json,
+                   d.obrigatorios_json, d.opcionais_json
+            FROM lead l
+            LEFT JOIN dados_negocio d ON d.lead_id = l.id
+            WHERE l.id = ?
+        `).get(leadId);
+        if (!row) return res.status(404).json({ error: 'Lead não encontrado.' });
+        if (row.estado === 'fechado') {
+            return res.status(409).json({ error: 'Este lead já está fechado. Abra a proposta no admin.' });
+        }
+
+        const types = loadBusinessTypes();
+        const businessType = types.find((t) => t.id === row.business_type)
+            || { id: row.business_type, nome: row.business_type || 'Negócio' };
+        const dados = {
+            nome_negocio: row.nome || '',
+            morada: row.morada || '',
+            telefone: row.telefone || '',
+            whatsapp: row.whatsapp || '',
+            ...parseJsonSafe(row.obrigatorios_json, {}),
+            ...parseJsonSafe(row.opcionais_json, {})
+        };
+        if (!dados.nome_negocio) dados.nome_negocio = row.nome || '';
+
+        const identidade = parseJsonSafe(row.identidade_json, {});
+        const demo = parseJsonSafe(row.demo_json, null);
+        const googlePresence = parseJsonSafe(row.google_presence_json, null);
+        const wizardExtra = parseJsonSafe(row.wizard_json, {});
+
+        const data = {
+            leadId: row.id,
+            businessType,
+            dados,
+            identidade: Object.keys(identidade || {}).length ? identidade : undefined,
+            demo: demo && demo.hero ? demo : (wizardExtra.demo || undefined),
+            demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : (wizardExtra.demoUrl || ''),
+            demoPrompt: wizardExtra.demoPrompt || '',
+            demoRaw: wizardExtra.demoRaw || '',
+            demoGbp: wizardExtra.demoGbp === true,
+            googleDiagnostico: wizardExtra.googleDiagnostico || undefined,
+            proposta: wizardExtra.proposta || undefined,
+            googlePresence: (googlePresence && Object.keys(googlePresence).length)
+                ? googlePresence
+                : (wizardExtra.googlePresence || undefined),
+            clienteLegal: wizardExtra.clienteLegal || undefined
+        };
+        Object.keys(data).forEach((key) => {
+            if (data[key] === undefined || data[key] === '') delete data[key];
+        });
+
+        return res.json({
+            ok: true,
+            leadId: row.id,
+            estado: row.estado,
+            suggestedStep: 0,
+            data
+        });
+    } catch (err) {
+        console.error('digitalizept resume lead error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível reabrir este lead.' });
     }
 });
 
@@ -2119,13 +2313,35 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
         const leadId = cleanText(req.params.leadId, 80);
         const body = req.body || {};
         const db = getDigitalizeptDb();
-        const lead = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
+        const lead = db.prepare('SELECT id, morada, cidade FROM lead WHERE id = ?').get(leadId);
         if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
         if (body.notas_admin != null) {
             db.prepare('UPDATE lead SET notas_admin = ? WHERE id = ?')
                 .run(cleanText(body.notas_admin, 4000), leadId);
         }
-        return res.json({ ok: true });
+        if (body.cobertura != null) {
+            const cobertura = cleanText(body.cobertura, 40);
+            if (!isValidCobertura(cobertura)) {
+                return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+            }
+            db.prepare('UPDATE lead SET cobertura = ?, cobertura_locked = 1 WHERE id = ?')
+                .run(cobertura, leadId);
+        }
+        if (body.cidade != null || body.morada != null) {
+            const morada = body.morada != null ? cleanText(body.morada, 300) : lead.morada;
+            const cidade = body.cidade != null ? cleanText(body.cidade, 120) : lead.cidade;
+            clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+            db.prepare('UPDATE lead SET morada = ?, cidade = ? WHERE id = ?').run(morada, cidade, leadId);
+            scheduleLeadGeocode(leadId, { force: true });
+        }
+        if (body.regeocode === true) {
+            scheduleLeadGeocode(leadId, { force: true });
+        }
+        const updated = db.prepare(`
+            SELECT id, nome, morada, cidade, cobertura, cobertura_locked, lat, lng, geocode_status, estado, demo_slug
+            FROM lead WHERE id = ?
+        `).get(leadId);
+        return res.json({ ok: true, lead: updated });
     } catch (err) {
         console.error('digitalizept lead patch error:', err.message);
         return res.status(500).json({ error: 'Não foi possível atualizar o lead.' });
@@ -2170,21 +2386,28 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const existing = leadId ? db.prepare('SELECT id, demo_slug FROM lead WHERE id = ?').get(leadId) : null;
         if (!existing) leadId = crypto.randomUUID();
         const slug = (existing && existing.demo_slug) || digitalizeptSlug(dados.nome_negocio);
+        const morada = cleanText(dados.morada, 300);
+        const cidade = cleanText(dados.cidade, 120);
         const persist = db.transaction(() => {
             if (existing) {
-                db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?
+                clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+                db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?,
+                    morada = ?, cidade = ?, telefone = ?, whatsapp = ?, estado = CASE WHEN estado = 'fechado' THEN estado ELSE 'demonstracao' END
                     WHERE id = ?`).run(
                     JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug,
-                    cleanText(dados.nome_negocio, 200), leadId);
+                    cleanText(dados.nome_negocio, 200), morada, cidade,
+                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), leadId);
+                applyAutoCobertura(db, leadId, 'demo');
             } else {
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, demo_json, identidade_json, demo_slug, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, 'demonstracao', ?, ?, ?, ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'demonstracao', 'demo', ?, ?, ?, ?)`).run(
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
-                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
+                    morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug, now);
             }
         });
         persist();
+        scheduleLeadGeocode(leadId);
         try {
             writeDemoFolder({
                 slug,
@@ -2362,13 +2585,16 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         }
 
         const persist = db.transaction(() => {
+            const morada = cleanText(dados.morada, 300);
+            const cidade = cleanText(dados.cidade, 120);
             if (existingLead) {
-                db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, telefone = ?, whatsapp = ?,
-                    estado = 'fechado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?,
+                clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+                db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?,
+                    estado = 'fechado', cobertura = 'digitalizado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?,
                     google_presence_json = ?
                     WHERE id = ?`).run(
                     cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
-                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
+                    morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),
                     demoSlug, workPath, JSON.stringify(googlePresence || {}), leadId);
                 const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
@@ -2380,10 +2606,10 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                         VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
                 }
             } else {
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, demo_json, identidade_json, demo_slug, work_path, google_presence_json, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, 'fechado', ?, ?, ?, ?, ?, ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, work_path, google_presence_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'fechado', 'digitalizado', ?, ?, ?, ?, ?, ?)`).run(
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
-                    cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
+                    morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),
                     demoSlug, workPath, JSON.stringify(googlePresence || {}), now);
                 db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
@@ -2439,6 +2665,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             });
         });
         persist();
+        scheduleLeadGeocode(leadId);
 
         const archive = cleanText(process.env.LEAD_NOTIFY_TO, 200) || cleanText(process.env.SMTP_USER, 200);
         const subject = `Contrato — ${cleanText(dados.nome_negocio, 120) || clienteNome}`;

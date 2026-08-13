@@ -182,7 +182,15 @@ function migrate(db) {
         demo_slug: "TEXT NOT NULL DEFAULT ''",
         work_path: "TEXT NOT NULL DEFAULT ''",
         notas_admin: "TEXT NOT NULL DEFAULT ''",
-        google_presence_json: "TEXT NOT NULL DEFAULT '{}'"
+        google_presence_json: "TEXT NOT NULL DEFAULT '{}'",
+        wizard_json: "TEXT NOT NULL DEFAULT '{}'",
+        cidade: "TEXT NOT NULL DEFAULT ''",
+        cobertura: "TEXT NOT NULL DEFAULT 'contacto'",
+        cobertura_locked: 'INTEGER NOT NULL DEFAULT 0',
+        lat: 'REAL',
+        lng: 'REAL',
+        geocoded_at: "TEXT NOT NULL DEFAULT ''",
+        geocode_status: "TEXT NOT NULL DEFAULT ''"
     });
     addMissingColumns(db, 'contrato', {
         html_path: "TEXT NOT NULL DEFAULT ''"
@@ -198,6 +206,13 @@ function migrate(db) {
         texto TEXT NOT NULL DEFAULT '',
         criado_em TEXT NOT NULL
     )`);
+
+    try {
+        const { backfillLeadGeoFields } = require('./digitalizept-geocode');
+        backfillLeadGeoFields(db);
+    } catch (err) {
+        console.error('digitalizept: cobertura backfill failed:', err.message);
+    }
 }
 
 // Seed inserts new codes and refreshes rows the admin has not locked.

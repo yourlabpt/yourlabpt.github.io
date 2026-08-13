@@ -11,6 +11,8 @@
     background: var(--admin-bg);
     color: var(--admin-ink);
     min-height: 100vh;
+    height: auto;
+    overflow: auto;
     position: relative;
     z-index: 1;
 }
@@ -276,6 +278,87 @@
     padding: 32px 12px;
     text-align: center;
     font-size: 0.95rem;
+}
+
+.admin-hint {
+    margin: 0 0 12px;
+    color: var(--admin-muted);
+    font-size: 0.88rem;
+    line-height: 1.4;
+}
+
+/* ---------- Coverage map ---------- */
+
+.admin-app:has(#tab-coverage:not(.hidden)) {
+    max-width: 1100px;
+}
+
+.coverage-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.coverage-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.coverage-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.coverage-chip.active {
+    border-color: #1b1b1b;
+    box-shadow: inset 0 0 0 1px #1b1b1b;
+}
+
+.coverage-chip-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.coverage-map {
+    width: 100%;
+    height: min(62vh, 560px);
+    min-height: 320px;
+    border-radius: 12px;
+    border: 1px solid #e5e0d5;
+    background: #e8e4dc;
+    overflow: hidden;
+}
+
+.coverage-status {
+    margin: 8px 0 0;
+    font-size: 0.82rem;
+    color: var(--admin-muted);
+}
+
+.coverage-pin-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.coverage-pin-actions .btn-primary,
+.coverage-pin-actions .btn-secondary {
+    width: 100%;
 }
 
 /* ---------- Drawer ---------- */

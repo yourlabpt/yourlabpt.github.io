@@ -22,6 +22,19 @@ export function clearWizardState() {
     } catch (_) { /* ignore */ }
 }
 
+// Used by admin "Continuar venda" to seed the sales wizard from a server lead.
+export function seedWizardState(data, { step = 0, substep = 0 } = {}) {
+    const state = {
+        step: Number.isFinite(Number(step)) ? Math.max(0, Math.floor(Number(step))) : 0,
+        substep: Number.isFinite(Number(substep)) ? Math.max(0, Math.floor(Number(substep))) : 0,
+        data: data && typeof data === 'object' ? data : {}
+    };
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (_) { /* ignore */ }
+    return state;
+}
+
 // Used to decide whether discarding needs a confirmation.
 export function hasWizardProgress() {
     try {
@@ -185,7 +198,9 @@ export function createWizard({ onUnauthorized, showToast }) {
         }
 
         if (state.step >= STEPS.length - 1) return;
-        if (STEPS[state.step] === dataStep) {
+        // Persist mid-funnel progress so admin can reopen unfinished leads.
+        const leaving = STEPS[state.step];
+        if (leaving === dataStep || leaving === diagnosticoStep || leaving === demoStep || leaving === servicesStep) {
             try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
             catch (_) { /* a missed draft must not block the visit */ }
         }

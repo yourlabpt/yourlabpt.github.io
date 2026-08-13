@@ -27,12 +27,17 @@ const el = {
     app: document.getElementById('app'),
     logoutBtn: document.getElementById('logout-btn'),
     catalogList: document.getElementById('catalog-list'),
-    demosList: document.getElementById('demos-list'),
+    demosList: document.getElementById('leads-list'),
     dealsList: document.getElementById('deals-list'),
     catalogFilter: document.getElementById('catalog-filter'),
-    demosFilter: document.getElementById('demos-filter'),
+    demosFilter: document.getElementById('leads-filter'),
     dealsFilter: document.getElementById('deals-filter'),
     catalogAddBtn: document.getElementById('catalog-add-btn'),
+    coverageFilter: document.getElementById('coverage-filter'),
+    coverageLegend: document.getElementById('coverage-legend'),
+    coverageMap: document.getElementById('coverage-map'),
+    coverageStatus: document.getElementById('coverage-status'),
+    coverageUnmapped: document.getElementById('coverage-unmapped'),
     drawer: document.getElementById('drawer'),
     drawerPanel: document.getElementById('drawer-panel'),
     drawerBackdrop: document.getElementById('drawer-backdrop')
@@ -41,6 +46,14 @@ const el = {
 let catalog = [];
 let leads = [];
 let deals = [];
+let coveragePins = [];
+let coverageLegend = [];
+let coverageFilterIds = new Set();
+let mapsApiKey = '';
+let mapsReady = null;
+let googleMap = null;
+let googleMarkers = [];
+let mapsLoadPromise = null;
 
 function toast(message, isError = false) {
     const node = document.createElement('div');
@@ -118,9 +131,23 @@ function switchTab(name) {
     document.querySelectorAll('.admin-tab').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.tab === name);
     });
-    ['catalog', 'demos', 'deals'].forEach((id) => {
+    ['catalog', 'leads', 'deals', 'coverage'].forEach((id) => {
         document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== name);
     });
+    if (name === 'coverage') {
+        ensureCoverageMap().catch((err) => {
+            if (el.coverageStatus) {
+                el.coverageStatus.textContent = err.message || 'Mapa indisponível.';
+            }
+        });
+    }
+}
+
+function estadoLabel(estado) {
+    if (estado === 'rascunho') return 'Rascunho';
+    if (estado === 'demonstracao') return 'Com demo';
+    if (estado === 'fechado') return 'Fechado';
+    return estado || '—';
 }
 
 function renderCatalog() {
@@ -251,13 +278,15 @@ function openServiceEditor(servico) {
 
 function renderDemos() {
     const q = (el.demosFilter.value || '').trim().toLowerCase();
-    const items = leads.filter((l) => l.demo_slug).filter((l) => {
+    const items = leads.filter((l) => l.estado !== 'fechado').filter((l) => {
         if (!q) return true;
-        return `${l.nome} ${l.business_type} ${l.demo_slug} ${l.morada}`.toLowerCase().includes(q);
+        return `${l.nome} ${l.business_type} ${l.demo_slug || ''} ${l.morada || ''} ${l.estado || ''}`
+            .toLowerCase()
+            .includes(q);
     });
     el.demosList.innerHTML = '';
     if (!items.length) {
-        el.demosList.innerHTML = '<p class="admin-empty">Sem demos publicadas.</p>';
+        el.demosList.innerHTML = '<p class="admin-empty">Sem leads em aberto.</p>';
         return;
     }
     items.forEach((l) => {
@@ -265,23 +294,36 @@ function renderDemos() {
         card.className = 'admin-card';
         card.innerHTML = `
             <h3>${l.nome || 'Sem nome'}</h3>
-            <p class="meta">${l.business_type || '—'} · ${l.estado || ''} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
-            <p class="meta">/${l.demo_slug}</p>
+            <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
+            <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
+            ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';
-        const open = document.createElement('a');
-        open.className = 'btn-primary';
-        open.href = `/d/${l.demo_slug}`;
-        open.target = '_blank';
-        open.rel = 'noopener';
-        open.textContent = 'Abrir demo';
+
+        const resume = document.createElement('a');
+        resume.className = 'btn-primary';
+        resume.href = `./?resume=${encodeURIComponent(l.id)}`;
+        resume.textContent = 'Continuar venda';
+        actions.appendChild(resume);
+
+        if (l.demo_slug) {
+            const open = document.createElement('a');
+            open.className = 'btn-secondary';
+            open.href = `/d/${l.demo_slug}`;
+            open.target = '_blank';
+            open.rel = 'noopener';
+            open.textContent = 'Abrir demo';
+            actions.appendChild(open);
+        }
+
         const notes = document.createElement('button');
         notes.type = 'button';
         notes.className = 'btn-secondary';
         notes.textContent = 'Comentários';
         notes.addEventListener('click', () => openNotes(l));
-        actions.append(open, notes);
+        actions.appendChild(notes);
+
         card.appendChild(actions);
         el.demosList.appendChild(card);
     });
@@ -486,6 +528,250 @@ async function loadDeals() {
     renderDeals();
 }
 
+function markerIcon(color) {
+    const fill = encodeURIComponent(color || '#a9a8a3');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+      <path fill="${fill}" stroke="#1b1b1b" stroke-width="1.2" d="M14 1C7.4 1 2 6.4 2 13c0 9.2 12 21.5 12 21.5S26 22.2 26 13C26 6.4 20.6 1 14 1z"/>
+      <circle cx="14" cy="13" r="4.2" fill="#faf8f4"/>
+    </svg>`;
+    return {
+        url: `data:image/svg+xml;charset=UTF-8,${svg}`,
+        scaledSize: new window.google.maps.Size(28, 36),
+        anchor: new window.google.maps.Point(14, 34)
+    };
+}
+
+function loadGoogleMaps(apiKey) {
+    if (window.google && window.google.maps) return Promise.resolve();
+    if (mapsLoadPromise) return mapsLoadPromise;
+    mapsLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Não foi possível carregar o Google Maps.'));
+        document.head.appendChild(script);
+    });
+    return mapsLoadPromise;
+}
+
+function filteredCoveragePins() {
+    const q = (el.coverageFilter.value || '').trim().toLowerCase();
+    return coveragePins.filter((p) => {
+        if (coverageFilterIds.size && !coverageFilterIds.has(p.cobertura || 'contacto')) return false;
+        if (!q) return true;
+        return `${p.nome} ${p.morada || ''} ${p.cidade || ''} ${p.business_type || ''}`
+            .toLowerCase()
+            .includes(q);
+    });
+}
+
+function renderCoverageLegend() {
+    el.coverageLegend.innerHTML = '';
+    coverageLegend.forEach((item) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `coverage-chip${coverageFilterIds.has(item.id) ? ' active' : ''}`;
+        const dot = document.createElement('span');
+        dot.className = 'coverage-chip-dot';
+        dot.style.background = item.color;
+        btn.append(dot, document.createTextNode(item.label));
+        btn.addEventListener('click', () => {
+            if (coverageFilterIds.has(item.id)) coverageFilterIds.delete(item.id);
+            else coverageFilterIds.add(item.id);
+            renderCoverageLegend();
+            paintCoverageMarkers();
+        });
+        el.coverageLegend.appendChild(btn);
+    });
+}
+
+function openCoveragePin(pin) {
+    openDrawer(pin.nome || 'Negócio', (panel) => {
+        const meta = document.createElement('p');
+        meta.className = 'meta';
+        meta.textContent = `${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.business_type || '—'}`;
+        panel.appendChild(meta);
+
+        const form = document.createElement('form');
+        form.className = 'admin-form';
+        const cobertura = document.createElement('select');
+        cobertura.className = 'field-input';
+        coverageLegend.forEach((item) => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.label;
+            if ((pin.cobertura || 'contacto') === item.id) opt.selected = true;
+            cobertura.appendChild(opt);
+        });
+        form.appendChild(field('Desfecho na rua', cobertura));
+        const save = document.createElement('button');
+        save.type = 'submit';
+        save.className = 'btn-primary';
+        save.textContent = 'Guardar cobertura';
+        form.appendChild(save);
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const { response, data } = await api(`/api/digitalizept/leads/${pin.id}`, {
+                method: 'PATCH',
+                body: { cobertura: cobertura.value }
+            });
+            if (!response.ok) {
+                toast(data.error || 'Falha.', true);
+                return;
+            }
+            toast('Cobertura atualizada.');
+            closeDrawer();
+            await loadCoverage();
+            paintCoverageMarkers();
+        });
+        panel.appendChild(form);
+
+        const actions = document.createElement('div');
+        actions.className = 'coverage-pin-actions';
+        if (pin.estado !== 'fechado') {
+            const resume = document.createElement('a');
+            resume.className = 'btn-primary';
+            resume.href = `./?resume=${encodeURIComponent(pin.id)}`;
+            resume.textContent = 'Continuar venda';
+            actions.appendChild(resume);
+        }
+        if (pin.demo_slug) {
+            const demo = document.createElement('a');
+            demo.className = 'btn-secondary';
+            demo.href = `/d/${pin.demo_slug}`;
+            demo.target = '_blank';
+            demo.rel = 'noopener';
+            demo.textContent = 'Abrir demo';
+            actions.appendChild(demo);
+        }
+        const regeo = document.createElement('button');
+        regeo.type = 'button';
+        regeo.className = 'btn-secondary';
+        regeo.textContent = Number.isFinite(pin.lat) ? 'Regeocodificar' : 'Geocodificar';
+        regeo.addEventListener('click', async () => {
+            regeo.disabled = true;
+            const { response, data } = await api(`/api/digitalizept/leads/${pin.id}/geocode`, { method: 'POST' });
+            regeo.disabled = false;
+            if (!response.ok) {
+                toast(data.error || 'Geocoding falhou.', true);
+                return;
+            }
+            toast('Coordenadas atualizadas.');
+            closeDrawer();
+            await loadCoverage();
+            paintCoverageMarkers();
+        });
+        actions.appendChild(regeo);
+        const notes = document.createElement('button');
+        notes.type = 'button';
+        notes.className = 'btn-secondary';
+        notes.textContent = 'Comentários';
+        notes.addEventListener('click', () => openNotes({ id: pin.id, nome: pin.nome }));
+        actions.appendChild(notes);
+        panel.appendChild(actions);
+    });
+}
+
+function paintCoverageMarkers() {
+    if (!googleMap || !window.google) return;
+    googleMarkers.forEach((m) => m.setMap(null));
+    googleMarkers = [];
+    const pins = filteredCoveragePins().filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    const bounds = new window.google.maps.LatLngBounds();
+    pins.forEach((pin) => {
+        const marker = new window.google.maps.Marker({
+            map: googleMap,
+            position: { lat: pin.lat, lng: pin.lng },
+            title: pin.nome || '',
+            icon: markerIcon(pin.color)
+        });
+        marker.addListener('click', () => openCoveragePin(pin));
+        googleMarkers.push(marker);
+        bounds.extend(marker.getPosition());
+    });
+    const unmapped = filteredCoveragePins().filter((p) => !(Number.isFinite(p.lat) && Number.isFinite(p.lng)));
+    el.coverageStatus.textContent = pins.length
+        ? `${pins.length} no mapa${unmapped.length ? ` · ${unmapped.length} sem coordenadas` : ''}`
+        : (unmapped.length ? `${unmapped.length} leads sem coordenadas.` : 'Sem leads para mostrar.');
+
+    if (el.coverageUnmapped) {
+        el.coverageUnmapped.innerHTML = '';
+        unmapped.slice(0, 40).forEach((pin) => {
+            const card = document.createElement('article');
+            card.className = 'admin-card';
+            card.innerHTML = `
+                <h3>${pin.nome || 'Sem nome'}</h3>
+                <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · sem pin</p>
+            `;
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+            const open = document.createElement('button');
+            open.type = 'button';
+            open.className = 'btn-secondary';
+            open.textContent = 'Abrir';
+            open.addEventListener('click', () => openCoveragePin(pin));
+            actions.appendChild(open);
+            card.appendChild(actions);
+            el.coverageUnmapped.appendChild(card);
+        });
+    }
+
+    if (pins.length === 1) {
+        googleMap.setCenter(pins[0]);
+        googleMap.setZoom(14);
+    } else if (pins.length > 1) {
+        googleMap.fitBounds(bounds, 48);
+    } else {
+        googleMap.setCenter({ lat: 39.5, lng: -8.0 });
+        googleMap.setZoom(7);
+    }
+}
+
+async function loadCoverage() {
+    const { response, data } = await api('/api/digitalizept/coverage');
+    if (!response.ok) throw new Error('coverage');
+    coveragePins = data.pins || [];
+    coverageLegend = data.legend || [];
+    renderCoverageLegend();
+}
+
+async function ensureCoverageMap() {
+    if (!mapsReady) {
+        const { response, data } = await api('/api/digitalizept/maps-config');
+        if (!response.ok) throw new Error('maps-config');
+        mapsApiKey = data.apiKey || '';
+        if (data.legend) coverageLegend = data.legend;
+        if (!mapsApiKey) {
+            el.coverageStatus.textContent = 'Defina GOOGLE_MAPS_API_KEY no servidor (Maps JavaScript + Geocoding).';
+            renderCoverageLegend();
+            throw new Error('GOOGLE_MAPS_API_KEY em falta.');
+        }
+        await loadGoogleMaps(mapsApiKey);
+        mapsReady = true;
+    }
+    await loadCoverage();
+    if (!googleMap) {
+        googleMap = new window.google.maps.Map(el.coverageMap, {
+            center: { lat: 39.5, lng: -8.0 },
+            zoom: 7,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true,
+            styles: [
+                { elementType: 'geometry', stylers: [{ color: '#f4f1ea' }] },
+                { elementType: 'labels.text.fill', stylers: [{ color: '#5c564c' }] },
+                { elementType: 'labels.text.stroke', stylers: [{ color: '#f4f1ea' }] },
+                { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#d7e0e6' }] },
+                { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+                { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+                { featureType: 'transit', stylers: [{ visibility: 'off' }] }
+            ]
+        });
+    }
+    paintCoverageMarkers();
+}
+
 async function bootData() {
     await Promise.all([loadCatalog(), loadLeads(), loadDeals()]);
 }
@@ -525,6 +811,9 @@ document.querySelectorAll('.admin-tab').forEach((btn) => {
 el.catalogFilter.addEventListener('input', renderCatalog);
 el.demosFilter.addEventListener('input', renderDemos);
 el.dealsFilter.addEventListener('input', renderDeals);
+el.coverageFilter.addEventListener('input', () => {
+    if (googleMap) paintCoverageMarkers();
+});
 el.catalogAddBtn.addEventListener('click', () => openServiceEditor(null));
 el.drawerBackdrop.addEventListener('click', closeDrawer);
 

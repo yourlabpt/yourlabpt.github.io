@@ -1,6 +1,6 @@
 import { apiRequest } from './api.js';
 import { getToken, setToken, clearToken } from './auth.js';
-import { createWizard, clearWizardState, hasWizardProgress } from './wizard.js';
+import { createWizard, clearWizardState, hasWizardProgress, seedWizardState } from './wizard.js';
 import { clearSettingsCache, fetchSettings } from './settings.js';
 import { clearCatalogCache, fetchCatalog } from './catalog.js';
 import { flushDealQueue, queuedDealCount } from './offline-queue.js';
@@ -45,6 +45,54 @@ function handleUnauthorized(message = 'Sessão expirada. Introduza a chave novam
     showLoginOverlay(message);
 }
 
+function resumeLeadIdFromUrl() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return (params.get('resume') || '').trim();
+    } catch (_) {
+        return '';
+    }
+}
+
+function clearResumeParam() {
+    try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('resume')) return;
+        url.searchParams.delete('resume');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch (_) { /* ignore */ }
+}
+
+async function applyResumeLead(leadId) {
+    if (!leadId) return false;
+    if (hasWizardProgress()
+        && !window.confirm('Já há uma venda em curso neste telemóvel. Substituir pelos dados deste lead?')) {
+        clearResumeParam();
+        return false;
+    }
+
+    const { response, data } = await apiRequest(
+        `/api/digitalizept/leads/${encodeURIComponent(leadId)}/resume`,
+        { token: getToken() }
+    );
+    if (response.status === 401) {
+        handleUnauthorized();
+        return false;
+    }
+    if (!response.ok || !data.data) {
+        showToast((data && data.error) || 'Não foi possível reabrir este lead.', true);
+        clearResumeParam();
+        return false;
+    }
+
+    clearWizardState();
+    seedWizardState(data.data, { step: data.suggestedStep || 0, substep: 0 });
+    clearResumeParam();
+    wizard = null;
+    showToast(`Lead reaberto: ${(data.data.dados && data.data.dados.nome_negocio) || 'negócio'}.`);
+    return true;
+}
+
 function startApp() {
     hideLoginOverlay();
     if (!wizard) {
@@ -71,6 +119,11 @@ async function handleLoginSubmit(event) {
         }
 
         setToken(data.token);
+        const resumeId = resumeLeadIdFromUrl();
+        if (resumeId) {
+            try { await applyResumeLead(resumeId); }
+            catch (_) { showToast('Sem rede para reabrir o lead.', true); }
+        }
         startApp();
     } catch (_) {
         el.loginError.textContent = 'Não foi possível contactar o servidor.';
@@ -128,6 +181,12 @@ async function boot() {
     } catch (_) {
         // Unreachable server (no signal in a shop). Trust the stored token and
         // let the app run from cache rather than locking the vendedor out.
+    }
+
+    const resumeId = resumeLeadIdFromUrl();
+    if (resumeId) {
+        try { await applyResumeLead(resumeId); }
+        catch (_) { showToast('Sem rede para reabrir o lead.', true); }
     }
 
     startApp();

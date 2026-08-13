@@ -1,4 +1,4 @@
-const CACHE = 'digitalizept-v4';
+const CACHE = 'digitalizept-v7';
 const SHELL = [
     '/digitalizept/',
     '/digitalizept/index.html',
@@ -29,6 +29,31 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+function isShellAsset(pathname) {
+    return pathname.endsWith('.html')
+        || pathname.endsWith('.css')
+        || pathname === '/digitalizept'
+        || pathname === '/digitalizept/';
+}
+
+function networkFirst(req) {
+    return fetch(req).then((res) => {
+        if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(req, copy));
+        }
+        return res;
+    }).catch(() => caches.match(req));
+}
+
+function cacheFirst(req) {
+    return caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(req, copy));
+        return res;
+    }));
+}
+
 self.addEventListener('fetch', (event) => {
     const req = event.request;
     const url = new URL(req.url);
@@ -36,23 +61,12 @@ self.addEventListener('fetch', (event) => {
 
     if (url.pathname.startsWith('/api/digitalizept/business-types')
         || url.pathname.startsWith('/api/digitalizept/catalog')) {
-        event.respondWith(
-            fetch(req).then((res) => {
-                const copy = res.clone();
-                caches.open(CACHE).then((cache) => cache.put(req, copy));
-                return res;
-            }).catch(() => caches.match(req))
-        );
+        event.respondWith(networkFirst(req));
         return;
     }
 
     if (url.pathname.startsWith('/digitalizept/')) {
-        event.respondWith(
-            caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-                const copy = res.clone();
-                caches.open(CACHE).then((cache) => cache.put(req, copy));
-                return res;
-            }))
-        );
+        // HTML/CSS must stay fresh (vendas → admin was serving stale styles).
+        event.respondWith(isShellAsset(url.pathname) ? networkFirst(req) : cacheFirst(req));
     }
 });

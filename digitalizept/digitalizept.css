@@ -887,6 +887,21 @@ button, input, textarea, select {
     color: var(--l-ink);
     background: var(--l-paper);
     position: relative;
+    min-height: 100vh;
+}
+
+/* Public demo pages: keep document scroll and paper page chrome */
+body:has(> .dp-landing) {
+    background: #faf9f7;
+    color: #1c1c1c;
+    overflow: auto;
+    height: auto;
+    min-height: 100%;
+}
+
+html:has(body > .dp-landing) {
+    overflow: auto;
+    height: auto;
 }
 
 .dpl-topbar {
@@ -2085,13 +2100,16 @@ button, input, textarea, select {
 }
 
 /* ---------- Desktop: same language, more room ---------- */
+/* Shell chrome (lock scroll + ambient blobs) only when the sales .app exists.
+   Public demos (/d/…) and admin share this CSS and must keep document scroll. */
 @media (min-width: 900px) {
-    html, body {
+    html:has(.app),
+    body:has(.app) {
         height: 100%;
         overflow: hidden;
     }
 
-    body {
+    body:has(.app) {
         background:
             radial-gradient(1100px 640px at 8% -12%, rgba(232, 213, 183, 0.14), transparent 58%),
             radial-gradient(900px 520px at 108% 18%, rgba(122, 138, 153, 0.14), transparent 52%),
@@ -2099,8 +2117,8 @@ button, input, textarea, select {
             var(--primary-dark);
     }
 
-    body::before,
-    body::after {
+    body:has(.app)::before,
+    body:has(.app)::after {
         content: "";
         position: fixed;
         pointer-events: none;
@@ -2109,7 +2127,7 @@ button, input, textarea, select {
         filter: blur(56px);
     }
 
-    body::before {
+    body:has(.app)::before {
         width: 42vw;
         height: 42vw;
         top: -12vh;
@@ -2118,7 +2136,7 @@ button, input, textarea, select {
         animation: dp-drift-a 28s ease-in-out infinite alternate;
     }
 
-    body::after {
+    body:has(.app)::after {
         width: 36vw;
         height: 36vw;
         right: -10vw;
@@ -2249,8 +2267,8 @@ button, input, textarea, select {
 }
 
 @media (min-width: 900px) and (prefers-reduced-motion: reduce) {
-    body::before,
-    body::after {
+    body:has(.app)::before,
+    body:has(.app)::after {
         animation: none;
     }
 }

@@ -35,8 +35,9 @@
 
         <nav class="admin-tabs" role="tablist">
             <button type="button" class="admin-tab active" data-tab="catalog">Catálogo</button>
-            <button type="button" class="admin-tab" data-tab="demos">Demos</button>
+            <button type="button" class="admin-tab" data-tab="leads">Leads</button>
             <button type="button" class="admin-tab" data-tab="deals">Propostas</button>
+            <button type="button" class="admin-tab" data-tab="coverage">Cobertura</button>
         </nav>
 
         <main class="admin-main">
@@ -48,11 +49,12 @@
                 <div id="catalog-list" class="admin-list"></div>
             </section>
 
-            <section id="tab-demos" class="admin-panel hidden">
+            <section id="tab-leads" class="admin-panel hidden">
                 <div class="admin-toolbar">
-                    <input id="demos-filter" class="field-input" type="search" placeholder="Filtrar demos…">
+                    <input id="leads-filter" class="field-input" type="search" placeholder="Filtrar leads…">
                 </div>
-                <div id="demos-list" class="admin-list"></div>
+                <p class="admin-hint">Leads em aberto. Continuar venda reabre o wizard com os dados já guardados (do início, editáveis).</p>
+                <div id="leads-list" class="admin-list"></div>
             </section>
 
             <section id="tab-deals" class="admin-panel hidden">
@@ -60,6 +62,17 @@
                     <input id="deals-filter" class="field-input" type="search" placeholder="Filtrar propostas…">
                 </div>
                 <div id="deals-list" class="admin-list"></div>
+            </section>
+
+            <section id="tab-coverage" class="admin-panel hidden">
+                <p class="admin-hint">Mapa de cobertura — evita retrabalhar zonas já contactadas. Pins a cores YourLab por desfecho na rua.</p>
+                <div class="coverage-toolbar">
+                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome ou morada…">
+                    <div id="coverage-legend" class="coverage-legend"></div>
+                </div>
+                <div id="coverage-map" class="coverage-map" aria-label="Mapa de cobertura"></div>
+                <p id="coverage-status" class="coverage-status"></p>
+                <div id="coverage-unmapped" class="admin-list" style="margin-top:12px"></div>
             </section>
         </main>
     </div>
@@ -70,5 +83,10 @@
     </div>
 
     <script type="module" src="./js/admin.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js', { scope: '/digitalizept/' }).catch(() => {});
+        }
+    </script>
 </body>
 </html>
