@@ -1,4 +1,5 @@
 import { formatEuros } from '../format.js';
+import { dominioContractLines } from '../domain.js';
 
 // YourLab (prestador). Fiscal identity comes from the server so a contract is
 // never signed against a placeholder; these are only the non-fiscal defaults.
@@ -17,12 +18,43 @@ const PROVIDER_DEFAULTS = {
 // during the sale rather than discovered on a signed document.
 const MISSING = '(em falta)';
 
+const BASE_ARRANQUE = [
+    'Landing page profissional (página única), adaptada a telemóvel',
+    'Adição do website na ficha Google Maps / Google Business Profile',
+    'Configuração da ficha Google Maps para o cliente',
+    'Criação de conta Google para o cliente, quando ainda não existir'
+];
+
+// Expanded on every contract — including Essencial — so the client sees what
+// will actually be done, not only a price line.
+export const PACKAGE_DELIVERABLES = {
+    essencial: [
+        ...BASE_ARRANQUE,
+        'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio',
+        'Conformidade legal básica da página (informação obrigatória e contactos)'
+    ],
+    plus: [
+        ...BASE_ARRANQUE,
+        'Website com várias páginas, catálogo e até 2 idiomas',
+        'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio',
+        'Conformidade legal básica da página (informação obrigatória e contactos)'
+    ],
+    renovacao: [
+        ...BASE_ARRANQUE,
+        'Renovação de website existente (estrutura e conteúdo essenciais)',
+        'Migração básica a partir do site atual, quando aplicável',
+        'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio'
+    ]
+};
+
 const CLAUSES = [
-    'Apenas os serviços contratados fazem parte deste acordo.',
+    'Apenas os serviços contratados e a lista de trabalhos descritos fazem parte deste acordo.',
+    'A assistência e formação de utilização só está incluída se constar como extra contratado.',
     'Alterações significativas poderão originar orçamento complementar.',
     'O prazo depende da entrega atempada dos conteúdos pelo cliente.',
     'Não são garantidos resultados comerciais nem posicionamento em motores de pesquisa.',
     'Serviços dependentes de terceiros (Google, domínios, alojamento, plataformas externas) estão sujeitos às respetivas regras e tempos de processamento.',
+    'Se o cliente comprar o próprio domínio, a YourLab entrega o website em ficheiro ZIP por email; a publicação fica a cargo do cliente, salvo extra de ajuda a apontar o domínio.',
     'Após aprovação final do website, alterações posteriores poderão ser cobradas separadamente.',
     'Propriedade: domínio, alojamento, contas Google e código ficam em nome do cliente.',
     'Garantia de 14 dias após a entrega e direito de livre resolução de 14 dias.',
@@ -64,6 +96,8 @@ export function buildContractModel(state, catalog, config) {
     }
 
     const provider = { ...PROVIDER_DEFAULTS, ...((config && config.provider) || {}) };
+    const deliverables = PACKAGE_DELIVERABLES[proposta.pacote] || PACKAGE_DELIVERABLES.essencial;
+    const dominioLines = dominioContractLines(proposta.dominio);
 
     return {
         provider,
@@ -76,6 +110,8 @@ export function buildContractModel(state, catalog, config) {
         },
         negocio: dados.nome_negocio || '',
         items,
+        deliverables,
+        dominioLines,
         calc,
         clauses: CLAUSES,
         data: new Date().toLocaleDateString('pt-PT')
@@ -87,8 +123,13 @@ export function contractInnerHtml(model) {
     const itemsRows = model.items.map((i) => `
         <tr><td>${escapeHtml(i.nome)}</td><td class="c-right">${escapeHtml(i.valor)}</td></tr>`).join('');
 
-    // With IVA the total has to be broken out; under isencao there is a single
-    // total and no "s/ IVA" wording, which would imply an IVA line that never comes.
+    const deliverablesList = (model.deliverables || [])
+        .map((line) => `<li>${escapeHtml(line)}</li>`).join('');
+    const dominioList = (model.dominioLines || [])
+        .map((line) => `<li>${escapeHtml(line)}</li>`).join('');
+
+    // With IVA the total has to be broken out; without it there is a single total
+    // and no "s/ IVA" wording, which would imply an IVA line that never comes.
     const comIva = c.iva > 0;
     const valuesRows = [
         ['Subtotal', formatEuros(c.subtotal)],
@@ -103,7 +144,7 @@ export function contractInnerHtml(model) {
 
     const ivaNote = comIva
         ? `Valores com IVA à taxa legal de ${Math.round((c.ivaRate || 0) * 100)}%.`
-        : 'IVA — regime de isenção nos termos do art. 53.º do CIVA.';
+        : 'Valores sem IVA. Prestação sem fatura com IVA neste momento.';
 
     const payment = [
         model.provider.iban ? `IBAN: ${model.provider.iban}` : '',
@@ -136,6 +177,10 @@ export function contractInnerHtml(model) {
 
     <h2 class="c-h2">Serviços contratados</h2>
     <table class="c-table">${itemsRows}</table>
+
+    <h2 class="c-h2">Serviços a prestar</h2>
+    <ul class="c-clauses">${deliverablesList}</ul>
+    ${dominioList ? `<p class="c-note"><strong>Domínio</strong></p><ul class="c-clauses">${dominioList}</ul>` : ''}
 
     <h2 class="c-h2">Valores e pagamento</h2>
     <table class="c-table c-values">${valuesRows}</table>

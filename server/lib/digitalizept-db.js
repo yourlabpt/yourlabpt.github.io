@@ -107,16 +107,24 @@ CREATE TABLE IF NOT EXISTS evento (
 `;
 
 // From 01 · Modelo Comercial e Preços (2026-08-10). Prices in cents, s/ IVA.
+// Deliverables of each package are expanded in the contract (see PACKAGE_DELIVERABLES).
 const CATALOG_SEED = [
-    { codigo: 'essencial', nome: 'Presença Digital Essencial', descricao_cliente: 'Página única profissional, mobile-first, com ficha Google, domínio, alojamento e conformidade legal incluídos.', preco_centimos: 49000, tipo: 'pacote', ordem: 10 },
-    { codigo: 'plus', nome: 'Presença Digital Plus', descricao_cliente: 'Várias páginas, catálogo, até 2 idiomas. Substitui o Essencial.', preco_centimos: 99000, tipo: 'pacote', ordem: 20 },
-    { codigo: 'renovacao', nome: 'Renovação de Website', descricao_cliente: 'Substitui um site antigo, lento ou não responsivo. Substitui o Essencial.', preco_centimos: 79000, tipo: 'pacote', ordem: 30 },
+    { codigo: 'essencial', nome: 'Presença Digital Essencial', descricao_cliente: 'Landing page, ficha Google Maps, conta Google, domínio/alojamento ou entrega em ZIP. Ideal para quem ainda não tem presença online.', preco_centimos: 49000, tipo: 'pacote', ordem: 10 },
+    { codigo: 'plus', nome: 'Presença Digital Plus', descricao_cliente: 'Várias páginas, catálogo, até 2 idiomas. Inclui o mesmo arranque Google e domínio do Essencial.', preco_centimos: 99000, tipo: 'pacote', ordem: 20 },
+    { codigo: 'renovacao', nome: 'Renovação de Website', descricao_cliente: 'Substitui um site antigo, lento ou não responsivo. Inclui migração básica e o arranque Google.', preco_centimos: 79000, tipo: 'pacote', ordem: 30 },
+    { codigo: 'assistencia_uso', nome: 'Assistência e formação de utilização', descricao_cliente: 'Sessão em português para ensinar a usar o website, a ficha Google e as contas criadas. Pensado para quem não tem hábito digital.', preco_centimos: 6000, tipo: 'extra', ordem: 35 },
+    { codigo: 'ajuda_dominio_cliente', nome: 'Ajuda a comprar e apontar o domínio', descricao_cliente: 'Acompanhamento passo a passo para o cliente comprar o domínio e ligá-lo ao site (ou ao ZIP).', preco_centimos: 4000, tipo: 'extra', ordem: 36 },
+    { codigo: 'conta_email_gmail', nome: 'Criação de email Gmail do negócio', descricao_cliente: 'Criação e organização básica de um Gmail profissional para o estabelecimento.', preco_centimos: 3500, tipo: 'extra', ordem: 37 },
+    { codigo: 'whatsapp_negocio', nome: 'WhatsApp no site + orientação Business', descricao_cliente: 'Botão de contacto no site e orientação para configurar o WhatsApp Business.', preco_centimos: 3000, tipo: 'extra', ordem: 38 },
+    { codigo: 'ligacao_redes', nome: 'Ligação do site às redes sociais', descricao_cliente: 'Ligações para Instagram e Facebook, e texto simples para a bio.', preco_centimos: 2500, tipo: 'extra', ordem: 39 },
     { codigo: 'pagina_adicional', nome: 'Página adicional', descricao_cliente: '', preco_centimos: 9000, tipo: 'extra', ordem: 40 },
     { codigo: 'idioma_adicional', nome: 'Idioma adicional', descricao_cliente: 'Tradução automática revista.', preco_centimos: 19000, tipo: 'extra', ordem: 50 },
     { codigo: 'catalogo_menu', nome: 'Catálogo / menu (+20 itens)', descricao_cliente: '', preco_centimos: 12000, tipo: 'extra', ordem: 60 },
     { codigo: 'tratamento_imagens', nome: 'Tratamento de imagens do cliente (+15 ficheiros)', descricao_cliente: '', preco_centimos: 6000, tipo: 'extra', ordem: 70 },
-    { codigo: 'email_profissional', nome: 'Email profissional', descricao_cliente: 'Configuração no domínio do cliente.', preco_centimos: 9000, tipo: 'extra', ordem: 80 },
-    { codigo: 'qr_cartao', nome: 'QR Code + cartão', descricao_cliente: 'PDF pronto a imprimir.', preco_centimos: 4000, tipo: 'extra', ordem: 90 },
+    { codigo: 'email_profissional', nome: 'Email profissional', descricao_cliente: 'Configuração no domínio do cliente (ex.: info@negocio.pt).', preco_centimos: 9000, tipo: 'extra', ordem: 80 },
+    { codigo: 'qr_cartao', nome: 'QR Code + cartão', descricao_cliente: 'PDF pronto a imprimir para a montra e o balcão.', preco_centimos: 4000, tipo: 'extra', ordem: 90 },
+    { codigo: 'video_guia', nome: 'Vídeo-guia de utilização', descricao_cliente: 'Vídeo curto em português a explicar como alterar o essencial e onde clicar.', preco_centimos: 4500, tipo: 'extra', ordem: 95 },
+    { codigo: 'visita_setup', nome: 'Sessão presencial de arranque', descricao_cliente: 'No estabelecimento: marcar o site no telemóvel, favoritos, QR e ficha Google.', preco_centimos: 8000, tipo: 'extra', ordem: 96 },
     { codigo: 'marcacoes', nome: 'Sistema de marcações / formulário avançado', descricao_cliente: '', preco_centimos: 25000, tipo: 'extra', ordem: 100 },
     { codigo: 'pagamentos', nome: 'Integração de pagamentos', descricao_cliente: '', preco_centimos: 35000, tipo: 'extra', ordem: 110 },
     { codigo: 'migracao', nome: 'Migração e redirecionamentos', descricao_cliente: '', preco_centimos: 15000, tipo: 'extra', ordem: 120 },

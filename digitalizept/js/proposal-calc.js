@@ -18,7 +18,10 @@ export function ensureProposta(state) {
             extras: [],
             urgencia: false,
             manutencao: null,
-            descontoPct: 0
+            descontoPct: 0,
+            // Off by default: many door-to-door deals close before a company
+            // and fatura exist. Flip on when you are ready to invoice with IVA.
+            cobrarIva: false
         };
     }
     const p = state.data.proposta;
@@ -28,11 +31,19 @@ export function ensureProposta(state) {
     if (p.manutencao === undefined) p.manutencao = null;
     if (typeof p.descontoPct !== 'number') p.descontoPct = 0;
     if (typeof p.contrapartida !== 'string') p.contrapartida = '';
+    if (typeof p.cobrarIva !== 'boolean') p.cobrarIva = false;
     return p;
 }
 
-// `ivaRate` is a fraction (0.23) and comes from the server. 0 means the art. 53.º
-// isencao regime: no IVA is charged and none is shown anywhere.
+// Config rate is the legal taxa when fatura exists. The deal can turn it off.
+export function resolveIvaRate(proposta, configRate = 0) {
+    const base = Math.max(0, Number(configRate) || 0);
+    if (!proposta || proposta.cobrarIva !== true) return 0;
+    return base;
+}
+
+// `ivaRate` is a fraction (0.23). 0 means no IVA on this deal — no fatura yet
+// or a formal isenção set on the server.
 export function computeProposta(proposta, catalog, businessType, ivaRate = 0) {
     const byCode = catalogByCode(catalog);
     const base = byCode[proposta.pacote];
@@ -97,9 +108,10 @@ export function computeProposta(proposta, catalog, businessType, ivaRate = 0) {
 // Steps after the proposal screen call this so a service changed by going back
 // is never priced from a stale _calc. Not used once a contract is signed: that
 // document has to reproduce exactly the totals the client put their name to.
-export function refreshCalc(state, catalog, businessType, ivaRate) {
+export function refreshCalc(state, catalog, businessType, configRate) {
     const proposta = ensureProposta(state);
-    proposta._calc = computeProposta(proposta, catalog, businessType, ivaRate);
+    const rate = resolveIvaRate(proposta, configRate);
+    proposta._calc = computeProposta(proposta, catalog, businessType, rate);
     return proposta._calc;
 }
 

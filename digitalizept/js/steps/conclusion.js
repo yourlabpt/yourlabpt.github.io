@@ -188,7 +188,12 @@ async function render(body, ctx) {
     project.appendChild(stateList);
     const meta = document.createElement('p');
     meta.className = 'id-disclaimer';
-    meta.textContent = `Estado atual: Contrato assinado · Google: por criar · Domínio: por comprar · ID ${result.projectId}`;
+    const dominioLabel = result.estados && result.estados.dominio === 'cliente_zip'
+        ? 'cliente compra · entrega ZIP'
+        : result.estados && result.estados.dominio === 'a_registar'
+        ? (result.dominio && result.dominio.escolhido ? result.dominio.escolhido : 'a registar')
+        : 'por comprar';
+    meta.textContent = `Estado atual: Contrato assinado · Google: por criar · Domínio: ${dominioLabel} · ID ${result.projectId}`;
     project.appendChild(meta);
     body.appendChild(project);
 

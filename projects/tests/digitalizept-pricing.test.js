@@ -8,22 +8,32 @@ const { pathToFileURL } = require('node:url');
 const appDir = path.join(__dirname, '..', '..', 'digitalizept', 'js');
 let computeProposta;
 let refreshCalc;
+let resolveIvaRate;
 let guardrailLevel;
 let validateNif;
 let parseDemoOutput;
 let isDataStepValid;
+let suggestDomains;
+let isDominioValid;
+let PACKAGE_DELIVERABLES;
 
 before(async () => {
     const calc = await import(pathToFileURL(path.join(appDir, 'proposal-calc.js')).href);
     const nif = await import(pathToFileURL(path.join(appDir, 'deal', 'nif.js')).href);
     const parse = await import(pathToFileURL(path.join(appDir, 'demo', 'parse.js')).href);
     const dataValid = await import(pathToFileURL(path.join(appDir, 'steps', 'data-valid.js')).href);
+    const domain = await import(pathToFileURL(path.join(appDir, 'domain.js')).href);
+    const contract = await import(pathToFileURL(path.join(appDir, 'deal', 'contract.js')).href);
     computeProposta = calc.computeProposta;
     refreshCalc = calc.refreshCalc;
+    resolveIvaRate = calc.resolveIvaRate;
     guardrailLevel = calc.guardrailLevel;
     validateNif = nif.validateNif;
     parseDemoOutput = parse.parseDemoOutput;
     isDataStepValid = dataValid.isDataStepValid;
+    suggestDomains = domain.suggestDomains;
+    isDominioValid = domain.isDominioValid;
+    PACKAGE_DELIVERABLES = contract.PACKAGE_DELIVERABLES;
 });
 
 const IVA = 0.23;
@@ -152,7 +162,7 @@ describe('digitalizept pricing — valor-hora guardrail', () => {
 
 describe('digitalizept pricing — refreshCalc', () => {
     it('re-prices stale totals in place after a service changes', () => {
-        const state = { data: { proposta: proposta() } };
+        const state = { data: { proposta: proposta({ cobrarIva: true }) } };
         refreshCalc(state, CATALOG, {}, IVA);
         assert.equal(state.data.proposta._calc.totalComIva, 60270);
 
@@ -165,7 +175,10 @@ describe('digitalizept pricing — refreshCalc', () => {
         const state = { data: {} };
         const c = refreshCalc(state, CATALOG, {}, IVA);
         assert.equal(state.data.proposta.pacote, 'essencial');
-        assert.equal(c.totalComIva, 60270);
+        assert.equal(state.data.proposta.cobrarIva, false);
+        assert.equal(c.totalComIva, 49000, 'new deals start without IVA until the toggle is on');
+        state.data.proposta.cobrarIva = true;
+        assert.equal(refreshCalc(state, CATALOG, {}, IVA).totalComIva, 60270);
     });
 });
 
@@ -317,5 +330,52 @@ describe('digitalizept data step — public shopfront is enough', () => {
                 }
             }
         }), true);
+    });
+});
+
+describe('digitalizept per-deal IVA toggle', () => {
+    it('keeps IVA off until cobrarIva is explicitly true', () => {
+        assert.equal(resolveIvaRate({ cobrarIva: false }, IVA), 0);
+        assert.equal(resolveIvaRate({}, IVA), 0);
+        assert.equal(resolveIvaRate({ cobrarIva: true }, IVA), IVA);
+        assert.equal(resolveIvaRate({ cobrarIva: true }, 0), 0);
+    });
+
+    it('refreshCalc respects the deal toggle against the config rate', () => {
+        const state = { data: { proposta: { pacote: 'essencial', extras: [], urgencia: false, manutencao: null, descontoPct: 0, cobrarIva: false } } };
+        const off = refreshCalc(state, CATALOG, {}, IVA);
+        assert.equal(off.iva, 0);
+        assert.equal(off.totalComIva, 49000);
+        state.data.proposta.cobrarIva = true;
+        const on = refreshCalc(state, CATALOG, {}, IVA);
+        assert.equal(on.iva, 11270);
+        assert.equal(on.totalComIva, 60270);
+    });
+});
+
+describe('digitalizept domain options', () => {
+    it('offers three distinct public domain suggestions', () => {
+        const list = suggestDomains('Café Central', 'Lisboa');
+        assert.equal(list.length, 3);
+        assert.equal(new Set(list).size, 3);
+        assert.ok(list.every((d) => d.includes('.')));
+        assert.ok(list[0].endsWith('.pt'));
+    });
+
+    it('accepts a suggested domain or the client-owned ZIP path', () => {
+        assert.equal(isDominioValid({ dominio: { modo: 'sugerido', escolhido: 'cafecentral.pt' } }), true);
+        assert.equal(isDominioValid({ dominio: { modo: 'sugerido', escolhido: '' } }), false);
+        assert.equal(isDominioValid({ dominio: { modo: 'proprio' } }), true);
+        assert.equal(isDominioValid({ dominio: { modo: '' } }), false);
+    });
+});
+
+describe('digitalizept contract deliverables', () => {
+    it('lists the Essencial Google and landing work even without extras', () => {
+        const lines = PACKAGE_DELIVERABLES.essencial.join(' ').toLowerCase();
+        assert.match(lines, /landing/);
+        assert.match(lines, /google maps/);
+        assert.match(lines, /conta google/);
+        assert.match(lines, /zip/);
     });
 });

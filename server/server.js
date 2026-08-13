@@ -2062,7 +2062,10 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const { computeProposta } = await getDigitalizeptPricing();
         const servicos = db.prepare('SELECT * FROM servico WHERE ativo = 1').all();
         const btConfig = loadBusinessTypes().find((t) => t.id === businessType.id) || {};
-        const verified = computeProposta(proposta, servicos, btConfig, DIGITALIZEPT_IVA_RATE);
+        // Per-deal: client may close without fatura/IVA. Only allow the live
+        // taxa when cobrarIva is true; anything else is priced at 0.
+        const dealIvaRate = proposta.cobrarIva === true ? DIGITALIZEPT_IVA_RATE : 0;
+        const verified = computeProposta(proposta, servicos, btConfig, dealIvaRate);
 
         if (Math.round(calc.totalComIva || 0) !== verified.totalComIva) {
             console.error(`digitalizept: total mismatch, client ${calc.totalComIva} vs server ${verified.totalComIva}`);
@@ -2149,7 +2152,15 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
 
             db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, iva_rate, iva_centimos, total_com_iva_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
-                propostaId, leadId, JSON.stringify({ pacote: proposta.pacote, extras: proposta.extras, urgencia: proposta.urgencia, manutencao: proposta.manutencao, contrapartida: proposta.contrapartida }),
+                propostaId, leadId, JSON.stringify({
+                    pacote: proposta.pacote,
+                    extras: proposta.extras,
+                    urgencia: proposta.urgencia,
+                    manutencao: proposta.manutencao,
+                    contrapartida: proposta.contrapartida,
+                    cobrarIva: proposta.cobrarIva === true,
+                    dominio: proposta.dominio || null
+                }),
                 verified.subtotal, verified.descontoPct, verified.desconto,
                 verified.totalSemIva, verified.ivaRate, verified.iva, verified.totalComIva,
                 cleanText(proposta.contrapartida, 300), verified.valorHora, now);
@@ -2169,11 +2180,16 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 cleanText(req.ip, 60), cleanText(assinatura.dispositivo, 300),
                 cleanText(assinatura.timestamp, 60) || now, cleanText(contrato.hash, 128));
 
+            const dominioEstado = (proposta.dominio && proposta.dominio.modo === 'proprio')
+                ? 'cliente_zip'
+                : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
+
             db.prepare(`INSERT INTO projeto (id, contrato_id, estado, estado_google, estado_dominio, criado_em)
-                VALUES (?, ?, 'contrato_assinado', 'por_criar', 'por_comprar', ?)`).run(projetoId, contratoId, now);
+                VALUES (?, ?, 'contrato_assinado', 'por_criar', ?, ?)`).run(projetoId, contratoId, dominioEstado, now);
 
             digitalizeptLogEvento(db, 'contrato', contratoId, 'assinado', {
-                cliente: clienteNome, total_centimos: verified.totalComIva, ip: req.ip
+                cliente: clienteNome, total_centimos: verified.totalComIva, ip: req.ip,
+                dominio: proposta.dominio || null
             });
         });
         persist();
@@ -2195,12 +2211,17 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             })
             : { sent: false, reason: 'No archive address.' };
 
+        const dominioEstado = (proposta.dominio && proposta.dominio.modo === 'proprio')
+            ? 'cliente_zip'
+            : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
+
         return res.json({
             ok: true,
             projectId: projetoId,
             leadId,
             estado: 'contrato_assinado',
-            estados: { google: 'por_criar', dominio: 'por_comprar' },
+            estados: { google: 'por_criar', dominio: dominioEstado },
+            dominio: proposta.dominio || null,
             email: { clientSent: clientResult.sent, archiveSent: archiveResult.sent },
             contractDownload: `/api/digitalizept/deals/${projetoId}/contract`,
             demoUrl: demoSlug ? `/d/${demoSlug}` : '',
