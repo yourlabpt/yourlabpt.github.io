@@ -178,6 +178,32 @@ button, input, textarea, select {
     cursor: pointer;
 }
 
+.btn-logout {
+    flex-shrink: 0;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--accent-soft);
+    background: var(--secondary-dark);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.btn-logout:hover {
+    border-color: rgba(232, 213, 183, 0.45);
+    color: var(--text-light);
+    background: var(--accent-dark);
+}
+
+.btn-logout:active {
+    background: var(--accent-dark);
+}
+
 .btn-icon {
     width: 38px;
     height: 38px;
@@ -1047,6 +1073,29 @@ button, input, textarea, select {
     font-weight: 700;
     color: var(--accent-color);
     white-space: nowrap;
+}
+
+.svc-tag {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--accent-soft);
+    color: var(--text-muted);
+}
+
+.svc-tag-ok {
+    border-color: rgba(74, 222, 128, 0.35);
+    color: var(--success-color);
+}
+
+.domain-status {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 4px 0 10px;
 }
 
 .svc-check {

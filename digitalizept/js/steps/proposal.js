@@ -1,7 +1,7 @@
 import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { formatEuros } from '../format.js';
-import { ensureProposta, computeProposta, resolveIvaRate, guardrailLevel } from '../proposal-calc.js';
+import { ensureProposta, computeProposta, resolveIvaRate } from '../proposal-calc.js';
 
 const DISCOUNT_PRESETS = [0, 5, 10, 15, 20];
 
@@ -131,19 +131,6 @@ async function render(body, ctx) {
             card.appendChild(summaryLine('Manutenção', `${formatEuros(mensal)}/mês`, { muted: true }));
         }
         summaryWrap.appendChild(card);
-
-        const level = guardrailLevel(c.valorHora);
-        const guard = document.createElement('div');
-        guard.className = `guardrail guardrail-${level}`;
-        guard.appendChild(Object.assign(document.createElement('span'), {
-            className: 'guardrail-label',
-            textContent: 'Valor-hora (só para si)'
-        }));
-        guard.appendChild(Object.assign(document.createElement('span'), {
-            className: 'guardrail-value',
-            textContent: `${c.valorHora.toFixed(0)} €/h`
-        }));
-        summaryWrap.appendChild(guard);
         paintIvaToggle();
     }
 

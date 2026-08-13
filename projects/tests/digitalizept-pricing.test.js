@@ -12,18 +12,21 @@ let resolveIvaRate;
 let guardrailLevel;
 let validateNif;
 let parseDemoOutput;
-let isDataStepValid;
-let suggestDomains;
 let isDominioValid;
 let PACKAGE_DELIVERABLES;
+let buildDomainCandidates;
 
 before(async () => {
+    if (typeof globalThis.window === 'undefined') {
+        globalThis.window = { location: { hostname: 'localhost', port: '3000' } };
+    }
     const calc = await import(pathToFileURL(path.join(appDir, 'proposal-calc.js')).href);
     const nif = await import(pathToFileURL(path.join(appDir, 'deal', 'nif.js')).href);
     const parse = await import(pathToFileURL(path.join(appDir, 'demo', 'parse.js')).href);
     const dataValid = await import(pathToFileURL(path.join(appDir, 'steps', 'data-valid.js')).href);
     const domain = await import(pathToFileURL(path.join(appDir, 'domain.js')).href);
     const contract = await import(pathToFileURL(path.join(appDir, 'deal', 'contract.js')).href);
+    const domainsServer = require(path.join(__dirname, '..', '..', 'server', 'lib', 'digitalizept-domains.js'));
     computeProposta = calc.computeProposta;
     refreshCalc = calc.refreshCalc;
     resolveIvaRate = calc.resolveIvaRate;
@@ -31,9 +34,9 @@ before(async () => {
     validateNif = nif.validateNif;
     parseDemoOutput = parse.parseDemoOutput;
     isDataStepValid = dataValid.isDataStepValid;
-    suggestDomains = domain.suggestDomains;
     isDominioValid = domain.isDominioValid;
     PACKAGE_DELIVERABLES = contract.PACKAGE_DELIVERABLES;
+    buildDomainCandidates = domainsServer.buildDomainCandidates;
 });
 
 const IVA = 0.23;
@@ -354,12 +357,11 @@ describe('digitalizept per-deal IVA toggle', () => {
 });
 
 describe('digitalizept domain options', () => {
-    it('offers three distinct public domain suggestions', () => {
-        const list = suggestDomains('Café Central', 'Lisboa');
-        assert.equal(list.length, 3);
-        assert.equal(new Set(list).size, 3);
-        assert.ok(list.every((d) => d.includes('.')));
-        assert.ok(list[0].endsWith('.pt'));
+    it('builds distinct candidate names from the shopfront', () => {
+        const list = buildDomainCandidates('Café Central', 'Lisboa');
+        assert.ok(list.length >= 6);
+        assert.equal(new Set(list).size, list.length);
+        assert.ok(list.every((d) => /\.(pt|com)$/.test(d)));
     });
 
     it('accepts a suggested domain or the client-owned ZIP path', () => {

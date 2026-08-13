@@ -1,7 +1,7 @@
 import { fetchCatalog } from '../catalog.js';
 import { formatEuros } from '../format.js';
 import { ensureProposta } from '../proposal-calc.js';
-import { ensureDominio, isDominioValid } from '../domain.js';
+import { ensureDominio, isDominioValid, refreshDominioCandidates } from '../domain.js';
 
 function isValid(state) {
     const p = state.data.proposta;
@@ -62,9 +62,9 @@ function buildPackages(body, catalog, proposta, persist) {
     body.appendChild(group);
 }
 
-function buildDomain(body, state, proposta, persist) {
-    const dados = state.data.dados || {};
-    const dominio = ensureDominio(proposta, dados);
+async function buildDomain(body, ctx, proposta, persist) {
+    const dados = ctx.state.data.dados || {};
+    const dominio = ensureDominio(proposta);
 
     const group = document.createElement('div');
     group.className = 'id-section';
@@ -72,11 +72,18 @@ function buildDomain(body, state, proposta, persist) {
 
     const hint = document.createElement('p');
     hint.className = 'id-disclaimer';
-    hint.textContent = 'Escolha um dos nomes sugeridos. Se nenhum servir, o cliente compra o próprio domínio e recebe o website em ZIP por email.';
+    hint.textContent = 'A procurar nomes livres para registar. Se nenhum servir, o cliente compra o próprio domínio e recebe o website em ZIP por email.';
     group.appendChild(hint);
+
+    const status = document.createElement('p');
+    status.className = 'domain-status';
+    status.textContent = 'A verificar disponibilidade…';
+    group.appendChild(status);
 
     const list = document.createElement('div');
     list.className = 'svc-list';
+    group.appendChild(list);
+    body.appendChild(group);
 
     function paint() {
         list.querySelectorAll('.svc-row').forEach((row) => {
@@ -89,59 +96,80 @@ function buildDomain(body, state, proposta, persist) {
         });
     }
 
-    (dominio.candidatos || []).forEach((name) => {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'svc-row';
-        row.dataset.mode = 'sugerido';
-        row.dataset.value = name;
-        const check = document.createElement('span');
-        check.className = 'svc-check';
-        const info = document.createElement('div');
-        info.className = 'svc-info';
-        info.appendChild(Object.assign(document.createElement('div'), { className: 'svc-name', textContent: name }));
-        info.appendChild(Object.assign(document.createElement('div'), {
-            className: 'svc-desc',
-            textContent: 'Sugestão a registar em nome do cliente'
+    function renderOwnOption() {
+        const own = document.createElement('button');
+        own.type = 'button';
+        own.className = 'svc-row';
+        own.dataset.mode = 'proprio';
+        const ownCheck = document.createElement('span');
+        ownCheck.className = 'svc-check';
+        const ownInfo = document.createElement('div');
+        ownInfo.className = 'svc-info';
+        ownInfo.appendChild(Object.assign(document.createElement('div'), {
+            className: 'svc-name',
+            textContent: 'Cliente compra o próprio domínio'
         }));
-        row.append(check, info);
-        row.addEventListener('click', () => {
-            dominio.modo = 'sugerido';
-            dominio.escolhido = name;
+        ownInfo.appendChild(Object.assign(document.createElement('div'), {
+            className: 'svc-desc',
+            textContent: 'Entrega do código em ZIP por email — o cliente publica quando quiser'
+        }));
+        own.append(ownCheck, ownInfo);
+        own.addEventListener('click', () => {
+            dominio.modo = 'proprio';
+            dominio.escolhido = '';
             paint();
             persist();
         });
-        list.appendChild(row);
-    });
-
-    const own = document.createElement('button');
-    own.type = 'button';
-    own.className = 'svc-row';
-    own.dataset.mode = 'proprio';
-    const ownCheck = document.createElement('span');
-    ownCheck.className = 'svc-check';
-    const ownInfo = document.createElement('div');
-    ownInfo.className = 'svc-info';
-    ownInfo.appendChild(Object.assign(document.createElement('div'), {
-        className: 'svc-name',
-        textContent: 'Cliente compra o próprio domínio'
-    }));
-    ownInfo.appendChild(Object.assign(document.createElement('div'), {
-        className: 'svc-desc',
-        textContent: 'Entrega do código em ZIP por email — o cliente publica quando quiser'
-    }));
-    own.append(ownCheck, ownInfo);
-    own.addEventListener('click', () => {
-        dominio.modo = 'proprio';
-        dominio.escolhido = '';
+        list.appendChild(own);
         paint();
-        persist();
-    });
-    list.appendChild(own);
+    }
 
-    group.appendChild(list);
-    body.appendChild(group);
-    paint();
+    if (!dados.nome_negocio) {
+        status.textContent = 'Preencha o nome do negócio no passo anterior.';
+        renderOwnOption();
+        return;
+    }
+
+    await refreshDominioCandidates(ctx, proposta, dados);
+
+    list.innerHTML = '';
+    const available = dominio.candidatos || [];
+
+    if (!available.length) {
+        status.textContent = 'Não encontrámos nomes livres agora. Use a opção de domínio próprio ou tente noutra rede.';
+    } else {
+        status.textContent = `${available.length} nome${available.length > 1 ? 's' : ''} livre${available.length > 1 ? 's' : ''} para registar:`;
+        available.forEach((name) => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'svc-row';
+            row.dataset.mode = 'sugerido';
+            row.dataset.value = name;
+            const check = document.createElement('span');
+            check.className = 'svc-check';
+            const info = document.createElement('div');
+            info.className = 'svc-info';
+            info.appendChild(Object.assign(document.createElement('div'), { className: 'svc-name', textContent: name }));
+            info.appendChild(Object.assign(document.createElement('div'), {
+                className: 'svc-desc',
+                textContent: 'Disponível para registar em nome do cliente'
+            }));
+            const tag = document.createElement('span');
+            tag.className = 'svc-tag svc-tag-ok';
+            tag.textContent = 'Livre';
+            row.append(check, info, tag);
+            row.addEventListener('click', () => {
+                dominio.modo = 'sugerido';
+                dominio.escolhido = name;
+                paint();
+                persist();
+            });
+            list.appendChild(row);
+        });
+    }
+
+    renderOwnOption();
+    persist();
 }
 
 function buildExtras(body, catalog, proposta, persist) {
@@ -296,7 +324,7 @@ async function render(body, ctx) {
     }
 
     buildPackages(body, catalog, proposta, persist);
-    buildDomain(body, ctx.state, proposta, persist);
+    await buildDomain(body, ctx, proposta, persist);
     buildExtras(body, catalog, proposta, persist);
     buildUrgencia(body, catalog, proposta, persist);
     buildManutencao(body, catalog, proposta, persist);

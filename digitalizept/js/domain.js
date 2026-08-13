@@ -1,27 +1,24 @@
-// Domain suggestions for the door-to-door pitch. Three public options from the
-// shopfront name; if none fit, the client buys their own and we email a ZIP.
+// Domain suggestions — fetched from the server after a DNS availability check.
+import { apiRequest } from './api.js';
+import { getToken } from './auth.js';
 
-function slugPart(value) {
-    return String(value || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '')
-        .slice(0, 28);
+export async function fetchAvailableDomains(ctx, nomeNegocio, cidade) {
+    const qs = new URLSearchParams({
+        nome: String(nomeNegocio || '').trim(),
+        cidade: String(cidade || '').trim()
+    });
+    const { response, data } = await apiRequest(`/api/digitalizept/domains?${qs}`, {
+        token: getToken()
+    });
+    if (response.status === 401) {
+        if (ctx && typeof ctx.onUnauthorized === 'function') ctx.onUnauthorized();
+        return null;
+    }
+    if (!response.ok) return [];
+    return Array.isArray(data.domains) ? data.domains : [];
 }
 
-export function suggestDomains(nomeNegocio, cidade) {
-    const base = slugPart(nomeNegocio) || 'negocio';
-    const city = slugPart(cidade);
-    const candidates = [
-        `${base}.pt`,
-        city ? `${base}-${city}.pt` : `${base}online.pt`,
-        `${base}.com`
-    ];
-    return [...new Set(candidates)].slice(0, 3);
-}
-
-export function ensureDominio(proposta, dados) {
+export function ensureDominio(proposta) {
     if (!proposta.dominio || typeof proposta.dominio !== 'object') {
         proposta.dominio = {
             modo: '',
@@ -30,14 +27,18 @@ export function ensureDominio(proposta, dados) {
         };
     }
     const d = proposta.dominio;
-    const fresh = suggestDomains(dados && dados.nome_negocio, dados && dados.cidade);
-    // Refresh suggestions when the business name changed since last visit.
-    if (!Array.isArray(d.candidatos) || d.candidatos.length !== 3
-        || d.candidatos.some((v, i) => v !== fresh[i])) {
-        d.candidatos = fresh;
-        if (d.modo === 'sugerido' && d.escolhido && !fresh.includes(d.escolhido)) {
-            d.escolhido = '';
-        }
+    if (!Array.isArray(d.candidatos)) d.candidatos = [];
+    return d;
+}
+
+export async function refreshDominioCandidates(ctx, proposta, dados) {
+    const d = ensureDominio(proposta);
+    const list = await fetchAvailableDomains(ctx, dados && dados.nome_negocio, dados && dados.cidade);
+    if (list === null) return d;
+    d.candidatos = list;
+    if (d.modo === 'sugerido' && d.escolhido && !list.includes(d.escolhido)) {
+        d.escolhido = '';
+        d.modo = '';
     }
     return d;
 }

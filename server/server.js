@@ -13,6 +13,7 @@ const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalize
 const { renderContractPdf } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { createRateLimiter } = require('./lib/rate-limit');
+const { findAvailableDomains } = require('./lib/digitalizept-domains');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -1658,6 +1659,7 @@ app.post('/api/admin/logout', (req, res) => {
 
 // Digitalize Portugal — master key login
 const digitalizeptLoginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
+const digitalizeptDomainLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 20 });
 
 app.post('/api/digitalizept/login', (req, res) => {
     const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
@@ -1734,6 +1736,26 @@ app.get('/api/digitalizept/catalog', requireDigitalizept, (req, res) => {
     } catch (err) {
         console.error('digitalizept catalog error:', err.message);
         return res.status(500).json({ error: 'Failed to load catalog.' });
+    }
+});
+
+// DNS-based domain availability — returns up to three names that do not resolve yet.
+app.get('/api/digitalizept/domains', requireDigitalizept, async (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeptDomainLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiadas pesquisas de domínio. Aguarde um minuto.' });
+    }
+    const nome = String(req.query.nome || '').trim().slice(0, 120);
+    const cidade = String(req.query.cidade || '').trim().slice(0, 80);
+    if (!nome) {
+        return res.status(400).json({ error: 'Indique o nome do negócio.' });
+    }
+    try {
+        const result = await findAvailableDomains(nome, cidade);
+        return res.json(result);
+    } catch (err) {
+        console.error('digitalizept domains error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível verificar domínios.' });
     }
 });
 
