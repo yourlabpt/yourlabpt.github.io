@@ -355,11 +355,18 @@ function renderDeals() {
         const fase = FASES.find((f) => f.id === d.estado)?.label || d.estado;
         card.innerHTML = `
             <h3>${d.nome || d.cliente_nome || 'Negócio'}</h3>
-            <p class="meta">${d.cliente_nome || ''} · ${packageLabel(d.itens_json)} · ${eurosFromCents(d.total_com_iva_centimos)}</p>
+            <p class="meta">${d.cliente_nome || ''} · ${packageLabel(d.itens_json)} · ${eurosFromCents(d.total_com_iva_centimos)} · ${d.template_versao || 'v1'}</p>
             <p class="meta">Fase: ${fase} · Google: ${d.estado_google || '—'} · ${new Date(d.criado_em).toLocaleDateString('pt-PT')}</p>
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';
+        if (d.leadId) {
+            const revise = document.createElement('a');
+            revise.className = 'btn-primary';
+            revise.href = `./?resume=${encodeURIComponent(d.leadId)}`;
+            revise.textContent = 'Editar proposta';
+            actions.appendChild(revise);
+        }
         if (d.demo_slug) {
             const demo = document.createElement('a');
             demo.className = 'btn-secondary';
@@ -388,7 +395,7 @@ function renderDeals() {
         });
         const edit = document.createElement('button');
         edit.type = 'button';
-        edit.className = 'btn-primary';
+        edit.className = 'btn-secondary';
         edit.textContent = 'Fase / notas';
         edit.addEventListener('click', () => openDealEditor(d));
         actions.append(contract, edit);
@@ -629,13 +636,11 @@ function openCoveragePin(pin) {
 
         const actions = document.createElement('div');
         actions.className = 'coverage-pin-actions';
-        if (pin.estado !== 'fechado') {
-            const resume = document.createElement('a');
-            resume.className = 'btn-primary';
-            resume.href = `./?resume=${encodeURIComponent(pin.id)}`;
-            resume.textContent = 'Continuar venda';
-            actions.appendChild(resume);
-        }
+        const resume = document.createElement('a');
+        resume.className = 'btn-primary';
+        resume.href = `./?resume=${encodeURIComponent(pin.id)}`;
+        resume.textContent = pin.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda';
+        actions.appendChild(resume);
         if (pin.demo_slug) {
             const demo = document.createElement('a');
             demo.className = 'btn-secondary';

@@ -2146,7 +2146,7 @@ app.post('/api/digitalizept/leads/:leadId/geocode', requireDigitalizept, async (
     }
 });
 
-// Hydrate an unfinished lead so the sales wizard can restart with fields filled.
+// Hydrate a lead (open or closed) so the sales wizard can reopen with fields filled.
 app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res) => {
     try {
         const leadId = cleanText(req.params.leadId, 80);
@@ -2160,9 +2160,6 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             WHERE l.id = ?
         `).get(leadId);
         if (!row) return res.status(404).json({ error: 'Lead não encontrado.' });
-        if (row.estado === 'fechado') {
-            return res.status(409).json({ error: 'Este lead já está fechado. Abra a proposta no admin.' });
-        }
 
         const types = loadBusinessTypes();
         const businessType = types.find((t) => t.id === row.business_type)
@@ -2182,6 +2179,74 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
         const googlePresence = parseJsonSafe(row.google_presence_json, null);
         const wizardExtra = parseJsonSafe(row.wizard_json, {});
 
+        // Closed deals: load the latest proposta + legal + project so re-sign updates in place.
+        let proposta = wizardExtra.proposta || undefined;
+        let clienteLegal = wizardExtra.clienteLegal || undefined;
+        let revisingDeal = false;
+        let projectId = '';
+        let propostaId = '';
+        let contratoId = '';
+        let contratoVersao = 'v1';
+
+        if (row.estado === 'fechado') {
+            const deal = db.prepare(`
+                SELECT p.id AS propostaId, p.itens_json, p.desconto_pct, p.subtotal_centimos,
+                       p.desconto_centimos, p.total_centimos, p.iva_rate, p.iva_centimos,
+                       p.total_com_iva_centimos, p.contrapartida, p.valor_hora_estimado,
+                       c.id AS contratoId, c.template_versao,
+                       pr.id AS projectId,
+                       cl.nome AS cliente_nome, cl.nif, cl.morada AS cliente_morada,
+                       cl.email AS cliente_email, cl.telefone AS cliente_telefone
+                FROM proposta p
+                JOIN contrato c ON c.proposta_id = p.id
+                JOIN projeto pr ON pr.contrato_id = c.id
+                LEFT JOIN cliente_legal cl ON cl.lead_id = p.lead_id
+                WHERE p.lead_id = ?
+                ORDER BY p.criado_em DESC
+                LIMIT 1
+            `).get(leadId);
+            if (deal) {
+                revisingDeal = true;
+                projectId = deal.projectId;
+                propostaId = deal.propostaId;
+                contratoId = deal.contratoId;
+                contratoVersao = deal.template_versao || 'v1';
+                const itens = parseJsonSafe(deal.itens_json, {});
+                proposta = {
+                    pacote: itens.pacote || 'google_essencial',
+                    extras: Array.isArray(itens.extras) ? itens.extras : [],
+                    urgencia: Boolean(itens.urgencia),
+                    manutencao: itens.manutencao || null,
+                    manutencoes: Array.isArray(itens.manutencoes)
+                        ? itens.manutencoes
+                        : (itens.manutencao ? [itens.manutencao] : []),
+                    descontoPct: Number(deal.desconto_pct) || 0,
+                    contrapartida: deal.contrapartida || itens.contrapartida || '',
+                    cobrarIva: itens.cobrarIva === true,
+                    dominio: itens.dominio || null,
+                    _calc: {
+                        subtotal: deal.subtotal_centimos,
+                        descontoPct: deal.desconto_pct,
+                        desconto: deal.desconto_centimos,
+                        totalSemIva: deal.total_centimos,
+                        ivaRate: deal.iva_rate,
+                        iva: deal.iva_centimos,
+                        totalComIva: deal.total_com_iva_centimos,
+                        valorHora: deal.valor_hora_estimado
+                    }
+                };
+                if (deal.cliente_nome || deal.cliente_email) {
+                    clienteLegal = {
+                        nome: deal.cliente_nome || '',
+                        nif: deal.nif || '',
+                        morada: deal.cliente_morada || '',
+                        email: deal.cliente_email || '',
+                        telefone: deal.cliente_telefone || ''
+                    };
+                }
+            }
+        }
+
         const data = {
             leadId: row.id,
             businessType,
@@ -2193,11 +2258,16 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             demoRaw: wizardExtra.demoRaw || '',
             demoGbp: wizardExtra.demoGbp === true,
             googleDiagnostico: wizardExtra.googleDiagnostico || undefined,
-            proposta: wizardExtra.proposta || undefined,
+            proposta,
             googlePresence: (googlePresence && Object.keys(googlePresence).length)
                 ? googlePresence
                 : (wizardExtra.googlePresence || undefined),
-            clienteLegal: wizardExtra.clienteLegal || undefined
+            clienteLegal,
+            revisingDeal: revisingDeal || undefined,
+            projectId: projectId || undefined,
+            propostaId: propostaId || undefined,
+            contratoId: contratoId || undefined,
+            contratoVersao: revisingDeal ? contratoVersao : undefined
         };
         Object.keys(data).forEach((key) => {
             if (data[key] === undefined || data[key] === '') delete data[key];
@@ -2207,6 +2277,7 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             ok: true,
             leadId: row.id,
             estado: row.estado,
+            revisingDeal,
             suggestedStep: 0,
             data
         });
@@ -2216,14 +2287,20 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
     }
 });
 
+function nextContractVersion(current) {
+    const match = /^v(\d+)$/i.exec(String(current || 'v1').trim());
+    const n = match ? Number(match[1]) : 1;
+    return `v${Math.max(1, n) + 1}`;
+}
+
 app.get('/api/digitalizept/deals', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
             SELECT pr.id AS projectId, pr.estado, pr.estado_google, pr.estado_dominio, pr.criado_em,
                    l.id AS leadId, l.nome, l.business_type, l.demo_slug, l.work_path, l.notas_admin,
-                   p.total_centimos, p.iva_centimos, p.total_com_iva_centimos, p.iva_rate, p.itens_json,
-                   c.id AS contratoId, c.pdf_path, c.html_path, c.hash_sha256,
+                   p.id AS propostaId, p.total_centimos, p.iva_centimos, p.total_com_iva_centimos, p.iva_rate, p.itens_json,
+                   c.id AS contratoId, c.template_versao, c.pdf_path, c.html_path, c.hash_sha256,
                    cl.nome AS cliente_nome, cl.email AS cliente_email, cl.nif
             FROM projeto pr
             JOIN contrato c ON c.id = pr.contrato_id
@@ -2527,15 +2604,64 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const now = digitalizeptNow();
         const incomingLeadId = cleanText(body.leadId, 80);
         const existingLead = incomingLeadId
-            ? db.prepare('SELECT id, demo_slug FROM lead WHERE id = ?').get(incomingLeadId)
+            ? db.prepare('SELECT id, demo_slug, estado FROM lead WHERE id = ?').get(incomingLeadId)
             : null;
         const leadId = existingLead ? existingLead.id : crypto.randomUUID();
+
+        // Prefer explicit IDs from a resumed closed deal; else look up the latest chain.
+        let existingDeal = null;
+        if (existingLead) {
+            const byIds = (body.propostaId && body.contratoId && body.projectId)
+                ? db.prepare(`
+                    SELECT p.id AS propostaId, c.id AS contratoId, c.template_versao, pr.id AS projectId,
+                           a.id AS assinaturaId, cl.id AS clienteLegalId
+                    FROM proposta p
+                    JOIN contrato c ON c.id = ?
+                    JOIN projeto pr ON pr.id = ?
+                    LEFT JOIN assinatura a ON a.contrato_id = c.id
+                    LEFT JOIN cliente_legal cl ON cl.lead_id = p.lead_id
+                    WHERE p.id = ? AND p.lead_id = ?
+                    LIMIT 1
+                `).get(
+                    cleanText(body.contratoId, 80),
+                    cleanText(body.projectId, 80),
+                    cleanText(body.propostaId, 80),
+                    leadId
+                )
+                : null;
+            existingDeal = byIds || db.prepare(`
+                SELECT p.id AS propostaId, c.id AS contratoId, c.template_versao, pr.id AS projectId,
+                       a.id AS assinaturaId, cl.id AS clienteLegalId
+                FROM proposta p
+                JOIN contrato c ON c.proposta_id = p.id
+                JOIN projeto pr ON pr.contrato_id = c.id
+                LEFT JOIN assinatura a ON a.contrato_id = c.id
+                LEFT JOIN cliente_legal cl ON cl.lead_id = p.lead_id
+                WHERE p.lead_id = ?
+                ORDER BY p.criado_em DESC
+                LIMIT 1
+            `).get(leadId);
+        }
+        const revising = Boolean(existingDeal && (body.revisingDeal === true || existingLead.estado === 'fechado'));
+        if ((body.revisingDeal === true || (existingLead && existingLead.estado === 'fechado')) && !existingDeal) {
+            return res.status(409).json({
+                error: 'Esta proposta fechada não tem contrato associado para atualizar. Contacte o suporte.'
+            });
+        }
+
         const dadosId = crypto.randomUUID();
-        const propostaId = crypto.randomUUID();
-        const clienteId = crypto.randomUUID();
-        const contratoId = crypto.randomUUID();
-        const assinaturaId = crypto.randomUUID();
-        const projetoId = crypto.randomUUID();
+        const propostaId = revising ? existingDeal.propostaId : crypto.randomUUID();
+        const clienteId = revising && existingDeal.clienteLegalId
+            ? existingDeal.clienteLegalId
+            : crypto.randomUUID();
+        const contratoId = revising ? existingDeal.contratoId : crypto.randomUUID();
+        const assinaturaId = revising && existingDeal.assinaturaId
+            ? existingDeal.assinaturaId
+            : crypto.randomUUID();
+        const projetoId = revising ? existingDeal.projectId : crypto.randomUUID();
+        const templateVersao = revising
+            ? nextContractVersion(existingDeal.template_versao)
+            : 'v1';
         const { obrigatorios, opcionais } = splitDados(dados, btConfig);
         const demoSlug = (existingLead && existingLead.demo_slug)
             || (body.demo ? digitalizeptSlug(dados.nome_negocio) : '');
@@ -2584,6 +2710,17 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             console.error(`digitalizept: work scaffold failed (${err.message})`);
         }
 
+        const itensJson = JSON.stringify({
+            pacote: proposta.pacote,
+            extras: proposta.extras,
+            urgencia: proposta.urgencia,
+            manutencao: proposta.manutencao,
+            manutencoes: Array.isArray(proposta.manutencoes) ? proposta.manutencoes : undefined,
+            contrapartida: proposta.contrapartida,
+            cobrarIva: proposta.cobrarIva === true,
+            dominio: proposta.dominio || null
+        });
+
         const persist = db.transaction(() => {
             const morada = cleanText(dados.morada, 300);
             const cidade = cleanText(dados.cidade, 120);
@@ -2616,60 +2753,122 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                     VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
             }
 
-            db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, iva_rate, iva_centimos, total_com_iva_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
-                propostaId, leadId, JSON.stringify({
-                    pacote: proposta.pacote,
-                    extras: proposta.extras,
-                    urgencia: proposta.urgencia,
-                    manutencao: proposta.manutencao,
-                    contrapartida: proposta.contrapartida,
-                    cobrarIva: proposta.cobrarIva === true,
+            if (revising) {
+                db.prepare(`UPDATE proposta SET itens_json = ?, subtotal_centimos = ?, desconto_pct = ?, desconto_centimos = ?,
+                    total_centimos = ?, iva_rate = ?, iva_centimos = ?, total_com_iva_centimos = ?,
+                    contrapartida = ?, valor_hora_estimado = ?, estado = 'aceite'
+                    WHERE id = ?`).run(
+                    itensJson,
+                    verified.subtotal, verified.descontoPct, verified.desconto,
+                    verified.totalSemIva, verified.ivaRate, verified.iva, verified.totalComIva,
+                    cleanText(proposta.contrapartida, 300), verified.valorHora, propostaId);
+
+                if (existingDeal.clienteLegalId) {
+                    db.prepare(`UPDATE cliente_legal SET nome = ?, nif = ?, morada = ?, email = ?, telefone = ?
+                        WHERE id = ?`).run(
+                        clienteNome, cleanText(clienteLegal.nif, 20),
+                        cleanText(clienteLegal.morada, 300), clienteEmail,
+                        cleanText(clienteLegal.telefone, 60), clienteId);
+                } else {
+                    db.prepare(`INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+                        clienteId, leadId, clienteNome, cleanText(clienteLegal.nif, 20),
+                        cleanText(clienteLegal.morada, 300), clienteEmail, cleanText(clienteLegal.telefone, 60));
+                }
+
+                db.prepare(`UPDATE contrato SET template_versao = ?, pdf_path = ?, html_path = ?, hash_sha256 = ?,
+                    assinado_em = ?, estado = 'assinado'
+                    WHERE id = ?`).run(
+                    templateVersao, storedPdfPath || htmlPath, htmlPath,
+                    cleanText(contrato.hash, 128), now, contratoId);
+
+                if (existingDeal.assinaturaId) {
+                    db.prepare(`UPDATE assinatura SET png_path = ?, geo = ?, ip = ?, dispositivo = ?, timestamp = ?, hash_documento = ?
+                        WHERE id = ?`).run(
+                        pngPath, cleanText(assinatura.geo, 120), cleanText(req.ip, 60),
+                        cleanText(assinatura.dispositivo, 300),
+                        cleanText(assinatura.timestamp, 60) || now,
+                        cleanText(contrato.hash, 128), assinaturaId);
+                } else {
+                    db.prepare(`INSERT INTO assinatura (id, contrato_id, png_path, geo, ip, dispositivo, timestamp, hash_documento)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                        assinaturaId, contratoId, pngPath, cleanText(assinatura.geo, 120),
+                        cleanText(req.ip, 60), cleanText(assinatura.dispositivo, 300),
+                        cleanText(assinatura.timestamp, 60) || now, cleanText(contrato.hash, 128));
+                }
+
+                const dominioEstadoRev = (proposta.dominio && proposta.dominio.modo === 'proprio')
+                    ? 'cliente_zip'
+                    : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
+                db.prepare(`UPDATE projeto SET estado_google = CASE
+                        WHEN estado_google IN ('nao_incluido', 'por_criar') THEN ?
+                        ELSE estado_google END,
+                    estado_dominio = ?
+                    WHERE id = ?`).run(
+                    hasGoogle ? 'por_criar' : 'nao_incluido',
+                    dominioEstadoRev,
+                    projetoId
+                );
+
+                digitalizeptLogEvento(db, 'contrato', contratoId, 'revisao', {
+                    cliente: clienteNome,
+                    total_centimos: verified.totalComIva,
+                    versao: templateVersao,
+                    ip: req.ip
+                });
+            } else {
+                db.prepare(`INSERT INTO proposta (id, lead_id, itens_json, subtotal_centimos, desconto_pct, desconto_centimos, total_centimos, iva_rate, iva_centimos, total_com_iva_centimos, contrapartida, valor_hora_estimado, estado, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aceite', ?)`).run(
+                    propostaId, leadId, itensJson,
+                    verified.subtotal, verified.descontoPct, verified.desconto,
+                    verified.totalSemIva, verified.ivaRate, verified.iva, verified.totalComIva,
+                    cleanText(proposta.contrapartida, 300), verified.valorHora, now);
+
+                db.prepare(`INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+                    clienteId, leadId, clienteNome, cleanText(clienteLegal.nif, 20),
+                    cleanText(clienteLegal.morada, 300), clienteEmail, cleanText(clienteLegal.telefone, 60));
+
+                db.prepare(`INSERT INTO contrato (id, proposta_id, template_versao, pdf_path, html_path, hash_sha256, assinado_em, estado, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'assinado', ?)`).run(
+                    contratoId, propostaId, templateVersao, storedPdfPath || htmlPath, htmlPath,
+                    cleanText(contrato.hash, 128), now, now);
+
+                db.prepare(`INSERT INTO assinatura (id, contrato_id, png_path, geo, ip, dispositivo, timestamp, hash_documento)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                    assinaturaId, contratoId, pngPath, cleanText(assinatura.geo, 120),
+                    cleanText(req.ip, 60), cleanText(assinatura.dispositivo, 300),
+                    cleanText(assinatura.timestamp, 60) || now, cleanText(contrato.hash, 128));
+
+                const dominioEstado = (proposta.dominio && proposta.dominio.modo === 'proprio')
+                    ? 'cliente_zip'
+                    : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
+
+                db.prepare(`INSERT INTO projeto (id, contrato_id, estado, estado_google, estado_dominio, criado_em)
+                    VALUES (?, ?, 'contrato_assinado', ?, ?, ?)`).run(
+                    projetoId,
+                    contratoId,
+                    hasGoogle ? 'por_criar' : 'nao_incluido',
+                    dominioEstado,
+                    now
+                );
+
+                digitalizeptLogEvento(db, 'contrato', contratoId, 'assinado', {
+                    cliente: clienteNome, total_centimos: verified.totalComIva, ip: req.ip,
                     dominio: proposta.dominio || null
-                }),
-                verified.subtotal, verified.descontoPct, verified.desconto,
-                verified.totalSemIva, verified.ivaRate, verified.iva, verified.totalComIva,
-                cleanText(proposta.contrapartida, 300), verified.valorHora, now);
-
-            db.prepare(`INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
-                VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
-                clienteId, leadId, clienteNome, cleanText(clienteLegal.nif, 20),
-                cleanText(clienteLegal.morada, 300), clienteEmail, cleanText(clienteLegal.telefone, 60));
-
-            db.prepare(`INSERT INTO contrato (id, proposta_id, template_versao, pdf_path, html_path, hash_sha256, assinado_em, estado, criado_em)
-                VALUES (?, ?, 'v1', ?, ?, ?, ?, 'assinado', ?)`).run(
-                contratoId, propostaId, storedPdfPath || htmlPath, htmlPath, cleanText(contrato.hash, 128), now, now);
-
-            db.prepare(`INSERT INTO assinatura (id, contrato_id, png_path, geo, ip, dispositivo, timestamp, hash_documento)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
-                assinaturaId, contratoId, pngPath, cleanText(assinatura.geo, 120),
-                cleanText(req.ip, 60), cleanText(assinatura.dispositivo, 300),
-                cleanText(assinatura.timestamp, 60) || now, cleanText(contrato.hash, 128));
-
-            const dominioEstado = (proposta.dominio && proposta.dominio.modo === 'proprio')
-                ? 'cliente_zip'
-                : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
-
-            db.prepare(`INSERT INTO projeto (id, contrato_id, estado, estado_google, estado_dominio, criado_em)
-                VALUES (?, ?, 'contrato_assinado', ?, ?, ?)`).run(
-                projetoId,
-                contratoId,
-                hasGoogle ? 'por_criar' : 'nao_incluido',
-                dominioEstado,
-                now
-            );
-
-            digitalizeptLogEvento(db, 'contrato', contratoId, 'assinado', {
-                cliente: clienteNome, total_centimos: verified.totalComIva, ip: req.ip,
-                dominio: proposta.dominio || null
-            });
+                });
+            }
         });
         persist();
         scheduleLeadGeocode(leadId);
 
         const archive = cleanText(process.env.LEAD_NOTIFY_TO, 200) || cleanText(process.env.SMTP_USER, 200);
-        const subject = `Contrato — ${cleanText(dados.nome_negocio, 120) || clienteNome}`;
-        const text = `Contrato assinado com ${clienteNome}. Documento em anexo.`;
+        const subject = revising
+            ? `Contrato ${templateVersao} — ${cleanText(dados.nome_negocio, 120) || clienteNome}`
+            : `Contrato — ${cleanText(dados.nome_negocio, 120) || clienteNome}`;
+        const text = revising
+            ? `Contrato atualizado (${templateVersao}) com ${clienteNome}. Documento em anexo.`
+            : `Contrato assinado com ${clienteNome}. Documento em anexo.`;
         const attachmentFile = storedPdfPath || htmlPath;
         const attachments = [{
             filename: storedPdfPath ? 'contrato.pdf' : 'contrato.html',
@@ -2684,16 +2883,23 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             })
             : { sent: false, reason: 'No archive address.' };
 
-        const dominioEstado = (proposta.dominio && proposta.dominio.modo === 'proprio')
-            ? 'cliente_zip'
-            : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
+        const projectRow = db.prepare('SELECT estado, estado_google, estado_dominio FROM projeto WHERE id = ?').get(projetoId);
+        const dominioEstado = (projectRow && projectRow.estado_dominio)
+            || ((proposta.dominio && proposta.dominio.modo === 'proprio')
+                ? 'cliente_zip'
+                : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar'));
 
         return res.json({
             ok: true,
+            revised: revising,
+            templateVersao,
             projectId: projetoId,
             leadId,
-            estado: 'contrato_assinado',
-            estados: { google: 'por_criar', dominio: dominioEstado },
+            estado: (projectRow && projectRow.estado) || 'contrato_assinado',
+            estados: {
+                google: (projectRow && projectRow.estado_google) || (hasGoogle ? 'por_criar' : 'nao_incluido'),
+                dominio: dominioEstado
+            },
             dominio: proposta.dominio || null,
             email: { clientSent: clientResult.sent, archiveSent: archiveResult.sent },
             contractDownload: `/api/digitalizept/deals/${projetoId}/contract`,

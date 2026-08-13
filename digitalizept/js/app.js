@@ -86,10 +86,18 @@ async function applyResumeLead(leadId) {
     }
 
     clearWizardState();
-    seedWizardState(data.data, { step: data.suggestedStep || 0, substep: 0 });
+    const seed = { ...data.data };
+    // Re-open always needs a fresh signature (new or revised contract).
+    delete seed.assinatura;
+    delete seed.dealResult;
+    seedWizardState(seed, { step: data.suggestedStep || 0, substep: 0 });
     clearResumeParam();
     wizard = null;
-    showToast(`Lead reaberto: ${(data.data.dados && data.data.dados.nome_negocio) || 'negócio'}.`);
+    const nome = (seed.dados && seed.dados.nome_negocio) || 'negócio';
+    const versao = seed.contratoVersao || 'v1';
+    showToast(data.revisingDeal
+        ? `Proposta reaberta (${versao}): ${nome}. Alterações atualizam a mesma proposta.`
+        : `Lead reaberto: ${nome}.`);
     return true;
 }
 

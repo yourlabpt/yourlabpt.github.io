@@ -104,16 +104,23 @@ async function render(body, ctx) {
         sendBtn.className = 'btn-primary';
         sendBtn.style.width = '100%';
         sendBtn.style.height = '52px';
-        sendBtn.textContent = 'Enviar por email e criar projeto';
+        const revising = Boolean(ctx.state.data.revisingDeal);
+        sendBtn.textContent = revising
+            ? 'Atualizar proposta e reenviar'
+            : 'Enviar por email e criar projeto';
         sendBtn.addEventListener('click', async () => {
             sendBtn.disabled = true;
             status.className = 'demo-status';
-            status.textContent = 'A finalizar…';
+            status.textContent = revising ? 'A atualizar proposta…' : 'A finalizar…';
 
             const a = ctx.state.data.assinatura;
             const bt = ctx.state.data.businessType || {};
             const payload = {
                 leadId: ctx.state.data.leadId || '',
+                revisingDeal: revising || undefined,
+                propostaId: ctx.state.data.propostaId || undefined,
+                contratoId: ctx.state.data.contratoId || undefined,
+                projectId: ctx.state.data.projectId || undefined,
                 businessType: { id: bt.id, nome: bt.nome },
                 dados: ctx.state.data.dados,
                 identidade: ctx.state.data.identidade,
@@ -169,6 +176,10 @@ async function render(body, ctx) {
     ok.style.marginBottom = '14px';
     const emailMsg = result.queued
         ? 'Contrato na fila. Envia-se automaticamente quando houver rede.'
+        : result.revised
+        ? (result.email && result.email.clientSent
+            ? `Proposta atualizada (${result.templateVersao || 'v2'}) e reenviada ao cliente.`
+            : `Proposta atualizada (${result.templateVersao || 'v2'}). Email não enviado.`)
         : result.email && result.email.clientSent
         ? 'Contrato enviado ao cliente e arquivado.'
         : 'Projeto criado. Email não enviado (configure o SMTP para envio automático).';
@@ -177,7 +188,10 @@ async function render(body, ctx) {
 
     const project = document.createElement('div');
     project.className = 'id-section';
-    project.appendChild(Object.assign(document.createElement('h3'), { className: 'field-group-title', textContent: 'Projeto criado' }));
+    project.appendChild(Object.assign(document.createElement('h3'), {
+        className: 'field-group-title',
+        textContent: result.revised ? 'Proposta atualizada' : 'Projeto criado'
+    }));
     const stateList = document.createElement('div');
     stateList.className = 'proj-states';
     PROJECT_STATES.forEach((label) => {
@@ -195,7 +209,7 @@ async function render(body, ctx) {
         : result.estados && result.estados.dominio === 'a_registar'
         ? (result.dominio && result.dominio.escolhido ? result.dominio.escolhido : 'a registar')
         : 'por comprar';
-    meta.textContent = `Estado atual: Contrato assinado · Google: por criar · Domínio: ${dominioLabel} · ID ${result.projectId}`;
+    meta.textContent = `Estado atual: ${result.revised ? `Contrato ${result.templateVersao || 'atualizado'}` : 'Contrato assinado'} · Google: ${(result.estados && result.estados.google) || '—'} · Domínio: ${dominioLabel} · ID ${result.projectId}`;
     project.appendChild(meta);
     body.appendChild(project);
 
