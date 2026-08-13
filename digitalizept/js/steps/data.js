@@ -1,5 +1,6 @@
 import { fetchSettings } from '../settings.js';
 import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
+import { currentSubstep, renderAsk, askText, askToggle, askChoices } from '../substep.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -48,94 +49,131 @@ function attachDictation(inputEl, micBtn) {
     });
 }
 
-function buildField(def, id, value, onChange, required) {
-    const wrap = document.createElement('label');
-    wrap.className = 'field';
-
-    const labelRow = document.createElement('span');
-    labelRow.className = 'field-label';
-    labelRow.textContent = def.label || id;
-    if (required) {
-        const mark = document.createElement('span');
-        mark.className = 'field-req';
-        mark.textContent = ' obrigatório';
-        labelRow.appendChild(mark);
+const CORE_PAGES = [
+    {
+        id: 'nome_negocio',
+        title: 'Qual é o nome do negócio?',
+        hint: 'O nome na montra ou no Google.',
+        required: true
+    },
+    {
+        id: 'morada',
+        title: 'Qual é a morada?',
+        hint: 'Rua e número, como o cliente diria a um cliente.',
+        required: true
+    },
+    {
+        id: 'cidade',
+        title: 'Em que cidade?',
+        required: true
+    },
+    {
+        id: 'telefone',
+        title: 'Qual é o telefone do negócio?',
+        hint: 'O número público, não o telemóvel pessoal.',
+        required: true
+    },
+    {
+        id: 'horario',
+        title: 'Qual é o horário?',
+        hint: 'Pode deixar em branco e preencher depois.',
+        required: false
+    },
+    {
+        id: 'whatsapp',
+        title: 'Tem WhatsApp do negócio?',
+        hint: 'Opcional. Se for o mesmo que o telefone, pode saltar.',
+        required: false
     }
-    wrap.appendChild(labelRow);
+];
 
-    const tipo = def.tipo || 'texto';
+function extraPages(state, standardFields) {
+    const businessType = getBusinessType(state) || {};
+    const used = new Set([...PUBLIC_REQUIRED, ...PUBLIC_EXTRA]);
+    const pages = [];
 
-    if (tipo === 'sim_nao') {
-        const toggle = document.createElement('div');
-        toggle.className = 'toggle';
-        ['Sim', 'Não'].forEach((opt) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = `toggle-opt${value === opt ? ' active' : ''}`;
-            btn.textContent = opt;
-            btn.addEventListener('click', () => {
-                toggle.querySelectorAll('.toggle-opt').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
-                onChange(opt);
-            });
-            toggle.appendChild(btn);
+    function addId(id) {
+        if (!id || used.has(id)) return;
+        used.add(id);
+        const def = (standardFields && standardFields[id]) || { label: id, tipo: 'texto' };
+        pages.push({
+            id,
+            title: def.label || id,
+            hint: 'Opcional — Continuar sem preencher está bem.',
+            required: false,
+            def
         });
-        wrap.appendChild(toggle);
-        return wrap;
     }
 
+    (businessType.campos_obrigatorios || []).forEach(addId);
+    (Array.isArray(businessType.perguntas_especificas) ? businessType.perguntas_especificas : []).forEach((q) => {
+        if (!q || !q.id || used.has(q.id)) return;
+        used.add(q.id);
+        pages.push({
+            id: q.id,
+            title: q.label || q.id,
+            hint: 'Opcional.',
+            required: false,
+            def: q
+        });
+    });
+    (businessType.campos_opcionais || []).forEach(addId);
+    return pages;
+}
+
+function pagesFor(state, standardFields) {
+    const core = CORE_PAGES.map((p) => ({
+        ...p,
+        def: (standardFields && standardFields[p.id]) || { label: p.id, tipo: p.id === 'telefone' || p.id === 'whatsapp' ? 'telefone' : 'texto' }
+    }));
+    const gate = {
+        id: '_more',
+        title: 'Quer acrescentar mais agora?',
+        hint: 'Nome do responsável, o que faz, e o resto. Pode ficar para depois do fecho.',
+        kind: 'gate'
+    };
+    if (!state.data.dadosMore) return [...core, gate];
+    return [...core, gate, ...extraPages(state, standardFields)];
+}
+
+function substepCount(state) {
+    return pagesFor(state, state.data._standardFields || null).length;
+}
+
+function isSubstepValid(state) {
+    const pages = pagesFor(state, state.data._standardFields || null);
+    const page = pages[currentSubstep(state)];
+    if (!page) return isDataStepValid(state);
+    if (page.kind === 'gate') return true;
+    if (!page.required) return true;
+    const dados = (state.data && state.data.dados) || {};
+    return String(dados[page.id] || '').trim().length > 0;
+}
+
+function fieldControl(control, def, value, onChange, onEnter) {
+    const tipo = (def && def.tipo) || 'texto';
+    if (tipo === 'sim_nao') {
+        askToggle(control, { value, onChange });
+        return;
+    }
     const isLong = tipo === 'texto_longo';
-    const input = document.createElement(isLong ? 'textarea' : 'input');
-    input.className = 'field-input';
-    input.value = value || '';
-    if (def.placeholder) input.placeholder = def.placeholder;
-
-    if (!isLong) {
-        input.type = tipo === 'telefone' ? 'tel'
-            : tipo === 'email' ? 'email'
-            : tipo === 'url' ? 'url'
-            : 'text';
-    } else {
-        input.rows = 3;
-    }
-
-    input.addEventListener('input', () => onChange(input.value));
-
-    // Voice dictation on long-text fields, where typing on a phone hurts most.
+    const input = askText(control, {
+        value,
+        type: tipo === 'telefone' ? 'tel' : tipo === 'email' ? 'email' : tipo === 'url' ? 'url' : 'text',
+        placeholder: def && def.placeholder,
+        rows: isLong ? 4 : 1,
+        onChange,
+        onEnter
+    });
     if (isLong && speechAvailable()) {
-        const row = document.createElement('div');
-        row.className = 'field-voice-row';
         const mic = document.createElement('button');
         mic.type = 'button';
         mic.className = 'mic-btn';
         mic.setAttribute('aria-label', 'Ditar por voz');
         mic.textContent = 'voz';
         attachDictation(input, mic);
-        row.append(input, mic);
-        wrap.appendChild(row);
-        return wrap;
+        control.appendChild(mic);
     }
-
-    wrap.appendChild(input);
-    return wrap;
-}
-
-function renderGroup(container, titleText) {
-    const group = document.createElement('div');
-    group.className = 'field-group';
-    if (titleText) {
-        const h = document.createElement('h3');
-        h.className = 'field-group-title';
-        h.textContent = titleText;
-        group.appendChild(h);
-    }
-    container.appendChild(group);
-    return group;
-}
-
-async function ensureStandardFields(ctx) {
-    const settings = await fetchSettings(ctx);
-    return settings ? settings.standardFields : null;
 }
 
 async function render(body, ctx) {
@@ -149,76 +187,58 @@ async function render(body, ctx) {
         return;
     }
 
-    const loading = document.createElement('div');
-    loading.className = 'placeholder';
-    loading.textContent = 'A preparar o formulário…';
-    body.appendChild(loading);
-
-    const standardFields = await ensureStandardFields(ctx);
-    if (!standardFields) return;
-    loading.remove();
+    let standardFields = ctx.state.data._standardFields;
+    if (!standardFields) {
+        const loading = document.createElement('div');
+        loading.className = 'placeholder';
+        loading.textContent = 'A preparar…';
+        body.appendChild(loading);
+        const settings = await fetchSettings(ctx);
+        if (!settings) return;
+        standardFields = settings.standardFields || {};
+        ctx.update({ _standardFields: standardFields });
+        loading.remove();
+    }
 
     const dados = getDados(ctx.state);
-    const used = new Set();
+    const pages = pagesFor(ctx.state, standardFields);
+    const idx = Math.min(currentSubstep(ctx.state), pages.length - 1);
+    const page = pages[idx];
 
-    function take(ids) {
-        return (ids || []).filter((id) => {
-            if (!id || used.has(id)) return false;
-            used.add(id);
-            return true;
-        });
-    }
-
-    function onFieldChange(id, val) {
-        dados[id] = val;
-        ctx.update({ dados });
-        ctx.setValid(isValid(ctx.state));
-    }
-
-    function appendFields(group, ids, required) {
-        ids.forEach((id) => {
-            const def = standardFields[id] || { label: id, tipo: 'texto' };
-            group.appendChild(buildField(def, id, dados[id], (v) => onFieldChange(id, v), required));
-        });
-    }
-
-    // Same fields as before, public shopfront first so Continuar unlocks without
-    // the owner's name or a written pitch.
-    const publicIds = take([...PUBLIC_REQUIRED, ...PUBLIC_EXTRA]);
-    const laterFromRequired = take(businessType.campos_obrigatorios || []);
-    const specific = Array.isArray(businessType.perguntas_especificas) ? businessType.perguntas_especificas : [];
-    const restOptional = take(businessType.campos_opcionais || []);
-
-    const mainGroup = renderGroup(body, 'Estabelecimento');
-    mainGroup.classList.add('field-grid');
-    publicIds.forEach((id) => {
-        const def = standardFields[id] || { label: id, tipo: 'texto' };
-        mainGroup.appendChild(buildField(def, id, dados[id], (v) => onFieldChange(id, v), PUBLIC_REQUIRED.includes(id)));
+    const { control } = renderAsk(body, {
+        title: page.title,
+        hint: page.hint,
+        index: idx,
+        total: pages.length
     });
-    appendFields(mainGroup, laterFromRequired, false);
 
-    if (specific.length) {
-        const specGroup = renderGroup(body, `Sobre o negócio · ${businessType.nome}`);
-        specGroup.classList.add('field-grid');
-        specific.forEach((q) => {
-            specGroup.appendChild(buildField(q, q.id, dados[q.id], (v) => onFieldChange(q.id, v), false));
+    function persist() {
+        ctx.update({ dados, dadosMore: ctx.state.data.dadosMore === true });
+        ctx.setValid(isSubstepValid(ctx.state));
+    }
+
+    if (page.kind === 'gate') {
+        askChoices(control, [
+            { id: 'no', name: 'Agora não', desc: 'Seguir para a identidade visual' },
+            { id: 'yes', name: 'Sim', desc: 'Responsável, descrição e mais detalhes' }
+        ], {
+            selected: ctx.state.data.dadosMore === true ? 'yes' : 'no',
+            onSelect: (item) => {
+                ctx.state.data.dadosMore = item.id === 'yes';
+                persist();
+            }
         });
+        ctx.setValid(true);
+        return;
     }
 
-    if (restOptional.length) {
-        const details = document.createElement('details');
-        details.className = 'field-optional';
-        const summary = document.createElement('summary');
-        summary.textContent = 'Opcionais (recomendado preencher o que souber)';
-        details.appendChild(summary);
-        const optGroup = document.createElement('div');
-        optGroup.className = 'field-group field-grid';
-        appendFields(optGroup, restOptional, false);
-        details.appendChild(optGroup);
-        body.appendChild(details);
-    }
-
-    ctx.setValid(isValid(ctx.state));
+    fieldControl(control, page.def, dados[page.id], (val) => {
+        dados[page.id] = val;
+        persist();
+    }, () => {
+        if (isSubstepValid(ctx.state) && ctx.goNext) ctx.goNext();
+    });
+    ctx.setValid(isSubstepValid(ctx.state));
 }
 
 export const dataStep = {
@@ -226,5 +246,7 @@ export const dataStep = {
     title: 'Dados do estabelecimento',
     subtitle: 'Nome, morada e contacto do negócio chegam para avançar. O resto pode ficar para depois do fecho.',
     isValid,
+    isSubstepValid,
+    substepCount,
     render
 };

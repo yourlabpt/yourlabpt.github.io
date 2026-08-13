@@ -3,13 +3,14 @@ import { fetchConfig } from '../settings.js';
 import { refreshCalc } from '../proposal-calc.js';
 import { validateNif } from '../deal/nif.js';
 import { buildContractModel, contractInnerHtml } from '../deal/contract.js';
+import { currentSubstep, renderAsk, askText } from '../substep.js';
 
 const FIELDS = [
-    { id: 'nome', label: 'Nome completo', tipo: 'text' },
-    { id: 'nif', label: 'NIF', tipo: 'tel' },
-    { id: 'morada', label: 'Morada', tipo: 'text' },
-    { id: 'email', label: 'Email', tipo: 'email' },
-    { id: 'telefone', label: 'Telefone', tipo: 'tel' }
+    { id: 'nome', label: 'Qual é o nome completo do cliente?', hint: 'Quem assina o contrato.', tipo: 'text' },
+    { id: 'nif', label: 'Qual é o NIF?', hint: 'Nove dígitos.', tipo: 'tel' },
+    { id: 'morada', label: 'Qual é a morada fiscal?', tipo: 'text' },
+    { id: 'email', label: 'Qual é o email?', hint: 'Para enviar o contrato.', tipo: 'email' },
+    { id: 'telefone', label: 'Qual é o telefone?', tipo: 'tel' }
 ];
 
 function ensureCliente(state) {
@@ -32,76 +33,85 @@ function isValid(state) {
     return Boolean(c.nome && c.morada && c.email && validateNif(c.nif));
 }
 
+function substepCount() {
+    return 6;
+}
+
+function isSubstepValid(state) {
+    const idx = currentSubstep(state);
+    const cliente = state.data.clienteLegal || {};
+    if (idx >= 5) return isValid(state);
+    const field = FIELDS[idx];
+    if (!field) return false;
+    const value = String(cliente[field.id] || '').trim();
+    if (!value) return false;
+    if (field.id === 'nif') return validateNif(value);
+    return true;
+}
+
 async function render(body, ctx) {
     const cliente = ensureCliente(ctx.state);
+    const idx = currentSubstep(ctx.state);
 
     function persist() {
         ctx.update({ clienteLegal: cliente });
-        ctx.setValid(isValid(ctx.state));
+        ctx.setValid(isSubstepValid(ctx.state));
     }
 
-    const group = document.createElement('div');
-    group.className = 'id-section';
-    group.appendChild(Object.assign(document.createElement('h3'), { className: 'field-group-title', textContent: 'Dados do cliente' }));
-
-    FIELDS.forEach((f) => {
-        const wrap = document.createElement('label');
-        wrap.className = 'field';
-        wrap.appendChild(Object.assign(document.createElement('span'), { className: 'field-label', textContent: f.label }));
-
-        const input = document.createElement('input');
-        input.className = 'field-input';
-        input.type = f.tipo;
-        input.value = cliente[f.id] || '';
-
+    if (idx < 5) {
+        const field = FIELDS[idx];
+        const { control } = renderAsk(body, {
+            title: field.label,
+            hint: field.hint,
+            index: idx,
+            total: 6
+        });
         const error = document.createElement('span');
         error.className = 'field-error';
-
-        input.addEventListener('input', () => {
-            cliente[f.id] = input.value;
-            if (f.id === 'nif') {
-                const ok = !input.value || validateNif(input.value);
-                error.textContent = ok ? '' : 'NIF inválido.';
-                input.classList.toggle('field-input-error', !ok);
+        askText(control, {
+            value: cliente[field.id] || '',
+            type: field.tipo,
+            onChange: (val) => {
+                cliente[field.id] = val;
+                if (field.id === 'nif') {
+                    const ok = !val || validateNif(val);
+                    error.textContent = ok ? '' : 'NIF inválido.';
+                }
+                persist();
+            },
+            onEnter: () => {
+                if (isSubstepValid(ctx.state) && ctx.goNext) ctx.goNext();
             }
-            persist();
         });
+        control.appendChild(error);
+        if (field.id === 'nif' && cliente.nif && !validateNif(cliente.nif)) {
+            error.textContent = 'NIF inválido.';
+        }
+        persist();
+        return;
+    }
 
-        wrap.append(input, error);
-        group.appendChild(wrap);
+    const { control } = renderAsk(body, {
+        title: 'Contrato',
+        hint: 'Leia com o cliente. Continuar só com os dados legais completos.',
+        index: 5,
+        total: 6
     });
-    body.appendChild(group);
-
-    // Contract preview
-    const previewSection = document.createElement('div');
-    previewSection.className = 'id-section';
-    previewSection.appendChild(Object.assign(document.createElement('h3'), { className: 'field-group-title', textContent: 'Pré-visualização do contrato' }));
     const contractBox = document.createElement('div');
     contractBox.className = 'dp-contract';
-    previewSection.appendChild(contractBox);
-    body.appendChild(previewSection);
+    control.appendChild(contractBox);
 
-    let catalog = [];
-    let config = null;
+    let catalog = ctx.state.data._catalog || [];
+    let config = ctx.state.data._config || null;
     try {
-        catalog = await fetchCatalog(ctx) || [];
-        config = await fetchConfig(ctx);
-    } catch (_) { /* preview still renders with empty items */ }
+        if (!catalog.length) catalog = await fetchCatalog(ctx) || [];
+        if (!config) config = await fetchConfig(ctx);
+    } catch (_) { /* preview still renders */ }
     if (config) {
-        // The client may have gone back and changed services since the proposal.
         refreshCalc(ctx.state, catalog, ctx.state.data.businessType || {}, config.ivaRate);
-        ctx.update({ proposta: ctx.state.data.proposta });
+        ctx.update({ proposta: ctx.state.data.proposta, _catalog: catalog, _config: config });
     }
-
-    function refreshContract() {
-        const model = buildContractModel(ctx.state, catalog, config);
-        contractBox.innerHTML = contractInnerHtml(model);
-    }
-    refreshContract();
-
-    // keep contract in sync as legal fields change
-    group.addEventListener('input', refreshContract);
-
+    contractBox.innerHTML = contractInnerHtml(buildContractModel(ctx.state, catalog, config));
     persist();
 }
 
@@ -110,5 +120,7 @@ export const acceptanceStep = {
     title: 'Aceitação e contrato',
     subtitle: 'Recolha os dados legais do cliente. O contrato é gerado automaticamente abaixo.',
     isValid,
+    isSubstepValid,
+    substepCount,
     render
 };

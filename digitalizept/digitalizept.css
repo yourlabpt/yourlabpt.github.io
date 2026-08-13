@@ -248,6 +248,95 @@ button, input, textarea, select {
     border-radius: 12px;
 }
 
+.app-main-ask {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.ask {
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 12px 0 8px;
+}
+
+.ask-index {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    margin-bottom: 14px;
+}
+
+.ask-title {
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 8px;
+}
+
+.ask-hint {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.45;
+    margin-bottom: 22px;
+}
+
+.ask-control {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ask-input {
+    font-size: 1.08rem;
+    padding: 16px 16px;
+}
+
+.ask-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ask-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    width: 100%;
+    text-align: left;
+    padding: 16px;
+    background: var(--secondary-dark);
+    border: 2px solid transparent;
+    border-radius: 14px;
+    color: var(--text-light);
+    cursor: pointer;
+}
+
+.ask-choice.selected {
+    border-color: var(--accent-color);
+    background: var(--accent-dark);
+}
+
+.ask-choice-name {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.ask-choice-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.ask-choice-meta {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-top: 4px;
+}
+
 /* ---------- Business type grid ---------- */
 .type-grid {
     display: grid;
@@ -1570,6 +1659,15 @@ button, input, textarea, select {
     .step-subtitle {
         max-width: 42em;
         margin-bottom: 22px;
+    }
+
+    .ask {
+        max-width: 560px;
+        padding: 24px 0;
+    }
+
+    .ask-title {
+        font-size: 1.85rem;
     }
 
     .type-grid {

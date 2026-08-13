@@ -8,6 +8,7 @@ import { acceptanceStep } from './steps/acceptance.js';
 import { signatureStep } from './steps/signature.js';
 import { conclusionStep } from './steps/conclusion.js';
 import { saveDraftLead } from './draft.js';
+import { currentSubstep } from './substep.js';
 
 // localStorage, not sessionStorage: a locked phone or a tab the browser evicts
 // mid-visit must not cost a deal that is halfway to a signature.
@@ -49,7 +50,13 @@ function loadState() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) return JSON.parse(raw);
     } catch (_) { /* ignore */ }
-    return { step: 0, data: {} };
+    return { step: 0, substep: 0, data: {} };
+}
+
+function substepCount(step, state) {
+    if (typeof step.substepCount !== 'function') return 0;
+    const n = Number(step.substepCount(state));
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
 export function createWizard({ onUnauthorized, showToast }) {
@@ -64,6 +71,8 @@ export function createWizard({ onUnauthorized, showToast }) {
 
     const state = loadState();
     if (state.step < 0 || state.step >= STEPS.length) state.step = 0;
+    if (!Number.isFinite(Number(state.substep)) || state.substep < 0) state.substep = 0;
+    if (!state.data || typeof state.data !== 'object') state.data = {};
     let currentValid = false;
 
     function persist() {
@@ -83,7 +92,7 @@ export function createWizard({ onUnauthorized, showToast }) {
     }
 
     function syncNav() {
-        const isFirst = state.step === 0;
+        const isFirst = state.step === 0 && currentSubstep(state) === 0;
         const isLast = state.step === STEPS.length - 1;
         els.backBtn.disabled = isFirst;
         els.nextBtn.disabled = isLast || !currentValid;
@@ -92,6 +101,12 @@ export function createWizard({ onUnauthorized, showToast }) {
 
     function render() {
         const step = STEPS[state.step];
+        const count = substepCount(step, state);
+        if (count > 0) {
+            state.substep = Math.min(currentSubstep(state), count - 1);
+        } else {
+            state.substep = 0;
+        }
 
         els.progressFill.style.width = `${((state.step + 1) / STEPS.length) * 100}%`;
         els.stepNum.textContent = `Passo ${state.step + 1} de ${STEPS.length}`;
@@ -99,24 +114,31 @@ export function createWizard({ onUnauthorized, showToast }) {
 
         els.container.innerHTML = '';
         els.container.scrollTop = 0;
+        els.container.classList.toggle('app-main-ask', count > 0);
 
-        const title = document.createElement('h2');
-        title.className = 'step-title';
-        title.textContent = step.title;
+        if (count === 0) {
+            const title = document.createElement('h2');
+            title.className = 'step-title';
+            title.textContent = step.title;
 
-        const subtitle = document.createElement('p');
-        subtitle.className = 'step-subtitle';
-        subtitle.textContent = step.subtitle;
+            const subtitle = document.createElement('p');
+            subtitle.className = 'step-subtitle';
+            subtitle.textContent = step.subtitle;
+
+            els.container.append(title, subtitle);
+        }
 
         const body = document.createElement('div');
         body.className = 'step-body';
-
-        els.container.append(title, subtitle, body);
+        els.container.appendChild(body);
 
         currentValid = typeof step.isValid === 'function' ? step.isValid(state) : true;
+        if (typeof step.isSubstepValid === 'function') {
+            currentValid = step.isSubstepValid(state);
+        }
         syncNav();
 
-        const ctx = { state, update, setValid, onUnauthorized, showToast, reset };
+        const ctx = { state, update, setValid, onUnauthorized, showToast, reset, goNext };
         Promise.resolve(step.render(body, ctx)).catch(() => {
             showToast('Ocorreu um erro neste passo.', true);
         });
@@ -127,25 +149,50 @@ export function createWizard({ onUnauthorized, showToast }) {
     function reset() {
         clearWizardState();
         state.step = 0;
+        state.substep = 0;
         state.data = {};
         currentValid = false;
         render();
     }
 
     async function goNext() {
-        if (state.step >= STEPS.length - 1 || !currentValid) return;
+        if (!currentValid) return;
+        const step = STEPS[state.step];
+        const count = substepCount(step, state);
+        const idx = currentSubstep(state);
+
+        if (count > 0 && idx < count - 1) {
+            state.substep = idx + 1;
+            persist();
+            render();
+            return;
+        }
+
+        if (state.step >= STEPS.length - 1) return;
         if (STEPS[state.step] === dataStep) {
             try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
             catch (_) { /* a missed draft must not block the visit */ }
         }
         state.step += 1;
+        state.substep = 0;
         persist();
         render();
     }
 
     function goBack() {
+        const step = STEPS[state.step];
+        const idx = currentSubstep(state);
+        if (substepCount(step, state) > 0 && idx > 0) {
+            state.substep = idx - 1;
+            persist();
+            render();
+            return;
+        }
         if (state.step === 0) return;
         state.step -= 1;
+        const prev = STEPS[state.step];
+        const prevCount = substepCount(prev, state);
+        state.substep = prevCount > 0 ? prevCount - 1 : 0;
         persist();
         render();
     }

@@ -1,5 +1,6 @@
-// Etapa 3 — Identidade visual: logótipo, estilo (boilerplate) e paleta.
-// The choices here feed the demo renderer in Etapa 4.
+// Etapa 3 — Identidade visual, one choice at a time.
+
+import { currentSubstep, renderAsk } from '../substep.js';
 
 const STYLES = [
     { id: 'clean', nome: 'Clean', desc: 'Claro, espaçado, moderno.' },
@@ -42,7 +43,15 @@ function isValid(state) {
     return Boolean(id && id.estilo && id.cores);
 }
 
-// Downscale any uploaded image so the base64 stays small in sessionStorage.
+function isSubstepValid(state) {
+    ensureIdentidade(state);
+    return true;
+}
+
+function substepCount() {
+    return 3;
+}
+
 function fileToDataUrl(file, maxDim = 512) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -67,13 +76,14 @@ function fileToDataUrl(file, maxDim = 512) {
     });
 }
 
-function buildLogoSection(body, ctx, identidade, persist) {
-    const group = document.createElement('div');
-    group.className = 'id-section';
-    const title = document.createElement('h3');
-    title.className = 'field-group-title';
-    title.textContent = 'Logótipo';
-    group.appendChild(title);
+function renderLogo(body, ctx, identidade, persist) {
+    const dados = getDados(ctx.state);
+    const { control } = renderAsk(body, {
+        title: 'Tem logótipo?',
+        hint: 'Se não tiver, usamos o nome do negócio. Continuar está sempre disponível.',
+        index: 0,
+        total: 3
+    });
 
     const preview = document.createElement('div');
     preview.className = 'logo-preview';
@@ -84,32 +94,20 @@ function buildLogoSection(body, ctx, identidade, persist) {
     input.capture = 'environment';
     input.className = 'hidden';
 
-    const dados = getDados(ctx.state);
-
     function renderPreview() {
         preview.innerHTML = '';
         if (identidade.logo.tipo === 'upload' && identidade.logo.dataUrl) {
             const img = document.createElement('img');
             img.src = identidade.logo.dataUrl;
             img.alt = 'Logótipo';
-            const remove = document.createElement('button');
-            remove.type = 'button';
-            remove.className = 'btn-secondary logo-remove';
-            remove.textContent = 'Remover';
-            remove.addEventListener('click', () => {
-                identidade.logo = { tipo: 'nenhum' };
-                persist();
-                renderPreview();
-            });
-            preview.append(img, remove);
+            preview.appendChild(img);
         } else {
-            const type = dados.nome_negocio || 'Nome do Negócio';
             const typo = document.createElement('div');
             typo.className = 'logo-typographic';
-            typo.textContent = type;
+            typo.textContent = dados.nome_negocio || 'Nome do Negócio';
             const note = document.createElement('div');
             note.className = 'logo-note';
-            note.textContent = 'Sem logótipo — usamos o nome com a tipografia do template.';
+            note.textContent = 'Sem logótipo — usamos o nome.';
             preview.append(typo, note);
         }
     }
@@ -144,35 +142,25 @@ function buildLogoSection(body, ctx, identidade, persist) {
         renderPreview();
     });
     actions.append(uploadBtn, noneBtn);
-
-    group.append(preview, actions, input);
-    body.appendChild(group);
+    control.append(preview, actions, input);
     renderPreview();
-}
-
-function buildLogoPromptSuggestion(body, ctx) {
-    const businessType = getBusinessType(ctx.state);
-    const dados = getDados(ctx.state);
 
     const details = document.createElement('details');
     details.className = 'field-optional';
-    const summary = document.createElement('summary');
-    summary.textContent = 'Gerar sugestão de logótipo (opcional)';
-    details.appendChild(summary);
-
+    details.appendChild(Object.assign(document.createElement('summary'), {
+        textContent: 'Gerar sugestão de logótipo (opcional)'
+    }));
     const disclaimer = document.createElement('p');
     disclaimer.className = 'id-disclaimer';
-    disclaimer.textContent = 'Isto é apenas uma sugestão. A YourLab não vende criação de logótipo nem identidade visual — para um logótipo profissional, encaminhamos para um parceiro.';
-
+    disclaimer.textContent = 'Apenas uma sugestão. A YourLab não vende criação de logótipo.';
     const nome = dados.nome_negocio || 'o negócio';
-    const promptText = `Cria um logótipo simples e moderno para "${nome}", um(a) ${businessType ? businessType.nome.toLowerCase() : 'negócio local'} em Portugal. Estilo minimalista, vetorial, fundo transparente, uma cor principal e uma secundária. Sem texto latino de exemplo — usa o nome "${nome}". Adequado a uso em website e ficha do Google.`;
-
+    const businessType = getBusinessType(ctx.state);
+    const promptText = `Cria um logótipo simples e moderno para "${nome}", um(a) ${businessType ? businessType.nome.toLowerCase() : 'negócio local'} em Portugal. Estilo minimalista, vetorial, fundo transparente. Usa o nome "${nome}".`;
     const ta = document.createElement('textarea');
     ta.className = 'field-input';
     ta.readOnly = true;
-    ta.rows = 4;
+    ta.rows = 3;
     ta.value = promptText;
-
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className = 'btn-secondary';
@@ -182,40 +170,36 @@ function buildLogoPromptSuggestion(body, ctx) {
             .then(() => ctx.showToast('Prompt copiado.'))
             .catch(() => ctx.showToast('Não foi possível copiar.', true));
     });
-
     details.append(disclaimer, ta, copyBtn);
-    body.appendChild(details);
+    control.appendChild(details);
 }
 
-function buildStyleSection(body, ctx, identidade, persist, updatePreviews) {
-    const group = document.createElement('div');
-    group.className = 'id-section';
-    const title = document.createElement('h3');
-    title.className = 'field-group-title';
-    title.textContent = 'Estilo';
-    group.appendChild(title);
+function renderStyle(body, ctx, identidade, persist) {
+    const { control } = renderAsk(body, {
+        title: 'Que estilo prefere?',
+        hint: 'Pode mudar depois. Clean fica bem na maioria dos casos.',
+        index: 1,
+        total: 3
+    });
 
     const grid = document.createElement('div');
     grid.className = 'style-grid';
-
     STYLES.forEach((style) => {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = `style-card${identidade.estilo === style.id ? ' selected' : ''}`;
-        card.dataset.style = style.id;
-
         const prev = document.createElement('div');
         prev.className = `style-preview style-preview-${style.id}`;
         prev.innerHTML = '<span class="sp-title">Aa</span><span class="sp-bar"></span>';
-
-        const name = document.createElement('div');
-        name.className = 'style-card-name';
-        name.textContent = style.nome;
-        const desc = document.createElement('div');
-        desc.className = 'style-card-desc';
-        desc.textContent = style.desc;
-
-        card.append(prev, name, desc);
+        const { base, destaque, secundaria } = identidade.cores;
+        prev.style.setProperty('--sp-base', base);
+        prev.style.setProperty('--sp-destaque', destaque);
+        prev.style.setProperty('--sp-secundaria', secundaria);
+        card.append(
+            prev,
+            Object.assign(document.createElement('div'), { className: 'style-card-name', textContent: style.nome }),
+            Object.assign(document.createElement('div'), { className: 'style-card-desc', textContent: style.desc })
+        );
         card.addEventListener('click', () => {
             identidade.estilo = style.id;
             grid.querySelectorAll('.style-card').forEach((c) => c.classList.remove('selected'));
@@ -224,35 +208,29 @@ function buildStyleSection(body, ctx, identidade, persist, updatePreviews) {
         });
         grid.appendChild(card);
     });
-
-    group.appendChild(grid);
-    body.appendChild(group);
-    updatePreviews();
+    control.appendChild(grid);
 }
 
-function buildColorSection(body, ctx, identidade, persist, updatePreviews) {
+function renderColors(body, ctx, identidade, persist) {
     const businessType = getBusinessType(ctx.state);
     const suggested = (businessType && Array.isArray(businessType.cores_sugeridas) && businessType.cores_sugeridas.length === 3)
         ? businessType.cores_sugeridas
         : FALLBACK_CORES;
 
-    const group = document.createElement('div');
-    group.className = 'id-section';
-    const title = document.createElement('h3');
-    title.className = 'field-group-title';
-    title.textContent = 'Cores';
-    group.appendChild(title);
+    const { control } = renderAsk(body, {
+        title: 'Estas cores servem?',
+        hint: 'Já vêm do tipo de negócio. Ajuste só se o cliente quiser.',
+        index: 2,
+        total: 3
+    });
 
     const row = document.createElement('div');
     row.className = 'color-row';
-
-    const swatches = [
+    [
         { key: 'base', label: 'Base' },
         { key: 'destaque', label: 'Destaque' },
         { key: 'secundaria', label: 'Secundária' }
-    ];
-
-    swatches.forEach(({ key, label }) => {
+    ].forEach(({ key, label }) => {
         const wrap = document.createElement('label');
         wrap.className = 'color-swatch';
         const input = document.createElement('input');
@@ -261,11 +239,8 @@ function buildColorSection(body, ctx, identidade, persist, updatePreviews) {
         input.addEventListener('input', () => {
             identidade.cores[key] = input.value;
             persist();
-            updatePreviews();
         });
-        const span = document.createElement('span');
-        span.textContent = label;
-        wrap.append(input, span);
+        wrap.append(input, Object.assign(document.createElement('span'), { textContent: label }));
         row.appendChild(wrap);
     });
 
@@ -276,15 +251,11 @@ function buildColorSection(body, ctx, identidade, persist, updatePreviews) {
     reset.addEventListener('click', () => {
         identidade.cores = { base: suggested[0], destaque: suggested[1], secundaria: suggested[2] };
         persist();
-        // refresh color inputs
         row.querySelectorAll('input[type="color"]').forEach((inp, i) => {
             inp.value = [suggested[0], suggested[1], suggested[2]][i];
         });
-        updatePreviews();
     });
-
-    group.append(row, reset);
-    body.appendChild(group);
+    control.append(row, reset);
 }
 
 function render(body, ctx) {
@@ -299,25 +270,15 @@ function render(body, ctx) {
     }
 
     const identidade = ensureIdentidade(ctx.state);
-
     function persist() {
         ctx.update({ identidade });
-        ctx.setValid(isValid(ctx.state));
+        ctx.setValid(true);
     }
 
-    function updatePreviews() {
-        const { base, destaque, secundaria } = identidade.cores;
-        body.querySelectorAll('.style-preview').forEach((prev) => {
-            prev.style.setProperty('--sp-base', base);
-            prev.style.setProperty('--sp-destaque', destaque);
-            prev.style.setProperty('--sp-secundaria', secundaria);
-        });
-    }
-
-    buildLogoSection(body, ctx, identidade, persist);
-    buildLogoPromptSuggestion(body, ctx);
-    buildStyleSection(body, ctx, identidade, persist, updatePreviews);
-    buildColorSection(body, ctx, identidade, persist, updatePreviews);
+    const idx = currentSubstep(ctx.state);
+    if (idx === 0) renderLogo(body, ctx, identidade, persist);
+    else if (idx === 1) renderStyle(body, ctx, identidade, persist);
+    else renderColors(body, ctx, identidade, persist);
 
     persist();
 }
@@ -327,5 +288,7 @@ export const identityStep = {
     title: 'Identidade visual',
     subtitle: 'Logótipo, estilo e cores. É rápido — ajuste em segundos e siga em frente.',
     isValid,
+    isSubstepValid,
+    substepCount,
     render
 };

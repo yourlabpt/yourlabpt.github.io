@@ -12,6 +12,9 @@ let resolveIvaRate;
 let guardrailLevel;
 let validateNif;
 let parseDemoOutput;
+let isDataStepValid;
+let dataStep;
+let identityStep;
 let isDominioValid;
 let PACKAGE_DELIVERABLES;
 let buildDomainCandidates;
@@ -37,6 +40,10 @@ before(async () => {
     isDominioValid = domain.isDominioValid;
     PACKAGE_DELIVERABLES = contract.PACKAGE_DELIVERABLES;
     buildDomainCandidates = domainsServer.buildDomainCandidates;
+    const dataMod = await import(pathToFileURL(path.join(appDir, 'steps', 'data.js')).href);
+    const identityMod = await import(pathToFileURL(path.join(appDir, 'steps', 'identity.js')).href);
+    dataStep = dataMod.dataStep;
+    identityStep = identityMod.identityStep;
 });
 
 const IVA = 0.23;
@@ -379,5 +386,36 @@ describe('digitalizept contract deliverables', () => {
         assert.match(lines, /google maps/);
         assert.match(lines, /conta google/);
         assert.match(lines, /zip/);
+    });
+});
+
+describe('digitalizept one-question substeps', () => {
+    const empty = {
+        substep: 0,
+        data: {
+            businessType: { id: 'restaurante', campos_obrigatorios: ['nome_negocio', 'responsavel'] },
+            dados: {}
+        }
+    };
+
+    it('asks the public shopfront as seven screens until the client wants more', () => {
+        assert.equal(dataStep.substepCount(empty), 7);
+        assert.equal(dataStep.isSubstepValid(empty), false);
+        empty.data.dados.nome_negocio = 'Café Central';
+        assert.equal(dataStep.isSubstepValid(empty), true);
+    });
+
+    it('opens extra screens only after Sim on the more-now gate', () => {
+        const state = {
+            substep: 6,
+            data: { ...empty.data, dadosMore: true, dados: { nome_negocio: 'Café Central' } }
+        };
+        assert.ok(dataStep.substepCount(state) > 7);
+    });
+
+    it('keeps identity as three skippable screens', () => {
+        const state = { substep: 0, data: { businessType: { id: 'restaurante' } } };
+        assert.equal(identityStep.substepCount(state), 3);
+        assert.equal(identityStep.isSubstepValid(state), true);
     });
 });
