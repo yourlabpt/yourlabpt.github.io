@@ -1,7 +1,7 @@
 import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { formatEuros } from '../format.js';
-import { ensureProposta, computeProposta, guardrailLevel } from '../proposal-calc.js';
+import { ensureProposta, computeProposta, resolveIvaRate, guardrailLevel } from '../proposal-calc.js';
 
 const DISCOUNT_PRESETS = [0, 5, 10, 15, 20];
 
@@ -39,6 +39,38 @@ async function render(body, ctx) {
     if (!catalog || !config) return;
     loading.remove();
 
+    // --- IVA toggle (per deal: no company / no fatura yet) ---
+    const ivaGroup = document.createElement('div');
+    ivaGroup.className = 'id-section';
+    ivaGroup.appendChild(Object.assign(document.createElement('h3'), {
+        className: 'field-group-title',
+        textContent: 'Fatura e IVA'
+    }));
+    const ivaHint = document.createElement('p');
+    ivaHint.className = 'id-disclaimer';
+    ivaHint.textContent = 'Enquanto não houver empresa aberta / fatura, deixe sem IVA. Ative só quando for emitir fatura com IVA.';
+    ivaGroup.appendChild(ivaHint);
+
+    const ivaToggle = document.createElement('div');
+    ivaToggle.className = 'toggle';
+    const ivaOff = document.createElement('button');
+    ivaOff.type = 'button';
+    ivaOff.className = 'toggle-opt';
+    ivaOff.textContent = 'Sem IVA';
+    const ivaOn = document.createElement('button');
+    ivaOn.type = 'button';
+    ivaOn.className = 'toggle-opt';
+    ivaOn.textContent = config.ivaRate > 0
+        ? `Com IVA (${Math.round(config.ivaRate * 100)}%)`
+        : 'Com IVA';
+    if (config.ivaRate <= 0) {
+        ivaOn.disabled = true;
+        ivaHint.textContent = 'A taxa de IVA está desligada no servidor (DIGITALIZEPT_IVA_RATE=0).';
+    }
+    ivaToggle.append(ivaOff, ivaOn);
+    ivaGroup.appendChild(ivaToggle);
+    body.appendChild(ivaGroup);
+
     // --- Discount selector ---
     const discGroup = document.createElement('div');
     discGroup.className = 'id-section';
@@ -57,10 +89,15 @@ async function render(body, ctx) {
 
     const summaryWrap = document.createElement('div');
 
-    function recompute() {
-        const c = computeProposta(proposta, catalog, businessType, config.ivaRate);
+    function paintIvaToggle() {
+        ivaOff.classList.toggle('active', proposta.cobrarIva !== true);
+        ivaOn.classList.toggle('active', proposta.cobrarIva === true);
+    }
 
-        // persist computed values for later slices
+    function recompute() {
+        const rate = resolveIvaRate(proposta, config.ivaRate);
+        const c = computeProposta(proposta, catalog, businessType, rate);
+
         ctx.update({
             proposta: {
                 ...proposta,
@@ -68,7 +105,6 @@ async function render(body, ctx) {
             }
         });
 
-        // rebuild summary
         summaryWrap.innerHTML = '';
 
         const card = document.createElement('div');
@@ -96,7 +132,6 @@ async function render(body, ctx) {
         }
         summaryWrap.appendChild(card);
 
-        // vendor-only guardrail
         const level = guardrailLevel(c.valorHora);
         const guard = document.createElement('div');
         guard.className = `guardrail guardrail-${level}`;
@@ -109,7 +144,18 @@ async function render(body, ctx) {
             textContent: `${c.valorHora.toFixed(0)} €/h`
         }));
         summaryWrap.appendChild(guard);
+        paintIvaToggle();
     }
+
+    ivaOff.addEventListener('click', () => {
+        proposta.cobrarIva = false;
+        recompute();
+    });
+    ivaOn.addEventListener('click', () => {
+        if (config.ivaRate <= 0) return;
+        proposta.cobrarIva = true;
+        recompute();
+    });
 
     function selectDiscount(pct, isCustom) {
         proposta.descontoPct = Math.max(0, Math.min(100, pct));
