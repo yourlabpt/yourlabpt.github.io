@@ -56,6 +56,8 @@ export function parseDemoOutput(raw) {
     const sobre = json.sobre || {};
     const servicos = json.servicos || {};
     const diferenciais = json.diferenciais || {};
+    const problemas = json.problemas || {};
+    const avaliacoes = json.avaliacoes || {};
     const rodape = json.rodape || {};
 
     if (!hero || typeof hero !== 'object') {
@@ -88,6 +90,24 @@ export function parseDemoOutput(raw) {
         return { ok: false, error: `diferenciais.itens: mínimo ${L.diferenciais.minItens}, máximo ${L.diferenciais.maxItens}.` };
     }
 
+    const problemasItens = (Array.isArray(problemas.itens) ? problemas.itens : [])
+        .map((item) => clamp(item, L.problemas.item))
+        .filter(Boolean)
+        .slice(0, L.problemas.maxItens);
+
+    const avaliacoesItens = (Array.isArray(avaliacoes.itens) ? avaliacoes.itens : [])
+        .map((item) => {
+            if (typeof item === 'string') {
+                return { autor: '', texto: clamp(item, L.avaliacoes.texto) };
+            }
+            return {
+                autor: clamp(item && item.autor, L.avaliacoes.autor),
+                texto: clamp(item && item.texto, L.avaliacoes.texto)
+            };
+        })
+        .filter((item) => item.texto)
+        .slice(0, L.avaliacoes.maxItens);
+
     const demo = {
         hero: {
             titulo: heroTitulo,
@@ -105,6 +125,14 @@ export function parseDemoOutput(raw) {
         diferenciais: {
             titulo: clamp(diferenciais.titulo, L.diferenciais.titulo) || 'Porquê nós',
             itens: diferenciaisItens
+        },
+        problemas: {
+            titulo: clamp(problemas.titulo, L.problemas.titulo) || 'Problemas que resolvemos',
+            itens: problemasItens
+        },
+        avaliacoes: {
+            titulo: clamp(avaliacoes.titulo, 40) || 'O que dizem',
+            itens: avaliacoesItens
         },
         rodape: {
             texto: clamp(rodape.texto, L.rodape.texto)

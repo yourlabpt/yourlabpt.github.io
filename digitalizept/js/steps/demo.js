@@ -1,6 +1,9 @@
 import { buildPrompt } from '../demo/prompt.js';
 import { parseDemoOutput } from '../demo/parse.js';
 import { renderLanding } from '../demo/landing.js';
+import { mountGbpExample, gbpDataFromState } from '../demo/gbp-example.js';
+import { includesWebsite } from '../deal/packages.js';
+import { ensureProposta } from '../proposal-calc.js';
 import { apiRequest } from '../api.js';
 import { getToken } from '../auth.js';
 
@@ -8,7 +11,15 @@ function getBusinessType(state) {
     return state.data.businessType || null;
 }
 
+function isGbpDemo(state) {
+    return !includesWebsite(ensureProposta(state));
+}
+
 function isValid(state) {
+    if (isGbpDemo(state)) {
+        const dados = state.data.dados || {};
+        return Boolean(dados.nome_negocio);
+    }
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
 }
 
@@ -40,7 +51,9 @@ function openPreview(state, ctx) {
     const bar = document.createElement('div');
     bar.className = 'dp-preview-bar';
     const label = document.createElement('span');
-    label.textContent = 'Pré-visualização da demonstração';
+    label.textContent = isGbpDemo(state)
+        ? 'Pré-visualização do Perfil Google'
+        : 'Pré-visualização da demonstração';
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'dp-preview-close';
@@ -51,7 +64,18 @@ function openPreview(state, ctx) {
     const scroll = document.createElement('div');
     scroll.className = 'dp-preview-scroll';
     try {
-        scroll.appendChild(renderLanding(state));
+        if (isGbpDemo(state)) {
+            const wrap = document.createElement('div');
+            wrap.style.padding = '16px';
+            mountGbpExample(wrap, {
+                data: gbpDataFromState(state),
+                clientMode: true,
+                showPitch: true
+            });
+            scroll.appendChild(wrap);
+        } else {
+            scroll.appendChild(renderLanding(state));
+        }
     } catch (_) {
         ctx.showToast('Não foi possível gerar a pré-visualização.', true);
         return;
@@ -59,6 +83,37 @@ function openPreview(state, ctx) {
 
     overlay.append(bar, scroll);
     document.body.appendChild(overlay);
+}
+
+function renderGbpDemo(body, ctx) {
+    const title = document.createElement('h3');
+    title.className = 'field-group-title';
+    title.textContent = 'O Perfil Google deste negócio';
+
+    const hint = document.createElement('p');
+    hint.className = 'id-disclaimer';
+    hint.textContent = 'Mostre ao cliente como fica no Maps com os dados que acabámos de recolher.';
+
+    const host = document.createElement('div');
+    mountGbpExample(host, {
+        data: gbpDataFromState(ctx.state),
+        clientMode: true,
+        showPitch: true
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'demo-actions';
+    const previewBtn = document.createElement('button');
+    previewBtn.type = 'button';
+    previewBtn.className = 'btn-primary';
+    previewBtn.textContent = 'Ver em ecrã cheio';
+    previewBtn.addEventListener('click', () => openPreview(ctx.state, ctx));
+    actions.appendChild(previewBtn);
+
+    body.append(title, hint, host, actions);
+    ctx.state.data.demoGbp = true;
+    ctx.update({ demoGbp: true });
+    ctx.setValid(isValid(ctx.state));
 }
 
 function render(body, ctx) {
@@ -69,6 +124,11 @@ function render(body, ctx) {
         warn.textContent = 'Complete primeiro os passos anteriores.';
         body.appendChild(warn);
         ctx.setValid(false);
+        return;
+    }
+
+    if (isGbpDemo(ctx.state)) {
+        renderGbpDemo(body, ctx);
         return;
     }
 
@@ -231,7 +291,7 @@ function render(body, ctx) {
 export const demoStep = {
     name: 'Demonstração',
     title: 'Gerar a demonstração',
-    subtitle: 'Prompt → conteúdo → demonstração. É o que mostra ao cliente o site dele a funcionar.',
+    subtitle: 'Perfil Google (pacotes sem site) ou landing por arquétipo.',
     isValid,
     render
 };

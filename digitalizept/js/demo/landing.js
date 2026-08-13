@@ -1,6 +1,5 @@
-// Renders the live demo landing page from the collected state.
-// Structure inspired by strong local restaurant sites: full-bleed hero,
-// image/text rhythm, edge-to-edge gallery, and round phone/WhatsApp FABs.
+// Renders the live demo landing from state: one engine, archetype + category
+// config drive sections, CTAs, and typography. Looks like a real site, not a template.
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -58,12 +57,82 @@ function whatsappIcon() {
     ]);
 }
 
+function mapsIcon() {
+    return svgIcon([
+        'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z'
+    ]);
+}
+
+function mapsUrl(dados) {
+    const query = [dados.morada, dados.cidade].filter(Boolean).join(', ');
+    if (!query) return '';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function scrollToId(id) {
+    const target = document.getElementById(id);
+    if (target) target.scrollIntoView({ behavior: 'smooth' });
+}
+
+function resolveCtaAction(target, dados) {
+    if (target === 'whatsapp') {
+        const wa = waNumber(dados.whatsapp || dados.telefone);
+        return wa ? { href: `https://wa.me/${wa}`, external: true } : { scroll: 'dpl-contactos' };
+    }
+    if (target === 'tel') {
+        return dados.telefone
+            ? { href: `tel:${digitsOnly(dados.telefone)}`, external: false }
+            : { scroll: 'dpl-contactos' };
+    }
+    if (target && target.startsWith('dpl-')) return { scroll: target };
+    return { scroll: 'dpl-contactos' };
+}
+
+function bindCta(node, target, dados) {
+    const action = resolveCtaAction(target, dados);
+    if (action.href) {
+        node.href = action.href;
+        if (action.external) {
+            node.target = '_blank';
+            node.rel = 'noopener';
+        }
+        return;
+    }
+    node.href = `#${action.scroll}`;
+    node.addEventListener('click', (event) => {
+        event.preventDefault();
+        scrollToId(action.scroll);
+    });
+}
+
+function buildQuickFacts(dados) {
+    const address = [dados.morada, dados.cidade].filter(Boolean).join(', ');
+    if (!address && !dados.horario) return null;
+    const s = section('dpl-facts', 'dpl-facts');
+    if (address) s.appendChild(el('p', 'dpl-facts-line', address));
+    if (dados.horario) s.appendChild(el('p', 'dpl-facts-line', `Horário: ${dados.horario}`));
+    return s;
+}
+
 function visualPlane(className, mark) {
     const plane = el('div', `dpl-visual ${className}`);
     plane.appendChild(el('div', 'dpl-visual-glow'));
     plane.appendChild(el('div', 'dpl-visual-grain'));
     if (mark) plane.appendChild(el('span', 'dpl-visual-mark', mark));
     return plane;
+}
+
+function photoOrPlane(fotos, index, className, mark) {
+    const url = Array.isArray(fotos) && fotos[index];
+    if (url) {
+        const wrap = el('div', `dpl-visual dpl-visual-photo ${className}`);
+        const img = el('img', 'dpl-photo-img');
+        img.src = url;
+        img.alt = '';
+        wrap.appendChild(img);
+        return wrap;
+    }
+    return visualPlane(className, mark);
 }
 
 function buildTopbar(dados, identidade) {
@@ -79,11 +148,16 @@ function buildTopbar(dados, identidade) {
     return bar;
 }
 
-function buildHero(dados, identidade, demo) {
+function heroCtas(businessType, demo, dados) {
+    const fromType = Array.isArray(businessType.ctas_hero) ? businessType.ctas_hero : [];
+    if (fromType.length) return fromType;
+    return [{ label: (demo.hero && demo.hero.cta) || 'Contactar', target: 'dpl-contactos' }];
+}
+
+function buildHero(dados, identidade, demo, businessType, fotos) {
     const hero = section('dpl-topo', 'dpl-hero');
-    hero.appendChild(visualPlane('dpl-hero-visual', '01'));
-    const veil = el('div', 'dpl-hero-veil');
-    hero.appendChild(veil);
+    hero.appendChild(photoOrPlane(fotos, 0, 'dpl-hero-visual', '01'));
+    hero.appendChild(el('div', 'dpl-hero-veil'));
 
     const inner = el('div', 'dpl-hero-inner');
     if (identidade.logo && identidade.logo.tipo === 'upload' && identidade.logo.dataUrl) {
@@ -98,32 +172,32 @@ function buildHero(dados, identidade, demo) {
     inner.appendChild(el('h1', 'dpl-hero-title', demo.hero.titulo));
     if (demo.hero.subtitulo) inner.appendChild(el('p', 'dpl-hero-sub', demo.hero.subtitulo));
 
-    const cta = el('button', 'dpl-btn dpl-btn-cta', demo.hero.cta);
-    cta.type = 'button';
-    cta.addEventListener('click', () => {
-        const target = document.getElementById('dpl-contactos');
-        if (target) target.scrollIntoView({ behavior: 'smooth' });
+    const group = el('div', 'dpl-hero-ctas');
+    heroCtas(businessType, demo, dados).slice(0, 2).forEach((cta, i) => {
+        const a = el('a', i === 0 ? 'dpl-btn dpl-btn-cta' : 'dpl-btn dpl-btn-ghost', cta.label || demo.hero.cta);
+        bindCta(a, cta.target || 'dpl-contactos', dados);
+        group.appendChild(a);
     });
-    inner.appendChild(cta);
+    inner.appendChild(group);
     hero.appendChild(inner);
     return hero;
 }
 
-function buildSobre(demo) {
-    if (!demo.sobre.texto) return null;
+function buildSobre(demo, fotos) {
+    if (!demo.sobre || !demo.sobre.texto) return null;
     const s = section(null, 'dpl-sobre');
     const grid = el('div', 'dpl-sobre-grid');
     const copy = el('div', 'dpl-sobre-copy');
     copy.appendChild(sectionTitle(demo.sobre.titulo));
     copy.appendChild(el('p', 'dpl-sobre-text', demo.sobre.texto));
     grid.appendChild(copy);
-    grid.appendChild(visualPlane('dpl-sobre-visual', '02'));
+    grid.appendChild(photoOrPlane(fotos, 1, 'dpl-sobre-visual', '02'));
     s.appendChild(grid);
     return s;
 }
 
 function buildServicos(demo) {
-    const s = section(null, 'dpl-servicos');
+    const s = section('dpl-servicos', 'dpl-servicos');
     s.appendChild(sectionTitle(demo.servicos.titulo));
     const grid = el('div', 'dpl-servicos-grid');
     demo.servicos.itens.forEach((item, i) => {
@@ -140,7 +214,7 @@ function buildServicos(demo) {
 }
 
 function buildDiferenciais(demo) {
-    if (!demo.diferenciais.itens.length) return null;
+    if (!demo.diferenciais || !demo.diferenciais.itens || !demo.diferenciais.itens.length) return null;
     const s = section(null, 'dpl-diferenciais');
     s.appendChild(sectionTitle(demo.diferenciais.titulo));
     const list = el('ul', 'dpl-dif-list');
@@ -154,16 +228,79 @@ function buildDiferenciais(demo) {
     return s;
 }
 
-function buildGaleria() {
-    const s = section(null, 'dpl-galeria');
+function buildProblemas(demo, businessType) {
+    const items = (demo.problemas && demo.problemas.itens)
+        || (demo.diferenciais && demo.diferenciais.itens)
+        || [];
+    if (!items.length) return null;
+    const title = (demo.problemas && demo.problemas.titulo)
+        || businessType.problemas_titulo
+        || 'Problemas que resolvemos';
+    const s = section('dpl-problemas', 'dpl-problemas');
+    s.appendChild(sectionTitle(title));
+    const list = el('ul', 'dpl-dif-list');
+    items.forEach((item) => {
+        const li = el('li', 'dpl-dif-item');
+        li.appendChild(el('span', 'dpl-dif-mark'));
+        li.appendChild(el('span', null, item));
+        list.appendChild(li);
+    });
+    s.appendChild(list);
+    return s;
+}
+
+function defaultReviews(nome) {
+    const n = nome || 'este negócio';
+    return [
+        { autor: 'Cliente local', texto: `Atendimento próximo e cuidado — voltamos a ${n} de boa vontade.` },
+        { autor: 'Vizinho', texto: 'Fácil de contactar, claro no que fazem, e sentimo-nos bem tratados.' },
+        { autor: 'Cliente', texto: 'Recomendo a quem procura um sítio de confiança aqui na zona.' }
+    ];
+}
+
+function buildAvaliacoes(demo, dados) {
+    const itens = (demo.avaliacoes && Array.isArray(demo.avaliacoes.itens) && demo.avaliacoes.itens.length)
+        ? demo.avaliacoes.itens
+        : defaultReviews(dados.nome_negocio);
+    const s = section('dpl-avaliacoes', 'dpl-avaliacoes');
+    s.appendChild(sectionTitle((demo.avaliacoes && demo.avaliacoes.titulo) || 'O que dizem'));
+    const grid = el('div', 'dpl-reviews-grid');
+    itens.slice(0, 3).forEach((item) => {
+        const card = el('blockquote', 'dpl-review');
+        card.appendChild(el('p', 'dpl-review-text', item.texto || item));
+        if (item.autor) card.appendChild(el('footer', 'dpl-review-author', item.autor));
+        grid.appendChild(card);
+    });
+    s.appendChild(grid);
+    return s;
+}
+
+function buildCtaBloco(businessType, dados) {
+    const cfg = businessType.cta_bloco || {
+        titulo: 'Fale connosco',
+        botao: 'Contactar',
+        target: 'dpl-contactos'
+    };
+    const s = section('dpl-cta-bloco', 'dpl-cta-bloco');
+    s.appendChild(el('h2', 'dpl-cta-title', cfg.titulo));
+    const a = el('a', 'dpl-btn dpl-btn-cta', cfg.botao);
+    bindCta(a, cfg.target || 'whatsapp', dados);
+    s.appendChild(a);
+    return s;
+}
+
+function buildGaleria(fotos) {
+    const s = section('dpl-galeria', 'dpl-galeria');
     const head = el('div', 'dpl-galeria-head');
     head.appendChild(sectionTitle('Galeria'));
-    head.appendChild(el('p', 'dpl-galeria-note', 'Fotos do estabelecimento — substituídas na entrega.'));
+    if (!fotos || !fotos.length) {
+        head.appendChild(el('p', 'dpl-galeria-note', 'Fotos do estabelecimento — tire algumas no local para tornar a demo real.'));
+    }
     s.appendChild(head);
     const grid = el('div', 'dpl-galeria-grid');
-    for (let i = 0; i < 3; i += 1) {
-        const tile = visualPlane(`dpl-galeria-tile dpl-galeria-tile-${i}`, String(i + 1).padStart(2, '0'));
-        grid.appendChild(tile);
+    const count = Math.max(3, Math.min(6, (fotos && fotos.length) || 3));
+    for (let i = 0; i < count; i += 1) {
+        grid.appendChild(photoOrPlane(fotos, i, `dpl-galeria-tile dpl-galeria-tile-${i % 3}`, String(i + 1).padStart(2, '0')));
     }
     s.appendChild(grid);
     return s;
@@ -193,6 +330,10 @@ function buildContactos(dados) {
     s.appendChild(info);
 
     const actions = el('div', 'dpl-contact-actions');
+    const maps = mapsUrl(dados);
+    if (maps) {
+        actions.appendChild(contactButton('Como chegar', maps, 'dpl-btn-maps', mapsIcon()));
+    }
     if (dados.telefone) {
         actions.appendChild(contactButton('Ligar', `tel:${digitsOnly(dados.telefone)}`, 'dpl-btn-call', phoneIcon()));
     }
@@ -209,7 +350,7 @@ function buildContactos(dados) {
 function buildMapa(dados) {
     const query = [dados.morada, dados.cidade].filter(Boolean).join(', ');
     if (!query) return null;
-    const s = section(null, 'dpl-mapa');
+    const s = section('dpl-mapa', 'dpl-mapa');
     const frame = el('iframe', 'dpl-map-frame');
     frame.src = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
     frame.loading = 'lazy';
@@ -221,7 +362,7 @@ function buildMapa(dados) {
 function buildRodape(dados, demo) {
     const s = el('footer', 'dpl-rodape');
     s.appendChild(el('div', 'dpl-rodape-name', dados.nome_negocio || ''));
-    if (demo.rodape.texto) s.appendChild(el('p', 'dpl-rodape-text', demo.rodape.texto));
+    if (demo.rodape && demo.rodape.texto) s.appendChild(el('p', 'dpl-rodape-text', demo.rodape.texto));
     s.appendChild(el('p', 'dpl-rodape-meta', `© ${new Date().getFullYear()} ${dados.nome_negocio || ''}`));
     return s;
 }
@@ -241,6 +382,10 @@ function fabLink(href, className, label, icon, external) {
 
 function buildFab(dados) {
     const fab = el('div', 'dpl-fab');
+    const maps = mapsUrl(dados);
+    if (maps) {
+        fab.appendChild(fabLink(maps, 'dpl-fab-maps', 'Como chegar', mapsIcon(), true));
+    }
     if (dados.telefone) {
         fab.appendChild(fabLink(
             `tel:${digitsOnly(dados.telefone)}`,
@@ -263,14 +408,21 @@ function buildFab(dados) {
     return fab;
 }
 
+function fotosOf(identidade) {
+    return Array.isArray(identidade.fotos) ? identidade.fotos.filter(Boolean) : [];
+}
+
 export function renderLanding(state) {
     const businessType = state.data.businessType || {};
     const dados = state.data.dados || {};
     const identidade = state.data.identidade || { cores: {}, estilo: 'clean', logo: { tipo: 'nenhum' } };
     const demo = state.data.demo;
+    const fotos = fotosOf(identidade);
+    const archetype = businessType.archetype || 'servico';
 
     const root = el('div', 'dp-landing');
-    root.dataset.style = identidade.estilo || 'clean';
+    root.dataset.style = identidade.estilo || identidade.paleta || 'clean';
+    root.dataset.archetype = archetype;
     const cores = identidade.cores || {};
     root.style.setProperty('--l-base', cores.base || '#1b1b1b');
     root.style.setProperty('--l-destaque', cores.destaque || '#e8d5b7');
@@ -280,22 +432,35 @@ export function renderLanding(state) {
 
     const sections = businessType.seccoes_landing || ['hero', 'sobre', 'servicos', 'diferenciais', 'galeria', 'contactos', 'mapa', 'rodape'];
     const builders = {
-        hero: () => buildHero(dados, identidade, demo),
-        sobre: () => buildSobre(demo),
+        hero: () => buildHero(dados, identidade, demo, businessType, fotos),
+        sobre: () => buildSobre(demo, fotos),
         servicos: () => buildServicos(demo),
         diferenciais: () => buildDiferenciais(demo),
-        galeria: () => buildGaleria(),
+        problemas: () => buildProblemas(demo, businessType),
+        avaliacoes: () => buildAvaliacoes(demo, dados),
+        cta_bloco: () => buildCtaBloco(businessType, dados),
+        galeria: () => buildGaleria(fotos),
         contactos: () => buildContactos(dados),
         mapa: () => buildMapa(dados),
         rodape: () => buildRodape(dados, demo)
     };
 
+    let heroDone = false;
     sections.forEach((name) => {
         const builder = builders[name];
         if (!builder) return;
         const node = builder();
         if (node) root.appendChild(node);
+        if (name === 'hero' && !heroDone) {
+            heroDone = true;
+            const facts = buildQuickFacts(dados);
+            if (facts) root.appendChild(facts);
+        }
     });
+    if (!heroDone) {
+        const facts = buildQuickFacts(dados);
+        if (facts) root.appendChild(facts);
+    }
 
     root.appendChild(buildFab(dados));
     return root;

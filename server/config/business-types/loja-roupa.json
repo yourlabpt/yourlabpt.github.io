@@ -33,12 +33,12 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
-    "diferenciais",
     "galeria",
-    "contactos",
+    "sobre",
+    "diferenciais",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +89,50 @@
       "label": "Vende também online?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "retail",
+  "ctas_hero": [
+    {
+      "label": "Ver coleção",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Visitar loja",
+      "target": "dpl-mapa"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "elegant",
+      "nome": "Elegant",
+      "cores": [
+        "#1e1a1c",
+        "#c48ba0",
+        "#d8c7b0"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#f5f2ef",
+        "#1a1a1a",
+        "#a08070"
+      ]
+    },
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#141214",
+        "#8a3048",
+        "#e0d0c0"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Venha ver as novidades",
+    "botao": "Como chegar",
+    "target": "dpl-mapa"
+  }
 }

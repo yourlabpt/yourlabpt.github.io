@@ -35,10 +35,9 @@
     "hero",
     "sobre",
     "servicos",
-    "diferenciais",
     "galeria",
-    "contactos",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +88,50 @@
       "label": "Tem esplanada?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "food",
+  "ctas_hero": [
+    {
+      "label": "Como chegar",
+      "target": "dpl-mapa"
+    },
+    {
+      "label": "Ver especialidades",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#2b1d14",
+        "#c98a3c",
+        "#e8c9a0"
+      ]
+    },
+    {
+      "id": "natural",
+      "nome": "Natural",
+      "cores": [
+        "#2a241c",
+        "#a67c52",
+        "#d9cbb8"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1f1a16",
+        "#d4a574",
+        "#f0e6d8"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Passe por cá",
+    "botao": "Ver localização",
+    "target": "dpl-mapa"
+  }
 }

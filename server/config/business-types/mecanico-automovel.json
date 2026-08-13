@@ -32,12 +32,14 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
+    "problemas",
     "diferenciais",
+    "cta_bloco",
     "galeria",
-    "contactos",
+    "avaliacoes",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -88,5 +90,51 @@
       "label": "Disponibiliza carro de substituição?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "servico",
+  "ctas_hero": [
+    {
+      "label": "Pedir orçamento",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver serviços",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#15181c",
+        "#3b82c4",
+        "#e0a020"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1a1d22",
+        "#5a7a9a",
+        "#c8d0d8"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#1c1814",
+        "#c25b2a",
+        "#d8c7a0"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Peça um orçamento",
+    "botao": "WhatsApp / Ligar",
+    "target": "whatsapp"
+  },
+  "problemas_titulo": "Problemas que resolvemos"
 }

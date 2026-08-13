@@ -33,12 +33,13 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
-    "diferenciais",
+    "problemas",
     "galeria",
-    "contactos",
+    "diferenciais",
+    "cta_bloco",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +90,51 @@
       "label": "Faz recolha e entrega?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "servico",
+  "ctas_hero": [
+    {
+      "label": "Pedir orçamento",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver trabalhos",
+      "target": "dpl-galeria"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#241a1a",
+        "#8a5a3c",
+        "#b8935f"
+      ]
+    },
+    {
+      "id": "natural",
+      "nome": "Natural",
+      "cores": [
+        "#2a2218",
+        "#6b7a4a",
+        "#c4b498"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1a1816",
+        "#7a6a5a",
+        "#e8e0d4"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Peça orçamento sem compromisso",
+    "botao": "Pedir orçamento",
+    "target": "whatsapp"
+  },
+  "problemas_titulo": "O que resolvemos"
 }

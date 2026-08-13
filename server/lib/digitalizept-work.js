@@ -29,7 +29,9 @@ function scaffoldClosedDeal({
     contractHtmlPath,
     contractPdfPath,
     dados,
-    proposta
+    proposta,
+    googlePresence,
+    googleDiagnostico
 }) {
     const folder = path.join(WORK_ROOT, `${slugify(negocio)}_${String(projetoId).slice(0, 8)}`);
     fs.mkdirSync(folder, { recursive: true });
@@ -41,6 +43,8 @@ function scaffoldClosedDeal({
         clienteEmail,
         dados: dados || {},
         proposta: proposta || {},
+        googlePresence: googlePresence || null,
+        googleDiagnostico: googleDiagnostico || null,
         totals: verified,
         criadoEm: new Date().toISOString()
     };
@@ -51,6 +55,42 @@ function scaffoldClosedDeal({
     }
     if (contractPdfPath && fs.existsSync(contractPdfPath)) {
         fs.copyFileSync(contractPdfPath, path.join(folder, 'contrato.pdf'));
+    }
+
+    if (googleDiagnostico || googlePresence) {
+        const d = googleDiagnostico || {};
+        const g = googlePresence || {};
+        const lines = [
+            `# Checklist Presença Google — ${negocio}`,
+            ``,
+            `## Diagnóstico (venda)`,
+            `- Maps: ${d.maps || g.mapsEstado || '—'}`,
+            `- Validado: ${d.validado || '—'}`,
+            `- Website: ${d.website || g.website || '—'}`,
+            `- Prioridade: ${d.prioridade || '—'}`,
+            `- Pacote sugerido: ${d.pacoteSugerido || '—'}`,
+            `- Pacote contratado: ${(proposta && proposta.pacote) || '—'}`,
+            ``,
+            `## Execução (0→100)`,
+            `- [ ] 1 Conta Google (Gmail + 2FA)`,
+            `- [ ] 2 Criar / reivindicar / pedir acesso`,
+            `- [ ] 3 Dados base (nome, categoria, morada, pin, tel, horário, descrição)`,
+            `- [ ] 4 Visuais (logo, capa, fachada, interior)`,
+            `- [ ] 5 Validação (orientação; prazo Google)`,
+            `- [ ] 6 Perfil 100% (se pacote Completo / extra)`,
+            `- [ ] 7 Website (se contratado)`,
+            `- [ ] 8 Confirmar pin Maps`,
+            `- [ ] 9 Reviews (orientação ou mensal)`,
+            `- [ ] 10 Manutenção mensal (se contratada)`,
+            ``,
+            `- Categoria (checklist tipo): ${g.categoria || '—'}`,
+            `- Atributos: ${(g.atributos || []).join(', ') || '—'}`,
+            `- Fotos: ${g.fotos || '—'}`,
+            ``,
+            `Conta Google: sempre do cliente. Sem API — executar no browser.`,
+            ``
+        ];
+        fs.writeFileSync(path.join(folder, 'google-checklist.md'), lines.join('\n'));
     }
 
     const invoice = [

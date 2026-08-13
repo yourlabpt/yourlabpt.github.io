@@ -119,6 +119,8 @@ async function render(body, ctx) {
                 identidade: ctx.state.data.identidade,
                 demo: ctx.state.data.demo,
                 proposta: ctx.state.data.proposta,
+                googlePresence: ctx.state.data.googlePresence || null,
+                googleDiagnostico: ctx.state.data.googleDiagnostico || null,
                 clienteLegal: ctx.state.data.clienteLegal,
                 contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash },
                 assinatura: { pngDataUrl: a.pngDataUrl, geo: a.geo, dispositivo: a.dispositivo, timestamp: a.timestamp }

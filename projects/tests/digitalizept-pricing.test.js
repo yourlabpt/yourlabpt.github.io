@@ -17,6 +17,10 @@ let dataStep;
 let identityStep;
 let isDominioValid;
 let PACKAGE_DELIVERABLES;
+let resolveDeliverables;
+let includesGooglePresence;
+let includesWebsite;
+let suggestPackage;
 let buildDomainCandidates;
 
 before(async () => {
@@ -29,6 +33,7 @@ before(async () => {
     const dataValid = await import(pathToFileURL(path.join(appDir, 'steps', 'data-valid.js')).href);
     const domain = await import(pathToFileURL(path.join(appDir, 'domain.js')).href);
     const contract = await import(pathToFileURL(path.join(appDir, 'deal', 'contract.js')).href);
+    const packages = await import(pathToFileURL(path.join(appDir, 'deal', 'packages.js')).href);
     const domainsServer = require(path.join(__dirname, '..', '..', 'server', 'lib', 'digitalizept-domains.js'));
     computeProposta = calc.computeProposta;
     refreshCalc = calc.refreshCalc;
@@ -39,6 +44,10 @@ before(async () => {
     isDataStepValid = dataValid.isDataStepValid;
     isDominioValid = domain.isDominioValid;
     PACKAGE_DELIVERABLES = contract.PACKAGE_DELIVERABLES;
+    resolveDeliverables = contract.resolveDeliverables;
+    includesGooglePresence = contract.includesGooglePresence;
+    includesWebsite = packages.includesWebsite;
+    suggestPackage = packages.suggestPackage;
     buildDomainCandidates = domainsServer.buildDomainCandidates;
     const dataMod = await import(pathToFileURL(path.join(appDir, 'steps', 'data.js')).href);
     const identityMod = await import(pathToFileURL(path.join(appDir, 'steps', 'identity.js')).href);
@@ -49,20 +58,28 @@ before(async () => {
 const IVA = 0.23;
 
 const CATALOG = [
-    { codigo: 'essencial', nome: 'Essencial', preco_centimos: 49000, tipo: 'pacote' },
+    { codigo: 'google_essencial', nome: 'Essencial Google', preco_centimos: 29000, tipo: 'pacote' },
+    { codigo: 'site_maps', nome: 'Site + Maps', preco_centimos: 39000, tipo: 'pacote' },
+    { codigo: 'digital_completo', nome: 'Completo', preco_centimos: 59000, tipo: 'pacote' },
     { codigo: 'plus', nome: 'Plus', preco_centimos: 99000, tipo: 'pacote' },
+    { codigo: 'renovacao', nome: 'Renovação', preco_centimos: 79000, tipo: 'pacote' },
+    { codigo: 'google_perfil_completo', nome: 'Perfil 100%', preco_centimos: 8000, tipo: 'extra' },
+    { codigo: 'google_avaliacoes', nome: 'Avaliações', preco_centimos: 2500, tipo: 'extra' },
     { codigo: 'email_profissional', nome: 'Email', preco_centimos: 9000, tipo: 'extra' },
     { codigo: 'qr_cartao', nome: 'QR', preco_centimos: 4000, tipo: 'extra' },
     { codigo: 'urgencia', nome: 'Urgência', preco_centimos: 0, percentual: 0.30, tipo: 'ajuste' },
-    { codigo: 'manutencao_base', nome: 'Manutenção Base', preco_centimos: 2900, tipo: 'manutencao' }
+    { codigo: 'manutencao_maps', nome: 'Manutenção Maps', preco_centimos: 1000, tipo: 'manutencao' },
+    { codigo: 'hosting_landing', nome: 'Hosting landing', preco_centimos: 500, tipo: 'manutencao' },
+    { codigo: 'hosting_site', nome: 'Hosting site', preco_centimos: 1000, tipo: 'manutencao' }
 ];
 
 function proposta(overrides = {}) {
     return {
-        pacote: 'essencial',
+        pacote: 'google_essencial',
         extras: [],
         urgencia: false,
         manutencao: null,
+        manutencoes: [],
         descontoPct: 0,
         ...overrides
     };
@@ -71,9 +88,9 @@ function proposta(overrides = {}) {
 describe('digitalizept pricing — IVA regime switch', () => {
     it('adds IVA on top at the taxa normal', () => {
         const c = computeProposta(proposta(), CATALOG, {}, IVA);
-        assert.equal(c.totalSemIva, 49000);
-        assert.equal(c.iva, 11270);
-        assert.equal(c.totalComIva, 60270);
+        assert.equal(c.totalSemIva, 29000);
+        assert.equal(c.iva, 6670);
+        assert.equal(c.totalComIva, 35670);
         assert.equal(c.ivaRate, IVA);
     });
 
@@ -86,15 +103,15 @@ describe('digitalizept pricing — IVA regime switch', () => {
 
     it('leaves the entrada split unchanged when IVA is switched off', () => {
         const off = computeProposta(proposta(), CATALOG, {}, 0);
-        assert.equal(off.entrada, 24500);
-        assert.equal(off.final, 24500);
+        assert.equal(off.entrada, 14500);
+        assert.equal(off.final, 14500);
         assert.equal(off.entrada + off.final, off.totalSemIva);
     });
 
     it('splits the entrada off the IVA-inclusive total, since that is what is paid', () => {
         const on = computeProposta(proposta(), CATALOG, {}, IVA);
         assert.equal(on.entrada + on.final, on.totalComIva);
-        assert.ok(on.entrada > 24500, 'entrada must include IVA, not sit on the net total');
+        assert.ok(on.entrada > 14500, 'entrada must include IVA, not sit on the net total');
     });
 
     it('treats a missing, negative or junk rate as no IVA rather than guessing', () => {
@@ -106,29 +123,37 @@ describe('digitalizept pricing — IVA regime switch', () => {
     });
 
     it('applies IVA to the monthly maintenance too', () => {
-        const c = computeProposta(proposta({ manutencao: 'manutencao_base' }), CATALOG, {}, IVA);
-        assert.equal(c.manutencaoMensal, 2900);
-        assert.equal(c.manutencaoMensalComIva, 3567);
+        const c = computeProposta(proposta({ manutencao: 'manutencao_maps' }), CATALOG, {}, IVA);
+        assert.equal(c.manutencaoMensal, 1000);
+        assert.equal(c.manutencaoMensalComIva, 1230);
+    });
+
+    it('sums combined Maps + hosting monthly plans', () => {
+        const c = computeProposta(proposta({
+            pacote: 'digital_completo',
+            manutencoes: ['manutencao_maps', 'hosting_landing']
+        }), CATALOG, {}, 0);
+        assert.equal(c.manutencaoMensal, 1500);
     });
 });
 
 describe('digitalizept pricing — discounts, urgency and rounding', () => {
     it('sums extras into the subtotal', () => {
         const c = computeProposta(proposta({ extras: ['email_profissional', 'qr_cartao'] }), CATALOG, {}, 0);
-        assert.equal(c.subtotal, 49000 + 9000 + 4000);
+        assert.equal(c.subtotal, 29000 + 9000 + 4000);
     });
 
     it('applies urgency before the discount', () => {
         const c = computeProposta(proposta({ urgencia: true }), CATALOG, {}, 0);
         assert.equal(c.urgenciaPct, 0.30);
-        assert.equal(c.urgencia, 14700);
-        assert.equal(c.totalSemIva, 63700);
+        assert.equal(c.urgencia, 8700);
+        assert.equal(c.totalSemIva, 37700);
     });
 
     it('discounts the subtotal plus urgency, not the subtotal alone', () => {
         const c = computeProposta(proposta({ urgencia: true, descontoPct: 10 }), CATALOG, {}, 0);
-        assert.equal(c.desconto, Math.round(63700 * 0.10));
-        assert.equal(c.totalSemIva, 63700 - 6370);
+        assert.equal(c.desconto, Math.round(37700 * 0.10));
+        assert.equal(c.totalSemIva, 37700 - 3770);
     });
 
     it('clamps the discount to 0-100', () => {
@@ -137,10 +162,22 @@ describe('digitalizept pricing — discounts, urgency and rounding', () => {
     });
 
     it('never loses or invents a cent on an odd total', () => {
-        // 5% off 490,00 leaves an odd number of cents to halve.
+        // 5% off 290,00 leaves an odd number of cents to halve.
         const c = computeProposta(proposta({ descontoPct: 5 }), CATALOG, {}, IVA);
         assert.ok(c.totalComIva % 2 !== 0, 'fixture should produce an odd total');
         assert.equal(c.entrada + c.final, c.totalComIva);
+    });
+
+    it('prices Site + Maps and Completo at the closed defaults', () => {
+        assert.equal(computeProposta(proposta({ pacote: 'site_maps' }), CATALOG, {}, 0).subtotal, 39000);
+        assert.equal(computeProposta(proposta({ pacote: 'digital_completo' }), CATALOG, {}, 0).subtotal, 59000);
+    });
+
+    it('adds Google upgrade extras on Essencial', () => {
+        const c = computeProposta(proposta({
+            extras: ['google_perfil_completo', 'google_avaliacoes']
+        }), CATALOG, {}, 0);
+        assert.equal(c.subtotal, 29000 + 8000 + 2500);
     });
 
     it('prices an unknown package as zero rather than NaN', () => {
@@ -160,7 +197,7 @@ describe('digitalizept pricing — valor-hora guardrail', () => {
     it('uses the business-type hour estimate when present', () => {
         const c = computeProposta(proposta(), CATALOG, { horas_estimadas: 5 }, IVA);
         assert.equal(c.horas, 5);
-        assert.equal(c.valorHora, 490 / 5);
+        assert.equal(c.valorHora, 290 / 5);
     });
 
     it('bands the guardrail on euros per hour', () => {
@@ -174,7 +211,7 @@ describe('digitalizept pricing — refreshCalc', () => {
     it('re-prices stale totals in place after a service changes', () => {
         const state = { data: { proposta: proposta({ cobrarIva: true }) } };
         refreshCalc(state, CATALOG, {}, IVA);
-        assert.equal(state.data.proposta._calc.totalComIva, 60270);
+        assert.equal(state.data.proposta._calc.totalComIva, 35670);
 
         state.data.proposta.pacote = 'plus';
         refreshCalc(state, CATALOG, {}, IVA);
@@ -184,11 +221,11 @@ describe('digitalizept pricing — refreshCalc', () => {
     it('creates a default proposta when the step was skipped', () => {
         const state = { data: {} };
         const c = refreshCalc(state, CATALOG, {}, IVA);
-        assert.equal(state.data.proposta.pacote, 'essencial');
+        assert.equal(state.data.proposta.pacote, 'google_essencial');
         assert.equal(state.data.proposta.cobrarIva, false);
-        assert.equal(c.totalComIva, 49000, 'new deals start without IVA until the toggle is on');
+        assert.equal(c.totalComIva, 29000, 'new deals start without IVA until the toggle is on');
         state.data.proposta.cobrarIva = true;
-        assert.equal(refreshCalc(state, CATALOG, {}, IVA).totalComIva, 60270);
+        assert.equal(refreshCalc(state, CATALOG, {}, IVA).totalComIva, 35670);
     });
 });
 
@@ -352,14 +389,14 @@ describe('digitalizept per-deal IVA toggle', () => {
     });
 
     it('refreshCalc respects the deal toggle against the config rate', () => {
-        const state = { data: { proposta: { pacote: 'essencial', extras: [], urgencia: false, manutencao: null, descontoPct: 0, cobrarIva: false } } };
+        const state = { data: { proposta: { pacote: 'google_essencial', extras: [], urgencia: false, manutencao: null, descontoPct: 0, cobrarIva: false } } };
         const off = refreshCalc(state, CATALOG, {}, IVA);
         assert.equal(off.iva, 0);
-        assert.equal(off.totalComIva, 49000);
+        assert.equal(off.totalComIva, 29000);
         state.data.proposta.cobrarIva = true;
         const on = refreshCalc(state, CATALOG, {}, IVA);
-        assert.equal(on.iva, 11270);
-        assert.equal(on.totalComIva, 60270);
+        assert.equal(on.iva, 6670);
+        assert.equal(on.totalComIva, 35670);
     });
 });
 
@@ -372,20 +409,43 @@ describe('digitalizept domain options', () => {
     });
 
     it('accepts a suggested domain or the client-owned ZIP path', () => {
-        assert.equal(isDominioValid({ dominio: { modo: 'sugerido', escolhido: 'cafecentral.pt' } }), true);
-        assert.equal(isDominioValid({ dominio: { modo: 'sugerido', escolhido: '' } }), false);
-        assert.equal(isDominioValid({ dominio: { modo: 'proprio' } }), true);
-        assert.equal(isDominioValid({ dominio: { modo: '' } }), false);
+        assert.equal(isDominioValid({ pacote: 'site_maps', dominio: { modo: 'sugerido', escolhido: 'cafecentral.pt' } }), true);
+        assert.equal(isDominioValid({ pacote: 'site_maps', dominio: { modo: 'sugerido', escolhido: '' } }), false);
+        assert.equal(isDominioValid({ pacote: 'digital_completo', dominio: { modo: 'proprio' } }), true);
+        assert.equal(isDominioValid({ pacote: 'site_maps', dominio: { modo: '' } }), false);
+    });
+
+    it('skips domain for Google-only Essencial', () => {
+        assert.equal(isDominioValid({ pacote: 'google_essencial' }), true);
+        assert.equal(includesWebsite({ pacote: 'google_essencial' }), false);
+        assert.equal(includesWebsite({ pacote: 'site_maps' }), true);
     });
 });
 
 describe('digitalizept contract deliverables', () => {
-    it('lists the Essencial Google and landing work even without extras', () => {
-        const lines = PACKAGE_DELIVERABLES.essencial.join(' ').toLowerCase();
-        assert.match(lines, /landing/);
-        assert.match(lines, /google maps/);
-        assert.match(lines, /conta google/);
-        assert.match(lines, /zip/);
+    it('keeps Essencial Google without website deliverables', () => {
+        const lines = PACKAGE_DELIVERABLES.google_essencial.join(' ').toLowerCase();
+        assert.match(lines, /google/);
+        assert.match(lines, /sem website/);
+        assert.doesNotMatch(lines, /landing page/);
+        assert.equal(includesGooglePresence({ pacote: 'google_essencial', extras: [] }), true);
+    });
+
+    it('adds landing + Google for Completo and Site + Maps', () => {
+        const completo = resolveDeliverables({ pacote: 'digital_completo', extras: [] }).join(' ').toLowerCase();
+        assert.match(completo, /landing/);
+        assert.match(completo, /google/);
+        assert.match(completo, /5 dias/);
+        const siteMaps = resolveDeliverables({ pacote: 'site_maps', extras: [] }).join(' ').toLowerCase();
+        assert.match(siteMaps, /landing/);
+        assert.match(siteMaps, /atualizar/);
+    });
+
+    it('suggests packages from the diagnosis answers', () => {
+        assert.equal(suggestPackage({ maps: 'nao', website: 'nao', prioridade: 'google' }), 'google_essencial');
+        assert.equal(suggestPackage({ maps: 'sim_acesso', website: 'nao', prioridade: 'site' }), 'site_maps');
+        assert.equal(suggestPackage({ maps: 'nao', website: 'nao', prioridade: 'os_dois' }), 'digital_completo');
+        assert.equal(suggestPackage({ maps: 'nao', website: 'nao', prioridade: 'varias_paginas' }), 'plus');
     });
 });
 

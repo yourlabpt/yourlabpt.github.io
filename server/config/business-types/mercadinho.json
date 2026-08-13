@@ -33,12 +33,11 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
     "diferenciais",
     "galeria",
-    "contactos",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +88,50 @@
       "label": "Vende produtos locais/regionais?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "retail",
+  "ctas_hero": [
+    {
+      "label": "Como chegar",
+      "target": "dpl-mapa"
+    },
+    {
+      "label": "Ver o que encontra",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "natural",
+      "nome": "Natural",
+      "cores": [
+        "#1f2d1a",
+        "#8bbf5a",
+        "#e0b44a"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#2a1f14",
+        "#c4783a",
+        "#d8c8a0"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1a2218",
+        "#5a8a4a",
+        "#e8ecd8"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Estamos perto de si",
+    "botao": "Ver localização",
+    "target": "dpl-mapa"
+  }
 }

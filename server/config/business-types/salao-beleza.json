@@ -33,12 +33,13 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
-    "diferenciais",
     "galeria",
-    "contactos",
+    "sobre",
+    "avaliacoes",
+    "cta_bloco",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +90,50 @@
       "label": "Faz marcações?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "beleza",
+  "ctas_hero": [
+    {
+      "label": "Marcar",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver trabalhos",
+      "target": "dpl-galeria"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#2a2a2a",
+        "#e8d5b7",
+        "#c98b7a"
+      ]
+    },
+    {
+      "id": "elegant",
+      "nome": "Elegant",
+      "cores": [
+        "#1c1a1a",
+        "#d4c4b0",
+        "#9a7b6a"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#f7f5f2",
+        "#1b1b1b",
+        "#c4a484"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Marque o seu horário",
+    "botao": "Marcar no WhatsApp",
+    "target": "whatsapp"
+  }
 }

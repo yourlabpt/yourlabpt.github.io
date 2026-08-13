@@ -35,10 +35,10 @@
     "hero",
     "sobre",
     "servicos",
-    "diferenciais",
     "galeria",
-    "contactos",
+    "avaliacoes",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -94,5 +94,50 @@
       "label": "Tem esplanada?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "food",
+  "ctas_hero": [
+    {
+      "label": "Reservar mesa",
+      "target": "dpl-contactos"
+    },
+    {
+      "label": "Ver menu",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#2a1a12",
+        "#e0a458",
+        "#a63d40"
+      ]
+    },
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#1a1010",
+        "#c44b3c",
+        "#e8d5b7"
+      ]
+    },
+    {
+      "id": "natural",
+      "nome": "Natural",
+      "cores": [
+        "#24301f",
+        "#8a9a6a",
+        "#d4c4a8"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Reserve a sua mesa",
+    "botao": "Reservar / WhatsApp",
+    "target": "whatsapp"
+  }
 }

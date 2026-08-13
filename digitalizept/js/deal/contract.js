@@ -1,5 +1,12 @@
 import { formatEuros } from '../format.js';
 import { dominioContractLines } from '../domain.js';
+import {
+    DEFAULT_PACOTE,
+    includesGooglePresence,
+    includesWebsite
+} from './packages.js';
+
+export { includesGooglePresence, includesWebsite } from './packages.js';
 
 // YourLab (prestador). Fiscal identity comes from the server so a contract is
 // never signed against a placeholder; these are only the non-fiscal defaults.
@@ -18,44 +25,124 @@ const PROVIDER_DEFAULTS = {
 // during the sale rather than discovered on a signed document.
 const MISSING = '(em falta)';
 
-const BASE_ARRANQUE = [
-    'Landing page profissional (página única), adaptada a telemóvel',
-    'Adição do website na ficha Google Maps / Google Business Profile',
-    'Configuração da ficha Google Maps para o cliente',
-    'Criação de conta Google para o cliente, quando ainda não existir'
+const LANDING_BASE = [
+    'Landing page profissional (página única), adaptada a telemóvel'
 ];
 
-// Expanded on every contract — including Essencial — so the client sees what
-// will actually be done, not only a price line.
+const GOOGLE_BASE = [
+    'Organização da presença no Google Maps / Google Business Profile (conta do cliente)',
+    'Criar, reivindicar ou pedir acesso ao perfil, conforme o estado atual no Maps',
+    'Dados base: nome, categoria, morada, pin no mapa, telefone, horário e descrição',
+    'Orientação e apoio à validação do perfil (o prazo depende do Google, tipicamente até cerca de 5 dias úteis)',
+    'Não são garantidos resultados comerciais nem posicionamento no Maps'
+];
+
+const GOOGLE_ESSENCIAL = [
+    ...GOOGLE_BASE,
+    'Lote base de fotos (5–10) e atributos essenciais do setor',
+    'Sem website neste pacote'
+];
+
+const GOOGLE_COMPLETO = [
+    ...GOOGLE_BASE,
+    'Perfil orientado a 100%: serviços, produtos, atributos, links, WhatsApp e redes quando disponíveis',
+    'Lote base de fotos e revisão do perfil público',
+    'Orientação breve para gestão futura do perfil (sem automação contínua nem SEO)'
+];
+
+const GOOGLE_MAPS_EXISTENTE = [
+    'Atualizar o Perfil Google / Maps já existente: website, contactos e fotos chave',
+    'Confirmar pin no mapa e dados públicos alinhados à landing',
+    'Não são garantidos resultados comerciais nem posicionamento no Maps'
+];
+
+const DOMAIN_LEGAL = [
+    'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio',
+    'Conformidade legal básica da página (informação obrigatória e contactos)'
+];
+
+function packageBaseLines(pacote) {
+    if (pacote === 'google_essencial') {
+        return [...GOOGLE_ESSENCIAL];
+    }
+    if (pacote === 'site_maps') {
+        return [
+            ...LANDING_BASE,
+            ...DOMAIN_LEGAL,
+            ...GOOGLE_MAPS_EXISTENTE
+        ];
+    }
+    if (pacote === 'digital_completo') {
+        return [
+            ...LANDING_BASE,
+            ...DOMAIN_LEGAL,
+            ...GOOGLE_COMPLETO
+        ];
+    }
+    if (pacote === 'plus') {
+        return [
+            ...LANDING_BASE,
+            'Website com várias páginas, catálogo e até 2 idiomas',
+            ...DOMAIN_LEGAL,
+            ...GOOGLE_COMPLETO
+        ];
+    }
+    if (pacote === 'renovacao') {
+        return [
+            ...LANDING_BASE,
+            'Renovação de website existente (estrutura e conteúdo essenciais)',
+            'Migração básica a partir do site atual, quando aplicável',
+            'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio',
+            ...GOOGLE_MAPS_EXISTENTE
+        ];
+    }
+    // Legacy: essencial / completa
+    if (pacote === 'completa') {
+        return [...LANDING_BASE, ...DOMAIN_LEGAL, ...GOOGLE_COMPLETO];
+    }
+    return [...LANDING_BASE, ...DOMAIN_LEGAL];
+}
+
+export function resolveDeliverables(proposta) {
+    const pacote = (proposta && proposta.pacote) || DEFAULT_PACOTE;
+    const lines = [...packageBaseLines(pacote)];
+    // Legacy extra on a landing-only package
+    if (pacote === 'essencial' && includesGooglePresence(proposta)) {
+        lines.push(...GOOGLE_COMPLETO);
+    }
+    if (Array.isArray(proposta && proposta.extras)) {
+        if (proposta.extras.includes('google_perfil_completo') && pacote === 'google_essencial') {
+            lines.push('Upgrade a perfil Google 100% (serviços, produtos, atributos, links e redes)');
+        }
+        if (proposta.extras.includes('google_avaliacoes')) {
+            lines.push('Sessão de orientação para pedir e responder a avaliações reais (sem compra de reviews)');
+        }
+    }
+    return lines;
+}
+
+// Kept for tests / callers that only know the package code. Prefer resolveDeliverables.
 export const PACKAGE_DELIVERABLES = {
-    essencial: [
-        ...BASE_ARRANQUE,
-        'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio',
-        'Conformidade legal básica da página (informação obrigatória e contactos)'
-    ],
-    plus: [
-        ...BASE_ARRANQUE,
-        'Website com várias páginas, catálogo e até 2 idiomas',
-        'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio',
-        'Conformidade legal básica da página (informação obrigatória e contactos)'
-    ],
-    renovacao: [
-        ...BASE_ARRANQUE,
-        'Renovação de website existente (estrutura e conteúdo essenciais)',
-        'Migração básica a partir do site atual, quando aplicável',
-        'Publicação online com domínio e alojamento, ou entrega do código em ZIP por email se o cliente preferir o próprio domínio'
-    ]
+    google_essencial: packageBaseLines('google_essencial'),
+    site_maps: packageBaseLines('site_maps'),
+    digital_completo: packageBaseLines('digital_completo'),
+    plus: packageBaseLines('plus'),
+    renovacao: packageBaseLines('renovacao'),
+    essencial: packageBaseLines('essencial'),
+    completa: packageBaseLines('completa')
 };
 
 const CLAUSES = [
     'Apenas os serviços contratados e a lista de trabalhos descritos fazem parte deste acordo.',
     'A assistência e formação de utilização só está incluída se constar como extra contratado.',
+    'A presença no Google só está incluída nos pacotes que a listam (Essencial Google, Site + Maps, Completo, Plus, Renovação) ou em extras Google contratados.',
+    'A validação do Perfil Google depende do Google; a YourLab orienta o processo, sem garantir o prazo (tipicamente até cerca de 5 dias úteis).',
     'Alterações significativas poderão originar orçamento complementar.',
     'O prazo depende da entrega atempada dos conteúdos pelo cliente.',
-    'Não são garantidos resultados comerciais nem posicionamento em motores de pesquisa.',
+    'Não são garantidos resultados comerciais nem posicionamento em motores de pesquisa ou no Google Maps.',
     'Serviços dependentes de terceiros (Google, domínios, alojamento, plataformas externas) estão sujeitos às respetivas regras e tempos de processamento.',
     'Se o cliente comprar o próprio domínio, a YourLab entrega o website em ficheiro ZIP por email; a publicação fica a cargo do cliente, salvo extra de ajuda a apontar o domínio.',
-    'Após aprovação final do website, alterações posteriores poderão ser cobradas separadamente.',
+    'Após aprovação final do website (quando aplicável), alterações posteriores poderão ser cobradas separadamente.',
     'Propriedade: domínio, alojamento, contas Google e código ficam em nome do cliente.',
     'Garantia de 14 dias após a entrega e direito de livre resolução de 14 dias.',
     'O projeto encerra por aprovação do cliente ou após 15 dias sem resposta.',
@@ -66,6 +153,14 @@ function escapeHtml(value) {
     return String(value == null ? '' : value)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function manutencaoCodes(proposta) {
+    if (Array.isArray(proposta.manutencoes) && proposta.manutencoes.length) {
+        return proposta.manutencoes.filter(Boolean);
+    }
+    if (proposta.manutencao) return [proposta.manutencao];
+    return [];
 }
 
 export function buildContractModel(state, catalog, config) {
@@ -87,17 +182,20 @@ export function buildContractModel(state, catalog, config) {
         const pct = Math.round((calc.urgenciaPct || Number(byCode.urgencia.percentual) || 0) * 100);
         items.push({ nome: byCode.urgencia.nome, valor: `+${pct}%` });
     }
-    if (proposta.manutencao && byCode[proposta.manutencao]) {
-        const m = byCode[proposta.manutencao];
-        const mensal = calc.iva > 0 && calc.manutencaoMensalComIva
-            ? calc.manutencaoMensalComIva
+    manutencaoCodes(proposta).forEach((code) => {
+        const m = byCode[code];
+        if (!m) return;
+        const unit = calc.iva > 0
+            ? Math.round(m.preco_centimos * (1 + (calc.ivaRate || 0)))
             : m.preco_centimos;
-        items.push({ nome: m.nome, valor: `${formatEuros(mensal)}/mês` });
-    }
+        items.push({ nome: m.nome, valor: `${formatEuros(unit)}/mês` });
+    });
 
     const provider = { ...PROVIDER_DEFAULTS, ...((config && config.provider) || {}) };
-    const deliverables = PACKAGE_DELIVERABLES[proposta.pacote] || PACKAGE_DELIVERABLES.essencial;
-    const dominioLines = dominioContractLines(proposta.dominio);
+    const deliverables = resolveDeliverables(proposta);
+    const dominioLines = includesWebsite(proposta)
+        ? dominioContractLines(proposta.dominio)
+        : [];
 
     return {
         provider,

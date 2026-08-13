@@ -1,14 +1,9 @@
-// Etapa 3 — Identidade visual, one choice at a time.
+// Etapa 3 — Identidade visual: logo, paleta (botões), fotos reais.
 
 import { currentSubstep, renderAsk } from '../substep.js';
 
-const STYLES = [
-    { id: 'clean', nome: 'Clean', desc: 'Claro, espaçado, moderno.' },
-    { id: 'bold', nome: 'Bold', desc: 'Contraste forte, títulos grandes.' },
-    { id: 'warm', nome: 'Warm', desc: 'Acolhedor, cantos suaves.' }
-];
-
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
+const MAX_FOTOS = 6;
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -18,29 +13,49 @@ function getDados(state) {
     return state.data.dados || {};
 }
 
-function ensureIdentidade(state) {
-    const businessType = getBusinessType(state);
-    const suggested = (businessType && Array.isArray(businessType.cores_sugeridas) && businessType.cores_sugeridas.length === 3)
+function palettesOf(businessType) {
+    if (businessType && Array.isArray(businessType.paletas_sugeridas) && businessType.paletas_sugeridas.length) {
+        return businessType.paletas_sugeridas;
+    }
+    const cores = (businessType && Array.isArray(businessType.cores_sugeridas) && businessType.cores_sugeridas.length === 3)
         ? businessType.cores_sugeridas
         : FALLBACK_CORES;
+    return [{ id: 'clean', nome: 'Clean', cores }];
+}
+
+function applyPalette(identidade, palette) {
+    const cores = palette.cores || FALLBACK_CORES;
+    identidade.paleta = palette.id || 'clean';
+    identidade.estilo = palette.id || 'clean';
+    identidade.cores = { base: cores[0], destaque: cores[1], secundaria: cores[2] };
+}
+
+function ensureIdentidade(state) {
+    const businessType = getBusinessType(state);
+    const palettes = palettesOf(businessType);
+    const first = palettes[0];
 
     if (!state.data.identidade || typeof state.data.identidade !== 'object') {
         state.data.identidade = {
             logo: { tipo: 'nenhum' },
-            estilo: 'clean',
-            cores: { base: suggested[0], destaque: suggested[1], secundaria: suggested[2] }
+            estilo: first.id || 'clean',
+            paleta: first.id || 'clean',
+            cores: { base: first.cores[0], destaque: first.cores[1], secundaria: first.cores[2] },
+            fotos: []
         };
     }
     const id = state.data.identidade;
     if (!id.logo) id.logo = { tipo: 'nenhum' };
-    if (!id.estilo) id.estilo = 'clean';
-    if (!id.cores) id.cores = { base: suggested[0], destaque: suggested[1], secundaria: suggested[2] };
+    if (!Array.isArray(id.fotos)) id.fotos = [];
+    if (!id.cores || !id.cores.base) applyPalette(id, first);
+    if (!id.paleta) id.paleta = id.estilo || first.id || 'clean';
+    if (!id.estilo) id.estilo = id.paleta;
     return id;
 }
 
 function isValid(state) {
     const id = state.data.identidade;
-    return Boolean(id && id.estilo && id.cores);
+    return Boolean(id && id.cores && id.cores.base);
 }
 
 function isSubstepValid(state) {
@@ -52,7 +67,7 @@ function substepCount() {
     return 3;
 }
 
-function fileToDataUrl(file, maxDim = 512) {
+function fileToDataUrl(file, maxDim = 1280) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(new Error('read failed'));
@@ -68,7 +83,7 @@ function fileToDataUrl(file, maxDim = 512) {
                 canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                 const isPng = /png/i.test(file.type);
-                resolve(canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85));
+                resolve(canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82));
             };
             img.src = reader.result;
         };
@@ -80,7 +95,7 @@ function renderLogo(body, ctx, identidade, persist) {
     const dados = getDados(ctx.state);
     const { control } = renderAsk(body, {
         title: 'Tem logótipo?',
-        hint: 'Se não tiver, usamos o nome do negócio. Continuar está sempre disponível.',
+        hint: 'Se não tiver, usamos o nome do negócio.',
         index: 0,
         total: 3
     });
@@ -116,7 +131,7 @@ function renderLogo(body, ctx, identidade, persist) {
         const file = input.files && input.files[0];
         if (!file) return;
         try {
-            const dataUrl = await fileToDataUrl(file);
+            const dataUrl = await fileToDataUrl(file, 512);
             identidade.logo = { tipo: 'upload', dataUrl, nome: file.name };
             persist();
             renderPreview();
@@ -144,118 +159,138 @@ function renderLogo(body, ctx, identidade, persist) {
     actions.append(uploadBtn, noneBtn);
     control.append(preview, actions, input);
     renderPreview();
-
-    const details = document.createElement('details');
-    details.className = 'field-optional';
-    details.appendChild(Object.assign(document.createElement('summary'), {
-        textContent: 'Gerar sugestão de logótipo (opcional)'
-    }));
-    const disclaimer = document.createElement('p');
-    disclaimer.className = 'id-disclaimer';
-    disclaimer.textContent = 'Apenas uma sugestão. A YourLab não vende criação de logótipo.';
-    const nome = dados.nome_negocio || 'o negócio';
-    const businessType = getBusinessType(ctx.state);
-    const promptText = `Cria um logótipo simples e moderno para "${nome}", um(a) ${businessType ? businessType.nome.toLowerCase() : 'negócio local'} em Portugal. Estilo minimalista, vetorial, fundo transparente. Usa o nome "${nome}".`;
-    const ta = document.createElement('textarea');
-    ta.className = 'field-input';
-    ta.readOnly = true;
-    ta.rows = 3;
-    ta.value = promptText;
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'btn-secondary';
-    copyBtn.textContent = 'Copiar prompt';
-    copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(promptText)
-            .then(() => ctx.showToast('Prompt copiado.'))
-            .catch(() => ctx.showToast('Não foi possível copiar.', true));
-    });
-    details.append(disclaimer, ta, copyBtn);
-    control.appendChild(details);
 }
 
-function renderStyle(body, ctx, identidade, persist) {
+function renderPalette(body, ctx, identidade, persist) {
+    const businessType = getBusinessType(ctx.state);
+    const palettes = palettesOf(businessType);
+
     const { control } = renderAsk(body, {
-        title: 'Que estilo prefere?',
-        hint: 'Pode mudar depois. Clean fica bem na maioria dos casos.',
+        title: 'Que paleta usar?',
+        hint: 'Um toque. Escolhida para este tipo de negócio.',
         index: 1,
         total: 3
     });
 
     const grid = document.createElement('div');
-    grid.className = 'style-grid';
-    STYLES.forEach((style) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = `style-card${identidade.estilo === style.id ? ' selected' : ''}`;
-        const prev = document.createElement('div');
-        prev.className = `style-preview style-preview-${style.id}`;
-        prev.innerHTML = '<span class="sp-title">Aa</span><span class="sp-bar"></span>';
-        const { base, destaque, secundaria } = identidade.cores;
-        prev.style.setProperty('--sp-base', base);
-        prev.style.setProperty('--sp-destaque', destaque);
-        prev.style.setProperty('--sp-secundaria', secundaria);
-        card.append(
-            prev,
-            Object.assign(document.createElement('div'), { className: 'style-card-name', textContent: style.nome }),
-            Object.assign(document.createElement('div'), { className: 'style-card-desc', textContent: style.desc })
+    grid.className = 'palette-grid';
+    palettes.forEach((palette) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const selected = identidade.paleta === palette.id
+            || (identidade.cores.base === palette.cores[0] && identidade.cores.destaque === palette.cores[1]);
+        btn.className = `palette-card${selected ? ' selected' : ''}`;
+        const swatches = document.createElement('div');
+        swatches.className = 'palette-swatches';
+        palette.cores.forEach((hex) => {
+            const chip = document.createElement('span');
+            chip.className = 'palette-chip';
+            chip.style.background = hex;
+            swatches.appendChild(chip);
+        });
+        btn.append(
+            swatches,
+            Object.assign(document.createElement('div'), { className: 'palette-name', textContent: palette.nome })
         );
-        card.addEventListener('click', () => {
-            identidade.estilo = style.id;
-            grid.querySelectorAll('.style-card').forEach((c) => c.classList.remove('selected'));
-            card.classList.add('selected');
+        btn.addEventListener('click', () => {
+            applyPalette(identidade, palette);
+            grid.querySelectorAll('.palette-card').forEach((c) => c.classList.remove('selected'));
+            btn.classList.add('selected');
             persist();
         });
-        grid.appendChild(card);
+        grid.appendChild(btn);
     });
     control.appendChild(grid);
 }
 
-function renderColors(body, ctx, identidade, persist) {
-    const businessType = getBusinessType(ctx.state);
-    const suggested = (businessType && Array.isArray(businessType.cores_sugeridas) && businessType.cores_sugeridas.length === 3)
-        ? businessType.cores_sugeridas
-        : FALLBACK_CORES;
-
+function renderFotos(body, ctx, identidade, persist) {
     const { control } = renderAsk(body, {
-        title: 'Estas cores servem?',
-        hint: 'Já vêm do tipo de negócio. Ajuste só se o cliente quiser.',
+        title: 'Tirar fotos agora?',
+        hint: 'Fotos reais do estabelecimento tornam a demo muito mais convincente. Pode saltar.',
         index: 2,
         total: 3
     });
 
-    const row = document.createElement('div');
-    row.className = 'color-row';
-    [
-        { key: 'base', label: 'Base' },
-        { key: 'destaque', label: 'Destaque' },
-        { key: 'secundaria', label: 'Secundária' }
-    ].forEach(({ key, label }) => {
-        const wrap = document.createElement('label');
-        wrap.className = 'color-swatch';
-        const input = document.createElement('input');
-        input.type = 'color';
-        input.value = identidade.cores[key];
-        input.addEventListener('input', () => {
-            identidade.cores[key] = input.value;
-            persist();
+    const preview = document.createElement('div');
+    preview.className = 'foto-grid';
+
+    function paint() {
+        preview.innerHTML = '';
+        (identidade.fotos || []).forEach((url, i) => {
+            const tile = document.createElement('div');
+            tile.className = 'foto-tile';
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = `Foto ${i + 1}`;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'foto-remove';
+            remove.textContent = '×';
+            remove.setAttribute('aria-label', 'Remover foto');
+            remove.addEventListener('click', () => {
+                identidade.fotos.splice(i, 1);
+                persist();
+                paint();
+            });
+            tile.append(img, remove);
+            preview.appendChild(tile);
         });
-        wrap.append(input, Object.assign(document.createElement('span'), { textContent: label }));
-        row.appendChild(wrap);
+        if (!identidade.fotos.length) {
+            const empty = document.createElement('p');
+            empty.className = 'ask-hint';
+            empty.textContent = 'Ainda sem fotos — Continuar usa placeholders visuais.';
+            preview.appendChild(empty);
+        }
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.multiple = true;
+    input.className = 'hidden';
+
+    input.addEventListener('change', async () => {
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+        const room = MAX_FOTOS - identidade.fotos.length;
+        for (const file of files.slice(0, room)) {
+            try {
+                const dataUrl = await fileToDataUrl(file);
+                identidade.fotos.push(dataUrl);
+            } catch (_) {
+                ctx.showToast('Uma foto falhou.', true);
+            }
+        }
+        input.value = '';
+        persist();
+        paint();
     });
 
-    const reset = document.createElement('button');
-    reset.type = 'button';
-    reset.className = 'btn-secondary color-reset';
-    reset.textContent = 'Repor paleta do setor';
-    reset.addEventListener('click', () => {
-        identidade.cores = { base: suggested[0], destaque: suggested[1], secundaria: suggested[2] };
-        persist();
-        row.querySelectorAll('input[type="color"]').forEach((inp, i) => {
-            inp.value = [suggested[0], suggested[1], suggested[2]][i];
-        });
+    const actions = document.createElement('div');
+    actions.className = 'logo-actions';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn-primary';
+    addBtn.textContent = identidade.fotos.length ? 'Adicionar fotos' : 'Sim — tirar / carregar';
+    addBtn.addEventListener('click', () => {
+        if (identidade.fotos.length >= MAX_FOTOS) {
+            ctx.showToast(`Máximo ${MAX_FOTOS} fotos.`, true);
+            return;
+        }
+        input.click();
     });
-    control.append(row, reset);
+    const skipBtn = document.createElement('button');
+    skipBtn.type = 'button';
+    skipBtn.className = 'btn-secondary';
+    skipBtn.textContent = 'Agora não';
+    skipBtn.addEventListener('click', () => {
+        persist();
+        if (typeof ctx.goNext === 'function') ctx.goNext();
+    });
+    actions.append(addBtn, skipBtn);
+    control.append(preview, actions, input);
+    paint();
 }
 
 function render(body, ctx) {
@@ -277,8 +312,8 @@ function render(body, ctx) {
 
     const idx = currentSubstep(ctx.state);
     if (idx === 0) renderLogo(body, ctx, identidade, persist);
-    else if (idx === 1) renderStyle(body, ctx, identidade, persist);
-    else renderColors(body, ctx, identidade, persist);
+    else if (idx === 1) renderPalette(body, ctx, identidade, persist);
+    else renderFotos(body, ctx, identidade, persist);
 
     persist();
 }
@@ -286,7 +321,7 @@ function render(body, ctx) {
 export const identityStep = {
     name: 'Identidade visual',
     title: 'Identidade visual',
-    subtitle: 'Logótipo, estilo e cores. É rápido — ajuste em segundos e siga em frente.',
+    subtitle: 'Logótipo, paleta e fotos. Decisões em botões — siga em frente.',
     isValid,
     isSubstepValid,
     substepCount,

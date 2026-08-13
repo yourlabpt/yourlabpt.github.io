@@ -1,0 +1,107 @@
+{
+  "default": {
+    "atributos": [
+      "Acessível a cadeiras de rodas",
+      "Estacionamento nas proximidades",
+      "Aceita cartões",
+      "Wi-Fi",
+      "Ar condicionado"
+    ]
+  },
+  "restaurante": {
+    "atributos": [
+      "Esplanada",
+      "Take-away",
+      "Entrega ao domicílio",
+      "Reservas",
+      "Menu do dia",
+      "Opções vegetarianas",
+      "Acessível a cadeiras de rodas"
+    ]
+  },
+  "cafe-pastelaria": {
+    "atributos": [
+      "Esplanada",
+      "Take-away",
+      "Wi-Fi",
+      "Pequeno-almoço",
+      "Acessível a cadeiras de rodas"
+    ]
+  },
+  "salao-beleza": {
+    "atributos": [
+      "Marcação necessária",
+      "Produtos para venda",
+      "Acessível a cadeiras de rodas",
+      "Estacionamento nas proximidades",
+      "Aceita cartões"
+    ]
+  },
+  "loja-roupa": {
+    "atributos": [
+      "Provadores",
+      "Novidades sazonais",
+      "Aceita cartões",
+      "Acessível a cadeiras de rodas",
+      "Estacionamento nas proximidades"
+    ]
+  },
+  "mercadinho": {
+    "atributos": [
+      "Produtos frescos",
+      "Entrega ao domicílio",
+      "Aceita cartões",
+      "Acessível a cadeiras de rodas",
+      "Estacionamento nas proximidades"
+    ]
+  },
+  "drogaria-ferragens": {
+    "atributos": [
+      "Amplo stock",
+      "Aceita cartões",
+      "Estacionamento nas proximidades",
+      "Acessível a cadeiras de rodas"
+    ]
+  },
+  "mecanico-automovel": {
+    "atributos": [
+      "Marcação necessária",
+      "Diagnóstico",
+      "Estacionamento no local",
+      "Aceita cartões"
+    ]
+  },
+  "otica": {
+    "atributos": [
+      "Marcação para exame",
+      "Marcas disponíveis",
+      "Aceita cartões",
+      "Acessível a cadeiras de rodas"
+    ]
+  },
+  "joalharia": {
+    "atributos": [
+      "Reparações",
+      "Peças sob medida",
+      "Aceita cartões",
+      "Acessível a cadeiras de rodas"
+    ]
+  },
+  "tapecaria": {
+    "atributos": [
+      "Medidas no local",
+      "Instalação",
+      "Aceita cartões",
+      "Estacionamento nas proximidades"
+    ]
+  },
+  "generico": {
+    "atributos": [
+      "Atendimento presencial",
+      "Aceita cartões",
+      "Acessível a cadeiras de rodas",
+      "Estacionamento nas proximidades",
+      "Wi-Fi"
+    ]
+  }
+}

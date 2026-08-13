@@ -1,9 +1,12 @@
-const CACHE = 'digitalizept-v1';
+const CACHE = 'digitalizept-v3';
 const SHELL = [
     '/digitalizept/',
     '/digitalizept/index.html',
+    '/digitalizept/admin.html',
+    '/digitalizept/admin.css',
     '/digitalizept/digitalizept.css',
     '/digitalizept/js/app.js',
+    '/digitalizept/js/admin.js',
     '/digitalizept/js/api.js',
     '/digitalizept/js/auth.js',
     '/digitalizept/js/catalog.js',
@@ -11,7 +14,8 @@ const SHELL = [
     '/digitalizept/js/format.js',
     '/digitalizept/js/proposal-calc.js',
     '/digitalizept/js/settings.js',
-    '/digitalizept/js/wizard.js'
+    '/digitalizept/js/wizard.js',
+    '/digitalizept/js/steps/google.js'
 ];
 
 self.addEventListener('install', (event) => {

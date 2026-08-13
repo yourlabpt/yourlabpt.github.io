@@ -1,15 +1,19 @@
 import { fetchCatalog } from '../catalog.js';
 import { formatEuros } from '../format.js';
-import { ensureProposta } from '../proposal-calc.js';
+import { ensureProposta, ensureManutencoes, setManutencoes } from '../proposal-calc.js';
 import { ensureDominio, isDominioValid, refreshDominioCandidates } from '../domain.js';
+import { includesWebsite } from '../deal/packages.js';
 import { currentSubstep, renderAsk, askChoices, askText } from '../substep.js';
 
 const BEGINNER_EXTRAS = [
+    'google_perfil_completo',
+    'google_avaliacoes',
     'assistencia_uso',
     'ajuda_dominio_cliente',
     'conta_email_gmail',
     'whatsapp_negocio',
-    'ligacao_redes'
+    'ligacao_redes',
+    'conteudo_visual'
 ];
 
 function isValid(state) {
@@ -21,8 +25,22 @@ function catalogOf(state) {
     return Array.isArray(state.data._catalog) ? state.data._catalog : [];
 }
 
-function extrasByGroup(catalog) {
+function relevantExtras(catalog, proposta) {
     const extras = (catalog || []).filter((s) => s.tipo === 'extra');
+    const hasWebsite = includesWebsite(proposta);
+    const isGoogleOnly = proposta && proposta.pacote === 'google_essencial';
+
+    return extras.filter((s) => {
+        if (s.codigo === 'ajuda_dominio_cliente' && !hasWebsite) return false;
+        if (s.codigo === 'whatsapp_negocio' && isGoogleOnly) return false;
+        if (s.codigo === 'ligacao_redes' && isGoogleOnly) return false;
+        if (s.codigo === 'google_perfil_completo' && proposta.pacote !== 'google_essencial') return false;
+        return true;
+    });
+}
+
+function extrasByGroup(catalog, proposta) {
+    const extras = relevantExtras(catalog, proposta);
     const beginner = [];
     const rest = [];
     extras.forEach((s) => {
@@ -33,14 +51,26 @@ function extrasByGroup(catalog) {
     return { beginner, rest };
 }
 
+function manutencaoPlans(catalog, proposta) {
+    const plans = (catalog || []).filter((s) => s.tipo === 'manutencao');
+    const hasWebsite = includesWebsite(proposta);
+    const isPlus = proposta && (proposta.pacote === 'plus' || proposta.pacote === 'renovacao');
+    return plans.filter((s) => {
+        if (s.codigo === 'hosting_landing' && (!hasWebsite || isPlus)) return false;
+        if (s.codigo === 'hosting_site' && !isPlus) return false;
+        return true;
+    });
+}
+
 function pagesFor(state) {
     const catalog = catalogOf(state);
-    const { beginner, rest } = extrasByGroup(catalog);
-    const pages = [
-        { kind: 'pacote' },
-        { kind: 'dominio' },
-        ...beginner.map((servico) => ({ kind: 'extra', servico }))
-    ];
+    const proposta = state.data.proposta || {};
+    const { beginner, rest } = extrasByGroup(catalog, proposta);
+    const pages = [];
+    // Pacote is chosen in Diagnóstico; allow override here if needed.
+    pages.push({ kind: 'pacote' });
+    if (includesWebsite(proposta)) pages.push({ kind: 'dominio' });
+    beginner.forEach((servico) => pages.push({ kind: 'extra', servico }));
     if (rest.length) pages.push({ kind: 'extrasGate' });
     if (state.data.extrasMore && rest.length) {
         rest.forEach((servico) => pages.push({ kind: 'extra', servico }));
@@ -108,8 +138,8 @@ async function render(body, ctx) {
     if (page.kind === 'pacote') {
         const packages = catalog.filter((s) => s.tipo === 'pacote');
         const { control } = renderAsk(body, {
-            title: 'Qual é o pacote?',
-            hint: 'Essencial chega para a maioria das lojas.',
+            title: 'Confirmar o pacote',
+            hint: 'Já veio do diagnóstico — pode ainda mudar aqui.',
             index: idx,
             total: pages.length
         });
@@ -259,26 +289,43 @@ async function render(body, ctx) {
     }
 
     if (page.kind === 'manutencao') {
-        const planos = catalog.filter((s) => s.tipo === 'manutencao');
+        const planos = manutencaoPlans(catalog, proposta);
+        const selected = new Set(ensureManutencoes(proposta));
         const { control } = renderAsk(body, {
-            title: 'Quer manutenção?',
-            hint: 'Apresente sempre. Sem manutenção o cliente trata do alojamento.',
+            title: 'Manutenção mensal?',
+            hint: 'Pode combinar Maps e hosting. Toque para ligar/desligar cada opção.',
             index: idx,
             total: pages.length
         });
-        askChoices(control, [
-            { id: '', name: 'Sem manutenção' },
+
+        const choices = [
+            { id: '', name: 'Nenhum', desc: 'Sem mensalidade neste acordo.' },
             ...planos.map((s) => ({
                 id: s.codigo,
                 name: s.nome,
                 desc: s.descricao_cliente,
                 meta: `${priceLabel(s)}/mês`
             }))
-        ], {
-            selected: proposta.manutencao || '',
+        ];
+
+        askChoices(control, choices, {
+            selected: (item) => {
+                if (!item.id) return selected.size === 0;
+                return selected.has(item.id);
+            },
             onSelect: (item) => {
-                proposta.manutencao = item.id || null;
+                if (!item.id) {
+                    setManutencoes(proposta, []);
+                } else {
+                    const next = new Set(ensureManutencoes(proposta));
+                    if (next.has(item.id)) next.delete(item.id);
+                    else next.add(item.id);
+                    setManutencoes(proposta, [...next]);
+                }
                 persist();
+                // Re-render so multi-select state paints correctly
+                body.innerHTML = '';
+                render(body, ctx);
             }
         });
         persist();
@@ -305,8 +352,8 @@ async function render(body, ctx) {
 
 export const servicesStep = {
     name: 'Serviços',
-    title: 'Seleção de serviços',
-    subtitle: 'Pacote, domínio e extras. Para quem tem pouca prática digital, acrescente a assistência de utilização.',
+    title: 'Extras e manutenção',
+    subtitle: 'Confirme o pacote, domínio (se houver site), extras e mensais Maps/hosting.',
     isValid,
     isSubstepValid,
     substepCount,

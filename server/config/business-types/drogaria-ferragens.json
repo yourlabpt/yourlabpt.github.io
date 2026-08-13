@@ -33,12 +33,12 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
     "diferenciais",
     "galeria",
-    "contactos",
+    "cta_bloco",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +89,50 @@
       "label": "Faz encomendas por pedido?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "retail",
+  "ctas_hero": [
+    {
+      "label": "Ligar",
+      "target": "tel"
+    },
+    {
+      "label": "Ver categorias",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#1c1a17",
+        "#c25b2a",
+        "#3f6f52"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1a1a1a",
+        "#4a6a5a",
+        "#d0d4c8"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#221c16",
+        "#a85a2a",
+        "#c8b090"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Não encontrou o que procura?",
+    "botao": "Ligue-nos",
+    "target": "tel"
+  }
 }

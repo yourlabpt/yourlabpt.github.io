@@ -33,12 +33,12 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
-    "diferenciais",
+    "sobre",
     "galeria",
-    "contactos",
+    "cta_bloco",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -89,5 +89,50 @@
       "label": "Trabalha com que convenções/seguros?",
       "tipo": "texto"
     }
-  ]
+  ],
+  "archetype": "premium",
+  "ctas_hero": [
+    {
+      "label": "Marcar exame",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver coleções",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#111a22",
+        "#2f8fbf",
+        "#dce4e8"
+      ]
+    },
+    {
+      "id": "elegant",
+      "nome": "Elegant",
+      "cores": [
+        "#0e1418",
+        "#6a8a9a",
+        "#e8eef0"
+      ]
+    },
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#0a1014",
+        "#1a6a9a",
+        "#c8d8e0"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Marque o seu exame de visão",
+    "botao": "Marcar exame",
+    "target": "whatsapp"
+  }
 }

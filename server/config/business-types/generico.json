@@ -32,8 +32,9 @@
     "servicos",
     "diferenciais",
     "galeria",
-    "contactos",
+    "cta_bloco",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -79,5 +80,50 @@
       "label": "Quem são os seus clientes?",
       "tipo": "texto_longo"
     }
-  ]
+  ],
+  "archetype": "servico",
+  "ctas_hero": [
+    {
+      "label": "Contactar",
+      "target": "dpl-contactos"
+    },
+    {
+      "label": "Como chegar",
+      "target": "dpl-mapa"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1b1b1b",
+        "#e8d5b7",
+        "#7a8a99"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#1c1814",
+        "#c4a060",
+        "#8a7a6a"
+      ]
+    },
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#121212",
+        "#3a6a8a",
+        "#d0c8b8"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Fale connosco",
+    "botao": "WhatsApp",
+    "target": "whatsapp"
+  }
 }

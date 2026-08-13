@@ -1,8 +1,10 @@
 import { businessTypeStep } from './steps/business-type.js';
 import { dataStep } from './steps/data.js';
+import { diagnosticoStep } from './steps/diagnostico.js';
 import { identityStep } from './steps/identity.js';
 import { demoStep } from './steps/demo.js';
 import { servicesStep } from './steps/services.js';
+import { googleStep } from './steps/google.js';
 import { proposalStep } from './steps/proposal.js';
 import { acceptanceStep } from './steps/acceptance.js';
 import { signatureStep } from './steps/signature.js';
@@ -32,13 +34,14 @@ export function hasWizardProgress() {
     }
 }
 
-// The 9 guided steps.
 const STEPS = [
     businessTypeStep,
     dataStep,
+    diagnosticoStep,
     identityStep,
     demoStep,
     servicesStep,
+    googleStep,
     proposalStep,
     acceptanceStep,
     signatureStep,
@@ -59,6 +62,18 @@ function substepCount(step, state) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
+function shouldSkip(step, state) {
+    return typeof step.shouldSkip === 'function' && step.shouldSkip(state);
+}
+
+function advancePastSkips(state, direction) {
+    while (state.step >= 0 && state.step < STEPS.length && shouldSkip(STEPS[state.step], state)) {
+        state.step += direction;
+    }
+    if (state.step < 0) state.step = 0;
+    if (state.step >= STEPS.length) state.step = STEPS.length - 1;
+}
+
 export function createWizard({ onUnauthorized, showToast }) {
     const els = {
         container: document.getElementById('stepContainer'),
@@ -73,6 +88,7 @@ export function createWizard({ onUnauthorized, showToast }) {
     if (state.step < 0 || state.step >= STEPS.length) state.step = 0;
     if (!Number.isFinite(Number(state.substep)) || state.substep < 0) state.substep = 0;
     if (!state.data || typeof state.data !== 'object') state.data = {};
+    advancePastSkips(state, 1);
     let currentValid = false;
 
     function persist() {
@@ -174,6 +190,7 @@ export function createWizard({ onUnauthorized, showToast }) {
             catch (_) { /* a missed draft must not block the visit */ }
         }
         state.step += 1;
+        advancePastSkips(state, 1);
         state.substep = 0;
         persist();
         render();
@@ -190,6 +207,7 @@ export function createWizard({ onUnauthorized, showToast }) {
         }
         if (state.step === 0) return;
         state.step -= 1;
+        advancePastSkips(state, -1);
         const prev = STEPS[state.step];
         const prevCount = substepCount(prev, state);
         state.substep = prevCount > 0 ? prevCount - 1 : 0;

@@ -1,6 +1,7 @@
 // Domain suggestions — fetched from the server after a DNS availability check.
 import { apiRequest } from './api.js';
 import { getToken } from './auth.js';
+import { includesWebsite } from './deal/packages.js';
 
 export async function fetchAvailableDomains(ctx, nomeNegocio, cidade) {
     const qs = new URLSearchParams({
@@ -44,6 +45,8 @@ export async function refreshDominioCandidates(ctx, proposta, dados) {
 }
 
 export function isDominioValid(proposta) {
+    // Google-only packages have no site to publish — skip domain.
+    if (!includesWebsite(proposta)) return true;
     const d = proposta && proposta.dominio;
     if (!d) return false;
     if (d.modo === 'sugerido') return Boolean(d.escolhido);

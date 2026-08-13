@@ -32,12 +32,12 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
     "servicos",
-    "diferenciais",
+    "sobre",
     "galeria",
-    "contactos",
+    "diferenciais",
     "mapa",
+    "contactos",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -88,5 +88,50 @@
       "label": "Faz avaliação de peças?",
       "tipo": "sim_nao"
     }
-  ]
+  ],
+  "archetype": "premium",
+  "ctas_hero": [
+    {
+      "label": "Visitar loja",
+      "target": "dpl-mapa"
+    },
+    {
+      "label": "Ver coleções",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "luxury",
+      "nome": "Luxury",
+      "cores": [
+        "#17130d",
+        "#c9a24b",
+        "#e8dcc0"
+      ]
+    },
+    {
+      "id": "elegant",
+      "nome": "Elegant",
+      "cores": [
+        "#0f0e0c",
+        "#a89070",
+        "#f0ebe3"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#faf8f5",
+        "#1a1814",
+        "#b89a5a"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Visite-nos",
+    "botao": "Como chegar",
+    "target": "dpl-mapa"
+  }
 }

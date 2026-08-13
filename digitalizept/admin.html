@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Digitalize Portugal</title>
+    <link rel="stylesheet" href="./digitalizept.css">
+    <link rel="stylesheet" href="./admin.css">
+    <meta name="robots" content="noindex, nofollow">
+</head>
+<body class="admin-body">
+    <div id="login-overlay" class="overlay">
+        <div class="login-box">
+            <h1>Admin Digitalize</h1>
+            <p>A mesma chave do Digitalize Portugal</p>
+            <form id="login-form">
+                <input type="password" id="key-input" placeholder="Chave" autocomplete="current-password" required>
+                <button type="submit">Entrar</button>
+            </form>
+            <div id="login-error"></div>
+        </div>
+    </div>
+
+    <div id="app" class="admin-app hidden">
+        <header class="admin-header">
+            <div>
+                <h1>Administração</h1>
+                <p>Preços, demos e propostas</p>
+            </div>
+            <div class="admin-header-actions">
+                <a class="btn-secondary" href="./">Venda</a>
+                <button id="logout-btn" type="button" class="btn-logout">Sair</button>
+            </div>
+        </header>
+
+        <nav class="admin-tabs" role="tablist">
+            <button type="button" class="admin-tab active" data-tab="catalog">Catálogo</button>
+            <button type="button" class="admin-tab" data-tab="demos">Demos</button>
+            <button type="button" class="admin-tab" data-tab="deals">Propostas</button>
+        </nav>
+
+        <main class="admin-main">
+            <section id="tab-catalog" class="admin-panel">
+                <div class="admin-toolbar">
+                    <input id="catalog-filter" class="field-input" type="search" placeholder="Filtrar serviços…">
+                    <button id="catalog-add-btn" type="button" class="btn-primary">Adicionar serviço</button>
+                </div>
+                <div id="catalog-list" class="admin-list"></div>
+            </section>
+
+            <section id="tab-demos" class="admin-panel hidden">
+                <div class="admin-toolbar">
+                    <input id="demos-filter" class="field-input" type="search" placeholder="Filtrar demos…">
+                </div>
+                <div id="demos-list" class="admin-list"></div>
+            </section>
+
+            <section id="tab-deals" class="admin-panel hidden">
+                <div class="admin-toolbar">
+                    <input id="deals-filter" class="field-input" type="search" placeholder="Filtrar propostas…">
+                </div>
+                <div id="deals-list" class="admin-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="drawer" class="admin-drawer hidden" aria-hidden="true">
+        <div class="admin-drawer-backdrop" id="drawer-backdrop"></div>
+        <aside class="admin-drawer-panel" id="drawer-panel"></aside>
+    </div>
+
+    <script type="module" src="./js/admin.js"></script>
+</body>
+</html>

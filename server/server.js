@@ -12,6 +12,7 @@ const { createProjectShowcaseStore } = require('./lib/project-showcase-store');
 const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalizeptLogEvento } = require('./lib/digitalizept-db');
 const { renderContractPdf } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
+const { writeDemoFolder } = require('./lib/digitalizept-demos');
 const { createRateLimiter } = require('./lib/rate-limit');
 const { findAvailableDomains } = require('./lib/digitalizept-domains');
 const { registerRequirementsPlatform } = require('../projects/api');
@@ -1727,15 +1728,118 @@ app.get('/api/digitalizept/business-types', requireDigitalizept, (req, res) => {
     }
 });
 
-// Digitalize Portugal — service catalog (servico table), price changes here need no deploy
+// Digitalize Portugal — service catalog (servico table)
 app.get('/api/digitalizept/catalog', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
-        const rows = db.prepare('SELECT * FROM servico WHERE ativo = 1 ORDER BY ordem ASC').all();
+        const includeInactive = String(req.query.all || '') === '1';
+        const rows = includeInactive
+            ? db.prepare('SELECT * FROM servico ORDER BY ordem ASC').all()
+            : db.prepare('SELECT * FROM servico WHERE ativo = 1 ORDER BY ordem ASC').all();
         return res.json({ servicos: rows });
     } catch (err) {
         console.error('digitalizept catalog error:', err.message);
         return res.status(500).json({ error: 'Failed to load catalog.' });
+    }
+});
+
+app.post('/api/digitalizept/catalog', requireDigitalizept, (req, res) => {
+    try {
+        const body = req.body || {};
+        const codigo = cleanText(body.codigo, 80).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        const nome = cleanText(body.nome, 200);
+        const tipo = cleanText(body.tipo, 40) || 'extra';
+        if (!codigo || !nome) {
+            return res.status(400).json({ error: 'Código e nome são obrigatórios.' });
+        }
+        if (!['pacote', 'extra', 'ajuste', 'manutencao'].includes(tipo)) {
+            return res.status(400).json({ error: 'Tipo inválido.' });
+        }
+        const db = getDigitalizeptDb();
+        if (db.prepare('SELECT id FROM servico WHERE codigo = ?').get(codigo)) {
+            return res.status(409).json({ error: 'Já existe um serviço com este código.' });
+        }
+        const id = crypto.randomUUID();
+        const preco = Math.max(0, Math.round(Number(body.preco_centimos) || 0));
+        const percentual = body.percentual == null || body.percentual === ''
+            ? null
+            : Number(body.percentual);
+        const ordem = Math.round(Number(body.ordem) || 999);
+        db.prepare(`
+            INSERT INTO servico (id, codigo, nome, descricao_cliente, preco_centimos, percentual, tipo, ativo, ordem, admin_edited)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 1)
+        `).run(
+            id, codigo, nome, cleanText(body.descricao_cliente, 800),
+            preco, Number.isFinite(percentual) ? percentual : null, tipo, ordem
+        );
+        const row = db.prepare('SELECT * FROM servico WHERE id = ?').get(id);
+        return res.json({ ok: true, servico: row });
+    } catch (err) {
+        console.error('digitalizept catalog create error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível criar o serviço.' });
+    }
+});
+
+app.patch('/api/digitalizept/catalog/:codigo', requireDigitalizept, (req, res) => {
+    try {
+        const codigo = cleanText(req.params.codigo, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const existing = db.prepare('SELECT * FROM servico WHERE codigo = ?').get(codigo);
+        if (!existing) return res.status(404).json({ error: 'Serviço não encontrado.' });
+
+        const nome = body.nome != null ? cleanText(body.nome, 200) : existing.nome;
+        const descricao = body.descricao_cliente != null
+            ? cleanText(body.descricao_cliente, 800)
+            : existing.descricao_cliente;
+        const preco = body.preco_centimos != null
+            ? Math.max(0, Math.round(Number(body.preco_centimos) || 0))
+            : existing.preco_centimos;
+        const percentual = Object.prototype.hasOwnProperty.call(body, 'percentual')
+            ? (body.percentual === null || body.percentual === ''
+                ? null
+                : Number(body.percentual))
+            : existing.percentual;
+        const tipo = body.tipo != null ? cleanText(body.tipo, 40) : existing.tipo;
+        const ordem = body.ordem != null ? Math.round(Number(body.ordem) || 0) : existing.ordem;
+        const ativo = body.ativo != null ? (body.ativo ? 1 : 0) : existing.ativo;
+
+        db.prepare(`
+            UPDATE servico SET nome = ?, descricao_cliente = ?, preco_centimos = ?,
+                percentual = ?, tipo = ?, ordem = ?, ativo = ?, admin_edited = 1
+            WHERE codigo = ?
+        `).run(nome, descricao, preco, Number.isFinite(percentual) ? percentual : null, tipo, ordem, ativo, codigo);
+
+        const row = db.prepare('SELECT * FROM servico WHERE codigo = ?').get(codigo);
+        return res.json({ ok: true, servico: row });
+    } catch (err) {
+        console.error('digitalizept catalog patch error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível atualizar o serviço.' });
+    }
+});
+
+const digitalizeptGoogleChecklistsPath = path.join(__dirname, 'config', 'google-checklists.json');
+let digitalizeptGoogleChecklists = null;
+function loadGoogleChecklists() {
+    if (digitalizeptGoogleChecklists) return digitalizeptGoogleChecklists;
+    try {
+        digitalizeptGoogleChecklists = JSON.parse(fs.readFileSync(digitalizeptGoogleChecklistsPath, 'utf8'));
+    } catch (err) {
+        console.error(`digitalizept: google-checklists.json: ${err.message}`);
+        digitalizeptGoogleChecklists = { default: { atributos: [] } };
+    }
+    return digitalizeptGoogleChecklists;
+}
+
+app.get('/api/digitalizept/google-checklist', requireDigitalizept, (req, res) => {
+    try {
+        const tipo = cleanText(req.query.tipo, 80) || 'generico';
+        const all = loadGoogleChecklists();
+        const checklist = all[tipo] || all.default || { atributos: [] };
+        return res.json({ tipo, checklist });
+    } catch (err) {
+        console.error('digitalizept google-checklist error:', err.message);
+        return res.status(500).json({ error: 'Failed to load Google checklist.' });
     }
 });
 
@@ -1905,7 +2009,7 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
-                   l.demo_slug, l.criado_em, p.total_com_iva_centimos, p.iva_rate
+                   l.demo_slug, l.notas_admin, l.criado_em, p.total_com_iva_centimos, p.iva_rate
             FROM lead l
             LEFT JOIN proposta p ON p.lead_id = l.id
             ORDER BY l.criado_em DESC
@@ -1923,8 +2027,8 @@ app.get('/api/digitalizept/deals', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
             SELECT pr.id AS projectId, pr.estado, pr.estado_google, pr.estado_dominio, pr.criado_em,
-                   l.id AS leadId, l.nome, l.business_type, l.demo_slug, l.work_path,
-                   p.total_centimos, p.iva_centimos, p.total_com_iva_centimos, p.iva_rate,
+                   l.id AS leadId, l.nome, l.business_type, l.demo_slug, l.work_path, l.notas_admin,
+                   p.total_centimos, p.iva_centimos, p.total_com_iva_centimos, p.iva_rate, p.itens_json,
                    c.id AS contratoId, c.pdf_path, c.html_path, c.hash_sha256,
                    cl.nome AS cliente_nome, cl.email AS cliente_email, cl.nif
             FROM projeto pr
@@ -1939,6 +2043,92 @@ app.get('/api/digitalizept/deals', requireDigitalizept, (req, res) => {
     } catch (err) {
         console.error('digitalizept deals error:', err.message);
         return res.status(500).json({ error: 'Failed to load deals.' });
+    }
+});
+
+const PROJECT_FASES = [
+    'demonstracao_criada',
+    'proposta',
+    'contrato_assinado',
+    'google_em_curso',
+    'site_no_ar',
+    'entregue',
+    'arquivado'
+];
+
+app.patch('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res) => {
+    try {
+        const projectId = cleanText(req.params.projectId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const row = db.prepare('SELECT id, estado, estado_google, estado_dominio FROM projeto WHERE id = ?').get(projectId);
+        if (!row) return res.status(404).json({ error: 'Projeto não encontrado.' });
+
+        const estado = body.estado != null ? cleanText(body.estado, 60) : row.estado;
+        const estadoGoogle = body.estado_google != null ? cleanText(body.estado_google, 60) : row.estado_google;
+        const estadoDominio = body.estado_dominio != null ? cleanText(body.estado_dominio, 60) : row.estado_dominio;
+        if (body.estado != null && !PROJECT_FASES.includes(estado)) {
+            return res.status(400).json({ error: 'Fase inválida.' });
+        }
+        db.prepare(`UPDATE projeto SET estado = ?, estado_google = ?, estado_dominio = ? WHERE id = ?`)
+            .run(estado, estadoGoogle, estadoDominio, projectId);
+        return res.json({
+            ok: true,
+            project: db.prepare('SELECT id AS projectId, estado, estado_google, estado_dominio FROM projeto WHERE id = ?').get(projectId)
+        });
+    } catch (err) {
+        console.error('digitalizept deal patch error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível atualizar a fase.' });
+    }
+});
+
+app.get('/api/digitalizept/leads/:leadId/notes', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const lead = db.prepare('SELECT id, notas_admin FROM lead WHERE id = ?').get(leadId);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const notes = db.prepare('SELECT id, texto, criado_em FROM nota WHERE lead_id = ? ORDER BY criado_em DESC').all(leadId);
+        return res.json({ notas_admin: lead.notas_admin || '', notes });
+    } catch (err) {
+        console.error('digitalizept notes get error:', err.message);
+        return res.status(500).json({ error: 'Failed to load notes.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/notes', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const texto = cleanText((req.body || {}).texto, 2000);
+        if (!texto) return res.status(400).json({ error: 'Texto em falta.' });
+        const db = getDigitalizeptDb();
+        const lead = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const id = crypto.randomUUID();
+        const now = digitalizeptNow();
+        db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)').run(id, leadId, texto, now);
+        return res.json({ ok: true, note: { id, texto, criado_em: now } });
+    } catch (err) {
+        console.error('digitalizept notes post error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar o comentário.' });
+    }
+});
+
+app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const lead = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+        if (body.notas_admin != null) {
+            db.prepare('UPDATE lead SET notas_admin = ? WHERE id = ?')
+                .run(cleanText(body.notas_admin, 4000), leadId);
+        }
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('digitalizept lead patch error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível atualizar o lead.' });
     }
 });
 
@@ -1995,6 +2185,17 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
             }
         });
         persist();
+        try {
+            writeDemoFolder({
+                slug,
+                demo,
+                identidade: body.identidade || {},
+                dados,
+                businessType
+            });
+        } catch (err) {
+            console.error(`digitalizept: demo folder failed (${err.message})`);
+        }
         return res.json({ ok: true, leadId, slug, url: `/d/${slug}` });
     } catch (err) {
         console.error('digitalizept publish demo error:', err.message);
@@ -2128,6 +2329,20 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const storedPdfPath = pdfOk ? pdfPath : '';
 
         let workPath = '';
+        const googlePresence = body.googlePresence && typeof body.googlePresence === 'object'
+            ? body.googlePresence
+            : null;
+        const googleDiagnostico = body.googleDiagnostico && typeof body.googleDiagnostico === 'object'
+            ? body.googleDiagnostico
+            : null;
+        const hasGoogle = Boolean(
+            ['google_essencial', 'site_maps', 'digital_completo', 'plus', 'renovacao', 'completa']
+                .includes(proposta.pacote)
+            || (Array.isArray(proposta.extras) && (
+                proposta.extras.includes('presenca_google')
+                || proposta.extras.includes('google_perfil_completo')
+            ))
+        );
         try {
             workPath = scaffoldClosedDeal({
                 projetoId,
@@ -2138,7 +2353,9 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 contractHtmlPath: htmlPath,
                 contractPdfPath: storedPdfPath,
                 dados,
-                proposta
+                proposta,
+                googlePresence: hasGoogle ? googlePresence : null,
+                googleDiagnostico: hasGoogle ? googleDiagnostico : null
             });
         } catch (err) {
             console.error(`digitalizept: work scaffold failed (${err.message})`);
@@ -2147,12 +2364,13 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const persist = db.transaction(() => {
             if (existingLead) {
                 db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, telefone = ?, whatsapp = ?,
-                    estado = 'fechado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?
+                    estado = 'fechado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?,
+                    google_presence_json = ?
                     WHERE id = ?`).run(
                     cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
                     cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),
-                    demoSlug, workPath, leadId);
+                    demoSlug, workPath, JSON.stringify(googlePresence || {}), leadId);
                 const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
                 if (dadosRow) {
                     db.prepare(`UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?`)
@@ -2162,12 +2380,12 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                         VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
                 }
             } else {
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, demo_json, identidade_json, demo_slug, work_path, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, 'fechado', ?, ?, ?, ?, ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, demo_json, identidade_json, demo_slug, work_path, google_presence_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, 'fechado', ?, ?, ?, ?, ?, ?)`).run(
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
                     cleanText(dados.morada, 300), cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),
-                    demoSlug, workPath, now);
+                    demoSlug, workPath, JSON.stringify(googlePresence || {}), now);
                 db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
                     VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
             }
@@ -2207,7 +2425,13 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
 
             db.prepare(`INSERT INTO projeto (id, contrato_id, estado, estado_google, estado_dominio, criado_em)
-                VALUES (?, ?, 'contrato_assinado', 'por_criar', ?, ?)`).run(projetoId, contratoId, dominioEstado, now);
+                VALUES (?, ?, 'contrato_assinado', ?, ?, ?)`).run(
+                projetoId,
+                contratoId,
+                hasGoogle ? 'por_criar' : 'nao_incluido',
+                dominioEstado,
+                now
+            );
 
             digitalizeptLogEvento(db, 'contrato', contratoId, 'assinado', {
                 cliente: clienteNome, total_centimos: verified.totalComIva, ip: req.ip,

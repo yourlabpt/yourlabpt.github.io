@@ -1,6 +1,8 @@
 // Pure calculation module — no network/DOM imports, so it stays unit-testable
 // and the server can import this exact file to re-verify the totals a client sends.
 
+import { DEFAULT_PACOTE } from './deal/packages.js';
+
 // Default human-hours per closed client (manual baseline from the pricing doc).
 // A business-type config may override via `horas_estimadas`.
 const DEFAULT_HORAS = 8.5;
@@ -11,13 +13,29 @@ function catalogByCode(catalog) {
     return map;
 }
 
+export function ensureManutencoes(proposta) {
+    if (!proposta || typeof proposta !== 'object') return [];
+    if (Array.isArray(proposta.manutencoes) && proposta.manutencoes.length) {
+        return proposta.manutencoes.filter(Boolean);
+    }
+    if (proposta.manutencao) return [proposta.manutencao];
+    return [];
+}
+
+export function setManutencoes(proposta, codes) {
+    const list = Array.isArray(codes) ? codes.filter(Boolean) : [];
+    proposta.manutencoes = list;
+    proposta.manutencao = list.length === 1 ? list[0] : (list[0] || null);
+}
+
 export function ensureProposta(state) {
     if (!state.data.proposta || typeof state.data.proposta !== 'object') {
         state.data.proposta = {
-            pacote: 'essencial',
+            pacote: DEFAULT_PACOTE,
             extras: [],
             urgencia: false,
             manutencao: null,
+            manutencoes: [],
             descontoPct: 0,
             // Off by default: many door-to-door deals close before a company
             // and fatura exist. Flip on when you are ready to invoice with IVA.
@@ -25,10 +43,13 @@ export function ensureProposta(state) {
         };
     }
     const p = state.data.proposta;
-    if (!p.pacote) p.pacote = 'essencial';
+    if (!p.pacote) p.pacote = DEFAULT_PACOTE;
     if (!Array.isArray(p.extras)) p.extras = [];
     if (typeof p.urgencia !== 'boolean') p.urgencia = false;
     if (p.manutencao === undefined) p.manutencao = null;
+    if (!Array.isArray(p.manutencoes)) {
+        p.manutencoes = p.manutencao ? [p.manutencao] : [];
+    }
     if (typeof p.descontoPct !== 'number') p.descontoPct = 0;
     if (typeof p.contrapartida !== 'string') p.contrapartida = '';
     if (typeof p.cobrarIva !== 'boolean') p.cobrarIva = false;
@@ -77,8 +98,11 @@ export function computeProposta(proposta, catalog, businessType, ivaRate = 0) {
     const entrada = Math.round(totalComIva / 2);
     const final = totalComIva - entrada;
 
-    const manutServico = proposta.manutencao ? byCode[proposta.manutencao] : null;
-    const manutencaoMensal = manutServico ? Number(manutServico.preco_centimos) : 0;
+    const manutCodes = ensureManutencoes(proposta);
+    const manutencaoMensal = manutCodes.reduce((sum, code) => {
+        const s = byCode[code];
+        return sum + (s ? Number(s.preco_centimos) : 0);
+    }, 0);
     const manutencaoMensalComIva = manutencaoMensal + Math.round(manutencaoMensal * rate);
 
     // Guardrail runs on revenue. IVA is collected for the State, so including it

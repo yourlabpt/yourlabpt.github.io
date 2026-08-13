@@ -1,0 +1,184 @@
+.admin-body {
+    background: #f4f1ea;
+    min-height: 100vh;
+}
+
+.admin-app {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 16px 16px 48px;
+}
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.admin-header h1 {
+    margin: 0;
+    font-size: 1.45rem;
+}
+
+.admin-header p {
+    margin: 4px 0 0;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.admin-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.admin-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.admin-tab {
+    flex: 1;
+    border: 1px solid #ddd4c4;
+    background: #fff;
+    border-radius: 999px;
+    padding: 10px 12px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.admin-tab.active {
+    background: #1b1b1b;
+    color: #fff;
+    border-color: #1b1b1b;
+}
+
+.admin-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-toolbar .field-input {
+    flex: 1;
+    min-width: 160px;
+}
+
+.admin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-card {
+    background: #fff;
+    border: 1px solid #e5e0d5;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.admin-card h3 {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+}
+
+.admin-card .meta {
+    color: #666;
+    font-size: 0.85rem;
+    margin: 0 0 8px;
+}
+
+.admin-card .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.admin-card.inactive {
+    opacity: 0.55;
+}
+
+.admin-price {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+}
+
+.admin-drawer.hidden {
+    display: none;
+}
+
+.admin-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.admin-drawer-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(420px, 100%);
+    background: #fff;
+    padding: 18px;
+    overflow: auto;
+    box-shadow: -8px 0 28px rgba(0, 0, 0, 0.15);
+}
+
+.admin-drawer-panel h2 {
+    margin: 0 0 12px;
+    font-size: 1.2rem;
+}
+
+.admin-form .field {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.admin-form .field-label {
+    display: block;
+    font-size: 0.8rem;
+    color: #555;
+    margin-bottom: 4px;
+}
+
+.admin-form textarea.field-input {
+    min-height: 90px;
+    resize: vertical;
+}
+
+.admin-notes {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+}
+
+.admin-notes li {
+    border-top: 1px solid #eee;
+    padding: 8px 0;
+    font-size: 0.9rem;
+}
+
+.admin-notes time {
+    display: block;
+    color: #888;
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+}
+
+.admin-empty {
+    color: #777;
+    padding: 24px 8px;
+    text-align: center;
+}
