@@ -160,14 +160,7 @@ function buildHero(dados, identidade, demo, businessType, fotos) {
     hero.appendChild(el('div', 'dpl-hero-veil'));
 
     const inner = el('div', 'dpl-hero-inner');
-    if (identidade.logo && identidade.logo.tipo === 'upload' && identidade.logo.dataUrl) {
-        const img = el('img', 'dpl-hero-logo');
-        img.src = identidade.logo.dataUrl;
-        img.alt = dados.nome_negocio || 'Logótipo';
-        inner.appendChild(img);
-    } else {
-        inner.appendChild(el('div', 'dpl-hero-name', dados.nome_negocio || 'O seu negócio'));
-    }
+    inner.appendChild(el('div', 'dpl-hero-name', dados.nome_negocio || 'O seu negócio'));
 
     inner.appendChild(el('h1', 'dpl-hero-title', demo.hero.titulo));
     if (demo.hero.subtitulo) inner.appendChild(el('p', 'dpl-hero-sub', demo.hero.subtitulo));

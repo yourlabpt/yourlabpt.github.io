@@ -189,7 +189,7 @@ function applyLogo(doc, identidade, dados) {
     const alt = (dados && dados.nome_negocio) || 'Logótipo';
 
     if (url) {
-        doc.querySelectorAll('.dpl-topbar-logo, .dpl-hero-logo, img[data-dp-logo]').forEach((img) => {
+        doc.querySelectorAll('.dpl-topbar-logo, img[data-dp-logo]').forEach((img) => {
             img.src = url;
             img.alt = alt;
         });
@@ -203,16 +203,16 @@ function applyLogo(doc, identidade, dados) {
             if (brand) brand.replaceWith(img);
             else topbar.insertBefore(img, topbar.firstChild);
         }
-        const heroInner = doc.querySelector('.dpl-hero-inner');
-        if (heroInner && !heroInner.querySelector('.dpl-hero-logo')) {
-            const img = doc.createElement('img');
-            img.className = 'dpl-hero-logo';
-            img.src = url;
-            img.alt = alt;
-            const name = heroInner.querySelector('.dpl-hero-name');
-            if (name) name.replaceWith(img);
-            else heroInner.insertBefore(img, heroInner.querySelector('.dpl-hero-title') || heroInner.firstChild);
-        }
+        doc.querySelectorAll('.dpl-hero-logo').forEach((img) => {
+            const inner = img.closest('.dpl-hero-inner');
+            img.remove();
+            if (inner && !inner.querySelector('.dpl-hero-name')) {
+                const name = doc.createElement('div');
+                name.className = 'dpl-hero-name';
+                name.textContent = alt;
+                inner.insertBefore(name, inner.querySelector('.dpl-hero-title') || inner.firstChild);
+            }
+        });
     }
 
     const brand = doc.querySelector('.brand, header .logo, .topbar .brand');
