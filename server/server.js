@@ -2742,12 +2742,9 @@ app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, asyn
         const htmlPath = row.html_path && fs.existsSync(row.html_path)
             ? row.html_path
             : (row.pdf_path && row.pdf_path.endsWith('.html') && fs.existsSync(row.pdf_path) ? row.pdf_path : '');
-        let pdfPath = row.pdf_path && row.pdf_path.endsWith('.pdf') && fs.existsSync(row.pdf_path)
-            && fs.statSync(row.pdf_path).size > 8
-            ? row.pdf_path
-            : '';
+        let pdfPath = '';
 
-        if (!pdfPath && htmlPath) {
+        if (htmlPath) {
             pdfPath = htmlPath.replace(/\.html$/i, '.pdf');
             if (pdfPath === htmlPath) {
                 pdfPath = path.join(path.dirname(htmlPath), `${row.id}.pdf`);
@@ -2759,6 +2756,10 @@ app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, asyn
             } else {
                 pdfPath = '';
             }
+        }
+        if (!pdfPath && row.pdf_path && row.pdf_path.endsWith('.pdf') && fs.existsSync(row.pdf_path)
+            && fs.statSync(row.pdf_path).size > 8) {
+            pdfPath = row.pdf_path;
         }
 
         if (!pdfPath) {

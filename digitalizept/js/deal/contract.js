@@ -341,7 +341,8 @@ export function buildContractDocument(model, { signaturePng, providerSignaturePn
   .c-sign-line{height:60px;border-bottom:1px solid #333}
   .c-sign-label{font-size:.8rem;color:#555;margin-top:6px}
   .c-audit{margin-top:28px;padding:12px;background:#f6f4ef;border-radius:8px;font-size:.72rem;color:#666;word-break:break-all}
-  @media print{body{padding:0}}
+  @page{size:A4;margin:14mm}
+  @media print{body{padding:0;max-width:none}}
 </style></head><body>
 ${contractInnerHtml(model)}
 ${signatureBlock}
