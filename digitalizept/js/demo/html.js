@@ -66,6 +66,195 @@ export function extractHtml(text) {
     return sanitizeDemoHtml(unwrapFence(text));
 }
 
+function coresOf(identidade) {
+    const cores = (identidade && identidade.cores) || {};
+    return {
+        base: cores.base || '#1b1b1b',
+        destaque: cores.destaque || '#e8d5b7',
+        secundaria: cores.secundaria || '#7a8a99'
+    };
+}
+
+export function identityFingerprint(identidade) {
+    const cores = coresOf(identidade);
+    const logo = (identidade && identidade.logo) || {};
+    const fotos = identidade && Array.isArray(identidade.fotos) ? identidade.fotos : [];
+    const logoKey = logo.tipo === 'upload'
+        ? `${String(logo.dataUrl || '').length}:${String(logo.dataUrl || '').slice(-24)}`
+        : (logo.tipo || 'nenhum');
+    const fotoKey = fotos.map((url) => `${String(url).length}:${String(url).slice(-16)}`).join('|');
+    return `${cores.base}~${cores.destaque}~${cores.secundaria}~${logoKey}~${fotoKey}`;
+}
+
+function rewriteNamedVars(css, cores) {
+    let out = String(css || '');
+    ['base', 'destaque', 'secundaria'].forEach((name) => {
+        const value = cores[name];
+        out = out.replace(new RegExp(`(--(?:l-)?${name})\\s*:\\s*[^;\\n}]+`, 'gi'), `$1: ${value}`);
+    });
+    return out;
+}
+
+function fillVisual(el, url) {
+    if (!el || !url) return;
+    el.classList.add('dpl-visual-photo');
+    let img = el.querySelector('img');
+    if (!img) {
+        img = el.ownerDocument.createElement('img');
+        img.className = 'dpl-photo-img';
+        img.alt = '';
+        el.textContent = '';
+        el.appendChild(img);
+    }
+    img.src = url;
+}
+
+function applyCores(doc, cores) {
+    doc.querySelectorAll('style').forEach((style) => {
+        if (style.hasAttribute('data-dp-fix') || style.hasAttribute('data-dp-identity')) return;
+        style.textContent = rewriteNamedVars(style.textContent, cores);
+    });
+    doc.querySelectorAll('[style]').forEach((node) => {
+        const next = rewriteNamedVars(node.getAttribute('style') || '', cores);
+        if (next) node.setAttribute('style', next);
+    });
+    let override = doc.querySelector('style[data-dp-identity]');
+    if (!override) {
+        override = doc.createElement('style');
+        override.setAttribute('data-dp-identity', '');
+        (doc.head || doc.documentElement).appendChild(override);
+    }
+    override.textContent = `
+:root, .dp-landing {
+  --base: ${cores.base};
+  --destaque: ${cores.destaque};
+  --secundaria: ${cores.secundaria};
+  --l-base: ${cores.base};
+  --l-destaque: ${cores.destaque};
+  --l-secundaria: ${cores.secundaria};
+}
+[data-dp-photos] {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 14px 20px;
+}
+[data-dp-photos] img {
+  height: 112px;
+  width: 148px;
+  object-fit: cover;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+img[data-dp-injected-logo] {
+  height: 32px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  border-radius: 6px;
+}`.trim();
+}
+
+function applyLogo(doc, identidade, dados) {
+    const logo = (identidade && identidade.logo) || {};
+    const url = logo.tipo === 'upload' && logo.dataUrl ? logo.dataUrl : '';
+    const alt = (dados && dados.nome_negocio) || 'Logótipo';
+
+    if (url) {
+        doc.querySelectorAll('.dpl-topbar-logo, .dpl-hero-logo, img[data-dp-logo]').forEach((img) => {
+            img.src = url;
+            img.alt = alt;
+        });
+        const topbar = doc.querySelector('.dpl-topbar');
+        if (topbar && !topbar.querySelector('.dpl-topbar-logo')) {
+            const img = doc.createElement('img');
+            img.className = 'dpl-topbar-logo';
+            img.src = url;
+            img.alt = alt;
+            const brand = topbar.querySelector('.dpl-topbar-brand');
+            if (brand) brand.replaceWith(img);
+            else topbar.insertBefore(img, topbar.firstChild);
+        }
+        const heroInner = doc.querySelector('.dpl-hero-inner');
+        if (heroInner && !heroInner.querySelector('.dpl-hero-logo')) {
+            const img = doc.createElement('img');
+            img.className = 'dpl-hero-logo';
+            img.src = url;
+            img.alt = alt;
+            const name = heroInner.querySelector('.dpl-hero-name');
+            if (name) name.replaceWith(img);
+            else heroInner.insertBefore(img, heroInner.querySelector('.dpl-hero-title') || heroInner.firstChild);
+        }
+    }
+
+    const brand = doc.querySelector('.brand, header .logo, .topbar .brand');
+    if (!brand) return;
+    const injected = brand.querySelector('img[data-dp-injected-logo]');
+    const mark = brand.querySelector('.brand-mark');
+    if (url) {
+        let img = injected;
+        if (!img) {
+            img = doc.createElement('img');
+            img.setAttribute('data-dp-injected-logo', '');
+            img.alt = alt;
+            brand.insertBefore(img, brand.firstChild);
+        }
+        img.src = url;
+        if (mark) mark.setAttribute('hidden', '');
+    } else if (injected) {
+        injected.remove();
+        if (mark) mark.removeAttribute('hidden');
+    }
+}
+
+function applyFotos(doc, identidade) {
+    const fotos = Array.isArray(identidade && identidade.fotos) ? identidade.fotos.filter(Boolean) : [];
+    const hero = doc.querySelector('.dpl-hero-visual');
+    if (hero && fotos[0]) fillVisual(hero, fotos[0]);
+    const sobre = doc.querySelector('.dpl-sobre-visual');
+    if (sobre && fotos[1]) fillVisual(sobre, fotos[1]);
+    doc.querySelectorAll('.dpl-galeria-tile').forEach((tile, i) => {
+        if (fotos[i]) fillVisual(tile, fotos[i]);
+    });
+
+    const landingHasSlots = Boolean(doc.querySelector('.dpl-galeria, .dpl-hero-visual'));
+    let strip = doc.querySelector('[data-dp-photos]');
+    if (landingHasSlots || !fotos.length) {
+        if (strip) strip.remove();
+        return;
+    }
+    if (!strip) {
+        strip = doc.createElement('div');
+        strip.setAttribute('data-dp-photos', '');
+        const header = doc.querySelector('header, .topbar');
+        if (header) header.insertAdjacentElement('afterend', strip);
+        else if (doc.body) doc.body.insertBefore(strip, doc.body.firstChild);
+    }
+    strip.textContent = '';
+    fotos.forEach((url, i) => {
+        const img = doc.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.setAttribute('data-dp-photo', String(i));
+        strip.appendChild(img);
+    });
+}
+
+export function applyIdentityToHtml(html, identidade, dados) {
+    const raw = extractHtml(html);
+    if (!raw || typeof DOMParser === 'undefined') return raw;
+    try {
+        const doc = new DOMParser().parseFromString(raw, 'text/html');
+        if (!doc || !doc.documentElement) return raw;
+        applyCores(doc, coresOf(identidade));
+        applyLogo(doc, identidade, dados);
+        applyFotos(doc, identidade);
+        return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
+    } catch (_) {
+        return raw;
+    }
+}
+
 function escapeText(value) {
     return String(value || '')
         .replace(/&/g, '&amp;')
@@ -125,10 +314,9 @@ NEGÓCIO
 - O que faz: ${dados.o_que_faz || '—'}
 - Serviços: ${dados.principais_servicos || '—'}
 
-CORES (usa-as como CSS variables)
-- base: ${cores.base || '#1b1b1b'}
-- destaque: ${cores.destaque || '#e8d5b7'}
-- secundaria: ${cores.secundaria || '#7a8a99'}
+CORES, LOGO E FOTOS
+- Cores (CSS variables): --base: ${cores.base || '#1b1b1b'}; --destaque: ${cores.destaque || '#e8d5b7'}; --secundaria: ${cores.secundaria || '#7a8a99'}.
+- A app injecta depois o logo, as fotos e estas cores. Usa sempre var(--base), var(--destaque), var(--secundaria) e reserva .brand para o logo.
 
 PEDIDO DE ALTERAÇÃO
 ${pedido}

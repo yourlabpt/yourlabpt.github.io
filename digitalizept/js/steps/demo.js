@@ -4,11 +4,13 @@ import { renderLanding } from '../demo/landing.js';
 import { mountGbpExample, gbpDataFromState } from '../demo/gbp-example.js';
 import { ensureSeededDemo } from '../demo/seed.js';
 import {
+    applyIdentityToHtml,
     buildHtmlChangePrompt,
     clipDemoHtml,
     currentDemoHtml,
     extractHtml,
     htmlTooLarge,
+    identityFingerprint,
     looksLikeHtml,
     mountHtmlPreview,
     serializeLandingDocument
@@ -115,13 +117,35 @@ function openPreview(state, ctx) {
     document.body.appendChild(overlay);
 }
 
+function refreshDemoFromIdentity(ctx, { force = false } = {}) {
+    const identidade = ctx.state.data.identidade || {};
+    const stamp = identityFingerprint(identidade);
+    const stampChanged = ctx.state.data.demoIdentityStamp !== stamp;
+    if (ctx.state.data.demoHtml && (stampChanged || force)) {
+        const next = clipDemoHtml(applyIdentityToHtml(
+            ctx.state.data.demoHtml,
+            identidade,
+            ctx.state.data.dados
+        ));
+        ctx.state.data.demoHtml = next;
+        ctx.update({ demoHtml: next, demoIdentityStamp: stamp });
+        return true;
+    }
+    if (stampChanged) {
+        ctx.update({ demoIdentityStamp: stamp });
+        return true;
+    }
+    return false;
+}
+
 function applyHtml(ctx, raw, showStatus, afterApply) {
     if (htmlTooLarge(raw)) {
         ctx.showToast('HTML demasiado grande — a usar os primeiros 900 KB.', true);
     }
-    const html = clipDemoHtml(extractHtml(raw));
+    const identidade = ctx.state.data.identidade || {};
+    const html = clipDemoHtml(applyIdentityToHtml(extractHtml(raw), identidade, ctx.state.data.dados));
     ctx.state.data.demoHtml = html;
-    ctx.update({ demoHtml: html });
+    ctx.update({ demoHtml: html, demoIdentityStamp: identityFingerprint(identidade) });
     ctx.setValid(true);
     showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
     if (typeof afterApply === 'function') afterApply();
@@ -235,9 +259,9 @@ function render(body, ctx) {
     previewTitle.textContent = 'Mostre ao cliente';
     const previewHint = document.createElement('p');
     previewHint.className = 'id-disclaimer';
-    previewHint.textContent = ctx.state.data.demoSeeded
-        ? 'Landing deste tipo de negócio, com o nome e a cidade. Pode avançar já.'
-        : 'Demonstração pronta. Pode ver, melhorar com AI, ou avançar.';
+    previewHint.textContent = 'Se mudou cores, logo ou fotos no passo anterior, a demo actualiza ao voltar aqui — ou toque em Atualizar demo.';
+
+    const identityChanged = refreshDemoFromIdentity(ctx);
 
     const live = document.createElement('div');
     live.className = 'demo-live';
@@ -265,9 +289,26 @@ function render(body, ctx) {
         openPreview(ctx.state, ctx);
         publishDemo(ctx);
     });
-    previewBtnWrap.append(previewBtn);
+    const refreshBtn = document.createElement('button');
+    refreshBtn.type = 'button';
+    refreshBtn.className = 'btn-secondary';
+    refreshBtn.textContent = 'Atualizar demo';
+    refreshBtn.addEventListener('click', () => {
+        refreshDemoFromIdentity(ctx, { force: true });
+        previewBtn.disabled = !isValid(ctx.state);
+        paintLive();
+        publishDemo(ctx);
+        ctx.showToast('Demo actualizada com cores, logo e fotos.');
+        showStatus('Demo actualizada com a identidade actual.', 'ok');
+    });
+    previewBtnWrap.append(previewBtn, refreshBtn);
     previewGroup.append(previewTitle, previewHint, live, previewBtnWrap, status);
     body.appendChild(previewGroup);
+
+    if (identityChanged) {
+        showStatus('Demo actualizada com as cores, logo e fotos do passo anterior.', 'ok');
+        publishDemo(ctx);
+    }
 
     const htmlBox = document.createElement('div');
     htmlBox.className = 'id-section';

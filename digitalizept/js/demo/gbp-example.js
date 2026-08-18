@@ -49,7 +49,13 @@ export function gbpDataFromState(state) {
             || dados.diferencial
             || `Perfil Google de ${nome} — o que os clientes vêem no Maps.`,
         horario: dados.horario ? [dados.horario] : GBP_SAMPLE.horario,
-        whatsapp: dados.whatsapp || ''
+        whatsapp: dados.whatsapp || '',
+        logoUrl: (state.data && state.data.identidade && state.data.identidade.logo
+            && state.data.identidade.logo.tipo === 'upload'
+            && state.data.identidade.logo.dataUrl) || '',
+        fotos: (state.data && state.data.identidade && Array.isArray(state.data.identidade.fotos))
+            ? state.data.identidade.fotos.filter(Boolean).slice(0, 3)
+            : []
     };
 }
 
@@ -62,6 +68,10 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false } = 
         ? '<span class="gbp-open">Aberto agora</span>'
         : '<span class="gbp-closed">Fechado</span>';
 
+    const avatar = d.logoUrl
+        ? `<div class="gbp-avatar gbp-avatar-photo"><img src="${escapeHtml(d.logoUrl)}" alt=""></div>`
+        : `<div class="gbp-avatar" aria-hidden="true">${escapeHtml((d.nome || '?').charAt(0).toUpperCase())}</div>`;
+
     const phoneBtn = d.telefone
         ? `<a class="gbp-action" href="tel:${escapeHtml(String(d.telefone).replace(/\s/g, ''))}">Ligar</a>`
         : '<span class="gbp-action gbp-action-muted">Ligar</span>';
@@ -69,15 +79,17 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false } = 
         ? `<a class="gbp-action" href="https://wa.me/${escapeHtml(String(d.whatsapp).replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>`
         : '<span class="gbp-action gbp-action-muted">WhatsApp</span>';
 
-    const fotos = ['Fachada', 'Interior', 'Produto']
-        .map((label) => `<div class="gbp-photo"><span>${escapeHtml(label)}</span></div>`)
-        .join('');
+    const fotos = (Array.isArray(d.fotos) && d.fotos.length)
+        ? d.fotos.map((url) => `<div class="gbp-photo gbp-photo-real"><img src="${escapeHtml(url)}" alt=""></div>`).join('')
+        : ['Fachada', 'Interior', 'Produto']
+            .map((label) => `<div class="gbp-photo"><span>${escapeHtml(label)}</span></div>`)
+            .join('');
 
     const horas = (d.horario || []).map((h) => `<li>${escapeHtml(h)}</li>`).join('');
 
     wrap.innerHTML = `
         <div class="gbp-card-top">
-            <div class="gbp-avatar" aria-hidden="true">${escapeHtml((d.nome || '?').charAt(0).toUpperCase())}</div>
+            ${avatar}
             <div class="gbp-heading">
                 <div class="gbp-name">${escapeHtml(d.nome)}</div>
                 <div class="gbp-category">${escapeHtml(d.categoria)}</div>

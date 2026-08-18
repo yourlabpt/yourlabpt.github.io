@@ -845,11 +845,13 @@ button, input, textarea, select {
     display: flex;
     gap: 10px;
     margin-top: 10px;
+    flex-wrap: wrap;
 }
 
 .demo-actions .btn-primary,
 .demo-actions .btn-secondary {
     height: 46px;
+    flex: 1 1 140px;
 }
 
 .demo-prompt,
@@ -2417,6 +2419,13 @@ html:has(body > .dp-landing) {
     font-weight: 700;
     font-size: 1.4rem;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+.gbp-avatar-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .gbp-name {
@@ -2539,6 +2548,13 @@ html:has(body > .dp-landing) {
     justify-content: center;
     font-size: 0.7rem;
     color: #80868b;
+    overflow: hidden;
+}
+
+.gbp-photo-real img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .gbp-map-placeholder {
