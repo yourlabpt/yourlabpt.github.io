@@ -19,6 +19,21 @@ function unwrapFence(text) {
         .trim();
 }
 
+// Models often emit en-dashes in CSS variables (var(–base)) and curly quotes
+// in content/font-family. Both make the demo look like a blank page.
+export function sanitizeDemoHtml(html) {
+    let out = String(html || '');
+    out = out.replace(/var\(\s*[\u2013\u2014\u2212]/g, 'var(--');
+    out = out.replace(/(^|[{;\s])[\u2013\u2014\u2212]([A-Za-z_])/gm, '$1--$2');
+    out = out.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (full, attrs, css) => {
+        const clean = String(css)
+            .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+            .replace(/[\u2018\u2019\u201A\u201B]/g, "'");
+        return `<style${attrs}>${clean}</style>`;
+    });
+    return out;
+}
+
 export function looksLikeHtml(text) {
     const raw = unwrapFence(text);
     if (!raw) return false;
@@ -26,7 +41,7 @@ export function looksLikeHtml(text) {
 }
 
 export function extractHtml(text) {
-    return unwrapFence(text);
+    return sanitizeDemoHtml(unwrapFence(text));
 }
 
 function escapeText(value) {
@@ -102,6 +117,7 @@ REGRAS
 - Pode ser uma landing OU uma web app (login falso, listagens, formulários que avançam de ecrã).
 - Cliques devem mudar de vista imediatamente (sem página em branco).
 - Estado da app: variáveis JS em memória. Proibido localStorage, cookies, fetch ou APIs.
+- CSS: variáveis com dois hífenes ASCII, ex. --base e var(--base). Nunca uses travessão (–) nem aspas curvas (“ ”) no CSS.
 - Não inventes moradas, preços ou contactos que não estejam no contexto.
 
 HTML ACTUAL
