@@ -103,14 +103,20 @@ export function createWizard({ onUnauthorized, showToast }) {
     if (!state.data || typeof state.data !== 'object') state.data = {};
     advancePastSkips(state, 1);
     let currentValid = false;
+    let persistWarned = false;
 
-function persist() {
+    function persist() {
         try {
             if (typeof state.data.demoHtml === 'string' && state.data.demoHtml.length > 900000) {
                 state.data.demoHtml = state.data.demoHtml.slice(0, 900000);
             }
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        } catch (_) { /* ignore */ }
+        } catch (_) {
+            if (!persistWarned) {
+                persistWarned = true;
+                showToast('Não deu para gravar no telemóvel. A demo fica só nesta sessão.', true);
+            }
+        }
     }
 
     function update(patch) {

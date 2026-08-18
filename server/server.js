@@ -13,6 +13,7 @@ const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalize
 const { renderContractPdf } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
+const { sanitizeDemoHtml } = require('./lib/sanitize-demo-html');
 const {
     mapsApiKey,
     isValidCobertura,
@@ -1886,7 +1887,8 @@ const DEMO_HTML_MAX = 900000;
 function clipDemoHtml(value) {
     const raw = typeof value === 'string' ? value.trim() : '';
     if (!raw) return '';
-    return raw.length > DEMO_HTML_MAX ? raw.slice(0, DEMO_HTML_MAX) : raw;
+    const clean = sanitizeDemoHtml(raw);
+    return clean.length > DEMO_HTML_MAX ? clean.slice(0, DEMO_HTML_MAX) : clean;
 }
 
 function scheduleLeadGeocode(leadId, { force = false } = {}) {
@@ -2267,8 +2269,11 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : (wizardExtra.demoUrl || ''),
             demoPrompt: wizardExtra.demoPrompt || '',
             demoRaw: wizardExtra.demoRaw || '',
-            demoHtml: row.demo_html
-                || (!row.demo_slug ? (wizardExtra.demoHtml || undefined) : undefined),
+            demoHtml: (() => {
+                const raw = row.demo_html
+                    || (!row.demo_slug ? (wizardExtra.demoHtml || '') : '');
+                return raw ? sanitizeDemoHtml(raw) : undefined;
+            })(),
             htmlChangeNote: wizardExtra.htmlChangeNote || undefined,
             colorPrompt: wizardExtra.colorPrompt || undefined,
             gbpSobre: wizardExtra.gbpSobre || undefined,
@@ -2564,7 +2569,7 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
             nome: row.nome,
             businessType,
             demo: parseJsonSafe(row.demo_json, null),
-            demoHtml: row.demo_html || '',
+            demoHtml: sanitizeDemoHtml(row.demo_html || ''),
             identidade: parseJsonSafe(row.identidade_json, {}),
             dados
         });

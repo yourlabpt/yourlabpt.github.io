@@ -48,6 +48,15 @@ export function renderOptionalAi(parent, {
     pasteArea.className = 'field-input demo-paste';
     pasteArea.rows = 3;
     pasteArea.placeholder = placeholder;
+    pasteArea.addEventListener('paste', () => {
+        setTimeout(() => {
+            const raw = pasteArea.value.trim();
+            if (!raw || typeof onApply !== 'function') return;
+            const htmlish = /^\s*</.test(raw) && /<!DOCTYPE|<html[\s>]|<\/html>/i.test(raw);
+            const jsonish = raw.startsWith('{') && raw.includes('"');
+            if (htmlish || jsonish) onApply(raw, { promptArea, pasteArea, details, fromPaste: true });
+        }, 0);
+    });
 
     const applyBtn = document.createElement('button');
     applyBtn.type = 'button';

@@ -873,6 +873,28 @@ button, input, textarea, select {
     color: var(--success-color);
 }
 
+.demo-live {
+    margin: 12px 0 16px;
+    border-radius: 16px;
+    border: 1px solid var(--accent-soft);
+    overflow: auto;
+    background: #111;
+    min-height: 360px;
+    max-height: 70vh;
+}
+
+.demo-live .dp-preview-frame {
+    min-height: 360px;
+    height: 70vh;
+    max-height: 70vh;
+}
+
+.demo-html-apply {
+    width: 100%;
+    margin-top: 8px;
+    height: 44px;
+}
+
 /* ---------- Full-screen preview overlay ---------- */
 .dp-preview-overlay {
     position: fixed;

@@ -1,4 +1,4 @@
-const CACHE = 'digitalizept-v12';
+const CACHE = 'digitalizept-v13';
 const SHELL = [
     '/digitalizept/',
     '/digitalizept/index.html',
@@ -32,6 +32,7 @@ self.addEventListener('activate', (event) => {
 function isShellAsset(pathname) {
     return pathname.endsWith('.html')
         || pathname.endsWith('.css')
+        || pathname.endsWith('.js')
         || pathname === '/digitalizept'
         || pathname === '/digitalizept/';
 }
@@ -66,7 +67,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (url.pathname.startsWith('/digitalizept/')) {
-        // HTML/CSS must stay fresh (vendas → admin was serving stale styles).
+        // HTML/CSS/JS must stay fresh so a deploy is visible after refresh.
         event.respondWith(isShellAsset(url.pathname) ? networkFirst(req) : cacheFirst(req));
     }
 });

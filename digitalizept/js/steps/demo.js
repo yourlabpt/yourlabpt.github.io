@@ -115,7 +115,7 @@ function openPreview(state, ctx) {
     document.body.appendChild(overlay);
 }
 
-function applyHtml(ctx, raw, showStatus) {
+function applyHtml(ctx, raw, showStatus, afterApply) {
     if (htmlTooLarge(raw)) {
         ctx.showToast('HTML demasiado grande — a usar os primeiros 900 KB.', true);
     }
@@ -124,6 +124,8 @@ function applyHtml(ctx, raw, showStatus) {
     ctx.update({ demoHtml: html });
     ctx.setValid(true);
     showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
+    if (typeof afterApply === 'function') afterApply();
+    openPreview(ctx.state, ctx);
     publishDemo(ctx).then((url) => {
         if (url) showStatus(`HTML publicado. Link: ${url}`, 'ok');
     });
@@ -237,6 +239,21 @@ function render(body, ctx) {
         ? 'Landing deste tipo de negócio, com o nome e a cidade. Pode avançar já.'
         : 'Demonstração pronta. Pode ver, melhorar com AI, ou avançar.';
 
+    const live = document.createElement('div');
+    live.className = 'demo-live';
+    live.setAttribute('aria-label', 'Pré-visualização');
+    function paintLive() {
+        live.innerHTML = '';
+        try {
+            if (ctx.state.data.demoHtml) {
+                mountHtmlPreview(live, ctx.state.data.demoHtml);
+            } else {
+                live.appendChild(renderLanding(ctx.state));
+            }
+        } catch (_) { /* keep the rest of the step usable */ }
+    }
+    paintLive();
+
     const previewBtnWrap = document.createElement('div');
     previewBtnWrap.className = 'demo-actions';
     const previewBtn = document.createElement('button');
@@ -249,8 +266,48 @@ function render(body, ctx) {
         publishDemo(ctx);
     });
     previewBtnWrap.append(previewBtn);
-    previewGroup.append(previewTitle, previewHint, previewBtnWrap, status);
+    previewGroup.append(previewTitle, previewHint, live, previewBtnWrap, status);
     body.appendChild(previewGroup);
+
+    const htmlBox = document.createElement('div');
+    htmlBox.className = 'id-section';
+    const htmlTitle = document.createElement('h3');
+    htmlTitle.className = 'field-group-title';
+    htmlTitle.textContent = 'Cole o HTML da demo';
+    const htmlHint = document.createElement('p');
+    htmlHint.className = 'id-disclaimer';
+    htmlHint.textContent = 'Cole o documento completo. A pré-visualização abre em seguida.';
+    const htmlPaste = document.createElement('textarea');
+    htmlPaste.className = 'field-input demo-paste';
+    htmlPaste.rows = 6;
+    htmlPaste.placeholder = '<!DOCTYPE html>…';
+    function usePastedHtml() {
+        const raw = htmlPaste.value.trim();
+        if (!raw) {
+            ctx.showToast('Cole o HTML primeiro.', true);
+            return;
+        }
+        if (!looksLikeHtml(raw)) {
+            ctx.showToast('Isto não parece HTML. Cole o documento completo.', true);
+            return;
+        }
+        applyHtml(ctx, raw, showStatus, () => {
+            previewBtn.disabled = false;
+            paintLive();
+        });
+    }
+    htmlPaste.addEventListener('paste', () => {
+        setTimeout(() => {
+            if (looksLikeHtml(htmlPaste.value)) usePastedHtml();
+        }, 0);
+    });
+    const htmlApply = document.createElement('button');
+    htmlApply.type = 'button';
+    htmlApply.className = 'btn-primary demo-html-apply';
+    htmlApply.textContent = 'Aplicar HTML';
+    htmlApply.addEventListener('click', usePastedHtml);
+    htmlBox.append(htmlTitle, htmlHint, htmlPaste, htmlApply);
+    body.appendChild(htmlBox);
 
     if (!ctx.state.data.demoPrompt) {
         ctx.state.data.demoPrompt = buildPrompt(ctx.state);
@@ -271,8 +328,10 @@ function render(body, ctx) {
         },
         onApply: (raw) => {
             if (looksLikeHtml(raw)) {
-                applyHtml(ctx, raw, showStatus);
-                previewBtn.disabled = false;
+                applyHtml(ctx, raw, showStatus, () => {
+                    previewBtn.disabled = false;
+                    paintLive();
+                });
                 return;
             }
             const result = parseDemoOutput(raw);
@@ -282,6 +341,7 @@ function render(body, ctx) {
             }
             applyJsonDemo(ctx, result.demo, raw, showStatus);
             previewBtn.disabled = false;
+            paintLive();
         }
     });
 
@@ -307,6 +367,7 @@ function render(body, ctx) {
             }
             applyJsonDemo(ctx, data.demo, data.raw || JSON.stringify(data.demo, null, 2), showStatus);
             previewBtn.disabled = false;
+            paintLive();
         } catch (_) {
             showStatus('Sem rede. Cole o resultado no bloco acima.', 'error');
         } finally {

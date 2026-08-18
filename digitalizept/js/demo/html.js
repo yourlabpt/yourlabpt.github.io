@@ -14,24 +14,46 @@ export function htmlTooLarge(value) {
 
 function unwrapFence(text) {
     return String(text || '')
+        .replace(/^\uFEFF/, '')
         .replace(/^```(?:html|htm)?\s*/i, '')
         .replace(/\s*```$/, '')
         .trim();
 }
 
-// Models often emit en-dashes in CSS variables (var(–base)) and curly quotes
-// in content/font-family. Both make the demo look like a blank page.
-export function sanitizeDemoHtml(html) {
-    let out = String(html || '');
-    out = out.replace(/var\(\s*[\u2013\u2014\u2212]/g, 'var(--');
-    out = out.replace(/(^|[{;\s])[\u2013\u2014\u2212]([A-Za-z_])/gm, '$1--$2');
-    out = out.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (full, attrs, css) => {
+const ANY_DASH = '[-\\u00AD\\u2010\\u2011\\u2012\\u2013\\u2014\\u2015\\u2212]';
+
+function closeUnclosedStyle(html) {
+    const opens = (html.match(/<style\b/gi) || []).length;
+    const closes = (html.match(/<\/style>/gi) || []).length;
+    if (opens <= closes) return html;
+    if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, '</style></head>');
+    if (/<body\b/i.test(html)) return html.replace(/<body\b/i, '</style><body');
+    return `${html}</style>`;
+}
+
+function straightenCssQuotes(html) {
+    return html.replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (full, attrs, css) => {
         const clean = String(css)
             .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
             .replace(/[\u2018\u2019\u201A\u201B]/g, "'");
         return `<style${attrs}>${clean}</style>`;
     });
-    return out;
+}
+
+function injectViewportFix(html) {
+    if (/data-dp-fix/.test(html)) return html;
+    const fix = '<style data-dp-fix>html,body{min-height:100%;margin:0}</style>';
+    if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${fix}</head>`);
+    return `${fix}${html}`;
+}
+
+// Models often emit en-dashes in CSS variables (var(–base)), curly quotes in
+// content/font-family, and forget </style> — all of which render as a blank page.
+export function sanitizeDemoHtml(html) {
+    let out = closeUnclosedStyle(String(html || ''));
+    out = out.replace(new RegExp(`var\\(\\s*${ANY_DASH}+`, 'g'), 'var(--');
+    out = straightenCssQuotes(out);
+    return injectViewportFix(out);
 }
 
 export function looksLikeHtml(text) {
@@ -130,7 +152,9 @@ export function mountHtmlPreview(host, html) {
     iframe.className = 'dp-preview-frame';
     iframe.title = 'Pré-visualização HTML';
     iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
-    iframe.srcdoc = extractHtml(html);
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
+    iframe.style.cssText = 'width:100%;min-height:70vh;height:100%;border:0;background:#111;display:block;';
     host.appendChild(iframe);
+    iframe.srcdoc = extractHtml(html);
     return iframe;
 }
