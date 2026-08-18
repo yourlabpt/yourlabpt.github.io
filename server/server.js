@@ -2703,8 +2703,10 @@ function contractDownloadName(nome) {
 }
 
 function sendPdfDownload(res, filePath, nome) {
+    const filename = contractDownloadName(nome);
     res.setHeader('Content-Type', 'application/pdf');
-    return res.download(filePath, contractDownloadName(nome));
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.sendFile(path.resolve(filePath));
 }
 
 app.post('/api/digitalizept/contract-pdf', requireDigitalizept, async (req, res) => {
@@ -2741,6 +2743,7 @@ app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, asyn
             ? row.html_path
             : (row.pdf_path && row.pdf_path.endsWith('.html') && fs.existsSync(row.pdf_path) ? row.pdf_path : '');
         let pdfPath = row.pdf_path && row.pdf_path.endsWith('.pdf') && fs.existsSync(row.pdf_path)
+            && fs.statSync(row.pdf_path).size > 8
             ? row.pdf_path
             : '';
 
