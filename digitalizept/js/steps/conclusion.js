@@ -3,6 +3,7 @@ import { getToken } from '../auth.js';
 import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { buildContractModel, buildContractDocument } from '../deal/contract.js';
+import { contractSlugName, downloadDealContract } from '../deal/download.js';
 import { enqueueDeal } from '../offline-queue.js';
 
 const PROJECT_STATES = [
@@ -15,48 +16,53 @@ function isValid() {
     return true; // final step; advancing is disabled anyway
 }
 
+function bothSigned(state) {
+    return Boolean(
+        state.data.assinatura && state.data.assinatura.pngDataUrl
+        && state.data.assinaturaPrestador && state.data.assinaturaPrestador.pngDataUrl
+    );
+}
+
 function buildFinalDocument(state, catalog, config) {
     const model = buildContractModel(state, catalog, config);
     const a = state.data.assinatura || {};
+    const p = state.data.assinaturaPrestador || {};
     return buildContractDocument(model, {
         signaturePng: a.pngDataUrl,
-        audit: { timestamp: a.timestamp, dispositivo: a.dispositivo, geo: a.geo, hash: a.hash }
+        providerSignaturePng: p.pngDataUrl,
+        audit: {
+            timestamp: a.timestamp,
+            dispositivo: a.dispositivo,
+            geo: a.geo,
+            hash: a.hash || p.hash,
+            providerTimestamp: p.timestamp
+        }
     });
 }
 
-async function downloadContract(state, catalog, config, result) {
-    if (result && result.contractDownload) {
-        try {
-            const response = await fetch(result.contractDownload, {
-                headers: { 'x-admin-token': getToken() }
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const ext = (response.headers.get('content-type') || '').includes('pdf') ? 'pdf' : 'html';
-                const name = (state.data.dados && state.data.dados.nome_negocio || 'contrato')
-                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                    .replace(/[^\w-]+/g, '_');
-                a.href = url;
-                a.download = `${name}-contrato.${ext}`;
-                a.click();
-                URL.revokeObjectURL(url);
-                return;
-            }
-        } catch (_) { /* fall through to local HTML */ }
-    }
+function localHtmlFallback(state, catalog, config) {
     const doc = buildFinalDocument(state, catalog, config);
     const blob = new Blob([doc], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const name = (state.data.dados && state.data.dados.nome_negocio || 'contrato')
-        .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip accents (ã→a, ç→c…)
-        .replace(/[^\w-]+/g, '_');
     a.href = url;
-    a.download = `${name}-contrato.html`;
+    a.download = `${contractSlugName(state.data.dados && state.data.dados.nome_negocio)}-contrato.html`;
     a.click();
     URL.revokeObjectURL(url);
+    return true;
+}
+
+async function downloadContract(ctx, catalog, config, result) {
+    const projectId = (result && result.contractDownload && result.projectId)
+        || (result && result.projectId)
+        || ctx.state.data.projectId;
+    const ok = await downloadDealContract({
+        projectId: projectId && projectId !== 'pendente' ? projectId : '',
+        nome: ctx.state.data.dados && ctx.state.data.dados.nome_negocio,
+        onUnauthorized: ctx.onUnauthorized,
+        fallback: () => localHtmlFallback(ctx.state, catalog, config)
+    });
+    if (!ok) ctx.showToast('Não foi possível descarregar o contrato.', true);
 }
 
 async function render(body, ctx) {
@@ -68,7 +74,7 @@ async function render(body, ctx) {
     } catch (_) { /* ignore */ }
 
     // Deliberately no refreshCalc here: this screen reproduces the signed deal.
-    const signed = Boolean(ctx.state.data.assinatura && ctx.state.data.assinatura.pngDataUrl);
+    const signed = bothSigned(ctx.state);
     const model = buildContractModel(ctx.state, catalog, config);
     const c = model.calc || {};
     const euros = (cents) => (cents ? (cents / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : '—');
@@ -85,12 +91,27 @@ async function render(body, ctx) {
     body.appendChild(recap);
 
     const result = ctx.state.data.dealResult;
+    const existingProjectId = ctx.state.data.projectId;
+
+    function addDownloadButton(label, { primary = false } = {}) {
+        const dl = document.createElement('button');
+        dl.type = 'button';
+        dl.className = primary ? 'btn-primary' : 'btn-secondary';
+        dl.style.width = '100%';
+        dl.style.marginTop = '10px';
+        dl.textContent = label;
+        dl.addEventListener('click', () => downloadContract(ctx, catalog, config, result));
+        body.appendChild(dl);
+    }
 
     if (!result) {
+        if (existingProjectId) {
+            addDownloadButton('Descarregar PDF do contrato actual');
+        }
         if (!signed) {
             const warn = document.createElement('div');
             warn.className = 'placeholder';
-            warn.textContent = 'Falta a assinatura. Volte ao passo anterior para assinar.';
+            warn.textContent = 'Faltam as duas assinaturas (cliente e YourLab). Volte ao passo anterior.';
             body.appendChild(warn);
             ctx.setValid(true);
             return;
@@ -114,6 +135,7 @@ async function render(body, ctx) {
             status.textContent = revising ? 'A atualizar proposta…' : 'A finalizar…';
 
             const a = ctx.state.data.assinatura;
+            const p = ctx.state.data.assinaturaPrestador;
             const bt = ctx.state.data.businessType || {};
             const payload = {
                 leadId: ctx.state.data.leadId || '',
@@ -130,8 +152,14 @@ async function render(body, ctx) {
                 googlePresence: ctx.state.data.googlePresence || null,
                 googleDiagnostico: ctx.state.data.googleDiagnostico || null,
                 clienteLegal: ctx.state.data.clienteLegal,
-                contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash },
-                assinatura: { pngDataUrl: a.pngDataUrl, geo: a.geo, dispositivo: a.dispositivo, timestamp: a.timestamp }
+                contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash || p.hash },
+                assinatura: { pngDataUrl: a.pngDataUrl, geo: a.geo, dispositivo: a.dispositivo, timestamp: a.timestamp },
+                assinaturaPrestador: {
+                    pngDataUrl: p.pngDataUrl,
+                    geo: p.geo,
+                    dispositivo: p.dispositivo,
+                    timestamp: p.timestamp
+                }
             };
 
             try {
@@ -214,13 +242,7 @@ async function render(body, ctx) {
     project.appendChild(meta);
     body.appendChild(project);
 
-    const dl = document.createElement('button');
-    dl.type = 'button';
-    dl.className = 'btn-primary';
-    dl.style.width = '100%';
-    dl.textContent = 'Descarregar contrato';
-    dl.addEventListener('click', () => downloadContract(ctx.state, catalog, config, result));
-    body.appendChild(dl);
+    addDownloadButton('Descarregar PDF do contrato', { primary: true });
 
     const demoUrl = result.demoUrl || ctx.state.data.demoUrl;
     if (demoUrl) {

@@ -146,6 +146,7 @@ const CLAUSES = [
     'Propriedade: domínio, alojamento, contas Google e código ficam em nome do cliente.',
     'Garantia de 14 dias após a entrega e direito de livre resolução de 14 dias.',
     'O projeto encerra por aprovação do cliente ou após 15 dias sem resposta.',
+    'O contrato produz efeitos após a assinatura eletrónica de ambas as partes (cliente e prestador).',
     'Os dados pessoais recolhidos são tratados para execução deste contrato, ao abrigo do RGPD.'
 ];
 
@@ -290,7 +291,11 @@ export function contractInnerHtml(model) {
     <ul class="c-clauses">${clausesList}</ul>`;
 }
 
-export function buildContractDocument(model, { signaturePng, audit } = {}) {
+export function buildContractDocument(model, { signaturePng, providerSignaturePng, audit } = {}) {
+    const providerLabel = `${model.provider.responsavel || model.provider.nome} — Prestador`;
+    const providerMark = providerSignaturePng
+        ? `<img src="${providerSignaturePng}" alt="Assinatura do prestador" class="c-sign-img">`
+        : `<div class="c-sign-line"></div>`;
     const signatureBlock = signaturePng ? `
         <div class="c-sign">
             <div class="c-sign-box">
@@ -298,17 +303,18 @@ export function buildContractDocument(model, { signaturePng, audit } = {}) {
                 <div class="c-sign-label">${escapeHtml(model.cliente.nome)} — Cliente</div>
             </div>
             <div class="c-sign-box">
-                <div class="c-sign-line"></div>
-                <div class="c-sign-label">${escapeHtml(model.provider.nome)} — Prestador</div>
+                ${providerMark}
+                <div class="c-sign-label">${escapeHtml(providerLabel)}</div>
             </div>
         </div>` : '';
 
     const auditBlock = audit ? `
         <div class="c-audit">
-            <strong>Registo da assinatura eletrónica</strong><br>
-            Data/hora: ${escapeHtml(audit.timestamp || '')}<br>
+            <strong>Registo das assinaturas eletrónicas</strong><br>
+            Cliente — Data/hora: ${escapeHtml(audit.timestamp || '')}
+            ${audit.geo ? ` · Localização: ${escapeHtml(audit.geo)}` : ''}<br>
+            ${audit.providerTimestamp ? `Prestador — Data/hora: ${escapeHtml(audit.providerTimestamp)}<br>` : ''}
             Dispositivo: ${escapeHtml(audit.dispositivo || '')}<br>
-            ${audit.geo ? `Localização: ${escapeHtml(audit.geo)}<br>` : ''}
             Hash do documento (SHA-256): ${escapeHtml(audit.hash || '')}
         </div>` : '';
 

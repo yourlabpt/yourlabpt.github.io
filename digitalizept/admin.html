@@ -66,9 +66,14 @@
             </section>
 
             <section id="tab-coverage" class="admin-panel hidden">
-                <p class="admin-hint">Mapa de cobertura — evita retrabalhar zonas já contactadas. Pins a cores YourLab por desfecho na rua.</p>
+                <p class="admin-hint">Mapa próprio (OpenStreetMap, sem Google). Registe sítios visitados, como correu, e descarregue o texto para não contactar duas vezes o mesmo sítio.</p>
                 <div class="coverage-toolbar">
-                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome ou morada…">
+                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome, morada ou experiência…">
+                    <div class="coverage-actions">
+                        <button id="coverage-add-btn" type="button" class="btn-primary">Registar visita</button>
+                        <button id="coverage-place-btn" type="button" class="btn-secondary">Marcar no mapa</button>
+                        <button id="coverage-export-btn" type="button" class="btn-secondary">Descarregar texto</button>
+                    </div>
                     <div id="coverage-legend" class="coverage-legend"></div>
                 </div>
                 <div id="coverage-map" class="coverage-map" aria-label="Mapa de cobertura"></div>

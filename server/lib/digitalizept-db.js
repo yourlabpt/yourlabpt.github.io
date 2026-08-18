@@ -207,6 +207,19 @@ function migrate(db) {
         texto TEXT NOT NULL DEFAULT '',
         criado_em TEXT NOT NULL
     )`);
+    db.exec(`CREATE TABLE IF NOT EXISTS visita (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL DEFAULT '',
+        morada TEXT NOT NULL DEFAULT '',
+        cidade TEXT NOT NULL DEFAULT '',
+        cobertura TEXT NOT NULL DEFAULT 'visitado',
+        experiencia TEXT NOT NULL DEFAULT '',
+        lat REAL,
+        lng REAL,
+        geocode_status TEXT NOT NULL DEFAULT '',
+        visitado_em TEXT NOT NULL DEFAULT '',
+        criado_em TEXT NOT NULL
+    )`);
 
     try {
         const { backfillLeadGeoFields } = require('./digitalizept-geocode');

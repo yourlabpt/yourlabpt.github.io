@@ -2085,6 +2085,7 @@ html:has(body > .dp-landing) {
 
 .sign-done {
     text-align: center;
+    margin-bottom: 18px;
 }
 
 .sign-done-img {

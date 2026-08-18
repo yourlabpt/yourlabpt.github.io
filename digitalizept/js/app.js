@@ -89,6 +89,7 @@ async function applyResumeLead(leadId) {
     const seed = { ...data.data };
     // Re-open always needs a fresh signature (new or revised contract).
     delete seed.assinatura;
+    delete seed.assinaturaPrestador;
     delete seed.dealResult;
     seedWizardState(seed, { step: data.suggestedStep || 0, substep: 0 });
     clearResumeParam();

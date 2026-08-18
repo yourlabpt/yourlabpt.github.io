@@ -15,9 +15,11 @@ const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
 const { sanitizeDemoHtml } = require('./lib/sanitize-demo-html');
 const {
-    mapsApiKey,
     isValidCobertura,
     geocodeLeadRow,
+    geocodeVisitRow,
+    geocodeAddress,
+    formatCoverageExport,
     COBERTURA_VALUES,
     COBERTURA_LABELS,
     COBERTURA_COLORS
@@ -2081,10 +2083,9 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
 });
 
 app.get('/api/digitalizept/maps-config', requireDigitalizept, (req, res) => {
-    const apiKey = mapsApiKey();
     return res.json({
-        configured: Boolean(apiKey),
-        apiKey: apiKey || '',
+        provider: 'osm',
+        configured: true,
         cobertura: COBERTURA_VALUES.map((id) => ({
             id,
             label: COBERTURA_LABELS[id],
@@ -2093,43 +2094,134 @@ app.get('/api/digitalizept/maps-config', requireDigitalizept, (req, res) => {
     });
 });
 
+function leadNotesMap(db) {
+    const rows = db.prepare(`
+        SELECT lead_id, texto, criado_em FROM nota ORDER BY criado_em DESC
+    `).all();
+    const map = {};
+    rows.forEach((row) => {
+        if (!map[row.lead_id]) map[row.lead_id] = [];
+        if (map[row.lead_id].length < 8) map[row.lead_id].push(row.texto);
+    });
+    return map;
+}
+
+function coverageLegend() {
+    return COBERTURA_VALUES.map((id) => ({
+        id,
+        label: COBERTURA_LABELS[id],
+        color: COBERTURA_COLORS[id]
+    }));
+}
+
 app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
-        const rows = db.prepare(`
+        const notes = leadNotesMap(db);
+        const leads = db.prepare(`
             SELECT id, business_type, nome, morada, cidade, telefone, whatsapp, estado,
-                   cobertura, cobertura_locked, demo_slug, lat, lng, geocode_status, criado_em
+                   cobertura, cobertura_locked, demo_slug, lat, lng, geocode_status,
+                   notas_admin, criado_em
             FROM lead
             ORDER BY criado_em DESC
             LIMIT 500
         `).all();
+        const visits = db.prepare(`
+            SELECT id, nome, morada, cidade, cobertura, experiencia, lat, lng,
+                   geocode_status, visitado_em, criado_em
+            FROM visita
+            ORDER BY criado_em DESC
+            LIMIT 500
+        `).all();
+        const leadPins = leads.map((r) => ({
+            id: r.id,
+            kind: 'lead',
+            nome: r.nome,
+            business_type: r.business_type,
+            morada: r.morada,
+            cidade: r.cidade,
+            telefone: r.telefone,
+            estado: r.estado,
+            cobertura: r.cobertura || 'contacto',
+            cobertura_locked: Boolean(r.cobertura_locked),
+            demo_slug: r.demo_slug,
+            lat: r.lat,
+            lng: r.lng,
+            geocode_status: r.geocode_status,
+            experiencia: '',
+            notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
+            criado_em: r.criado_em,
+            color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.contacto
+        }));
+        const visitPins = visits.map((r) => ({
+            id: r.id,
+            kind: 'visita',
+            nome: r.nome,
+            business_type: '',
+            morada: r.morada,
+            cidade: r.cidade,
+            telefone: '',
+            estado: '',
+            cobertura: r.cobertura || 'visitado',
+            demo_slug: '',
+            lat: r.lat,
+            lng: r.lng,
+            geocode_status: r.geocode_status,
+            experiencia: r.experiencia || '',
+            notas: '',
+            visitado_em: r.visitado_em,
+            criado_em: r.criado_em,
+            color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.visitado
+        }));
         return res.json({
-            pins: rows.map((r) => ({
-                id: r.id,
-                nome: r.nome,
-                business_type: r.business_type,
-                morada: r.morada,
-                cidade: r.cidade,
-                telefone: r.telefone,
-                estado: r.estado,
-                cobertura: r.cobertura || 'contacto',
-                cobertura_locked: Boolean(r.cobertura_locked),
-                demo_slug: r.demo_slug,
-                lat: r.lat,
-                lng: r.lng,
-                geocode_status: r.geocode_status,
-                criado_em: r.criado_em,
-                color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.contacto
-            })),
-            legend: COBERTURA_VALUES.map((id) => ({
-                id,
-                label: COBERTURA_LABELS[id],
-                color: COBERTURA_COLORS[id]
-            }))
+            pins: visitPins.concat(leadPins),
+            legend: coverageLegend()
         });
     } catch (err) {
         console.error('digitalizept coverage error:', err.message);
         return res.status(500).json({ error: 'Failed to load coverage.' });
+    }
+});
+
+app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const notes = leadNotesMap(db);
+        const leads = db.prepare(`
+            SELECT id, nome, morada, cidade, telefone, cobertura, notas_admin, criado_em
+            FROM lead ORDER BY criado_em DESC LIMIT 500
+        `).all();
+        const visits = db.prepare(`
+            SELECT nome, morada, cidade, cobertura, experiencia, visitado_em, criado_em
+            FROM visita ORDER BY criado_em DESC LIMIT 500
+        `).all();
+        const exportPins = visits.map((r) => ({
+            kind: 'visita',
+            nome: r.nome,
+            morada: r.morada,
+            cidade: r.cidade,
+            cobertura: r.cobertura || 'visitado',
+            experiencia: r.experiencia || '',
+            visitado_em: r.visitado_em,
+            criado_em: r.criado_em
+        })).concat(leads.map((r) => ({
+            kind: 'lead',
+            nome: r.nome,
+            morada: r.morada,
+            cidade: r.cidade,
+            telefone: r.telefone,
+            cobertura: r.cobertura || 'contacto',
+            notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
+            criado_em: r.criado_em
+        })));
+        const text = formatCoverageExport(exportPins, coverageLegend());
+        const stamp = digitalizeptNow().slice(0, 10);
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="cobertura-digitalizept-${stamp}.txt"`);
+        return res.send(text);
+    } catch (err) {
+        console.error('digitalizept coverage export error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível gerar o export.' });
     }
 });
 
@@ -2153,6 +2245,150 @@ app.post('/api/digitalizept/leads/:leadId/geocode', requireDigitalizept, async (
     } catch (err) {
         console.error('digitalizept geocode post error:', err.message);
         return res.status(500).json({ error: 'Não foi possível geocodificar.' });
+    }
+});
+
+function parseCoord(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+function visitaFromRow(row) {
+    return {
+        id: row.id,
+        kind: 'visita',
+        nome: row.nome,
+        morada: row.morada,
+        cidade: row.cidade,
+        cobertura: row.cobertura || 'visitado',
+        experiencia: row.experiencia || '',
+        lat: row.lat,
+        lng: row.lng,
+        geocode_status: row.geocode_status,
+        visitado_em: row.visitado_em,
+        criado_em: row.criado_em,
+        color: COBERTURA_COLORS[row.cobertura] || COBERTURA_COLORS.visitado
+    };
+}
+
+app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const nome = cleanText(body.nome, 200);
+        if (!nome) return res.status(400).json({ error: 'Indique o nome do sítio.' });
+        const cobertura = cleanText(body.cobertura, 40) || 'visitado';
+        if (!isValidCobertura(cobertura)) {
+            return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        }
+        const morada = cleanText(body.morada, 300);
+        const cidade = cleanText(body.cidade, 120);
+        const experiencia = cleanText(body.experiencia, 4000);
+        let lat = parseCoord(body.lat);
+        let lng = parseCoord(body.lng);
+        let geocodeStatus = (lat != null && lng != null) ? 'manual' : '';
+        if (lat == null || lng == null) {
+            const geo = await geocodeAddress(morada, cidade);
+            if (geo.ok) {
+                lat = geo.lat;
+                lng = geo.lng;
+                geocodeStatus = 'ok';
+            } else {
+                geocodeStatus = geo.status || 'failed';
+            }
+        }
+        const id = crypto.randomUUID();
+        const now = digitalizeptNow();
+        const visitadoEm = cleanText(body.visitado_em, 40) || now;
+        const db = getDigitalizeptDb();
+        db.prepare(`
+            INSERT INTO visita (id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocode_status, visitado_em, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, now);
+        const row = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
+        return res.json({ ok: true, visit: visitaFromRow(row) });
+    } catch (err) {
+        console.error('digitalizept visit post error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar a visita.' });
+    }
+});
+
+app.patch('/api/digitalizept/visits/:id', requireDigitalizept, async (req, res) => {
+    try {
+        const id = cleanText(req.params.id, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const existing = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
+        if (!existing) return res.status(404).json({ error: 'Visita não encontrada.' });
+        const nome = body.nome != null ? cleanText(body.nome, 200) : existing.nome;
+        if (!nome) return res.status(400).json({ error: 'Indique o nome do sítio.' });
+        const cobertura = body.cobertura != null
+            ? cleanText(body.cobertura, 40)
+            : existing.cobertura;
+        if (!isValidCobertura(cobertura)) {
+            return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        }
+        const morada = body.morada != null ? cleanText(body.morada, 300) : existing.morada;
+        const cidade = body.cidade != null ? cleanText(body.cidade, 120) : existing.cidade;
+        const experiencia = body.experiencia != null
+            ? cleanText(body.experiencia, 4000)
+            : existing.experiencia;
+        const visitadoEm = body.visitado_em != null
+            ? (cleanText(body.visitado_em, 40) || existing.visitado_em)
+            : existing.visitado_em;
+        const hasManual = body.lat != null && body.lng != null;
+        let lat = hasManual ? parseCoord(body.lat) : existing.lat;
+        let lng = hasManual ? parseCoord(body.lng) : existing.lng;
+        let geocodeStatus = hasManual && lat != null && lng != null
+            ? 'manual'
+            : existing.geocode_status;
+        db.prepare(`
+            UPDATE visita SET nome = ?, morada = ?, cidade = ?, cobertura = ?, experiencia = ?,
+                lat = ?, lng = ?, geocode_status = ?, visitado_em = ?
+            WHERE id = ?
+        `).run(nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, id);
+
+        if (body.regeocode === true) {
+            await geocodeVisitRow(db, id, { force: true, nowIso: digitalizeptNow });
+        }
+        const row = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
+        return res.json({ ok: true, visit: visitaFromRow(row) });
+    } catch (err) {
+        console.error('digitalizept visit patch error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível atualizar a visita.' });
+    }
+});
+
+app.delete('/api/digitalizept/visits/:id', requireDigitalizept, (req, res) => {
+    try {
+        const id = cleanText(req.params.id, 80);
+        const db = getDigitalizeptDb();
+        const info = db.prepare('DELETE FROM visita WHERE id = ?').run(id);
+        if (!info.changes) return res.status(404).json({ error: 'Visita não encontrada.' });
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('digitalizept visit delete error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível apagar a visita.' });
+    }
+});
+
+app.post('/api/digitalizept/visits/:id/geocode', requireDigitalizept, async (req, res) => {
+    try {
+        const id = cleanText(req.params.id, 80);
+        const db = getDigitalizeptDb();
+        const existing = db.prepare('SELECT id FROM visita WHERE id = ?').get(id);
+        if (!existing) return res.status(404).json({ error: 'Visita não encontrada.' });
+        const result = await geocodeVisitRow(db, id, { force: true, nowIso: digitalizeptNow });
+        const row = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
+        if (!result || result.ok === false) {
+            return res.status(422).json({
+                error: (result && result.error) || 'Geocoding falhou.',
+                visit: visitaFromRow(row)
+            });
+        }
+        return res.json({ ok: true, visit: visitaFromRow(row) });
+    } catch (err) {
+        console.error('digitalizept visit geocode error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível localizar a visita.' });
     }
 });
 
@@ -2290,7 +2526,10 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             projectId: projectId || undefined,
             propostaId: propostaId || undefined,
             contratoId: contratoId || undefined,
-            contratoVersao: revisingDeal ? contratoVersao : undefined
+            contratoVersao: revisingDeal ? contratoVersao : undefined,
+            contractDownload: revisingDeal && projectId
+                ? `/api/digitalizept/deals/${projectId}/contract`
+                : undefined
         };
         Object.keys(data).forEach((key) => {
             if (data[key] === undefined || data[key] === '') delete data[key];
@@ -2427,6 +2666,13 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
             db.prepare('UPDATE lead SET cobertura = ?, cobertura_locked = 1 WHERE id = ?')
                 .run(cobertura, leadId);
         }
+        if (body.experiencia) {
+            const texto = cleanText(body.experiencia, 4000);
+            if (texto) {
+                db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
+                    .run(crypto.randomUUID(), leadId, texto, digitalizeptNow());
+            }
+        }
         if (body.cidade != null || body.morada != null) {
             const morada = body.morada != null ? cleanText(body.morada, 300) : lead.morada;
             const cidade = body.cidade != null ? cleanText(body.cidade, 120) : lead.cidade;
@@ -2464,7 +2710,13 @@ app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, (req
         const html = row.html_path && fs.existsSync(row.html_path) ? row.html_path : (row.pdf_path && row.pdf_path.endsWith('.html') && fs.existsSync(row.pdf_path) ? row.pdf_path : '');
         const file = pdf || html;
         if (!file) return res.status(404).json({ error: 'Ficheiro do contrato em falta.' });
-        return res.download(file);
+        const ext = path.extname(file).replace('.', '') || 'pdf';
+        const base = String(row.nome || 'contrato')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\w-]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 60) || 'contrato';
+        return res.download(file, `${base}-contrato.${ext}`);
     } catch (err) {
         console.error('digitalizept contract download error:', err.message);
         return res.status(500).json({ error: 'Não foi possível descarregar o contrato.' });
@@ -2609,14 +2861,15 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const clienteLegal = body.clienteLegal || {};
         const contrato = body.contrato || {};
         const assinatura = body.assinatura || {};
+        const assinaturaPrestador = body.assinaturaPrestador || {};
 
         const clienteNome = cleanText(clienteLegal.nome, 200);
         const clienteEmail = cleanText(clienteLegal.email, 200);
         if (!clienteNome || !clienteEmail) {
             return res.status(400).json({ error: 'Dados do cliente incompletos (nome e email).' });
         }
-        if (!contrato.html || !assinatura.pngDataUrl) {
-            return res.status(400).json({ error: 'Falta o contrato assinado ou a assinatura.' });
+        if (!contrato.html || !assinatura.pngDataUrl || !assinaturaPrestador.pngDataUrl) {
+            return res.status(400).json({ error: 'Falta o contrato assinado ou uma das assinaturas (cliente e YourLab).' });
         }
 
         const db = getDigitalizeptDb();
@@ -2712,7 +2965,11 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         fs.writeFileSync(htmlPath, String(contrato.html));
         const pngPath = path.join(digitalizeptContractsDir, `${contratoId}-assinatura.png`);
         if (!saveDataUrlPng(assinatura.pngDataUrl, pngPath)) {
-            return res.status(400).json({ error: 'A assinatura não é uma imagem PNG válida.' });
+            return res.status(400).json({ error: 'A assinatura do cliente não é uma imagem PNG válida.' });
+        }
+        const pngPrestadorPath = path.join(digitalizeptContractsDir, `${contratoId}-assinatura-prestador.png`);
+        if (!saveDataUrlPng(assinaturaPrestador.pngDataUrl, pngPrestadorPath)) {
+            return res.status(400).json({ error: 'A assinatura YourLab não é uma imagem PNG válida.' });
         }
 
         const pdfPath = path.join(digitalizeptContractsDir, `${contratoId}.pdf`);
