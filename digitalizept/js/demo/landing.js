@@ -360,11 +360,26 @@ function buildMapa(dados) {
     return s;
 }
 
+export const LIVRO_RECLAMACOES_URL = 'https://www.livroreclamacoes.pt/Inicio/';
+
+function buildLivroLink() {
+    const a = el('a', 'dpl-rodape-livro');
+    a.href = LIVRO_RECLAMACOES_URL;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'Livro de Reclamações';
+    const wrap = el('p', 'dpl-rodape-legal');
+    wrap.setAttribute('data-dp-livro', '');
+    wrap.appendChild(a);
+    return wrap;
+}
+
 function buildRodape(dados, demo) {
     const s = el('footer', 'dpl-rodape');
     s.appendChild(el('div', 'dpl-rodape-name', dados.nome_negocio || ''));
     if (demo.rodape && demo.rodape.texto) s.appendChild(el('p', 'dpl-rodape-text', demo.rodape.texto));
     s.appendChild(el('p', 'dpl-rodape-meta', `© ${new Date().getFullYear()} ${dados.nome_negocio || ''}`));
+    s.appendChild(buildLivroLink());
     return s;
 }
 

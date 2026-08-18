@@ -10,7 +10,7 @@ const nodemailer = require('nodemailer');
 const { createAdminAuth } = require('./lib/admin-auth');
 const { createProjectShowcaseStore } = require('./lib/project-showcase-store');
 const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalizeptLogEvento } = require('./lib/digitalizept-db');
-const { renderContractPdf } = require('./lib/digitalizept-pdf');
+const { renderContractPdf, renderContractPdfBuffer } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
 const { sanitizeDemoHtml } = require('./lib/sanitize-demo-html');
@@ -2694,11 +2694,41 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
     }
 });
 
-app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, (req, res) => {
+function contractDownloadName(nome) {
+    return `${String(nome || 'contrato')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w-]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 60) || 'contrato'}-contrato.pdf`;
+}
+
+function sendPdfDownload(res, filePath, nome) {
+    res.setHeader('Content-Type', 'application/pdf');
+    return res.download(filePath, contractDownloadName(nome));
+}
+
+app.post('/api/digitalizept/contract-pdf', requireDigitalizept, async (req, res) => {
+    try {
+        const html = req.body && req.body.html;
+        const buffer = await renderContractPdfBuffer(html);
+        if (!buffer) {
+            return res.status(503).json({ error: 'Não foi possível gerar o PDF do contrato.' });
+        }
+        const filename = contractDownloadName(req.body && req.body.nome);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(buffer);
+    } catch (err) {
+        console.error('digitalizept contract-pdf error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível gerar o PDF do contrato.' });
+    }
+});
+
+app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, async (req, res) => {
     try {
         const db = getDigitalizeptDb();
         const row = db.prepare(`
-            SELECT c.pdf_path, c.html_path, l.nome
+            SELECT c.id, c.pdf_path, c.html_path, l.nome
             FROM projeto pr
             JOIN contrato c ON c.id = pr.contrato_id
             JOIN proposta p ON p.id = c.proposta_id
@@ -2706,17 +2736,34 @@ app.get('/api/digitalizept/deals/:projectId/contract', requireDigitalizept, (req
             WHERE pr.id = ?
         `).get(req.params.projectId);
         if (!row) return res.status(404).json({ error: 'Contrato não encontrado.' });
-        const pdf = row.pdf_path && row.pdf_path.endsWith('.pdf') && fs.existsSync(row.pdf_path) ? row.pdf_path : '';
-        const html = row.html_path && fs.existsSync(row.html_path) ? row.html_path : (row.pdf_path && row.pdf_path.endsWith('.html') && fs.existsSync(row.pdf_path) ? row.pdf_path : '');
-        const file = pdf || html;
-        if (!file) return res.status(404).json({ error: 'Ficheiro do contrato em falta.' });
-        const ext = path.extname(file).replace('.', '') || 'pdf';
-        const base = String(row.nome || 'contrato')
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^\w-]+/g, '_')
-            .replace(/^_+|_+$/g, '')
-            .slice(0, 60) || 'contrato';
-        return res.download(file, `${base}-contrato.${ext}`);
+
+        const htmlPath = row.html_path && fs.existsSync(row.html_path)
+            ? row.html_path
+            : (row.pdf_path && row.pdf_path.endsWith('.html') && fs.existsSync(row.pdf_path) ? row.pdf_path : '');
+        let pdfPath = row.pdf_path && row.pdf_path.endsWith('.pdf') && fs.existsSync(row.pdf_path)
+            ? row.pdf_path
+            : '';
+
+        if (!pdfPath && htmlPath) {
+            pdfPath = htmlPath.replace(/\.html$/i, '.pdf');
+            if (pdfPath === htmlPath) {
+                pdfPath = path.join(path.dirname(htmlPath), `${row.id}.pdf`);
+            }
+            const html = fs.readFileSync(htmlPath, 'utf8');
+            const ok = await renderContractPdf(html, pdfPath);
+            if (ok) {
+                db.prepare('UPDATE contrato SET pdf_path = ? WHERE id = ?').run(pdfPath, row.id);
+            } else {
+                pdfPath = '';
+            }
+        }
+
+        if (!pdfPath) {
+            return res.status(503).json({
+                error: 'Não foi possível gerar o PDF do contrato. Confirme que o Chromium do servidor está instalado.'
+            });
+        }
+        return sendPdfDownload(res, pdfPath, row.nome);
     } catch (err) {
         console.error('digitalizept contract download error:', err.message);
         return res.status(500).json({ error: 'Não foi possível descarregar o contrato.' });
@@ -3078,7 +3125,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 db.prepare(`UPDATE contrato SET template_versao = ?, pdf_path = ?, html_path = ?, hash_sha256 = ?,
                     assinado_em = ?, estado = 'assinado'
                     WHERE id = ?`).run(
-                    templateVersao, storedPdfPath || htmlPath, htmlPath,
+                    templateVersao, storedPdfPath, htmlPath,
                     cleanText(contrato.hash, 128), now, contratoId);
 
                 if (existingDeal.assinaturaId) {
@@ -3130,7 +3177,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
 
                 db.prepare(`INSERT INTO contrato (id, proposta_id, template_versao, pdf_path, html_path, hash_sha256, assinado_em, estado, criado_em)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'assinado', ?)`).run(
-                    contratoId, propostaId, templateVersao, storedPdfPath || htmlPath, htmlPath,
+                    contratoId, propostaId, templateVersao, storedPdfPath, htmlPath,
                     cleanText(contrato.hash, 128), now, now);
 
                 db.prepare(`INSERT INTO assinatura (id, contrato_id, png_path, geo, ip, dispositivo, timestamp, hash_documento)

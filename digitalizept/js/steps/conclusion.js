@@ -3,7 +3,7 @@ import { getToken } from '../auth.js';
 import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { buildContractModel, buildContractDocument } from '../deal/contract.js';
-import { contractSlugName, downloadDealContract } from '../deal/download.js';
+import { downloadDealContract } from '../deal/download.js';
 import { enqueueDeal } from '../offline-queue.js';
 
 const PROJECT_STATES = [
@@ -40,18 +40,6 @@ function buildFinalDocument(state, catalog, config) {
     });
 }
 
-function localHtmlFallback(state, catalog, config) {
-    const doc = buildFinalDocument(state, catalog, config);
-    const blob = new Blob([doc], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${contractSlugName(state.data.dados && state.data.dados.nome_negocio)}-contrato.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-    return true;
-}
-
 async function downloadContract(ctx, catalog, config, result) {
     const projectId = (result && result.contractDownload && result.projectId)
         || (result && result.projectId)
@@ -60,9 +48,9 @@ async function downloadContract(ctx, catalog, config, result) {
         projectId: projectId && projectId !== 'pendente' ? projectId : '',
         nome: ctx.state.data.dados && ctx.state.data.dados.nome_negocio,
         onUnauthorized: ctx.onUnauthorized,
-        fallback: () => localHtmlFallback(ctx.state, catalog, config)
+        html: buildFinalDocument(ctx.state, catalog, config)
     });
-    if (!ok) ctx.showToast('Não foi possível descarregar o contrato.', true);
+    if (!ok) ctx.showToast('Não foi possível gerar o PDF do contrato.', true);
 }
 
 async function render(body, ctx) {

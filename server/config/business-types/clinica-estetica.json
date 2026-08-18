@@ -1,0 +1,139 @@
+{
+  "id": "clinica-estetica",
+  "nome": "Clínica de Estética",
+  "icone": "CE",
+  "tom": "clínico, sereno, de confiança",
+  "prompt_contexto": "Clínica de estética em Portugal. O texto transmite confiança clínica e cuidado, sem promessas médicas nem resultados milagrosos. Destaca consultas, tratamentos faciais e corporais, e a possibilidade de acompanhamento pré e pós-cirúrgico. Convida a marcar consulta ou a visitar o espaço. Tom sóbrio, claro, em português de Portugal.",
+  "publico_alvo": "Pessoas que procuram tratamentos de estética facial e corporal, skincare ou acompanhamento em clínica, com profissionais e um espaço de confiança.",
+  "servicos_tipicos": [
+    "Consulta de estética",
+    "Tratamentos faciais",
+    "Tratamentos corporais",
+    "Laser e peeling",
+    "Consultoria skincare",
+    "Acompanhamento pré e pós-cirúrgico"
+  ],
+  "diferenciais_sugeridos": [
+    "Equipa especializada",
+    "Avaliação personalizada",
+    "Espaço clínico e acolhedor",
+    "Acompanhamento contínuo",
+    "Marcações por WhatsApp"
+  ],
+  "palavras_chave": [
+    "clínica de estética",
+    "tratamentos faciais",
+    "estética corporal",
+    "skincare",
+    "marcar consulta"
+  ],
+  "categorias_google": [
+    "beauty_salon",
+    "health"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "servicos",
+    "galeria",
+    "avaliacoes",
+    "cta_bloco",
+    "mapa",
+    "contactos",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#4a5548",
+    "#c4b08a",
+    "#e8e4dc"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "tiktok",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "mbway",
+    "wifi",
+    "reservas",
+    "entregas",
+    "anos_experiencia",
+    "certificacoes"
+  ],
+  "perguntas_especificas": [
+    {
+      "id": "tratamentos_principais",
+      "label": "Tratamentos principais",
+      "tipo": "texto_longo"
+    },
+    {
+      "id": "faz_marcacoes",
+      "label": "Faz marcações?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "pre_pos_cirurgico",
+      "label": "Trabalha pré ou pós-cirúrgico?",
+      "tipo": "sim_nao"
+    }
+  ],
+  "archetype": "clinica",
+  "ctas_hero": [
+    {
+      "label": "Marcar consulta",
+      "target": "whatsapp"
+    },
+    {
+      "label": "Ver o espaço",
+      "target": "dpl-galeria"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "olive",
+      "nome": "Olive",
+      "cores": [
+        "#4a5548",
+        "#c4b08a",
+        "#e8e4dc"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1c1c1c",
+        "#4a5548",
+        "#dce4dc"
+      ]
+    },
+    {
+      "id": "sage",
+      "nome": "Sage",
+      "cores": [
+        "#3d4a40",
+        "#a8b5a0",
+        "#f4f1ea"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Venha visitar o nosso espaço",
+    "botao": "Marcar consulta",
+    "target": "whatsapp"
+  }
+}

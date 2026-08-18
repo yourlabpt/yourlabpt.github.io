@@ -1,4 +1,4 @@
-import { renderLanding } from './landing.js';
+import { LIVRO_RECLAMACOES_URL, renderLanding } from './landing.js';
 
 export const DEMO_HTML_MAX = 900000;
 
@@ -47,13 +47,41 @@ function injectViewportFix(html) {
     return `${fix}${html}`;
 }
 
+const LIVRO_SNIPPET = `<p class="dpl-rodape-legal" data-dp-livro><a class="dpl-rodape-livro" href="${LIVRO_RECLAMACOES_URL}" target="_blank" rel="noopener noreferrer">Livro de Reclamações</a></p>`;
+
+function injectLivroReclamacoesHtml(html) {
+    const src = String(html || '');
+    if (!src.trim() || /livroreclamacoes\.pt/i.test(src)) return src;
+    if (/<\/footer>/i.test(src)) return src.replace(/<\/footer>/i, `${LIVRO_SNIPPET}</footer>`);
+    if (/<\/body>/i.test(src)) return src.replace(/<\/body>/i, `${LIVRO_SNIPPET}</body>`);
+    return `${src}${LIVRO_SNIPPET}`;
+}
+
+function injectLivroReclamacoesDom(doc) {
+    if (!doc || /livroreclamacoes\.pt/i.test(doc.documentElement.innerHTML || '')) return;
+    const wrap = doc.createElement('p');
+    wrap.className = 'dpl-rodape-legal';
+    wrap.setAttribute('data-dp-livro', '');
+    const a = doc.createElement('a');
+    a.className = 'dpl-rodape-livro';
+    a.href = LIVRO_RECLAMACOES_URL;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'Livro de Reclamações';
+    wrap.appendChild(a);
+    const footer = doc.querySelector('footer');
+    if (footer) footer.appendChild(wrap);
+    else if (doc.body) doc.body.appendChild(wrap);
+}
+
 // Models often emit en-dashes in CSS variables (var(–base)), curly quotes in
 // content/font-family, and forget </style> — all of which render as a blank page.
 export function sanitizeDemoHtml(html) {
     let out = closeUnclosedStyle(String(html || ''));
     out = out.replace(new RegExp(`var\\(\\s*${ANY_DASH}+`, 'g'), 'var(--');
     out = straightenCssQuotes(out);
-    return injectViewportFix(out);
+    out = injectViewportFix(out);
+    return injectLivroReclamacoesHtml(out);
 }
 
 export function looksLikeHtml(text) {
@@ -249,6 +277,7 @@ export function applyIdentityToHtml(html, identidade, dados) {
         applyCores(doc, coresOf(identidade));
         applyLogo(doc, identidade, dados);
         applyFotos(doc, identidade);
+        injectLivroReclamacoesDom(doc);
         return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
     } catch (_) {
         return raw;
@@ -329,6 +358,7 @@ REGRAS
 - Estado da app: variáveis JS em memória. Proibido localStorage, cookies, fetch ou APIs.
 - CSS: variáveis com dois hífenes ASCII, ex. --base e var(--base). Nunca uses travessão (–) nem aspas curvas (“ ”) no CSS.
 - Não inventes moradas, preços ou contactos que não estejam no contexto.
+- O rodapé deve incluir um link "Livro de Reclamações" para https://www.livroreclamacoes.pt/Inicio/ (target=_blank, rel=noopener).
 
 HTML ACTUAL
 ${html || '(ainda não há HTML — cria a primeira versão a partir do negócio e do pedido.)'}

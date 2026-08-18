@@ -17,7 +17,8 @@ const ARCHETYPE_HINTS = {
     beleza: 'Enfatiza serviços, resultados e marcação fácil. CTA natural: marcar, ver trabalhos.',
     servico: 'Estrutura problema → solução → confiança → orçamento. CTAs: pedir orçamento, ligar.',
     retail: 'Mostra o que se encontra na loja, proximidade e horário. Sem inventar loja online. CTAs: visitar, ligar, Instagram se fizer sentido.',
-    premium: 'Tom sóbrio e elegante, pouco texto, foco em coleções/confiança. CTAs discretos: visitar loja, marcar exame, ver coleções.'
+    premium: 'Tom sóbrio e elegante, pouco texto, foco em coleções/confiança. CTAs discretos: visitar loja, marcar exame, ver coleções.',
+    clinica: 'Confiança clínica e cuidado, sem promessas médicas nem resultados milagrosos. Destaca tratamentos, avaliação e o espaço. CTA natural: marcar consulta ou visitar o espaço.'
 };
 
 function line(label, value) {

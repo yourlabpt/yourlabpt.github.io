@@ -8,11 +8,42 @@ export function contractSlugName(nome) {
         .slice(0, 60) || 'contrato';
 }
 
+function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function downloadPdfFromHtml(html, nome, onUnauthorized) {
+    const response = await fetch('/api/digitalizept/contract-pdf', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-admin-token': getToken()
+        },
+        body: JSON.stringify({ html, nome: nome || '' })
+    });
+    if (response.status === 401) {
+        if (typeof onUnauthorized === 'function') onUnauthorized();
+        return false;
+    }
+    if (!response.ok) return false;
+    const blob = await response.blob();
+    if (!blob || blob.size < 8) return false;
+    saveBlob(blob, `${contractSlugName(nome)}-contrato.pdf`);
+    return true;
+}
+
 export async function downloadDealContract({
     projectId,
     nome,
     onUnauthorized,
-    fallback
+    html
 }) {
     if (projectId) {
         try {
@@ -26,23 +57,19 @@ export async function downloadDealContract({
             }
             if (response.ok) {
                 const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const ext = (response.headers.get('content-type') || '').includes('pdf') ? 'pdf' : 'html';
-                const cd = response.headers.get('content-disposition') || '';
-                const named = /filename\*?=(?:UTF-8'')?["']?([^";]+)/i.exec(cd);
-                a.href = url;
-                a.download = named
-                    ? decodeURIComponent(named[1].trim())
-                    : `${contractSlugName(nome)}-contrato.${ext}`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 2000);
-                return true;
+                const type = (response.headers.get('content-type') || blob.type || '').toLowerCase();
+                if (type.includes('pdf') || (blob.size > 4 && type.indexOf('html') === -1)) {
+                    const cd = response.headers.get('content-disposition') || '';
+                    const named = /filename\*?=(?:UTF-8'')?["']?([^";]+)/i.exec(cd);
+                    const filename = named
+                        ? decodeURIComponent(named[1].trim())
+                        : `${contractSlugName(nome)}-contrato.pdf`;
+                    saveBlob(blob, filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+                    return true;
+                }
             }
-        } catch (_) { /* fall through */ }
+        } catch (_) { /* try HTML conversion next */ }
     }
-    if (typeof fallback === 'function') return fallback();
+    if (html) return downloadPdfFromHtml(html, nome, onUnauthorized);
     return false;
 }
