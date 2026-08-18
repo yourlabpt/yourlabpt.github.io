@@ -67,7 +67,11 @@ export function buildPrompt(state) {
         line('Diferenciais comuns do setor', joinList(businessType.diferenciais_sugeridos)),
         line('Palavras-chave locais', joinList(businessType.palavras_chave)),
         line('CTAs preferidos', suggestedCtas(businessType)),
-        line('Horário', dados.horario)
+        line('Horário', dados.horario),
+        line('Cores (base / destaque / secundária)', (() => {
+            const c = state.data.identidade && state.data.identidade.cores;
+            return c && c.base ? `${c.base} / ${c.destaque} / ${c.secundaria}` : '';
+        })())
     ].filter(Boolean).join('\n');
 
     const specific = specificAnswers(businessType, dados);

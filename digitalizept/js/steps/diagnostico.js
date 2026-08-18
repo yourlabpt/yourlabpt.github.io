@@ -8,6 +8,7 @@ import {
 } from '../deal/packages.js';
 import { formatEuros } from '../format.js';
 import { fetchCatalog } from '../catalog.js';
+import { buildDiagPitchPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
 
 const PACKAGE_ORDER = ['google_essencial', 'site_maps', 'digital_completo', 'plus'];
 
@@ -116,9 +117,36 @@ async function render(body, ctx) {
             { id: 'ok', name: 'Já percebi — seguir' }
         ], {
             selected: diag.exemploVisto ? 'ok' : '',
+            goNext: ctx.goNext,
             onSelect: () => {
                 diag.exemploVisto = true;
                 persist();
+            }
+        });
+        if (ctx.state.data.diagPitch) {
+            const pitch = document.createElement('p');
+            pitch.className = 'ask-hint';
+            pitch.textContent = ctx.state.data.diagPitch;
+            control.appendChild(pitch);
+        }
+        if (!ctx.state.data.diagPitchPrompt) {
+            ctx.state.data.diagPitchPrompt = buildDiagPitchPrompt(ctx.state);
+        }
+        renderOptionalAi(control, {
+            title: 'Frase para a rua (opcional)',
+            hint: 'O pacote continua a ser escolhido pelos toques. Isto é só o que dizer ao mostrar o Maps.',
+            prompt: ctx.state.data.diagPitchPrompt,
+            placeholder: 'Cole a frase…',
+            ctx,
+            onPromptChange: (value) => {
+                ctx.state.data.diagPitchPrompt = value;
+                ctx.update({ diagPitchPrompt: value });
+            },
+            onApply: (raw) => {
+                const texto = plainAiText(raw);
+                ctx.state.data.diagPitch = texto;
+                ctx.update({ diagPitch: texto });
+                ctx.showToast('Frase guardada.');
             }
         });
         persist();
@@ -139,6 +167,7 @@ async function render(body, ctx) {
             { id: 'nao_sei', name: 'Não sei', desc: 'Confirmamos juntos no telemóvel.' }
         ], {
             selected: diag.maps,
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 diag.maps = item.id;
                 persist();
@@ -162,6 +191,7 @@ async function render(body, ctx) {
             { id: 'na', name: 'N/A', desc: 'Ainda não há perfil.' }
         ], {
             selected: diag.validado,
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 diag.validado = item.id;
                 persist();
@@ -184,6 +214,7 @@ async function render(body, ctx) {
             { id: 'sim_ok', name: 'Sim, ok', desc: 'Já serve; foco no Google.' }
         ], {
             selected: diag.website,
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 diag.website = item.id;
                 persist();
@@ -207,6 +238,7 @@ async function render(body, ctx) {
             { id: 'varias_paginas', name: 'Várias páginas', desc: 'Site maior (Plus).' }
         ], {
             selected: diag.prioridade,
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 diag.prioridade = item.id;
                 applySuggestion(ctx.state, diag);
@@ -248,8 +280,9 @@ async function render(body, ctx) {
     });
 
     askChoices(control, packages, {
-        selected: proposta.pacote,
-        onSelect: (item) => {
+            selected: proposta.pacote,
+            goNext: ctx.goNext,
+            onSelect: (item) => {
             proposta.pacote = item.id;
             proposta._fromDiag = true;
             persist();

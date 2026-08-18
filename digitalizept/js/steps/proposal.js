@@ -101,8 +101,9 @@ async function render(body, ctx) {
             { id: 'on', name: ivaOnLabel, desc: config.ivaRate > 0 ? 'Só quando for emitir fatura' : 'A taxa está desligada no servidor' }
         ], {
             selected: proposta.cobrarIva === true ? 'on' : 'off',
+            goNext: ctx.goNext,
             onSelect: (item) => {
-                if (item.id === 'on' && config.ivaRate <= 0) return;
+                if (item.id === 'on' && config.ivaRate <= 0) return false;
                 proposta.cobrarIva = item.id === 'on';
                 recompute();
             }
@@ -150,6 +151,7 @@ async function render(body, ctx) {
                 customWrap.classList.add('hidden');
                 paintChips();
                 recompute();
+                if (typeof ctx.goNext === 'function') ctx.goNext();
             });
             chips.appendChild(chip);
         });

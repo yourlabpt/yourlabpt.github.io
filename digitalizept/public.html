@@ -11,6 +11,7 @@
     <div id="root" class="dp-public">A carregar a demonstração…</div>
     <script type="module">
         import { renderLanding } from '/digitalizept/js/demo/landing.js';
+        import { mountHtmlPreview } from '/digitalizept/js/demo/html.js';
 
         const slug = window.location.pathname.split('/').filter(Boolean).pop();
         const root = document.getElementById('root');
@@ -18,18 +19,28 @@
         try {
             const response = await fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}`);
             const data = await response.json();
-            if (!response.ok || !data.demo) {
+            if (!response.ok || (!data.demo && !data.demoHtml)) {
                 root.textContent = data.error || 'Demonstração não encontrada.';
             } else {
                 document.title = `${data.nome || 'Demonstração'} — Digitalize Portugal`;
-                root.replaceWith(renderLanding({
-                    data: {
-                        businessType: data.businessType,
-                        dados: data.dados,
-                        identidade: data.identidade,
-                        demo: data.demo
-                    }
-                }));
+                if (data.demoHtml && String(data.demoHtml).trim()) {
+                    document.body.className = 'dp-public dp-public-html';
+                    root.replaceWith((() => {
+                        const host = document.createElement('div');
+                        host.className = 'dp-public-frame-host';
+                        mountHtmlPreview(host, data.demoHtml);
+                        return host;
+                    })());
+                } else {
+                    root.replaceWith(renderLanding({
+                        data: {
+                            businessType: data.businessType,
+                            dados: data.dados,
+                            identidade: data.identidade,
+                            demo: data.demo
+                        }
+                    }));
+                }
             }
         } catch (_) {
             root.textContent = 'Não foi possível carregar a demonstração.';

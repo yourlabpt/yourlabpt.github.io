@@ -1,6 +1,7 @@
 // Etapa 3 — Identidade visual: logo, paleta (botões), fotos reais.
 
 import { currentSubstep, renderAsk } from '../substep.js';
+import { applyCustomCores, buildColorPrompt, parseCores } from '../demo/colors.js';
 
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
 const MAX_FOTOS = 6;
@@ -155,6 +156,7 @@ function renderLogo(body, ctx, identidade, persist) {
         identidade.logo = { tipo: 'nenhum' };
         persist();
         renderPreview();
+        if (typeof ctx.goNext === 'function') ctx.goNext();
     });
     actions.append(uploadBtn, noneBtn);
     control.append(preview, actions, input);
@@ -167,18 +169,147 @@ function renderPalette(body, ctx, identidade, persist) {
 
     const { control } = renderAsk(body, {
         title: 'Que paleta usar?',
-        hint: 'Um toque. Escolhida para este tipo de negócio.',
+        hint: 'Um toque avança. Cores à medida (prompt) ficam em opção, acima.',
         index: 1,
         total: 3
     });
 
+    function paintSelection() {
+        grid.querySelectorAll('.palette-card').forEach((card) => {
+            card.classList.toggle('selected', card.dataset.paletteId === identidade.paleta);
+        });
+        if (baseInput) baseInput.value = identidade.cores.base || '#1b1b1b';
+        if (destaqueInput) destaqueInput.value = identidade.cores.destaque || '#e8d5b7';
+        if (secundariaInput) secundariaInput.value = identidade.cores.secundaria || '#7a8a99';
+    }
+
+    const details = document.createElement('details');
+    details.className = 'palette-custom';
+    details.open = identidade.paleta === 'custom';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Cores à medida (opcional)';
+    details.appendChild(summary);
+
+    const customHint = document.createElement('p');
+    customHint.className = 'ask-hint';
+    customHint.textContent = 'Copie o prompt, peça 3 cores ao assistente, cole o JSON e avance.';
+
+    if (!ctx.state.data.colorPrompt) {
+        ctx.state.data.colorPrompt = buildColorPrompt(ctx.state);
+    }
+    const promptArea = document.createElement('textarea');
+    promptArea.className = 'field-input demo-prompt';
+    promptArea.rows = 5;
+    promptArea.value = ctx.state.data.colorPrompt;
+    promptArea.addEventListener('input', () => {
+        ctx.state.data.colorPrompt = promptArea.value;
+        ctx.update({ colorPrompt: promptArea.value });
+    });
+
+    const promptActions = document.createElement('div');
+    promptActions.className = 'demo-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-secondary';
+    copyBtn.textContent = 'Copiar prompt';
+    copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(promptArea.value)
+            .then(() => ctx.showToast('Prompt de cores copiado.'))
+            .catch(() => ctx.showToast('Não foi possível copiar.', true));
+    });
+    const regenBtn = document.createElement('button');
+    regenBtn.type = 'button';
+    regenBtn.className = 'btn-secondary';
+    regenBtn.textContent = 'Repor prompt';
+    regenBtn.addEventListener('click', () => {
+        const fresh = buildColorPrompt(ctx.state);
+        promptArea.value = fresh;
+        ctx.state.data.colorPrompt = fresh;
+        ctx.update({ colorPrompt: fresh });
+    });
+    promptActions.append(copyBtn, regenBtn);
+
+    const pasteArea = document.createElement('textarea');
+    pasteArea.className = 'field-input demo-paste';
+    pasteArea.rows = 3;
+    pasteArea.placeholder = '{"base":"#1b1b1b","destaque":"#e8d5b7","secundaria":"#7a8a99"}';
+
+    function applyCores(cores, advance) {
+        applyCustomCores(identidade, cores);
+        persist();
+        paintSelection();
+        if (advance && typeof ctx.goNext === 'function') ctx.goNext();
+    }
+
+    const applyPasteBtn = document.createElement('button');
+    applyPasteBtn.type = 'button';
+    applyPasteBtn.className = 'btn-primary';
+    applyPasteBtn.textContent = 'Aplicar cores do JSON';
+    applyPasteBtn.addEventListener('click', () => {
+        const result = parseCores(pasteArea.value);
+        if (!result.ok) {
+            ctx.showToast(result.error, true);
+            return;
+        }
+        applyCores(result.cores, false);
+        ctx.showToast('Cores aplicadas. Ajuste os selectores se quiser.');
+    });
+
+    function colorField(label, key) {
+        const wrap = document.createElement('label');
+        wrap.className = 'color-swatch';
+        wrap.appendChild(Object.assign(document.createElement('span'), { textContent: label }));
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = identidade.cores[key] || '#1b1b1b';
+        input.addEventListener('input', () => {
+            applyCustomCores(identidade, {
+                base: baseInput.value,
+                destaque: destaqueInput.value,
+                secundaria: secundariaInput.value
+            });
+            persist();
+            paintSelection();
+        });
+        wrap.appendChild(input);
+        return { wrap, input };
+    }
+
+    const row = document.createElement('div');
+    row.className = 'color-row';
+    const baseField = colorField('Base', 'base');
+    const destaqueField = colorField('Destaque', 'destaque');
+    const secundariaField = colorField('Secundária', 'secundaria');
+    const baseInput = baseField.input;
+    const destaqueInput = destaqueField.input;
+    const secundariaInput = secundariaField.input;
+    row.append(baseField.wrap, destaqueField.wrap, secundariaField.wrap);
+
+    details.append(customHint, promptArea, promptActions, pasteArea, applyPasteBtn, row);
+    control.appendChild(details);
+
     const grid = document.createElement('div');
     grid.className = 'palette-grid';
-    palettes.forEach((palette) => {
+    const allPalettes = [
+        ...palettes,
+        {
+            id: 'custom',
+            nome: 'À medida',
+            cores: [
+                identidade.cores.base || FALLBACK_CORES[0],
+                identidade.cores.destaque || FALLBACK_CORES[1],
+                identidade.cores.secundaria || FALLBACK_CORES[2]
+            ]
+        }
+    ];
+    allPalettes.forEach((palette) => {
         const btn = document.createElement('button');
         btn.type = 'button';
+        btn.dataset.paletteId = palette.id;
         const selected = identidade.paleta === palette.id
-            || (identidade.cores.base === palette.cores[0] && identidade.cores.destaque === palette.cores[1]);
+            || (palette.id !== 'custom'
+                && identidade.cores.base === palette.cores[0]
+                && identidade.cores.destaque === palette.cores[1]);
         btn.className = `palette-card${selected ? ' selected' : ''}`;
         const swatches = document.createElement('div');
         swatches.className = 'palette-swatches';
@@ -193,10 +324,21 @@ function renderPalette(body, ctx, identidade, persist) {
             Object.assign(document.createElement('div'), { className: 'palette-name', textContent: palette.nome })
         );
         btn.addEventListener('click', () => {
+            if (palette.id === 'custom') {
+                details.open = true;
+                applyCustomCores(identidade, {
+                    base: baseInput.value,
+                    destaque: destaqueInput.value,
+                    secundaria: secundariaInput.value
+                });
+                persist();
+                paintSelection();
+                return;
+            }
             applyPalette(identidade, palette);
-            grid.querySelectorAll('.palette-card').forEach((c) => c.classList.remove('selected'));
-            btn.classList.add('selected');
             persist();
+            paintSelection();
+            if (typeof ctx.goNext === 'function') ctx.goNext();
         });
         grid.appendChild(btn);
     });
@@ -321,7 +463,7 @@ function render(body, ctx) {
 export const identityStep = {
     name: 'Identidade visual',
     title: 'Identidade visual',
-    subtitle: 'Logótipo, paleta e fotos. Decisões em botões — siga em frente.',
+    subtitle: 'Logótipo, paleta e fotos. Um toque avança; cores à medida são opcionais.',
     isValid,
     isSubstepValid,
     substepCount,

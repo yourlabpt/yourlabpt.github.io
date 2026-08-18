@@ -1,6 +1,7 @@
 import { fetchSettings } from '../settings.js';
 import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
 import { currentSubstep, renderAsk, askText, askToggle, askChoices } from '../substep.js';
+import { buildDadosCopyPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -150,10 +151,10 @@ function isSubstepValid(state) {
     return String(dados[page.id] || '').trim().length > 0;
 }
 
-function fieldControl(control, def, value, onChange, onEnter) {
+function fieldControl(control, def, value, onChange, onEnter, goNext) {
     const tipo = (def && def.tipo) || 'texto';
     if (tipo === 'sim_nao') {
-        askToggle(control, { value, onChange });
+        askToggle(control, { value, onChange, goNext });
         return;
     }
     const isLong = tipo === 'texto_longo';
@@ -223,6 +224,7 @@ async function render(body, ctx) {
             { id: 'yes', name: 'Sim', desc: 'Responsável, descrição e mais detalhes' }
         ], {
             selected: ctx.state.data.dadosMore === true ? 'yes' : 'no',
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 ctx.state.data.dadosMore = item.id === 'yes';
                 persist();
@@ -237,7 +239,34 @@ async function render(body, ctx) {
         persist();
     }, () => {
         if (isSubstepValid(ctx.state) && ctx.goNext) ctx.goNext();
-    });
+    }, ctx.goNext);
+
+    if (['o_que_faz', 'principais_servicos', 'diferencial'].includes(page.id)) {
+        const promptKey = `dadosAiPrompt_${page.id}`;
+        if (!ctx.state.data[promptKey]) {
+            ctx.state.data[promptKey] = buildDadosCopyPrompt(ctx.state, page.id);
+        }
+        renderOptionalAi(control, {
+            title: 'Sugerir com AI (opcional)',
+            hint: 'Pode deixar em branco e avançar. O tipo de negócio já sugere o tom.',
+            prompt: ctx.state.data[promptKey],
+            placeholder: 'Cole o texto…',
+            ctx,
+            onPromptChange: (value) => {
+                ctx.state.data[promptKey] = value;
+                ctx.update({ [promptKey]: value });
+            },
+            onApply: (raw) => {
+                const texto = plainAiText(raw);
+                dados[page.id] = texto;
+                persist();
+                const input = control.querySelector('.ask-input');
+                if (input) input.value = texto;
+                ctx.showToast('Texto aplicado.');
+            }
+        });
+    }
+
     ctx.setValid(isSubstepValid(ctx.state));
 }
 

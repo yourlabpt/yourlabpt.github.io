@@ -104,8 +104,11 @@ export function createWizard({ onUnauthorized, showToast }) {
     advancePastSkips(state, 1);
     let currentValid = false;
 
-    function persist() {
+function persist() {
         try {
+            if (typeof state.data.demoHtml === 'string' && state.data.demoHtml.length > 900000) {
+                state.data.demoHtml = state.data.demoHtml.slice(0, 900000);
+            }
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch (_) { /* ignore */ }
     }
@@ -200,7 +203,8 @@ export function createWizard({ onUnauthorized, showToast }) {
         if (state.step >= STEPS.length - 1) return;
         // Persist mid-funnel progress so admin can reopen unfinished leads.
         const leaving = STEPS[state.step];
-        if (leaving === dataStep || leaving === diagnosticoStep || leaving === demoStep || leaving === servicesStep) {
+        if (leaving === dataStep || leaving === diagnosticoStep || leaving === identityStep
+            || leaving === demoStep || leaving === servicesStep) {
             try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
             catch (_) { /* a missed draft must not block the visit */ }
         }

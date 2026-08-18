@@ -2,6 +2,22 @@ import { buildPrompt } from '../demo/prompt.js';
 import { parseDemoOutput } from '../demo/parse.js';
 import { renderLanding } from '../demo/landing.js';
 import { mountGbpExample, gbpDataFromState } from '../demo/gbp-example.js';
+import { ensureSeededDemo } from '../demo/seed.js';
+import {
+    buildHtmlChangePrompt,
+    clipDemoHtml,
+    currentDemoHtml,
+    extractHtml,
+    htmlTooLarge,
+    looksLikeHtml,
+    mountHtmlPreview,
+    serializeLandingDocument
+} from '../demo/html.js';
+import {
+    buildGbpSobrePrompt,
+    plainAiText,
+    renderOptionalAi
+} from '../optional-ai.js';
 import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
 import { apiRequest } from '../api.js';
@@ -20,11 +36,22 @@ function isValid(state) {
         const dados = state.data.dados || {};
         return Boolean(dados.nome_negocio);
     }
+    if (state.data.demoHtml) return true;
+    ensureSeededDemo(state);
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
+}
+
+function copyText(ctx, text, okMessage) {
+    return navigator.clipboard.writeText(text)
+        .then(() => ctx.showToast(okMessage))
+        .catch(() => ctx.showToast('Não foi possível copiar.', true));
 }
 
 async function publishDemo(ctx) {
     try {
+        const demo = ctx.state.data.demo;
+        const demoHtml = ctx.state.data.demoHtml || '';
+        if ((!demo || !demo.hero || !demo.hero.titulo) && !demoHtml) return '';
         const { response, data } = await apiRequest('/api/digitalizept/demos', {
             method: 'POST',
             token: getToken(),
@@ -33,7 +60,8 @@ async function publishDemo(ctx) {
                 businessType: ctx.state.data.businessType,
                 dados: ctx.state.data.dados,
                 identidade: ctx.state.data.identidade,
-                demo: ctx.state.data.demo
+                demo,
+                demoHtml
             }
         });
         if (response.ok && data.url) {
@@ -53,7 +81,7 @@ function openPreview(state, ctx) {
     const label = document.createElement('span');
     label.textContent = isGbpDemo(state)
         ? 'Pré-visualização do Perfil Google'
-        : 'Pré-visualização da demonstração';
+        : (state.data.demoHtml ? 'Pré-visualização HTML' : 'Pré-visualização da demonstração');
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'dp-preview-close';
@@ -73,6 +101,8 @@ function openPreview(state, ctx) {
                 showPitch: true
             });
             scroll.appendChild(wrap);
+        } else if (state.data.demoHtml) {
+            mountHtmlPreview(scroll, state.data.demoHtml);
         } else {
             scroll.appendChild(renderLanding(state));
         }
@@ -85,6 +115,33 @@ function openPreview(state, ctx) {
     document.body.appendChild(overlay);
 }
 
+function applyHtml(ctx, raw, showStatus) {
+    if (htmlTooLarge(raw)) {
+        ctx.showToast('HTML demasiado grande — a usar os primeiros 900 KB.', true);
+    }
+    const html = clipDemoHtml(extractHtml(raw));
+    ctx.state.data.demoHtml = html;
+    ctx.update({ demoHtml: html });
+    ctx.setValid(true);
+    showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
+    publishDemo(ctx).then((url) => {
+        if (url) showStatus(`HTML publicado. Link: ${url}`, 'ok');
+    });
+}
+
+function applyJsonDemo(ctx, demo, raw, showStatus) {
+    delete ctx.state.data.demoHtml;
+    ctx.state.data.demoSeeded = false;
+    ctx.state.data.demo = demo;
+    ctx.state.data.demoRaw = raw || JSON.stringify(demo, null, 2);
+    ctx.update({ demo, demoRaw: ctx.state.data.demoRaw, demoHtml: '', demoSeeded: false });
+    ctx.setValid(true);
+    showStatus(`Demonstração actualizada — ${demo.servicos.itens.length} serviços.`, 'ok');
+    publishDemo(ctx).then((url) => {
+        if (url) showStatus(`Demonstração pronta. Link: ${url}`, 'ok');
+    });
+}
+
 function renderGbpDemo(body, ctx) {
     const title = document.createElement('h3');
     title.className = 'field-group-title';
@@ -95,11 +152,15 @@ function renderGbpDemo(body, ctx) {
     hint.textContent = 'Mostre ao cliente como fica no Maps com os dados que acabámos de recolher.';
 
     const host = document.createElement('div');
-    mountGbpExample(host, {
-        data: gbpDataFromState(ctx.state),
-        clientMode: true,
-        showPitch: true
-    });
+    function paintCard() {
+        host.innerHTML = '';
+        mountGbpExample(host, {
+            data: gbpDataFromState(ctx.state),
+            clientMode: true,
+            showPitch: true
+        });
+    }
+    paintCard();
 
     const actions = document.createElement('div');
     actions.className = 'demo-actions';
@@ -111,6 +172,29 @@ function renderGbpDemo(body, ctx) {
     actions.appendChild(previewBtn);
 
     body.append(title, hint, host, actions);
+
+    if (!ctx.state.data.gbpSobrePrompt) {
+        ctx.state.data.gbpSobrePrompt = buildGbpSobrePrompt(ctx.state);
+    }
+    renderOptionalAi(body, {
+        title: 'Melhorar o “Sobre” com AI (opcional)',
+        hint: 'O cartão já usa o nome e a morada. Peça um texto melhor se fizer falta.',
+        prompt: ctx.state.data.gbpSobrePrompt,
+        placeholder: 'Cole o texto Sobre…',
+        ctx,
+        onPromptChange: (value) => {
+            ctx.state.data.gbpSobrePrompt = value;
+            ctx.update({ gbpSobrePrompt: value });
+        },
+        onApply: (raw) => {
+            const texto = plainAiText(raw);
+            ctx.state.data.gbpSobre = texto;
+            ctx.update({ gbpSobre: texto });
+            paintCard();
+            ctx.showToast('Texto Sobre aplicado.');
+        }
+    });
+
     ctx.state.data.demoGbp = true;
     ctx.update({ demoGbp: true });
     ctx.setValid(isValid(ctx.state));
@@ -132,106 +216,26 @@ function render(body, ctx) {
         return;
     }
 
-    // 1 · Prompt (editable, regenerable)
-    if (!ctx.state.data.demoPrompt) {
-        ctx.state.data.demoPrompt = buildPrompt(ctx.state);
-    }
-
-    const promptGroup = document.createElement('div');
-    promptGroup.className = 'id-section';
-    const promptTitle = document.createElement('h3');
-    promptTitle.className = 'field-group-title';
-    promptTitle.textContent = '1 · Copie o prompt';
-    const promptHint = document.createElement('p');
-    promptHint.className = 'id-disclaimer';
-    promptHint.textContent = 'Gere aqui, ou cole no seu assistente se o modelo local não estiver disponível.';
-
-    const promptArea = document.createElement('textarea');
-    promptArea.className = 'field-input demo-prompt';
-    promptArea.rows = 7;
-    promptArea.value = ctx.state.data.demoPrompt;
-    promptArea.addEventListener('input', () => {
-        ctx.state.data.demoPrompt = promptArea.value;
-        ctx.update({ demoPrompt: promptArea.value });
-    });
-
-    const promptActions = document.createElement('div');
-    promptActions.className = 'demo-actions';
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'btn-primary';
-    copyBtn.textContent = 'Copiar prompt';
-    copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(promptArea.value)
-            .then(() => ctx.showToast('Prompt copiado.'))
-            .catch(() => ctx.showToast('Não foi possível copiar.', true));
-    });
-    const regenBtn = document.createElement('button');
-    regenBtn.type = 'button';
-    regenBtn.className = 'btn-secondary';
-    regenBtn.textContent = 'Repor prompt';
-    regenBtn.addEventListener('click', () => {
-        const fresh = buildPrompt(ctx.state);
-        promptArea.value = fresh;
-        ctx.state.data.demoPrompt = fresh;
-        ctx.update({ demoPrompt: fresh });
-        ctx.showToast('Prompt reposto a partir dos dados.');
-    });
-    const genNowBtn = document.createElement('button');
-    genNowBtn.type = 'button';
-    genNowBtn.className = 'btn-primary';
-    genNowBtn.textContent = 'Gerar agora';
-    genNowBtn.addEventListener('click', async () => {
-        genNowBtn.disabled = true;
-        showStatus('A gerar o conteúdo…', 'ok');
-        try {
-            const { response, data } = await apiRequest('/api/digitalizept/demo', {
-                method: 'POST',
-                token: getToken(),
-                body: { prompt: promptArea.value }
-            });
-            if (response.status === 401) { ctx.onUnauthorized(); return; }
-            if (!response.ok || !data.demo) {
-                showStatus(data.error || 'Modelo indisponível. Cole o JSON abaixo.', 'error');
-                return;
-            }
-            ctx.state.data.demoRaw = data.raw || JSON.stringify(data.demo, null, 2);
-            ctx.state.data.demo = data.demo;
-            pasteArea.value = ctx.state.data.demoRaw;
-            ctx.update({ demoRaw: ctx.state.data.demoRaw, demo: data.demo });
-            ctx.setValid(true);
-            previewBtn.disabled = false;
-            showStatus(`Demonstração pronta — ${data.demo.servicos.itens.length} serviços.`, 'ok');
-            await publishDemo(ctx);
-        } catch (_) {
-            showStatus('Sem rede. Use o fluxo manual abaixo.', 'error');
-        } finally {
-            genNowBtn.disabled = false;
-        }
-    });
-    promptActions.append(copyBtn, regenBtn, genNowBtn);
-    promptGroup.append(promptTitle, promptHint, promptArea, promptActions);
-    body.appendChild(promptGroup);
-
-    // 2 · Paste result
-    const pasteGroup = document.createElement('div');
-    pasteGroup.className = 'id-section';
-    const pasteTitle = document.createElement('h3');
-    pasteTitle.className = 'field-group-title';
-    pasteTitle.textContent = '2 · Cole o resultado';
-    const pasteArea = document.createElement('textarea');
-    pasteArea.className = 'field-input demo-paste';
-    pasteArea.rows = 6;
-    pasteArea.placeholder = 'Cole aqui o JSON gerado pelo assistente…';
-    if (ctx.state.data.demoRaw) pasteArea.value = ctx.state.data.demoRaw;
+    ensureSeededDemo(ctx.state);
+    ctx.update({ demo: ctx.state.data.demo, demoSeeded: ctx.state.data.demoSeeded === true });
 
     const status = document.createElement('div');
     status.className = 'demo-status';
-
     function showStatus(message, kind) {
         status.textContent = message;
         status.className = `demo-status demo-status-${kind}`;
     }
+
+    const previewGroup = document.createElement('div');
+    previewGroup.className = 'id-section';
+    const previewTitle = document.createElement('h3');
+    previewTitle.className = 'field-group-title';
+    previewTitle.textContent = 'Mostre ao cliente';
+    const previewHint = document.createElement('p');
+    previewHint.className = 'id-disclaimer';
+    previewHint.textContent = ctx.state.data.demoSeeded
+        ? 'Landing deste tipo de negócio, com o nome e a cidade. Pode avançar já.'
+        : 'Demonstração pronta. Pode ver, melhorar com AI, ou avançar.';
 
     const previewBtnWrap = document.createElement('div');
     previewBtnWrap.className = 'demo-actions';
@@ -240,49 +244,124 @@ function render(body, ctx) {
     previewBtn.className = 'btn-primary demo-preview-btn';
     previewBtn.textContent = 'Ver demonstração';
     previewBtn.disabled = !isValid(ctx.state);
-    previewBtn.addEventListener('click', () => openPreview(ctx.state, ctx));
-    previewBtnWrap.appendChild(previewBtn);
-
-    const genBtn = document.createElement('button');
-    genBtn.type = 'button';
-    genBtn.className = 'btn-primary';
-    genBtn.textContent = 'Gerar demonstração';
-    genBtn.addEventListener('click', () => {
-        const raw = pasteArea.value;
-        const result = parseDemoOutput(raw);
-        if (!result.ok) {
-            showStatus(result.error, 'error');
-            return;
-        }
-        ctx.state.data.demoRaw = raw;
-        ctx.state.data.demo = result.demo;
-        ctx.update({ demoRaw: raw, demo: result.demo });
-        ctx.setValid(true);
-        showStatus(`Demonstração pronta — ${result.demo.servicos.itens.length} serviços.`, 'ok');
-        previewBtn.disabled = false;
-        publishDemo(ctx).then((url) => {
-            if (url) showStatus(`Demonstração pronta. Link: ${url}`, 'ok');
-        });
+    previewBtn.addEventListener('click', () => {
+        openPreview(ctx.state, ctx);
+        publishDemo(ctx);
     });
-
-    const pasteActions = document.createElement('div');
-    pasteActions.className = 'demo-actions';
-    pasteActions.appendChild(genBtn);
-
-    pasteGroup.append(pasteTitle, pasteArea, pasteActions, status);
-    body.appendChild(pasteGroup);
-
-    // 3 · Preview (enabled once generated)
-    const previewGroup = document.createElement('div');
-    previewGroup.className = 'id-section';
-    const previewTitle = document.createElement('h3');
-    previewTitle.className = 'field-group-title';
-    previewTitle.textContent = '3 · Mostre ao cliente';
-    previewGroup.append(previewTitle, previewBtnWrap);
+    previewBtnWrap.append(previewBtn);
+    previewGroup.append(previewTitle, previewHint, previewBtnWrap, status);
     body.appendChild(previewGroup);
 
+    if (!ctx.state.data.demoPrompt) {
+        ctx.state.data.demoPrompt = buildPrompt(ctx.state);
+    }
+
+    const aiHost = document.createElement('div');
+    aiHost.className = 'id-section';
+    renderOptionalAi(aiHost, {
+        title: 'Melhorar com AI (opcional)',
+        hint: 'Copie o prompt da landing (JSON) ou peça uma app mock em HTML. O modelo de base fica no ecrã até aplicar.',
+        prompt: ctx.state.data.demoPrompt,
+        placeholder: 'Cole o JSON da landing, ou HTML completo.',
+        applyLabel: 'Aplicar resultado',
+        ctx,
+        onPromptChange: (value) => {
+            ctx.state.data.demoPrompt = value;
+            ctx.update({ demoPrompt: value });
+        },
+        onApply: (raw) => {
+            if (looksLikeHtml(raw)) {
+                applyHtml(ctx, raw, showStatus);
+                previewBtn.disabled = false;
+                return;
+            }
+            const result = parseDemoOutput(raw);
+            if (!result.ok) {
+                showStatus(result.error, 'error');
+                return;
+            }
+            applyJsonDemo(ctx, result.demo, raw, showStatus);
+            previewBtn.disabled = false;
+        }
+    });
+
+    const extraActions = document.createElement('div');
+    extraActions.className = 'demo-actions';
+    const genNowBtn = document.createElement('button');
+    genNowBtn.type = 'button';
+    genNowBtn.className = 'btn-secondary';
+    genNowBtn.textContent = 'Gerar JSON agora';
+    genNowBtn.addEventListener('click', async () => {
+        genNowBtn.disabled = true;
+        showStatus('A gerar o conteúdo…', 'ok');
+        try {
+            const { response, data } = await apiRequest('/api/digitalizept/demo', {
+                method: 'POST',
+                token: getToken(),
+                body: { prompt: ctx.state.data.demoPrompt }
+            });
+            if (response.status === 401) { ctx.onUnauthorized(); return; }
+            if (!response.ok || !data.demo) {
+                showStatus(data.error || 'Modelo indisponível. Cole o JSON abaixo.', 'error');
+                return;
+            }
+            applyJsonDemo(ctx, data.demo, data.raw || JSON.stringify(data.demo, null, 2), showStatus);
+            previewBtn.disabled = false;
+        } catch (_) {
+            showStatus('Sem rede. Cole o resultado no bloco acima.', 'error');
+        } finally {
+            genNowBtn.disabled = false;
+        }
+    });
+
+    const changeNote = document.createElement('textarea');
+    changeNote.className = 'field-input demo-paste';
+    changeNote.rows = 2;
+    changeNote.placeholder = 'O que mudar no HTML? Ex.: ecrã de login falso, lista de marcações…';
+    changeNote.value = ctx.state.data.htmlChangeNote || '';
+    changeNote.addEventListener('input', () => {
+        ctx.state.data.htmlChangeNote = changeNote.value;
+        ctx.update({ htmlChangeNote: changeNote.value });
+    });
+
+    const htmlActions = document.createElement('div');
+    htmlActions.className = 'demo-actions';
+    const copyHtmlBtn = document.createElement('button');
+    copyHtmlBtn.type = 'button';
+    copyHtmlBtn.className = 'btn-secondary';
+    copyHtmlBtn.textContent = 'Copiar HTML';
+    copyHtmlBtn.addEventListener('click', () => {
+        const html = currentDemoHtml(ctx.state) || serializeLandingDocument(ctx.state);
+        if (!html) {
+            ctx.showToast('Ainda não há HTML para copiar.', true);
+            return;
+        }
+        copyText(ctx, html, 'HTML copiado.');
+    });
+    const copyChangeBtn = document.createElement('button');
+    copyChangeBtn.type = 'button';
+    copyChangeBtn.className = 'btn-secondary';
+    copyChangeBtn.textContent = 'Copiar prompt de alterações HTML';
+    copyChangeBtn.addEventListener('click', () => {
+        const html = currentDemoHtml(ctx.state);
+        const prompt = buildHtmlChangePrompt(ctx.state, html, changeNote.value);
+        ctx.state.data.htmlChangePrompt = prompt;
+        ctx.update({ htmlChangePrompt: prompt, htmlChangeNote: changeNote.value });
+        copyText(ctx, prompt, 'Prompt de alterações copiado.');
+    });
+    htmlActions.append(copyHtmlBtn, copyChangeBtn);
+    extraActions.appendChild(genNowBtn);
+
+    const details = aiHost.querySelector('details');
+    if (details) details.append(extraActions, changeNote, htmlActions);
+    body.appendChild(aiHost);
+
     if (isValid(ctx.state)) {
-        showStatus('Demonstração já gerada. Pode ver, ou gerar de novo.', 'ok');
+        showStatus(ctx.state.data.demoHtml
+            ? 'HTML da demo pronto. Pode ver ou pedir alterações.'
+            : (ctx.state.data.demoSeeded
+                ? 'Landing do tipo pronta. Melhorar com AI é opcional.'
+                : 'Demonstração pronta.'), 'ok');
     }
 
     ctx.setValid(isValid(ctx.state));
@@ -290,8 +369,8 @@ function render(body, ctx) {
 
 export const demoStep = {
     name: 'Demonstração',
-    title: 'Gerar a demonstração',
-    subtitle: 'Perfil Google (pacotes sem site) ou landing por arquétipo.',
+    title: 'A demonstração',
+    subtitle: 'Landing deste tipo de negócio — já pode mostrar. AI e HTML mock são opcionais.',
     isValid,
     render
 };

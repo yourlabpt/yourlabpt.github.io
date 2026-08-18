@@ -63,18 +63,22 @@ export function askText(control, { value, type, placeholder, rows, onChange, onE
     return input;
 }
 
-export function askToggle(control, { value, options, onChange }) {
+export function askToggle(control, { value, options, onChange, goNext }) {
     const toggle = document.createElement('div');
     toggle.className = 'toggle';
+    let current = value;
     (options || ['Sim', 'Não']).forEach((opt) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `toggle-opt${value === opt ? ' active' : ''}`;
         btn.textContent = opt;
         btn.addEventListener('click', () => {
+            if (opt === current) return;
+            current = opt;
             toggle.querySelectorAll('.toggle-opt').forEach((b) => b.classList.remove('active'));
             btn.classList.add('active');
             onChange(opt);
+            if (typeof goNext === 'function') queueMicrotask(() => goNext());
         });
         toggle.appendChild(btn);
     });
@@ -82,7 +86,7 @@ export function askToggle(control, { value, options, onChange }) {
     return toggle;
 }
 
-export function askChoices(control, items, { selected, onSelect }) {
+export function askChoices(control, items, { selected, onSelect, goNext, autoAdvance }) {
     const list = document.createElement('div');
     list.className = 'ask-choices';
     items.forEach((item) => {
@@ -107,9 +111,12 @@ export function askChoices(control, items, { selected, onSelect }) {
             btn.appendChild(meta);
         }
         btn.addEventListener('click', () => {
-            onSelect(item);
+            const result = onSelect(item);
             list.querySelectorAll('.ask-choice').forEach((el) => el.classList.remove('selected'));
             btn.classList.add('selected');
+            if (autoAdvance !== false && typeof goNext === 'function' && result !== false) {
+                queueMicrotask(() => goNext());
+            }
         });
         list.appendChild(btn);
     });

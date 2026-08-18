@@ -61,6 +61,7 @@ async function render(body, ctx) {
                 card.classList.add('selected');
                 ctx.update({ businessType: type });
                 ctx.setValid(true);
+                if (typeof ctx.goNext === 'function') ctx.goNext();
             });
 
             grid.appendChild(card);

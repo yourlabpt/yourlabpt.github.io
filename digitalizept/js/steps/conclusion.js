@@ -125,6 +125,7 @@ async function render(body, ctx) {
                 dados: ctx.state.data.dados,
                 identidade: ctx.state.data.identidade,
                 demo: ctx.state.data.demo,
+                demoHtml: ctx.state.data.demoHtml || '',
                 proposta: ctx.state.data.proposta,
                 googlePresence: ctx.state.data.googlePresence || null,
                 googleDiagnostico: ctx.state.data.googleDiagnostico || null,

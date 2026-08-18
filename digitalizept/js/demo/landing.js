@@ -197,6 +197,7 @@ function buildSobre(demo, fotos) {
 }
 
 function buildServicos(demo) {
+    if (!demo.servicos || !Array.isArray(demo.servicos.itens) || !demo.servicos.itens.length) return null;
     const s = section('dpl-servicos', 'dpl-servicos');
     s.appendChild(sectionTitle(demo.servicos.titulo));
     const grid = el('div', 'dpl-servicos-grid');

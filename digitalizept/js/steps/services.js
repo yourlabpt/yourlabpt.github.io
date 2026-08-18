@@ -4,6 +4,7 @@ import { ensureProposta, ensureManutencoes, setManutencoes } from '../proposal-c
 import { ensureDominio, isDominioValid, refreshDominioCandidates } from '../domain.js';
 import { includesWebsite } from '../deal/packages.js';
 import { currentSubstep, renderAsk, askChoices, askText } from '../substep.js';
+import { buildPackagePitchPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
 
 const BEGINNER_EXTRAS = [
     'google_perfil_completo',
@@ -150,9 +151,36 @@ async function render(body, ctx) {
             meta: priceLabel(s)
         })), {
             selected: proposta.pacote,
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 proposta.pacote = item.id;
                 persist();
+            }
+        });
+        if (ctx.state.data.packagePitch) {
+            const pitch = document.createElement('p');
+            pitch.className = 'ask-hint';
+            pitch.textContent = ctx.state.data.packagePitch;
+            control.appendChild(pitch);
+        }
+        if (!ctx.state.data.packagePitchPrompt) {
+            ctx.state.data.packagePitchPrompt = buildPackagePitchPrompt(ctx.state);
+        }
+        renderOptionalAi(control, {
+            title: 'Como dizer o pacote (opcional)',
+            hint: 'Não altera extras nem preços. Só uma frase para a conversa.',
+            prompt: ctx.state.data.packagePitchPrompt,
+            placeholder: 'Cole a frase…',
+            ctx,
+            onPromptChange: (value) => {
+                ctx.state.data.packagePitchPrompt = value;
+                ctx.update({ packagePitchPrompt: value });
+            },
+            onApply: (raw) => {
+                const texto = plainAiText(raw);
+                ctx.state.data.packagePitch = texto;
+                ctx.update({ packagePitch: texto, packagePitchPrompt: ctx.state.data.packagePitchPrompt });
+                ctx.showToast('Frase guardada.');
             }
         });
         persist();
@@ -181,6 +209,7 @@ async function render(body, ctx) {
                 selected: (item) => (item.id === 'proprio'
                     ? dominio.modo === 'proprio'
                     : dominio.modo === 'sugerido' && dominio.escolhido === item.id),
+                goNext: ctx.goNext,
                 onSelect: (item) => {
                     if (item.id === 'proprio') {
                         dominio.modo = 'proprio';
@@ -236,6 +265,7 @@ async function render(body, ctx) {
             { id: 'no', name: 'Não' }
         ], {
             selected: on ? 'yes' : 'no',
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 setExtra(proposta, s.codigo, item.id === 'yes');
                 persist();
@@ -257,6 +287,7 @@ async function render(body, ctx) {
             { id: 'yes', name: 'Sim, ver o resto' }
         ], {
             selected: ctx.state.data.extrasMore === true ? 'yes' : 'no',
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 ctx.state.data.extrasMore = item.id === 'yes';
                 persist();
@@ -279,6 +310,7 @@ async function render(body, ctx) {
             { id: 'yes', name: 'Sim' }
         ], {
             selected: proposta.urgencia ? 'yes' : 'no',
+            goNext: ctx.goNext,
             onSelect: (item) => {
                 proposta.urgencia = item.id === 'yes';
                 persist();
@@ -313,6 +345,7 @@ async function render(body, ctx) {
                 if (!item.id) return selected.size === 0;
                 return selected.has(item.id);
             },
+            autoAdvance: false,
             onSelect: (item) => {
                 if (!item.id) {
                     setManutencoes(proposta, []);

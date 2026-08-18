@@ -3,7 +3,7 @@ const path = require('path');
 
 const DEMOS_ROOT = path.join(__dirname, '..', 'data', 'digitalizept-demos');
 
-function writeDemoFolder({ slug, demo, identidade, dados, businessType }) {
+function writeDemoFolder({ slug, demo, identidade, dados, businessType, demoHtml }) {
     const safe = String(slug || 'demo').replace(/[^a-z0-9_-]/gi, '_').slice(0, 80) || 'demo';
     const folder = path.join(DEMOS_ROOT, safe);
     fs.mkdirSync(folder, { recursive: true });
@@ -13,6 +13,12 @@ function writeDemoFolder({ slug, demo, identidade, dados, businessType }) {
         dados: dados || {},
         businessType: businessType || {}
     }, null, 2));
+    const customPath = path.join(folder, 'custom.html');
+    if (demoHtml) {
+        fs.writeFileSync(customPath, String(demoHtml));
+    } else if (fs.existsSync(customPath)) {
+        fs.unlinkSync(customPath);
+    }
     fs.writeFileSync(path.join(folder, 'index-url.txt'), `/d/${safe}\n`);
     return folder;
 }

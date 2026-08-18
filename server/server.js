@@ -1881,6 +1881,14 @@ function digitalizeptSlug(value) {
     return `${base}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
+const DEMO_HTML_MAX = 900000;
+
+function clipDemoHtml(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return '';
+    return raw.length > DEMO_HTML_MAX ? raw.slice(0, DEMO_HTML_MAX) : raw;
+}
+
 function scheduleLeadGeocode(leadId, { force = false } = {}) {
     setImmediate(() => {
         try {
@@ -2154,6 +2162,7 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
         const row = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
                    l.demo_slug, l.demo_json, l.identidade_json, l.google_presence_json, l.wizard_json,
+                   l.demo_html,
                    d.obrigatorios_json, d.opcionais_json
             FROM lead l
             LEFT JOIN dados_negocio d ON d.lead_id = l.id
@@ -2251,11 +2260,20 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             leadId: row.id,
             businessType,
             dados,
-            identidade: Object.keys(identidade || {}).length ? identidade : undefined,
+            identidade: Object.keys(identidade || {}).length
+                ? identidade
+                : (wizardExtra.identidade || undefined),
             demo: demo && demo.hero ? demo : (wizardExtra.demo || undefined),
             demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : (wizardExtra.demoUrl || ''),
             demoPrompt: wizardExtra.demoPrompt || '',
             demoRaw: wizardExtra.demoRaw || '',
+            demoHtml: row.demo_html
+                || (!row.demo_slug ? (wizardExtra.demoHtml || undefined) : undefined),
+            htmlChangeNote: wizardExtra.htmlChangeNote || undefined,
+            colorPrompt: wizardExtra.colorPrompt || undefined,
+            gbpSobre: wizardExtra.gbpSobre || undefined,
+            diagPitch: wizardExtra.diagPitch || undefined,
+            packagePitch: wizardExtra.packagePitch || undefined,
             demoGbp: wizardExtra.demoGbp === true,
             googleDiagnostico: wizardExtra.googleDiagnostico || undefined,
             proposta,
@@ -2453,7 +2471,23 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const body = req.body || {};
         const dados = body.dados || {};
         const businessType = body.businessType || {};
-        const demo = body.demo;
+        const demoHtml = clipDemoHtml(body.demoHtml);
+        let demo = body.demo;
+        if ((!demo || !demo.hero || !demo.hero.titulo) && demoHtml) {
+            demo = {
+                hero: {
+                    titulo: cleanText(dados.nome_negocio, 80) || 'Demonstração',
+                    subtitulo: '',
+                    cta: 'Contactar'
+                },
+                sobre: { titulo: 'Sobre', texto: '' },
+                servicos: { titulo: 'Serviços', itens: [] },
+                diferenciais: { titulo: 'Porquê nós', itens: [] },
+                problemas: { titulo: '', itens: [] },
+                avaliacoes: { titulo: '', itens: [] },
+                rodape: { texto: '' }
+            };
+        }
         if (!demo || !demo.hero || !demo.hero.titulo) {
             return res.status(400).json({ error: 'Falta a demonstração.' });
         }
@@ -2469,18 +2503,19 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
             if (existing) {
                 clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
                 db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?,
-                    morada = ?, cidade = ?, telefone = ?, whatsapp = ?, estado = CASE WHEN estado = 'fechado' THEN estado ELSE 'demonstracao' END
+                    morada = ?, cidade = ?, telefone = ?, whatsapp = ?, demo_html = ?,
+                    estado = CASE WHEN estado = 'fechado' THEN estado ELSE 'demonstracao' END
                     WHERE id = ?`).run(
                     JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug,
                     cleanText(dados.nome_negocio, 200), morada, cidade,
-                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), leadId);
+                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), demoHtml, leadId);
                 applyAutoCobertura(db, leadId, 'demo');
             } else {
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'demonstracao', 'demo', ?, ?, ?, ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, demo_html, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'demonstracao', 'demo', ?, ?, ?, ?, ?)`).run(
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
                     morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
-                    JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug, now);
+                    JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug, demoHtml, now);
             }
         });
         persist();
@@ -2491,7 +2526,8 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
                 demo,
                 identidade: body.identidade || {},
                 dados,
-                businessType
+                businessType,
+                demoHtml
             });
         } catch (err) {
             console.error(`digitalizept: demo folder failed (${err.message})`);
@@ -2508,13 +2544,13 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
         const slug = cleanText(req.params.slug, 80);
         const db = getDigitalizeptDb();
         const row = db.prepare(`
-            SELECT l.nome, l.business_type, l.demo_json, l.identidade_json,
+            SELECT l.nome, l.business_type, l.demo_json, l.identidade_json, l.demo_html,
                    d.obrigatorios_json, d.opcionais_json
             FROM lead l
             LEFT JOIN dados_negocio d ON d.lead_id = l.id
             WHERE l.demo_slug = ?
         `).get(slug);
-        if (!row || !row.demo_json || row.demo_json === '{}') {
+        if (!row || ((!row.demo_json || row.demo_json === '{}') && !row.demo_html)) {
             return res.status(404).json({ error: 'Demonstração não encontrada.' });
         }
         const types = loadBusinessTypes();
@@ -2528,6 +2564,7 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
             nome: row.nome,
             businessType,
             demo: parseJsonSafe(row.demo_json, null),
+            demoHtml: row.demo_html || '',
             identidade: parseJsonSafe(row.identidade_json, {}),
             dados
         });
@@ -2860,6 +2897,8 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             }
         });
         persist();
+        db.prepare('UPDATE lead SET demo_html = ? WHERE id = ?')
+            .run(clipDemoHtml(body.demoHtml), leadId);
         scheduleLeadGeocode(leadId);
 
         const archive = cleanText(process.env.LEAD_NOTIFY_TO, 200) || cleanText(process.env.SMTP_USER, 200);

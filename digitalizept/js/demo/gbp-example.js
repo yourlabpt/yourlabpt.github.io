@@ -44,7 +44,9 @@ export function gbpDataFromState(state) {
             : 'Horário a confirmar',
         telefone: dados.telefone || dados.whatsapp || '',
         morada: [dados.morada, dados.cidade].filter(Boolean).join(', ') || 'Morada a confirmar',
-        sobre: dados.o_que_faz || dados.diferencial
+        sobre: (state.data && state.data.gbpSobre)
+            || dados.o_que_faz
+            || dados.diferencial
             || `Perfil Google de ${nome} — o que os clientes vêem no Maps.`,
         horario: dados.horario ? [dados.horario] : GBP_SAMPLE.horario,
         whatsapp: dados.whatsapp || ''
