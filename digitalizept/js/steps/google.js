@@ -284,8 +284,7 @@ export const googleStep = {
     name: 'Google',
     title: 'Presença no Google',
     subtitle: 'Checklist leve para organizar o Perfil Google do cliente.',
-    // Diagnóstico covers Maps/website/priority; operational checklist lives in the work folder.
-    shouldSkip: () => true,
+    shouldSkip: (state) => !includesGooglePresence(ensureProposta(state)),
     isValid,
     isSubstepValid,
     substepCount: (state) => (includesGooglePresence(ensureProposta(state)) ? pagesFor(state).length : 0),

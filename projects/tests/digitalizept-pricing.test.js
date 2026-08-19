@@ -23,7 +23,8 @@ let resolveDeliverables;
 let includesGooglePresence;
 let includesWebsite;
 let suggestPackage;
-let buildDomainCandidates;
+let demoStep;
+let diagnosticoStep;
 let buildWhatsAppMessage;
 let buildEmailContent;
 let buildWhatsAppUrl;
@@ -67,6 +68,10 @@ before(async () => {
     invalidateDemoIfDriverField = dataMod.invalidateDemoIfDriverField;
     identityStep = identityMod.identityStep;
     servicesStep = servicesMod.servicesStep;
+    const demoMod = await import(pathToFileURL(path.join(appDir, 'steps', 'demo.js')).href);
+    const diagMod = await import(pathToFileURL(path.join(appDir, 'steps', 'diagnostico.js')).href);
+    demoStep = demoMod.demoStep;
+    diagnosticoStep = diagMod.diagnosticoStep;
 });
 
 const IVA = 0.23;
@@ -553,6 +558,49 @@ describe('digitalizept one-question substeps', () => {
         assert.equal(changed, false);
         assert.deepEqual(state.data.demo, { hero: { titulo: 'Demo atual' } });
         assert.equal(state.data.demoSeeded, true);
+    });
+});
+
+describe('digitalizept demo flow', () => {
+    it('diagnóstico ends before pacotes — only understanding questions', () => {
+        assert.equal(diagnosticoStep.substepCount(), 5);
+        const state = {
+            substep: 4,
+            data: {
+                googleDiagnostico: {
+                    exemploVisto: true,
+                    maps: 'sim_acesso',
+                    validado: 'sim',
+                    website: 'nao',
+                    prioridade: 'google'
+                }
+            }
+        };
+        assert.equal(diagnosticoStep.isSubstepValid(state), true);
+        assert.equal(diagnosticoStep.isValid(state), true);
+    });
+
+    it('demonstração shows Google Maps and website as two substeps', () => {
+        assert.equal(demoStep.substepCount(), 2);
+        const gbpOnly = {
+            substep: 0,
+            data: {
+                businessType: { id: 'cafe-pastelaria' },
+                dados: { nome_negocio: 'Café Central' }
+            }
+        };
+        assert.equal(demoStep.isSubstepValid(gbpOnly), true);
+        const website = {
+            substep: 1,
+            data: {
+                businessType: { id: 'cafe-pastelaria' },
+                dados: { nome_negocio: 'Café Central', o_que_faz: 'Café' },
+                demo: { hero: { titulo: 'Café Central' }, servicos: { itens: [] } },
+                demoSeeded: true
+            }
+        };
+        assert.equal(demoStep.isSubstepValid(website), true);
+        assert.equal(demoStep.isValid(website), true);
     });
 });
 

@@ -2,7 +2,7 @@ import { fetchCatalog } from '../catalog.js';
 import { formatEuros } from '../format.js';
 import { ensureProposta, ensureManutencoes, setManutencoes } from '../proposal-calc.js';
 import { ensureDominio, isDominioValid, refreshDominioCandidates } from '../domain.js';
-import { includesWebsite } from '../deal/packages.js';
+import { includesWebsite, PACKAGE_LABELS } from '../deal/packages.js';
 import { currentSubstep, renderAsk, askChoices, askText } from '../substep.js';
 import { buildPackagePitchPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
 
@@ -68,7 +68,7 @@ function pagesFor(state) {
     const proposta = state.data.proposta || {};
     const { beginner, rest } = extrasByGroup(catalog, proposta);
     const pages = [];
-    // Pacote is chosen in Diagnóstico; allow override here if needed.
+    // Pacote escolhido depois das demonstrações; diagnóstico só sugere.
     pages.push({ kind: 'pacote' });
     if (includesWebsite(proposta)) pages.push({ kind: 'dominio' });
     beginner.forEach((servico) => pages.push({ kind: 'extra', servico }));
@@ -145,9 +145,17 @@ async function render(body, ctx) {
 
     if (page.kind === 'pacote') {
         const packages = catalog.filter((s) => s.tipo === 'pacote');
+        const diag = ctx.state.data.googleDiagnostico || {};
+        if (diag.pacoteSugerido && !ctx.state.data._pacoteEscolhido) {
+            proposta.pacote = diag.pacoteSugerido;
+        }
+        const suggested = diag.pacoteSugerido || proposta.pacote;
+        const suggestedLabel = PACKAGE_LABELS[suggested] || suggested;
         const { control } = renderAsk(body, {
-            title: 'Confirmar o pacote',
-            hint: 'Já veio do diagnóstico — pode ainda mudar aqui.',
+            title: 'Escolher pacote',
+            hint: diag.pacoteSugerido
+                ? `Depois das demonstrações — sugestão do diagnóstico: ${suggestedLabel}. Agora sim, fale de preços.`
+                : 'Depois de mostrar Google Maps e site — escolha com o cliente.',
             index: idx,
             total: pages.length
         });
@@ -161,6 +169,7 @@ async function render(body, ctx) {
             goNext: ctx.goNext,
             onSelect: (item) => {
                 proposta.pacote = item.id;
+                ctx.state.data._pacoteEscolhido = true;
                 persist();
             }
         });
@@ -392,8 +401,8 @@ async function render(body, ctx) {
 
 export const servicesStep = {
     name: 'Serviços',
-    title: 'Extras e manutenção',
-    subtitle: 'Confirme o pacote, domínio (se houver site), extras e mensais Maps/hosting.',
+    title: 'Pacotes e extras',
+    subtitle: 'Escolha o pacote, domínio (se houver site), extras e manutenção — depois das demonstrações.',
     isValid,
     isSubstepValid,
     substepCount,

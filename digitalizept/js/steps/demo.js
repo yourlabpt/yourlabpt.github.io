@@ -26,6 +26,7 @@ import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
 import { fetchConfig } from '../settings.js';
 import { renderFollowupShare } from '../demo/followup-ui.js';
+import { currentSubstep, renderAsk } from '../substep.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -35,14 +36,28 @@ function isGbpDemo(state) {
     return !includesWebsite(ensureProposta(state));
 }
 
-function isValid(state) {
-    if (isGbpDemo(state)) {
-        const dados = state.data.dados || {};
-        return Boolean(dados.nome_negocio);
-    }
+function isGbpSubstepValid(state) {
+    const dados = state.data.dados || {};
+    return Boolean(dados.nome_negocio);
+}
+
+function isWebsiteSubstepValid(state) {
     if (state.data.demoHtml) return true;
     ensureSeededDemo(state);
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
+}
+
+function isSubstepValid(state) {
+    const idx = currentSubstep(state);
+    return idx === 0 ? isGbpSubstepValid(state) : isWebsiteSubstepValid(state);
+}
+
+function isValid(state) {
+    return isGbpSubstepValid(state) && isWebsiteSubstepValid(state);
+}
+
+function substepCount() {
+    return 2;
 }
 
 function copyText(ctx, text, okMessage) {
@@ -76,14 +91,15 @@ async function publishDemo(ctx) {
     return '';
 }
 
-function openPreview(state, ctx) {
+function openPreview(state, ctx, { mode } = {}) {
+    const showGbp = mode === 'gbp' || (mode !== 'website' && isGbpDemo(state));
     const overlay = document.createElement('div');
     overlay.className = 'dp-preview-overlay';
 
     const bar = document.createElement('div');
     bar.className = 'dp-preview-bar';
     const label = document.createElement('span');
-    label.textContent = isGbpDemo(state)
+    label.textContent = showGbp
         ? 'Pré-visualização do Perfil Google'
         : (state.data.demoHtml ? 'Pré-visualização HTML' : 'Pré-visualização da demonstração');
     const close = document.createElement('button');
@@ -96,7 +112,7 @@ function openPreview(state, ctx) {
     const scroll = document.createElement('div');
     scroll.className = 'dp-preview-scroll';
     try {
-        if (isGbpDemo(state)) {
+        if (showGbp) {
             const wrap = document.createElement('div');
             wrap.style.padding = '16px';
             mountGbpExample(wrap, {
@@ -151,7 +167,7 @@ function applyHtml(ctx, raw, showStatus, afterApply) {
     ctx.setValid(true);
     showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
     if (typeof afterApply === 'function') afterApply();
-    openPreview(ctx.state, ctx);
+    openPreview(ctx.state, ctx, { mode: 'website' });
     publishDemo(ctx).then((url) => {
         if (url) showStatus(`HTML publicado. Link: ${url}`, 'ok');
     });
@@ -170,14 +186,14 @@ function applyJsonDemo(ctx, demo, raw, showStatus) {
     });
 }
 
-function renderGbpDemo(body, ctx) {
+function renderGbpDemo(container, ctx) {
     const title = document.createElement('h3');
     title.className = 'field-group-title';
-    title.textContent = 'O Perfil Google deste negócio';
+    title.textContent = 'Cartão no Google Maps';
 
     const hint = document.createElement('p');
     hint.className = 'id-disclaimer';
-    hint.textContent = 'Mostre ao cliente como fica no Maps com os dados que acabámos de recolher.';
+    hint.textContent = 'Com os dados deste negócio — ainda sem falar de preços.';
 
     const host = document.createElement('div');
     function paintCard() {
@@ -196,15 +212,15 @@ function renderGbpDemo(body, ctx) {
     previewBtn.type = 'button';
     previewBtn.className = 'btn-primary';
     previewBtn.textContent = 'Ver em ecrã cheio';
-    previewBtn.addEventListener('click', () => openPreview(ctx.state, ctx));
+    previewBtn.addEventListener('click', () => openPreview(ctx.state, ctx, { mode: 'gbp' }));
     actions.appendChild(previewBtn);
 
-    body.append(title, hint, host, actions);
+    container.append(title, hint, host, actions);
 
     if (!ctx.state.data.gbpSobrePrompt) {
         ctx.state.data.gbpSobrePrompt = buildGbpSobrePrompt(ctx.state);
     }
-    renderOptionalAi(body, {
+    renderOptionalAi(container, {
         title: 'Melhorar o “Sobre” com AI (opcional)',
         hint: 'O cartão já usa o nome e a morada. Peça um texto melhor se fizer falta.',
         prompt: ctx.state.data.gbpSobrePrompt,
@@ -225,25 +241,10 @@ function renderGbpDemo(body, ctx) {
 
     ctx.state.data.demoGbp = true;
     ctx.update({ demoGbp: true });
-    ctx.setValid(isValid(ctx.state));
+    ctx.setValid(isSubstepValid(ctx.state));
 }
 
-function render(body, ctx) {
-    const businessType = getBusinessType(ctx.state);
-    if (!businessType) {
-        const warn = document.createElement('div');
-        warn.className = 'placeholder';
-        warn.textContent = 'Complete primeiro os passos anteriores.';
-        body.appendChild(warn);
-        ctx.setValid(false);
-        return;
-    }
-
-    if (isGbpDemo(ctx.state)) {
-        renderGbpDemo(body, ctx);
-        return;
-    }
-
+function renderWebsiteDemo(body, ctx) {
     ensureSeededDemo(ctx.state);
     ctx.update({ demo: ctx.state.data.demo, demoSeeded: ctx.state.data.demoSeeded === true });
 
@@ -288,7 +289,7 @@ function render(body, ctx) {
     previewBtn.textContent = 'Ver demonstração';
     previewBtn.disabled = !isValid(ctx.state);
     previewBtn.addEventListener('click', () => {
-        openPreview(ctx.state, ctx);
+        openPreview(ctx.state, ctx, { mode: 'website' });
         publishDemo(ctx).then(() => {
             if (followupUi) followupUi.refresh();
         });
@@ -482,13 +483,49 @@ function render(body, ctx) {
                 : 'Demonstração pronta.'), 'ok');
     }
 
-    ctx.setValid(isValid(ctx.state));
+    ctx.setValid(isSubstepValid(ctx.state));
+}
+
+function render(body, ctx) {
+    const businessType = getBusinessType(ctx.state);
+    if (!businessType) {
+        const warn = document.createElement('div');
+        warn.className = 'placeholder';
+        warn.textContent = 'Complete primeiro os passos anteriores.';
+        body.appendChild(warn);
+        ctx.setValid(false);
+        return;
+    }
+
+    const idx = currentSubstep(ctx.state);
+    const total = substepCount();
+
+    if (idx === 0) {
+        const { control } = renderAsk(body, {
+            title: 'Perfil Google',
+            hint: '1.º exemplo — como aparece no Maps. Ainda sem preços.',
+            index: idx,
+            total
+        });
+        renderGbpDemo(control, ctx);
+        return;
+    }
+
+    const { control } = renderAsk(body, {
+        title: 'Site de exemplo',
+        hint: '2.º exemplo — como poderia ser uma página web. Depois vem a escolha de pacotes.',
+        index: idx,
+        total
+    });
+    renderWebsiteDemo(control, ctx);
 }
 
 export const demoStep = {
     name: 'Demonstração',
-    title: 'A demonstração',
-    subtitle: 'Landing deste tipo de negócio — já pode mostrar. AI e HTML mock são opcionais.',
+    title: 'Mostrar as opções',
+    subtitle: 'Google Maps e site de exemplo — antes de falar de preços.',
     isValid,
+    isSubstepValid,
+    substepCount,
     render
 };
