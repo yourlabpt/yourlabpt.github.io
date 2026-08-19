@@ -1,3 +1,5 @@
+import { apiRequest } from '../api.js';
+import { getToken } from '../auth.js';
 import { buildPrompt } from '../demo/prompt.js';
 import { parseDemoOutput } from '../demo/parse.js';
 import { renderLanding } from '../demo/landing.js';
@@ -22,8 +24,8 @@ import {
 } from '../optional-ai.js';
 import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
-import { apiRequest } from '../api.js';
-import { getToken } from '../auth.js';
+import { fetchConfig } from '../settings.js';
+import { renderFollowupShare } from '../demo/followup-ui.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -287,7 +289,9 @@ function render(body, ctx) {
     previewBtn.disabled = !isValid(ctx.state);
     previewBtn.addEventListener('click', () => {
         openPreview(ctx.state, ctx);
-        publishDemo(ctx);
+        publishDemo(ctx).then(() => {
+            if (followupUi) followupUi.refresh();
+        });
     });
     const refreshBtn = document.createElement('button');
     refreshBtn.type = 'button';
@@ -304,6 +308,18 @@ function render(body, ctx) {
     previewBtnWrap.append(previewBtn, refreshBtn);
     previewGroup.append(previewTitle, previewHint, live, previewBtnWrap, status);
     body.appendChild(previewGroup);
+
+    const followupHost = document.createElement('div');
+    body.appendChild(followupHost);
+    let followupUi = null;
+    fetchConfig(ctx).then((config) => {
+        if (!config) return;
+        followupUi = renderFollowupShare(followupHost, ctx, config, {
+            onPublish: () => publishDemo(ctx).then((url) => {
+                if (url && followupUi) followupUi.refresh();
+            })
+        });
+    }).catch(() => { /* follow-up block is optional */ });
 
     if (identityChanged) {
         showStatus('Demo actualizada com as cores, logo e fotos do passo anterior.', 'ok');

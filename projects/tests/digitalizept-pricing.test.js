@@ -24,6 +24,10 @@ let includesGooglePresence;
 let includesWebsite;
 let suggestPackage;
 let buildDomainCandidates;
+let buildWhatsAppMessage;
+let buildEmailContent;
+let buildWhatsAppUrl;
+let normalizePhoneForWa;
 
 before(async () => {
     if (typeof globalThis.window === 'undefined') {
@@ -51,6 +55,11 @@ before(async () => {
     includesWebsite = packages.includesWebsite;
     suggestPackage = packages.suggestPackage;
     buildDomainCandidates = domainsServer.buildDomainCandidates;
+    const followup = await import(pathToFileURL(path.join(appDir, 'demo', 'followup-messages.js')).href);
+    buildWhatsAppMessage = followup.buildWhatsAppMessage;
+    buildEmailContent = followup.buildEmailContent;
+    buildWhatsAppUrl = followup.buildWhatsAppUrl;
+    normalizePhoneForWa = followup.normalizePhoneForWa;
     const dataMod = await import(pathToFileURL(path.join(appDir, 'steps', 'data.js')).href);
     const identityMod = await import(pathToFileURL(path.join(appDir, 'steps', 'identity.js')).href);
     const servicesMod = await import(pathToFileURL(path.join(appDir, 'steps', 'services.js')).href);
@@ -544,5 +553,40 @@ describe('digitalizept one-question substeps', () => {
         assert.equal(changed, false);
         assert.deepEqual(state.data.demo, { hero: { titulo: 'Demo atual' } });
         assert.equal(state.data.demoSeeded, true);
+    });
+});
+
+describe('digitalizept followup messages', () => {
+    it('fills templates with demo link and client name', () => {
+        const state = {
+            data: {
+                demoUrl: '/d/cafe-exemplo',
+                followupVisita: 'manha',
+                followupDia: 'sexta-feira',
+                dados: {
+                    responsavel: 'Silva',
+                    nome_negocio: 'Café do Zé',
+                    email: 'cafe@example.com',
+                    telefone: '965601954'
+                }
+            }
+        };
+        const config = { provider: { responsavel: 'Túlio Soares', telefone: '912345678', site: 'yourlabpt.com' } };
+        const wa = buildWhatsAppMessage(state, config);
+        assert.match(wa, /Sr\. Silva/);
+        assert.match(wa, /Café do Zé/);
+        assert.match(wa, /sexta-feira/);
+        assert.match(wa, /\/d\/cafe-exemplo/);
+
+        const email = buildEmailContent(state, config);
+        assert.match(email.subject, /Café do Zé/);
+        assert.match(email.body, /\/d\/cafe-exemplo/);
+        assert.match(email.body, /Túlio Soares/);
+    });
+
+    it('builds absolute demo url and whatsapp phone', () => {
+        assert.equal(normalizePhoneForWa('965 601 954'), '351965601954');
+        const url = buildWhatsAppUrl('351965601954', 'Olá');
+        assert.match(url, /^https:\/\/wa\.me\/351965601954\?text=/);
     });
 });

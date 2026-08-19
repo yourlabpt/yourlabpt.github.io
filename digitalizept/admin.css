@@ -429,6 +429,23 @@
     box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18);
 }
 
+.admin-drawer-panel .followup-share {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.admin-drawer-panel .followup-wa {
+    background: #25d366;
+    border-color: #1da851;
+    color: #fff;
+}
+
+.admin-drawer-panel .followup-actions .btn-primary,
+.admin-drawer-panel .followup-actions .btn-secondary {
+    flex: 1 1 140px;
+}
+
 .admin-drawer-panel h2 {
     margin: 0 0 16px;
     font-size: 1.2rem;

@@ -3,6 +3,8 @@ import { getToken, setToken, clearToken } from './auth.js';
 import { formatEuros } from './format.js';
 import { downloadDealContract } from './deal/download.js';
 import { setupCoverage } from './admin-coverage.js';
+import { fetchConfig } from './settings.js';
+import { renderFollowupShare } from './demo/followup-ui.js';
 
 const FASES = [
     { id: 'demonstracao_criada', label: 'Demonstração' },
@@ -336,6 +338,17 @@ function renderDemos() {
             open.rel = 'noopener';
             open.textContent = 'Abrir demo';
             actions.appendChild(open);
+
+            const share = document.createElement('button');
+            share.type = 'button';
+            share.className = 'btn-secondary';
+            share.textContent = 'WhatsApp / Email';
+            share.addEventListener('click', () => openFollowupShare({
+                leadId: l.id,
+                nome: l.nome,
+                demo_slug: l.demo_slug
+            }));
+            actions.appendChild(share);
         }
 
         const notes = document.createElement('button');
@@ -418,6 +431,19 @@ function renderDeals() {
             demo.rel = 'noopener';
             demo.textContent = 'Demo';
             actions.appendChild(demo);
+
+            if (d.leadId) {
+                const share = document.createElement('button');
+                share.type = 'button';
+                share.className = 'btn-secondary';
+                share.textContent = 'WhatsApp / Email';
+                share.addEventListener('click', () => openFollowupShare({
+                    leadId: d.leadId,
+                    nome: d.nome || d.cliente_nome,
+                    demo_slug: d.demo_slug
+                }));
+                actions.appendChild(share);
+            }
         }
         const contract = document.createElement('button');
         contract.type = 'button';
@@ -462,6 +488,68 @@ function renderDeals() {
         card.appendChild(actions);
         el.dealsList.appendChild(card);
     });
+}
+
+async function openFollowupShare({ leadId, nome, demo_slug }) {
+    if (!leadId) {
+        toast('Lead em falta.', true);
+        return;
+    }
+    openDrawer(`Enviar demonstração — ${nome || 'Lead'}`, (panel) => {
+        const loading = document.createElement('p');
+        loading.className = 'admin-hint';
+        loading.textContent = 'A carregar dados…';
+        panel.appendChild(loading);
+    });
+
+    try {
+        const [{ response, data }, config] = await Promise.all([
+            api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/resume`),
+            fetchConfig({ onUnauthorized })
+        ]);
+        if (!response.ok) {
+            closeDrawer();
+            toast((data && data.error) || 'Não foi possível carregar o lead.', true);
+            return;
+        }
+
+        const resume = data.data || {};
+        const stateData = {
+            ...resume,
+            demoUrl: resume.demoUrl || (demo_slug ? `/d/${demo_slug}` : ''),
+            dados: {
+                ...(resume.dados || {}),
+                nome_negocio: (resume.dados && resume.dados.nome_negocio) || nome || '',
+                email: (resume.dados && resume.dados.email)
+                    || (resume.clienteLegal && resume.clienteLegal.email)
+                    || '',
+                telefone: (resume.dados && resume.dados.telefone) || '',
+                whatsapp: (resume.dados && resume.dados.whatsapp) || '',
+                responsavel: (resume.dados && resume.dados.responsavel)
+                    || (resume.clienteLegal && resume.clienteLegal.nome)
+                    || ''
+            }
+        };
+
+        const ctx = {
+            state: { data: stateData },
+            update(patch) {
+                Object.assign(stateData, patch);
+            },
+            showToast: toast
+        };
+
+        openDrawer(`Enviar demonstração — ${stateData.dados.nome_negocio || nome || 'Lead'}`, (panel) => {
+            const host = document.createElement('div');
+            panel.appendChild(host);
+            renderFollowupShare(host, ctx, config || { provider: {} }, {
+                hidePublish: Boolean(stateData.demoUrl)
+            });
+        });
+    } catch (_) {
+        closeDrawer();
+        toast('Erro de rede.', true);
+    }
 }
 
 async function openNotes(lead) {

@@ -17,7 +17,8 @@ const FALLBACK_CONFIG = {
         email: '',
         site: '',
         iban: '',
-        mbway: ''
+        mbway: '',
+        telefone: ''
     }
 };
 

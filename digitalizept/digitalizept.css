@@ -916,6 +916,54 @@ button, input, textarea, select {
     color: var(--success-color);
 }
 
+.followup-share {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color);
+}
+
+.followup-controls {
+    display: grid;
+    gap: 10px;
+    margin: 12px 0;
+}
+
+@media (min-width: 520px) {
+    .followup-controls {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.followup-link-status {
+    font-size: 0.85rem;
+    color: var(--muted-color);
+    margin: 0 0 8px;
+    word-break: break-all;
+}
+
+.followup-link-missing {
+    color: var(--danger-color);
+}
+
+.followup-preview {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+}
+
+.followup-actions {
+    margin-top: 12px;
+}
+
+.followup-wa {
+    background: #25d366;
+    border-color: #25d366;
+}
+
+.followup-wa:hover {
+    filter: brightness(0.95);
+}
+
 .demo-live {
     margin: 12px 0 16px;
     border-radius: 16px;

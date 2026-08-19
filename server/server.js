@@ -114,7 +114,8 @@ const DIGITALIZEPT_PROVIDER = {
     email: cleanText(process.env.YOURLAB_EMAIL, 160) || cleanText(process.env.SMTP_USER, 160),
     site: cleanText(process.env.YOURLAB_SITE, 120) || 'yourlabpt.com',
     iban: cleanText(process.env.YOURLAB_IBAN, 40),
-    mbway: cleanText(process.env.YOURLAB_MBWAY, 40)
+    mbway: cleanText(process.env.YOURLAB_MBWAY, 40),
+    telefone: cleanText(process.env.YOURLAB_TELEFONE, 40) || cleanText(process.env.YOURLAB_MBWAY, 40)
 };
 
 const ollamaClient = FORCE_OFFLINE_CHAT
