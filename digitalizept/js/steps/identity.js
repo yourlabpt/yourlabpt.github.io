@@ -1,6 +1,6 @@
 // Etapa 3 — Identidade visual: logo, paleta (botões), fotos reais.
 
-import { currentSubstep, renderAsk } from '../substep.js';
+import { currentSubstep, renderAsk, scheduleGoNext } from '../substep.js';
 import { applyCustomCores, buildColorPrompt, parseCores } from '../demo/colors.js';
 
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
@@ -156,7 +156,7 @@ function renderLogo(body, ctx, identidade, persist) {
         identidade.logo = { tipo: 'nenhum' };
         persist();
         renderPreview();
-        if (typeof ctx.goNext === 'function') ctx.goNext();
+        scheduleGoNext(ctx.goNext);
     });
     actions.append(uploadBtn, noneBtn);
     control.append(preview, actions, input);
@@ -238,7 +238,7 @@ function renderPalette(body, ctx, identidade, persist) {
         applyCustomCores(identidade, cores);
         persist();
         paintSelection();
-        if (advance && typeof ctx.goNext === 'function') ctx.goNext();
+        if (advance) scheduleGoNext(ctx.goNext);
     }
 
     const applyPasteBtn = document.createElement('button');
@@ -338,7 +338,7 @@ function renderPalette(body, ctx, identidade, persist) {
             applyPalette(identidade, palette);
             persist();
             paintSelection();
-            if (typeof ctx.goNext === 'function') ctx.goNext();
+            scheduleGoNext(ctx.goNext);
         });
         grid.appendChild(btn);
     });
@@ -428,7 +428,7 @@ function renderFotos(body, ctx, identidade, persist) {
     skipBtn.textContent = 'Agora não';
     skipBtn.addEventListener('click', () => {
         persist();
-        if (typeof ctx.goNext === 'function') ctx.goNext();
+        scheduleGoNext(ctx.goNext);
     });
     actions.append(addBtn, skipBtn);
     control.append(preview, actions, input);

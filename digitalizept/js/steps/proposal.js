@@ -2,7 +2,7 @@ import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { formatEuros } from '../format.js';
 import { ensureProposta, computeProposta, resolveIvaRate } from '../proposal-calc.js';
-import { currentSubstep, renderAsk, askChoices } from '../substep.js';
+import { currentSubstep, renderAsk, askChoices, scheduleGoNext } from '../substep.js';
 
 const DISCOUNT_PRESETS = [0, 5, 10, 15, 20];
 
@@ -151,7 +151,7 @@ async function render(body, ctx) {
                 customWrap.classList.add('hidden');
                 paintChips();
                 recompute();
-                if (typeof ctx.goNext === 'function') ctx.goNext();
+                scheduleGoNext(ctx.goNext);
             });
             chips.appendChild(chip);
         });

@@ -201,6 +201,27 @@ button, input, textarea, select {
     flex-shrink: 0;
 }
 
+.btn-new-deal {
+    display: inline-flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--accent-color);
+    background: transparent;
+    color: var(--accent-color);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+
+.btn-new-deal:hover {
+    background: var(--accent-soft);
+    color: var(--text-light);
+}
+
 .btn-admin {
     display: inline-flex;
     align-items: center;

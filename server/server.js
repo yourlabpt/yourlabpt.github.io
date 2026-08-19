@@ -1829,6 +1829,20 @@ app.patch('/api/digitalizept/catalog/:codigo', requireDigitalizept, (req, res) =
     }
 });
 
+app.delete('/api/digitalizept/catalog/:codigo', requireDigitalizept, (req, res) => {
+    try {
+        const codigo = cleanText(req.params.codigo, 80);
+        const db = getDigitalizeptDb();
+        const existing = db.prepare('SELECT id FROM servico WHERE codigo = ?').get(codigo);
+        if (!existing) return res.status(404).json({ error: 'Serviço não encontrado.' });
+        db.prepare('DELETE FROM servico WHERE codigo = ?').run(codigo);
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('digitalizept catalog delete error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível apagar o serviço.' });
+    }
+});
+
 const digitalizeptGoogleChecklistsPath = path.join(__dirname, 'config', 'google-checklists.json');
 let digitalizeptGoogleChecklists = null;
 function loadGoogleChecklists() {
@@ -2612,6 +2626,63 @@ app.patch('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res) 
     } catch (err) {
         console.error('digitalizept deal patch error:', err.message);
         return res.status(500).json({ error: 'Não foi possível atualizar a fase.' });
+    }
+});
+
+app.delete('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const lead = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const hasDeal = db.prepare(`
+            SELECT 1 FROM proposta p
+            JOIN contrato c ON c.proposta_id = p.id
+            JOIN projeto pr ON pr.contrato_id = c.id
+            WHERE p.lead_id = ? LIMIT 1
+        `).get(leadId);
+        if (hasDeal) {
+            return res.status(409).json({ error: 'Este lead tem uma proposta fechada. Apague a proposta primeiro.' });
+        }
+        const del = db.transaction(() => {
+            db.prepare('DELETE FROM nota WHERE lead_id = ?').run(leadId);
+            db.prepare('DELETE FROM evento WHERE entidade = ? AND entidade_id = ?').run('lead', leadId);
+            db.prepare('DELETE FROM dados_negocio WHERE lead_id = ?').run(leadId);
+            db.prepare('DELETE FROM lead WHERE id = ?').run(leadId);
+        });
+        del();
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('digitalizept delete lead error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível apagar o lead.' });
+    }
+});
+
+app.delete('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res) => {
+    try {
+        const projectId = cleanText(req.params.projectId, 80);
+        const db = getDigitalizeptDb();
+        const row = db.prepare(`
+            SELECT pr.id, pr.contrato_id, c.proposta_id, p.lead_id
+            FROM projeto pr
+            JOIN contrato c ON c.id = pr.contrato_id
+            JOIN proposta p ON p.id = c.proposta_id
+            WHERE pr.id = ?
+        `).get(projectId);
+        if (!row) return res.status(404).json({ error: 'Proposta não encontrada.' });
+        const del = db.transaction(() => {
+            db.prepare('DELETE FROM assinatura WHERE contrato_id = ?').run(row.contrato_id);
+            db.prepare('DELETE FROM evento WHERE entidade = ? AND entidade_id = ?').run('projeto', projectId);
+            db.prepare('DELETE FROM projeto WHERE id = ?').run(projectId);
+            db.prepare('DELETE FROM contrato WHERE id = ?').run(row.contrato_id);
+            db.prepare('DELETE FROM cliente_legal WHERE lead_id = ?').run(row.lead_id);
+            db.prepare('DELETE FROM proposta WHERE id = ?').run(row.proposta_id);
+        });
+        del();
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('digitalizept delete deal error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível apagar a proposta.' });
     }
 });
 

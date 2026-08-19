@@ -1,4 +1,19 @@
 import { fetchSettings } from '../settings.js';
+import { scheduleGoNext } from '../substep.js';
+
+function clearTypeBoundState() {
+    return {
+        identidade: undefined,
+        demo: undefined,
+        demoHtml: '',
+        demoRaw: '',
+        demoSeeded: false,
+        demoIdentityStamp: '',
+        colorPrompt: '',
+        _googleChecklist: undefined,
+        googlePresence: undefined
+    };
+}
 
 function marca(type) {
     const raw = String((type && type.icone) || '').trim();
@@ -59,9 +74,12 @@ async function render(body, ctx) {
             card.addEventListener('click', () => {
                 grid.querySelectorAll('.type-card').forEach((c) => c.classList.remove('selected'));
                 card.classList.add('selected');
-                ctx.update({ businessType: type });
+                const prevId = ctx.state.data.businessType && ctx.state.data.businessType.id;
+                const patch = { businessType: type };
+                if (prevId && prevId !== type.id) Object.assign(patch, clearTypeBoundState());
+                ctx.update(patch);
                 ctx.setValid(true);
-                if (typeof ctx.goNext === 'function') ctx.goNext();
+                scheduleGoNext(ctx.goNext);
             });
 
             grid.appendChild(card);

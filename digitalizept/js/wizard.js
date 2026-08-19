@@ -10,7 +10,7 @@ import { acceptanceStep } from './steps/acceptance.js';
 import { signatureStep } from './steps/signature.js';
 import { conclusionStep } from './steps/conclusion.js';
 import { saveDraftLead } from './draft.js';
-import { currentSubstep } from './substep.js';
+import { cancelScheduledGoNext, currentSubstep } from './substep.js';
 
 // localStorage, not sessionStorage: a locked phone or a tab the browser evicts
 // mid-visit must not cost a deal that is halfway to a signature.
@@ -20,6 +20,14 @@ export function clearWizardState() {
     try {
         localStorage.removeItem(STORAGE_KEY);
     } catch (_) { /* ignore */ }
+}
+
+export function getWizardState() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch (_) { /* ignore */ }
+    return null;
 }
 
 // Used by admin "Continuar venda" to seed the sales wizard from a server lead.
@@ -104,6 +112,7 @@ export function createWizard({ onUnauthorized, showToast }) {
     advancePastSkips(state, 1);
     let currentValid = false;
     let persistWarned = false;
+    let navLock = false;
 
     function persist() {
         try {
@@ -132,18 +141,28 @@ export function createWizard({ onUnauthorized, showToast }) {
     function syncNav() {
         const isFirst = state.step === 0 && currentSubstep(state) === 0;
         const isLast = state.step === STEPS.length - 1;
-        els.backBtn.disabled = isFirst;
-        els.nextBtn.disabled = isLast || !currentValid;
+        els.backBtn.disabled = isFirst || navLock;
+        els.nextBtn.disabled = isLast || !currentValid || navLock;
         els.nextBtn.textContent = isLast ? 'Concluir' : 'Continuar';
+    }
+
+    function pagesReady(step) {
+        return typeof step.pagesReady !== 'function' || step.pagesReady(state);
     }
 
     function render() {
         const step = STEPS[state.step];
         const count = substepCount(step, state);
-        if (count > 0) {
-            state.substep = Math.min(currentSubstep(state), count - 1);
-        } else {
-            state.substep = 0;
+        const ready = pagesReady(step);
+        // While a step is still loading its pages (catalog, fields), do not
+        // clamp substep against a short placeholder list — that jumps the
+        // vendedor from the last extra into urgência / the next phase.
+        if (ready) {
+            if (count > 0) {
+                state.substep = Math.min(currentSubstep(state), count - 1);
+            } else {
+                state.substep = 0;
+            }
         }
 
         els.progressFill.style.width = `${((state.step + 1) / STEPS.length) * 100}%`;
@@ -185,6 +204,8 @@ export function createWizard({ onUnauthorized, showToast }) {
     // Start a fresh deal. Without this the next shop inherits the previous
     // client's answers, because the stored state outlives the sale.
     function reset() {
+        cancelScheduledGoNext();
+        navLock = false;
         clearWizardState();
         state.step = 0;
         state.substep = 0;
@@ -194,34 +215,59 @@ export function createWizard({ onUnauthorized, showToast }) {
     }
 
     async function goNext() {
-        if (!currentValid) return;
-        const step = STEPS[state.step];
-        const count = substepCount(step, state);
-        const idx = currentSubstep(state);
+        cancelScheduledGoNext();
+        if (navLock || !currentValid) return;
+        navLock = true;
+        currentValid = false;
+        syncNav();
+        let holdFooter = false;
+        try {
+            const step = STEPS[state.step];
+            const count = substepCount(step, state);
+            const idx = currentSubstep(state);
+            const ready = pagesReady(step);
 
-        if (count > 0 && idx < count - 1) {
-            state.substep = idx + 1;
+            if (ready && count > 0 && idx < count - 1) {
+                state.substep = idx + 1;
+                persist();
+                render();
+                return;
+            }
+
+            if (!ready) return;
+
+            if (state.step >= STEPS.length - 1) return;
+            // Persist mid-funnel progress so admin can reopen unfinished leads.
+            const leaving = STEPS[state.step];
+            if (leaving === dataStep || leaving === diagnosticoStep || leaving === identityStep
+                || leaving === demoStep || leaving === servicesStep) {
+                try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
+                catch (_) { /* a missed draft must not block the visit */ }
+            }
+            state.step += 1;
+            advancePastSkips(state, 1);
+            state.substep = 0;
             persist();
             render();
-            return;
+            holdFooter = true;
+        } finally {
+            if (holdFooter) {
+                // Continuar sits in the same footer slot on every step. Hold it
+                // disabled until the mobile ghost-click from this tap is gone.
+                setTimeout(() => {
+                    navLock = false;
+                    syncNav();
+                }, 350);
+            } else {
+                navLock = false;
+                syncNav();
+            }
         }
-
-        if (state.step >= STEPS.length - 1) return;
-        // Persist mid-funnel progress so admin can reopen unfinished leads.
-        const leaving = STEPS[state.step];
-        if (leaving === dataStep || leaving === diagnosticoStep || leaving === identityStep
-            || leaving === demoStep || leaving === servicesStep) {
-            try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
-            catch (_) { /* a missed draft must not block the visit */ }
-        }
-        state.step += 1;
-        advancePastSkips(state, 1);
-        state.substep = 0;
-        persist();
-        render();
     }
 
     function goBack() {
+        cancelScheduledGoNext();
+        if (navLock) return;
         const step = STEPS[state.step];
         const idx = currentSubstep(state);
         if (substepCount(step, state) > 0 && idx > 0) {

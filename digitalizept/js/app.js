@@ -1,9 +1,10 @@
 import { apiRequest } from './api.js';
 import { getToken, setToken, clearToken } from './auth.js';
-import { createWizard, clearWizardState, hasWizardProgress, seedWizardState } from './wizard.js';
+import { createWizard, clearWizardState, hasWizardProgress, seedWizardState, getWizardState } from './wizard.js';
 import { clearSettingsCache, fetchSettings } from './settings.js';
 import { clearCatalogCache, fetchCatalog } from './catalog.js';
 import { flushDealQueue, queuedDealCount } from './offline-queue.js';
+import { saveDraftLead } from './draft.js';
 
 const el = {
     loginOverlay: document.getElementById('login-overlay'),
@@ -11,7 +12,8 @@ const el = {
     loginError: document.getElementById('login-error'),
     keyInput: document.getElementById('key-input'),
     app: document.getElementById('app'),
-    logoutBtn: document.getElementById('logout-btn')
+    logoutBtn: document.getElementById('logout-btn'),
+    newDealBtn: document.getElementById('newDealBtn')
 };
 
 let wizard = null;
@@ -164,9 +166,34 @@ async function logout() {
     showLoginOverlay();
 }
 
+async function startNewDeal() {
+    if (hasWizardProgress()) {
+        const ws = getWizardState();
+        const nome = (ws && ws.data && ws.data.dados && ws.data.dados.nome_negocio) || '';
+        const label = nome ? `Guardar "${nome}" e começar novo negócio?` : 'Guardar rascunho e começar novo negócio?';
+        if (!window.confirm(label)) return;
+        if (ws && ws.data && ws.data.dados && ws.data.dados.nome_negocio) {
+            try {
+                await saveDraftLead(
+                    { data: ws.data, step: ws.step, substep: ws.substep },
+                    { update: () => {}, onUnauthorized: handleUnauthorized, showToast }
+                );
+                showToast(nome ? `"${nome}" guardado como lead.` : 'Rascunho guardado.');
+            } catch (_) {
+                showToast('Não foi possível guardar — a iniciar sem gravar.', true);
+            }
+        }
+    }
+    clearWizardState();
+    wizard = null;
+    wizard = createWizard({ onUnauthorized: handleUnauthorized, showToast });
+    wizard.render();
+}
+
 function bindEvents() {
     el.loginForm.addEventListener('submit', handleLoginSubmit);
     el.logoutBtn.addEventListener('click', logout);
+    el.newDealBtn.addEventListener('click', startNewDeal);
 }
 
 async function boot() {

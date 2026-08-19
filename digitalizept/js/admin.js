@@ -176,6 +176,29 @@ function renderCatalog() {
         edit.textContent = 'Editar';
         edit.addEventListener('click', () => openServiceEditor(s));
         actions.appendChild(edit);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn-danger';
+        del.textContent = 'Apagar';
+        del.addEventListener('click', async () => {
+            if (!window.confirm(`Apagar "${s.nome}" (${s.codigo})? Esta ação é irreversível.`)) return;
+            try {
+                const { response, data } = await api(`/api/digitalizept/catalog/${encodeURIComponent(s.codigo)}`, {
+                    method: 'DELETE'
+                });
+                if (!response.ok) {
+                    toast(data.error || 'Não foi possível apagar.', true);
+                    return;
+                }
+                toast('Serviço apagado.');
+                await loadCatalog();
+            } catch (_) {
+                toast('Erro de rede.', true);
+            }
+        });
+        actions.appendChild(del);
+
         card.appendChild(actions);
         el.catalogList.appendChild(card);
     });
@@ -322,6 +345,28 @@ function renderDemos() {
         notes.addEventListener('click', () => openNotes(l));
         actions.appendChild(notes);
 
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn-danger';
+        del.textContent = 'Apagar';
+        del.addEventListener('click', async () => {
+            if (!window.confirm(`Apagar o lead "${l.nome || 'sem nome'}"? Esta ação é irreversível.`)) return;
+            try {
+                const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(l.id)}`, {
+                    method: 'DELETE'
+                });
+                if (!response.ok) {
+                    toast(data.error || 'Não foi possível apagar.', true);
+                    return;
+                }
+                toast('Lead apagado.');
+                await loadLeads();
+            } catch (_) {
+                toast('Erro de rede.', true);
+            }
+        });
+        actions.appendChild(del);
+
         card.appendChild(actions);
         el.demosList.appendChild(card);
     });
@@ -391,7 +436,29 @@ function renderDeals() {
         edit.className = 'btn-secondary';
         edit.textContent = 'Fase / notas';
         edit.addEventListener('click', () => openDealEditor(d));
-        actions.append(contract, edit);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn-danger';
+        del.textContent = 'Apagar';
+        del.addEventListener('click', async () => {
+            if (!window.confirm(`Apagar a proposta de "${d.nome || d.cliente_nome || 'negócio'}"? Contrato e assinaturas serão eliminados. Esta ação é irreversível.`)) return;
+            try {
+                const { response, data } = await api(`/api/digitalizept/deals/${encodeURIComponent(d.projectId)}`, {
+                    method: 'DELETE'
+                });
+                if (!response.ok) {
+                    toast(data.error || 'Não foi possível apagar.', true);
+                    return;
+                }
+                toast('Proposta apagada.');
+                await loadDeals();
+            } catch (_) {
+                toast('Erro de rede.', true);
+            }
+        });
+
+        actions.append(contract, edit, del);
         card.appendChild(actions);
         el.dealsList.appendChild(card);
     });

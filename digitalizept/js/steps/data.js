@@ -220,7 +220,7 @@ async function render(body, ctx) {
 
     if (page.kind === 'gate') {
         askChoices(control, [
-            { id: 'no', name: 'Agora não', desc: 'Seguir para a identidade visual' },
+            { id: 'no', name: 'Agora não', desc: 'Seguir para o diagnóstico' },
             { id: 'yes', name: 'Sim', desc: 'Responsável, descrição e mais detalhes' }
         ], {
             selected: ctx.state.data.dadosMore === true ? 'yes' : 'no',

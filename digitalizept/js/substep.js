@@ -63,6 +63,28 @@ export function askText(control, { value, type, placeholder, rows, onChange, onE
     return input;
 }
 
+// Auto-advance must wait out the synthetic click that mobile browsers fire
+// on whatever sits under the finger after the DOM is replaced (~300ms).
+// Otherwise Sim/Não on the last café extras (or "Agora não") lands on
+// Continuar / the next step's first button and skips a whole phase.
+const ADVANCE_DELAY_MS = 350;
+let nextTimer = 0;
+
+export function cancelScheduledGoNext() {
+    if (!nextTimer) return;
+    clearTimeout(nextTimer);
+    nextTimer = 0;
+}
+
+export function scheduleGoNext(goNext, delayMs = ADVANCE_DELAY_MS) {
+    if (typeof goNext !== 'function') return;
+    cancelScheduledGoNext();
+    nextTimer = setTimeout(() => {
+        nextTimer = 0;
+        goNext();
+    }, delayMs);
+}
+
 export function askToggle(control, { value, options, onChange, goNext }) {
     const toggle = document.createElement('div');
     toggle.className = 'toggle';
@@ -78,7 +100,7 @@ export function askToggle(control, { value, options, onChange, goNext }) {
             toggle.querySelectorAll('.toggle-opt').forEach((b) => b.classList.remove('active'));
             btn.classList.add('active');
             onChange(opt);
-            if (typeof goNext === 'function') queueMicrotask(() => goNext());
+            scheduleGoNext(goNext);
         });
         toggle.appendChild(btn);
     });
@@ -115,7 +137,7 @@ export function askChoices(control, items, { selected, onSelect, goNext, autoAdv
             list.querySelectorAll('.ask-choice').forEach((el) => el.classList.remove('selected'));
             btn.classList.add('selected');
             if (autoAdvance !== false && typeof goNext === 'function' && result !== false) {
-                queueMicrotask(() => goNext());
+                scheduleGoNext(goNext);
             }
         });
         list.appendChild(btn);

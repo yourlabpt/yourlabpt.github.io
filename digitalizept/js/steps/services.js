@@ -81,10 +81,17 @@ function pagesFor(state) {
 }
 
 function substepCount(state) {
+    // Placeholder 1 keeps the ask layout without clamping extras away.
+    if (!catalogReady(state)) return 1;
     return pagesFor(state).length;
 }
 
+function catalogReady(state) {
+    return Array.isArray(state.data._catalog);
+}
+
 function isSubstepValid(state) {
+    if (!catalogReady(state)) return false;
     const pages = pagesFor(state);
     const page = pages[currentSubstep(state)];
     if (!page) return false;
@@ -390,5 +397,6 @@ export const servicesStep = {
     isValid,
     isSubstepValid,
     substepCount,
+    pagesReady: catalogReady,
     render
 };

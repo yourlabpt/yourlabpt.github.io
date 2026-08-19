@@ -15,6 +15,7 @@ let parseDemoOutput;
 let isDataStepValid;
 let dataStep;
 let identityStep;
+let servicesStep;
 let isDominioValid;
 let PACKAGE_DELIVERABLES;
 let resolveDeliverables;
@@ -51,8 +52,10 @@ before(async () => {
     buildDomainCandidates = domainsServer.buildDomainCandidates;
     const dataMod = await import(pathToFileURL(path.join(appDir, 'steps', 'data.js')).href);
     const identityMod = await import(pathToFileURL(path.join(appDir, 'steps', 'identity.js')).href);
+    const servicesMod = await import(pathToFileURL(path.join(appDir, 'steps', 'services.js')).href);
     dataStep = dataMod.dataStep;
     identityStep = identityMod.identityStep;
+    servicesStep = servicesMod.servicesStep;
 });
 
 const IVA = 0.23;
@@ -477,5 +480,33 @@ describe('digitalizept one-question substeps', () => {
         const state = { substep: 0, data: { businessType: { id: 'restaurante' } } };
         assert.equal(identityStep.substepCount(state), 3);
         assert.equal(identityStep.isSubstepValid(state), true);
+    });
+
+    it('does not shrink extras to urgência while the catalog is still loading', () => {
+        const state = {
+            substep: 9,
+            data: { proposta: { pacote: 'site_maps', extras: [] } }
+        };
+        assert.equal(servicesStep.pagesReady(state), false);
+        assert.equal(servicesStep.substepCount(state), 1);
+        assert.equal(servicesStep.isSubstepValid(state), false);
+    });
+
+    it('lists café extras in a stable order after the more-now gate', () => {
+        const cafe = {
+            id: 'cafe-pastelaria',
+            campos_obrigatorios: ['nome_negocio', 'responsavel', 'telefone', 'o_que_faz'],
+            perguntas_especificas: [
+                { id: 'faz_encomendas', label: 'Aceita encomendas de bolos?', tipo: 'sim_nao' },
+                { id: 'tem_esplanada', label: 'Tem esplanada?', tipo: 'sim_nao' }
+            ],
+            campos_opcionais: ['estacionamento', 'mbway', 'wifi', 'reservas', 'entregas']
+        };
+        const state = {
+            substep: 6,
+            data: { businessType: cafe, dadosMore: true, dados: { nome_negocio: 'Café Central' } }
+        };
+        assert.ok(dataStep.substepCount(state) > 7);
+        assert.equal(dataStep.isSubstepValid(state), true);
     });
 });
