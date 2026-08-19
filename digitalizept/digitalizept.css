@@ -202,24 +202,26 @@ button, input, textarea, select {
 }
 
 .btn-new-deal {
-    display: inline-flex;
-    align-items: center;
+    flex-shrink: 0;
     height: 36px;
     padding: 0 12px;
     border-radius: 10px;
-    border: 1px solid var(--accent-color);
-    background: transparent;
-    color: var(--accent-color);
+    border: 1px solid var(--accent-soft);
+    background: var(--secondary-dark);
+    color: var(--text-muted);
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
     white-space: nowrap;
 }
 
 .btn-new-deal:hover {
-    background: var(--accent-soft);
+    border-color: rgba(232, 213, 183, 0.45);
     color: var(--text-light);
+    background: var(--accent-dark);
 }
 
 .btn-admin {
