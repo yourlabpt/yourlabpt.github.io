@@ -16,6 +16,7 @@ let isDataStepValid;
 let dataStep;
 let identityStep;
 let servicesStep;
+let invalidateDemoIfDriverField;
 let isDominioValid;
 let PACKAGE_DELIVERABLES;
 let resolveDeliverables;
@@ -54,6 +55,7 @@ before(async () => {
     const identityMod = await import(pathToFileURL(path.join(appDir, 'steps', 'identity.js')).href);
     const servicesMod = await import(pathToFileURL(path.join(appDir, 'steps', 'services.js')).href);
     dataStep = dataMod.dataStep;
+    invalidateDemoIfDriverField = dataMod.invalidateDemoIfDriverField;
     identityStep = identityMod.identityStep;
     servicesStep = servicesMod.servicesStep;
 });
@@ -508,5 +510,39 @@ describe('digitalizept one-question substeps', () => {
         };
         assert.ok(dataStep.substepCount(state) > 7);
         assert.equal(dataStep.isSubstepValid(state), true);
+    });
+
+    it('invalidates seeded demo when core business data changes', () => {
+        const state = {
+            data: {
+                demo: { hero: { titulo: 'Demo antiga' } },
+                demoRaw: '{"hero":{"titulo":"Demo antiga"}}',
+                demoHtml: '<html>demo antiga</html>',
+                demoSeeded: true,
+                demoUrl: 'https://old.example/demo',
+                demoIdentityStamp: 'abc123'
+            }
+        };
+        const changed = invalidateDemoIfDriverField(state, 'nome_negocio');
+        assert.equal(changed, true);
+        assert.equal(state.data.demo, undefined);
+        assert.equal(state.data.demoRaw, '');
+        assert.equal(state.data.demoHtml, '');
+        assert.equal(state.data.demoSeeded, false);
+        assert.equal(state.data.demoUrl, '');
+        assert.equal(state.data.demoIdentityStamp, '');
+    });
+
+    it('does not invalidate demo for non-driver fields', () => {
+        const state = {
+            data: {
+                demo: { hero: { titulo: 'Demo atual' } },
+                demoSeeded: true
+            }
+        };
+        const changed = invalidateDemoIfDriverField(state, 'telefone');
+        assert.equal(changed, false);
+        assert.deepEqual(state.data.demo, { hero: { titulo: 'Demo atual' } });
+        assert.equal(state.data.demoSeeded, true);
     });
 });

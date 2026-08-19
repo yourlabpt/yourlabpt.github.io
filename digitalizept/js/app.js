@@ -184,10 +184,10 @@ async function startNewDeal() {
             }
         }
     }
+    clearResumeParam();
     clearWizardState();
-    wizard = null;
-    wizard = createWizard({ onUnauthorized: handleUnauthorized, showToast });
-    wizard.render();
+    if (!wizard) wizard = createWizard({ onUnauthorized: handleUnauthorized, showToast });
+    wizard.reset();
 }
 
 function bindEvents() {

@@ -151,6 +151,29 @@ function isSubstepValid(state) {
     return String(dados[page.id] || '').trim().length > 0;
 }
 
+const DEMO_DRIVER_FIELDS = new Set([
+    'nome_negocio',
+    'cidade',
+    'o_que_faz',
+    'principais_servicos',
+    'diferencial'
+]);
+
+function clearDemoState(state) {
+    delete state.data.demo;
+    state.data.demoRaw = '';
+    state.data.demoHtml = '';
+    state.data.demoSeeded = false;
+    state.data.demoUrl = '';
+    state.data.demoIdentityStamp = '';
+}
+
+export function invalidateDemoIfDriverField(state, fieldId) {
+    if (!DEMO_DRIVER_FIELDS.has(fieldId)) return false;
+    clearDemoState(state);
+    return true;
+}
+
 function fieldControl(control, def, value, onChange, onEnter, goNext) {
     const tipo = (def && def.tipo) || 'texto';
     if (tipo === 'sim_nao') {
@@ -164,7 +187,9 @@ function fieldControl(control, def, value, onChange, onEnter, goNext) {
         placeholder: def && def.placeholder,
         rows: isLong ? 4 : 1,
         onChange,
-        onEnter
+        onEnter,
+        showNextButton: !isLong,
+        nextLabel: 'Seguinte'
     });
     if (isLong && speechAvailable()) {
         const mic = document.createElement('button');
@@ -236,6 +261,7 @@ async function render(body, ctx) {
 
     fieldControl(control, page.def, dados[page.id], (val) => {
         dados[page.id] = val;
+        invalidateDemoIfDriverField(ctx.state, page.id);
         persist();
     }, () => {
         if (isSubstepValid(ctx.state) && ctx.goNext) ctx.goNext();

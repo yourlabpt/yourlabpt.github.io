@@ -36,7 +36,9 @@ export function renderAsk(body, { title, hint, index, total }) {
     return { wrap, control };
 }
 
-export function askText(control, { value, type, placeholder, rows, onChange, onEnter }) {
+export function askText(control, {
+    value, type, placeholder, rows, onChange, onEnter, showNextButton, nextLabel
+}) {
     const isLong = Number(rows) > 1;
     const input = document.createElement(isLong ? 'textarea' : 'input');
     input.className = 'field-input ask-input';
@@ -57,6 +59,14 @@ export function askText(control, { value, type, placeholder, rows, onChange, onE
         });
     }
     control.appendChild(input);
+    if (!isLong && showNextButton && typeof onEnter === 'function') {
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'ask-next-btn';
+        nextBtn.textContent = nextLabel || 'Seguinte';
+        nextBtn.addEventListener('click', () => onEnter());
+        control.appendChild(nextBtn);
+    }
     queueMicrotask(() => {
         try { input.focus(); } catch (_) { /* ignore */ }
     });
