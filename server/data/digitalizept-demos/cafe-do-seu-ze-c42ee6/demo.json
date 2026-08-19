@@ -1,0 +1,78 @@
+{
+  "hero": {
+    "titulo": "Joias que celebram momentos",
+    "subtitulo": "O brilho certo para celebrar histórias, encontros e momentos que ficam para sempre.",
+    "cta": "Ver coleções"
+  },
+  "sobre": {
+    "titulo": "Elegância em cada detalhe",
+    "texto": "Na Art'Jóias encontra joias pensadas para acompanhar os momentos mais especiais. Anéis, colares, brincos e alianças em peças que unem brilho, cor e sofisticação, com o cuidado de quem valoriza cada escolha."
+  },
+  "servicos": {
+    "titulo": "As nossas joias",
+    "itens": [
+      {
+        "nome": "Anéis",
+        "descricao": "Peças elegantes para celebrar momentos especiais e acompanhar cada história."
+      },
+      {
+        "nome": "Colares",
+        "descricao": "Detalhes de brilho e sofisticação para completar cada ocasião."
+      },
+      {
+        "nome": "Brincos",
+        "descricao": "Joias delicadas que acrescentam elegância a cada visual."
+      },
+      {
+        "nome": "Alianças",
+        "descricao": "Peças escolhidas para simbolizar um compromisso para a vida."
+      },
+      {
+        "nome": "Reparações",
+        "descricao": "Cuidado especializado para devolver às suas peças o brilho e a beleza."
+      },
+      {
+        "nome": "Avaliação de peças",
+        "descricao": "Avaliação cuidada de peças de joalharia, com discrição e confiança."
+      }
+    ]
+  },
+  "diferenciais": {
+    "titulo": "Porque escolher a Art'Jóias",
+    "itens": [
+      "Seleção de joias para momentos verdadeiramente especiais",
+      "Cuidado e atenção em cada escolha",
+      "Reparação e avaliação de peças com discrição",
+      "Voucher de férias na compra de alianças, mediante condições da campanha"
+    ]
+  },
+  "problemas": {
+    "titulo": "Para momentos especiais",
+    "itens": [
+      "Procura uma aliança para celebrar o seu compromisso",
+      "Quer oferecer uma joia com significado",
+      "Precisa de reparar ou avaliar uma peça",
+      "Procura um detalhe elegante para uma ocasião especial"
+    ]
+  },
+  "avaliacoes": {
+    "titulo": "O que dizem",
+    "itens": [
+      {
+        "autor": "Ana",
+        "texto": "Uma experiência muito agradável, com peças bonitas e um atendimento atencioso."
+      },
+      {
+        "autor": "Mariana",
+        "texto": "Encontrámos as alianças certas para um momento muito especial."
+      },
+      {
+        "autor": "João",
+        "texto": "Bom atendimento e cuidado na escolha da peça."
+      }
+    ]
+  },
+  "rodape": {
+    "texto": "Visite a Art'Jóias no Porto e descubra a joia certa para o seu próximo momento especial."
+  }
+}

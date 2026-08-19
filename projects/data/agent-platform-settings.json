@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "executionDefaults": {
+    "schemaVersion": 2,
+    "version": 1,
+    "agentId": "",
+    "modelProfileId": "medium",
+    "targetInputTokens": 14000,
+    "targetOutputTokens": 2500,
+    "tokenPolicy": {
+      "local": {
+        "mode": "unlimited"
+      },
+      "external": {
+        "mode": "limited",
+        "maxTokens": 120000
+      }
+    },
+    "tokenBudgetMode": "auto",
+    "externalTokenBudgetMode": "limited",
+    "externalMaxTokens": 120000,
+    "costPolicy": {
+      "mode": "unlimited",
+      "maxCost": 0,
+      "currency": "EUR",
+      "onLimit": "checkpoint_pause"
+    },
+    "timePolicy": {
+      "mode": "unlimited",
+      "enforced": false,
+      "onLimit": "best_effort_review"
+    },
+    "checkpointPolicy": {
+      "intervalSeconds": 30,
+      "onStep": true,
+      "beforeSideEffect": true
+    },
+    "resumePolicy": {
+      "autoOnRestart": true,
+      "autoOnReconnect": true,
+      "autoAfterWindow": false,
+      "requireApprovalForRisk": true
+    },
+    "reviewPolicy": {
+      "subtask": "non_blocking",
+      "parent": "required"
+    },
+    "pauseForSubtaskReview": false,
+    "goalPolicy": {
+      "checkEverySteps": 3,
+      "maxNoProgressIterations": 3,
+      "stopWhenAcceptanceSatisfied": true
+    },
+    "providerRouting": {
+      "classifier": "small",
+      "goalSetter": "medium",
+      "planner": "medium",
+      "requirements": "medium",
+      "researcher": "high",
+      "coder": "high",
+      "reviewer": "max"
+    },
+    "planningWaveSize": 8,
+    "maxTotalSteps": 0,
+    "goalCheckInterval": 3,
+    "maxTokens": 0,
+    "maxWallClockMinutes": 0,
+    "timeLimitEnabled": false,
+    "maxSubtasks": 8,
+    "enableWebSearch": true,
+    "allowedMcpTools": []
+  },
+  "updatedAt": "2026-07-21T13:53:02.796Z",
+  "updatedBy": "usr_50e66a91-c695-4779-99c1-f827d14975d2"
+}

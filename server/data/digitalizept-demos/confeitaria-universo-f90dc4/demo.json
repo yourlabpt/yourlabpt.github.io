@@ -1,0 +1,69 @@
+{
+  "hero": {
+    "titulo": "Confeitaria Universo",
+    "subtitulo": "Café / Pastelaria em Porto",
+    "cta": "Como chegar"
+  },
+  "sobre": {
+    "titulo": "Sobre nós",
+    "texto": "A Confeitaria Universo é um espaço com fabrico próprio diário de produtos de padaria e pastelaria, servindo também refeições económicas de segunda-feira a sábado. Diariamente, têm frango assado no espeto para qualquer hora do horário de funcionamento. Os seus produtos de padaria são variados, têm pão fresco e gelados refrescantes, que vão deliciar os seus clientes em momentos de pausa. A Confeita…"
+  },
+  "servicos": {
+    "titulo": "Serviços",
+    "itens": [
+      {
+        "nome": "Cafetaria",
+        "descricao": "pão fresco e gelados refrescantes"
+      },
+      {
+        "nome": "Pastelaria fresca",
+        "descricao": "pão fresco e gelados refrescantes"
+      },
+      {
+        "nome": "Pequenos-almoços",
+        "descricao": "pão fresco e gelados refrescantes"
+      },
+      {
+        "nome": "Salgados",
+        "descricao": "pão fresco e gelados refrescantes"
+      },
+      {
+        "nome": "Bolos por encomenda",
+        "descricao": "pão fresco e gelados refrescantes"
+      },
+      {
+        "nome": "Snacks e refeições ligeiras",
+        "descricao": "pão fresco e gelados refrescantes"
+      }
+    ]
+  },
+  "diferenciais": {
+    "titulo": "Porquê vir",
+    "itens": [
+      "Pastelaria feita no dia",
+      "Café de qualidade",
+      "Bolos por encomenda",
+      "Esplanada"
+    ]
+  },
+  "problemas": {
+    "titulo": "Para quando precisa",
+    "itens": []
+  },
+  "avaliacoes": {
+    "titulo": "O que dizem",
+    "itens": [
+      {
+        "autor": "Cliente",
+        "texto": "Atendimento próximo e de confiança."
+      },
+      {
+        "autor": "Vizinho",
+        "texto": "Fica aqui ao lado — voltamos sempre."
+      }
+    ]
+  },
+  "rodape": {
+    "texto": "Confeitaria Universo · Porto"
+  }
+}

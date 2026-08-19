@@ -1,0 +1,69 @@
+{
+  "hero": {
+    "titulo": "Café Cidade Nova",
+    "subtitulo": "Café / Pastelaria em Porto",
+    "cta": "Como chegar"
+  },
+  "sobre": {
+    "titulo": "Sobre nós",
+    "texto": "Café Cidade Nova em Porto."
+  },
+  "servicos": {
+    "titulo": "Serviços",
+    "itens": [
+      {
+        "nome": "Cafetaria",
+        "descricao": ""
+      },
+      {
+        "nome": "Pastelaria fresca",
+        "descricao": ""
+      },
+      {
+        "nome": "Pequenos-almoços",
+        "descricao": ""
+      },
+      {
+        "nome": "Salgados",
+        "descricao": ""
+      },
+      {
+        "nome": "Bolos por encomenda",
+        "descricao": ""
+      },
+      {
+        "nome": "Snacks e refeições ligeiras",
+        "descricao": ""
+      }
+    ]
+  },
+  "diferenciais": {
+    "titulo": "Porquê vir",
+    "itens": [
+      "Pastelaria feita no dia",
+      "Café de qualidade",
+      "Bolos por encomenda",
+      "Esplanada"
+    ]
+  },
+  "problemas": {
+    "titulo": "Para quando precisa",
+    "itens": []
+  },
+  "avaliacoes": {
+    "titulo": "O que dizem",
+    "itens": [
+      {
+        "autor": "Cliente",
+        "texto": "Atendimento próximo e de confiança."
+      },
+      {
+        "autor": "Vizinho",
+        "texto": "Fica aqui ao lado — voltamos sempre."
+      }
+    ]
+  },
+  "rodape": {
+    "texto": "Café Cidade Nova · Porto"
+  }
+}

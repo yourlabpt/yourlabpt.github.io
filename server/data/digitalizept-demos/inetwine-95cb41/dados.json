@@ -1,0 +1,153 @@
+{
+  "dados": {
+    "nome_negocio": "Inetwine",
+    "morada": "Enzhaldenweg 13",
+    "telefone": "+491736281243",
+    "whatsapp": "",
+    "cidade": "Vaihingen",
+    "responsavel": "Dr. Helerson Alexandre Kemmer",
+    "o_que_faz": "Produto que mantem a qualidade de vinhos ja abertos.",
+    "principais_servicos": "Produto IoT revolucionario",
+    "diferencial": "Mantenha os seus vinhos abertos evitando desperdicio e diminuindo os custos.",
+    "setor": "Equipamentos eletrodomesticos",
+    "publico": "Restaurantes de Luxo, Hotelarias e pequenos de donos de Adega.",
+    "email": "alexkemmer@hotmail.de",
+    "website_atual": "inetwine.com",
+    "idiomas": "Portugues, Ingles, Alemao",
+    "estacionamento": "Não",
+    "mbway": "Não",
+    "wifi": "Não",
+    "reservas": "Não",
+    "entregas": "Não",
+    "anos_experiencia": "1"
+  },
+  "businessType": {
+    "id": "generico",
+    "nome": "Genérico",
+    "icone": "GE",
+    "tom": "claro, próximo, profissional",
+    "prompt_contexto": "Pequeno negócio local em Portugal, sem categoria específica. O texto apresenta o negócio de forma clara e honesta, destaca os serviços e o que o distingue, e convida ao contacto. Adapta o tom à informação recolhida.",
+    "publico_alvo": "Clientes locais que procuram o serviço ou produto do negócio e valorizam proximidade e confiança.",
+    "servicos_tipicos": [
+      "Serviço principal",
+      "Serviço secundário",
+      "Atendimento ao cliente"
+    ],
+    "diferenciais_sugeridos": [
+      "Atendimento próximo",
+      "Qualidade",
+      "Confiança",
+      "Bom preço",
+      "Experiência"
+    ],
+    "palavras_chave": [
+      "negócio local",
+      "serviços",
+      "perto de si"
+    ],
+    "categorias_google": [
+      "point_of_interest",
+      "establishment"
+    ],
+    "seccoes_landing": [
+      "hero",
+      "sobre",
+      "servicos",
+      "diferenciais",
+      "galeria",
+      "cta_bloco",
+      "mapa",
+      "contactos",
+      "rodape"
+    ],
+    "cores_sugeridas": [
+      "#1b1b1b",
+      "#e8d5b7",
+      "#7a8a99"
+    ],
+    "campos_obrigatorios": [
+      "nome_negocio",
+      "responsavel",
+      "telefone",
+      "whatsapp",
+      "morada",
+      "cidade",
+      "horario",
+      "o_que_faz",
+      "principais_servicos",
+      "diferencial"
+    ],
+    "campos_opcionais": [
+      "email",
+      "instagram",
+      "facebook",
+      "tiktok",
+      "website_atual",
+      "idiomas",
+      "estacionamento",
+      "mbway",
+      "wifi",
+      "reservas",
+      "entregas",
+      "anos_experiencia",
+      "certificacoes"
+    ],
+    "perguntas_especificas": [
+      {
+        "id": "setor",
+        "label": "Setor de atividade",
+        "tipo": "texto"
+      },
+      {
+        "id": "publico",
+        "label": "Quem são os seus clientes?",
+        "tipo": "texto_longo"
+      }
+    ],
+    "archetype": "servico",
+    "ctas_hero": [
+      {
+        "label": "Contactar",
+        "target": "dpl-contactos"
+      },
+      {
+        "label": "Como chegar",
+        "target": "dpl-mapa"
+      }
+    ],
+    "paletas_sugeridas": [
+      {
+        "id": "clean",
+        "nome": "Clean",
+        "cores": [
+          "#1b1b1b",
+          "#e8d5b7",
+          "#7a8a99"
+        ]
+      },
+      {
+        "id": "warm",
+        "nome": "Warm",
+        "cores": [
+          "#1c1814",
+          "#c4a060",
+          "#8a7a6a"
+        ]
+      },
+      {
+        "id": "bold",
+        "nome": "Bold",
+        "cores": [
+          "#121212",
+          "#3a6a8a",
+          "#d0c8b8"
+        ]
+      }
+    ],
+    "cta_bloco": {
+      "titulo": "Fale connosco",
+      "botao": "WhatsApp",
+      "target": "whatsapp"
+    }
+  }
+}

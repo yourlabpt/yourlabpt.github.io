@@ -1,0 +1,74 @@
+{
+  "hero": {
+    "titulo": "Joias para momentos inesquecíveis",
+    "subtitulo": "Anéis de noivado e joias escolhidas para celebrar momentos únicos com elegância.",
+    "cta": "Ver coleções"
+  },
+  "sobre": {
+    "titulo": "Elegância que permanece",
+    "texto": "A VeneraJewelry é uma joalharia no Porto especializada em anéis de noivado e aparadores de anel. Selecionamos peças pensadas para celebrar momentos especiais, com qualidade, cuidado e uma atenção particular a cada detalhe."
+  },
+  "servicos": {
+    "titulo": "As nossas coleções",
+    "itens": [
+      {
+        "nome": "Anéis de noivado",
+        "descricao": "Peças especiais para marcar um dos momentos mais importantes da sua história."
+      },
+      {
+        "nome": "Aparadores de anel",
+        "descricao": "Joias pensadas para complementar e valorizar o seu anel de noivado."
+      },
+      {
+        "nome": "Brincos de ouro branco",
+        "descricao": "Elegância discreta em peças escolhidas para momentos especiais."
+      },
+      {
+        "nome": "Brincos de zircónia",
+        "descricao": "Brilho sofisticado para oferecer ou completar um visual."
+      },
+      {
+        "nome": "Reparação de joias",
+        "descricao": "Cuidado e atenção para preservar a beleza das suas peças."
+      },
+      {
+        "nome": "Avaliação de peças",
+        "descricao": "Um serviço de avaliação realizado com discrição e confiança."
+      }
+    ]
+  },
+  "diferenciais": {
+    "titulo": "A nossa diferença",
+    "itens": [
+      "Joias de qualidade com garantia de 2 anos",
+      "Reforço do banho de ouro durante o período de garantia",
+      "Especialização em anéis de noivado e aparadores",
+      "Seleção cuidada para momentos verdadeiramente especiais"
+    ]
+  },
+  "problemas": {
+    "titulo": "Para a ocasião certa",
+    "itens": [
+      "Procura o anel de noivado ideal",
+      "Quer complementar o seu anel com elegância",
+      "Procura uma joia especial para oferecer",
+      "Precisa de reparar ou avaliar uma peça"
+    ]
+  },
+  "avaliacoes": {
+    "titulo": "O que dizem",
+    "itens": [
+      {
+        "autor": "Cliente VeneraJewelry",
+        "texto": "Peças bonitas, atendimento cuidado e atenção aos detalhes."
+      },
+      {
+        "autor": "Cliente VeneraJewelry",
+        "texto": "Uma boa escolha para encontrar uma joia especial para um momento importante."
+      }
+    ]
+  },
+  "rodape": {
+    "texto": "Visite a VeneraJewelry no Porto e descubra a peça certa para celebrar o seu próximo momento especial."
+  }
+}

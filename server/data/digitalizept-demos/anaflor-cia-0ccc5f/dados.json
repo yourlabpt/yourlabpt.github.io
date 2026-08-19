@@ -1,0 +1,160 @@
+{
+  "dados": {
+    "nome_negocio": "AnaFlor & Cia",
+    "morada": "Rua de Costa Cabral 2245, 4200-230 Porto",
+    "telefone": "225400140",
+    "whatsapp": "936654012",
+    "cidade": "Porto",
+    "horario": "Terça-Feira as Sexta-Feira de 9:30 as 19:00 Sabado e Domingo de 10:00 as 13:00",
+    "o_que_faz": "Na AnaFlor & Cia, no Porto, trabalhamos com flores naturais frescas, escolhidas com cuidado e renovadas com frequência, para o dia a dia, para oferecer ou para as ocasiões que merecem ser assinaladas. Ao lado das flores, temos uma seleção variada de decoração, com peças de louça e outros objetos que ajudam a dar personalidade à casa ou a compor uma prenda. Somos uma casa de atendimento familiar, com preços justos e entregas ao domicílio na cidade.",
+    "faz_entregas": "Não",
+    "produtos_locais": "Não",
+    "email": "geral@anaflorecompanhia.com",
+    "website_atual": "http://www.anaflorecompanhia.com/",
+    "idiomas": "Portugues, Ingles e Espanhol",
+    "estacionamento": "Não",
+    "mbway": "Sim",
+    "wifi": "Não",
+    "reservas": "Não",
+    "entregas": "Não"
+  },
+  "businessType": {
+    "id": "loja-flores-decoracao",
+    "nome": "Loja de Flores e Decoração",
+    "icone": "FD",
+    "tom": "fresco, acolhedor, atento ao detalhe",
+    "prompt_contexto": "Loja de flores e decoração em Portugal. O texto transmite frescura, cuidado na escolha das plantas e objectos, e o gosto de oferecer ou de vestir a casa. Fala de ramos, plantas, presentes e decoração sem soar a grande cadeia nem a catálogo genérico. Convida a visitar a loja ou a pedir um ramo.",
+    "publico_alvo": "Pessoas que procuram flores, plantas e peças de decoração para a casa, presentes ou ocasiões — com aconselhamento próximo e um espaço agradável para entrar.",
+    "servicos_tipicos": [
+      "Ramos e bouquets",
+      "Plantas de interior",
+      "Flores para ocasiões",
+      "Decoração para casa",
+      "Presentes e arranjos",
+      "Entrega ao domicílio"
+    ],
+    "diferenciais_sugeridos": [
+      "Flores frescas todos os dias",
+      "Arranjos à medida",
+      "Peças de decoração escolhidas",
+      "Aconselhamento na loja",
+      "Entregas na zona"
+    ],
+    "palavras_chave": [
+      "florista",
+      "loja de flores",
+      "decoração",
+      "ramos",
+      "plantas"
+    ],
+    "categorias_google": [
+      "florist",
+      "home_goods_store"
+    ],
+    "seccoes_landing": [
+      "hero",
+      "servicos",
+      "galeria",
+      "sobre",
+      "avaliacoes",
+      "cta_bloco",
+      "mapa",
+      "contactos",
+      "rodape"
+    ],
+    "cores_sugeridas": [
+      "#2f4a3c",
+      "#e8c4b8",
+      "#f4efe6"
+    ],
+    "campos_obrigatorios": [
+      "nome_negocio",
+      "responsavel",
+      "telefone",
+      "whatsapp",
+      "morada",
+      "cidade",
+      "horario",
+      "o_que_faz",
+      "principais_servicos",
+      "diferencial"
+    ],
+    "campos_opcionais": [
+      "email",
+      "instagram",
+      "facebook",
+      "tiktok",
+      "website_atual",
+      "idiomas",
+      "estacionamento",
+      "mbway",
+      "wifi",
+      "reservas",
+      "entregas",
+      "anos_experiencia",
+      "certificacoes"
+    ],
+    "perguntas_especificas": [
+      {
+        "id": "faz_ramos",
+        "label": "Faz ramos e arranjos à medida?",
+        "tipo": "sim_nao"
+      },
+      {
+        "id": "faz_entregas",
+        "label": "Faz entregas?",
+        "tipo": "sim_nao"
+      },
+      {
+        "id": "ocasioes",
+        "label": "Trabalha casamentos, funerais ou outras ocasiões?",
+        "tipo": "texto"
+      }
+    ],
+    "archetype": "retail",
+    "ctas_hero": [
+      {
+        "label": "Pedir um ramo",
+        "target": "whatsapp"
+      },
+      {
+        "label": "Visitar a loja",
+        "target": "dpl-mapa"
+      }
+    ],
+    "paletas_sugeridas": [
+      {
+        "id": "garden",
+        "nome": "Garden",
+        "cores": [
+          "#2f4a3c",
+          "#e8c4b8",
+          "#f4efe6"
+        ]
+      },
+      {
+        "id": "clean",
+        "nome": "Clean",
+        "cores": [
+          "#1c1c1c",
+          "#6b8f71",
+          "#f3eee6"
+        ]
+      },
+      {
+        "id": "warm",
+        "nome": "Warm",
+        "cores": [
+          "#3a2e28",
+          "#c4785a",
+          "#efe6d8"
+        ]
+      }
+    ],
+    "cta_bloco": {
+      "titulo": "Peça o seu ramo ou venha à loja",
+      "botao": "WhatsApp",
+      "target": "whatsapp"
+    }
+  }
+}

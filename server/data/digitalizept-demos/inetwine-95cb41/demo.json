@@ -1,0 +1,66 @@
+{
+  "hero": {
+    "titulo": "Preserve a qualidade do seu vinho",
+    "subtitulo": "Tecnologia inteligente para conservar vinhos abertos, reduzir desperdício e controlar custos.",
+    "cta": "Contactar"
+  },
+  "sobre": {
+    "titulo": "Tecnologia para o vinho",
+    "texto": "A Inetwine desenvolve uma solução IoT pensada para manter a qualidade de vinhos já abertos. Uma resposta prática para restaurantes de luxo, hotelaria e proprietários de adegas que valorizam cada garrafa."
+  },
+  "servicos": {
+    "titulo": "A solução Inetwine",
+    "itens": [
+      {
+        "nome": "Conservação inteligente",
+        "descricao": "Ajuda a manter a qualidade do vinho depois de a garrafa ser aberta."
+      },
+      {
+        "nome": "Tecnologia IoT",
+        "descricao": "Uma solução tecnológica desenvolvida para uma gestão mais eficiente do vinho."
+      },
+      {
+        "nome": "Redução de desperdício",
+        "descricao": "Evite perder vinho que ainda pode ser servido e aproveite melhor cada garrafa."
+      },
+      {
+        "nome": "Controlo de custos",
+        "descricao": "Reduza perdas associadas a garrafas abertas e melhore a utilização do stock."
+      }
+    ]
+  },
+  "diferenciais": {
+    "titulo": "Porquê a Inetwine",
+    "itens": [
+      "Tecnologia pensada para vinhos já abertos",
+      "Menos desperdício e melhor aproveitamento",
+      "Solução orientada para restauração e hotelaria",
+      "Proximidade e acompanhamento profissional"
+    ]
+  },
+  "problemas": {
+    "titulo": "Quando cada garrafa conta",
+    "itens": [
+      "Abre uma garrafa e não a consegue utilizar a tempo",
+      "Perde vinho de qualidade por falta de conservação",
+      "Procura reduzir o desperdício no seu negócio",
+      "Quer controlar melhor os custos associados ao vinho"
+    ]
+  },
+  "avaliacoes": {
+    "titulo": "A experiência dos clientes",
+    "itens": [
+      {
+        "autor": "Cliente profissional",
+        "texto": "Uma solução interessante para quem trabalha diariamente com vinhos de qualidade e procura reduzir desperdícios."
+      },
+      {
+        "autor": "Profissional de restauração",
+        "texto": "A tecnologia permite olhar para a conservação do vinho de uma forma mais prática e eficiente."
+      }
+    ]
+  },
+  "rodape": {
+    "texto": "Quer saber como a Inetwine pode ajudar o seu negócio? Contacte-nos para conhecer a solução."
+  }
+}

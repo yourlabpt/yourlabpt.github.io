@@ -1,0 +1,163 @@
+{
+  "dados": {
+    "nome_negocio": "VeneraJewelry",
+    "morada": "Praceta Francisco Borges, 4200-310 Porto",
+    "telefone": "+351 999 999 999",
+    "whatsapp": "+351 888 888 888",
+    "cidade": "Porto",
+    "horario": "Segunda a Sexta das 8:00 as 19:00",
+    "responsavel": "Jo Soares",
+    "o_que_faz": "Somos uma joalheiria para o cliente final em especialidade em aneis de noivado e aparadores de aneis infinitos. ",
+    "principais_servicos": "Aneis de noivado\nAparadores de anel\nBrincos de ouro branco\nBricos de zirconia\n",
+    "diferencial": "Produtos de qualidade com garantia de 2 anos e reforço de banho de ouro dentro da garantia. ",
+    "especialidade": "Joias somente",
+    "faz_reparacoes": "Sim",
+    "faz_avaliacoes": "Sim",
+    "email": "yourlabpt@gmail.com",
+    "instagram": "@joiasdajo",
+    "idiomas": "Portugues, Ingles, Frances, Alemao, Espanhol",
+    "estacionamento": "Não",
+    "mbway": "Sim",
+    "wifi": "Não",
+    "reservas": "Não",
+    "entregas": "Não",
+    "anos_experiencia": "99"
+  },
+  "businessType": {
+    "id": "joalharia",
+    "nome": "Joalharia",
+    "icone": "JO",
+    "tom": "elegante, sofisticado, de confiança",
+    "prompt_contexto": "Joalharia e relojoaria em Portugal. O texto transmite elegância, valor e confiança — peças que marcam momentos. Fala de ouro, prata, relógios e serviço de reparação com discrição e requinte. Tom refinado, nunca ostensivo.",
+    "publico_alvo": "Clientes que procuram joias, relógios ou presentes especiais, e serviço de reparação e avaliação de confiança.",
+    "servicos_tipicos": [
+      "Joias em ouro e prata",
+      "Relógios",
+      "Alianças",
+      "Reparações",
+      "Gravações",
+      "Avaliação de peças"
+    ],
+    "diferenciais_sugeridos": [
+      "Peças exclusivas",
+      "Reparação e restauro",
+      "Gravação personalizada",
+      "Marcas de prestígio",
+      "Anos de confiança"
+    ],
+    "palavras_chave": [
+      "joalharia",
+      "relojoaria",
+      "alianças",
+      "ouro e prata",
+      "reparação de relógios"
+    ],
+    "categorias_google": [
+      "jewelry_store"
+    ],
+    "seccoes_landing": [
+      "hero",
+      "servicos",
+      "sobre",
+      "galeria",
+      "diferenciais",
+      "mapa",
+      "contactos",
+      "rodape"
+    ],
+    "cores_sugeridas": [
+      "#17130d",
+      "#c9a24b",
+      "#e8dcc0"
+    ],
+    "campos_obrigatorios": [
+      "nome_negocio",
+      "responsavel",
+      "telefone",
+      "whatsapp",
+      "morada",
+      "cidade",
+      "horario",
+      "o_que_faz",
+      "principais_servicos",
+      "diferencial"
+    ],
+    "campos_opcionais": [
+      "email",
+      "instagram",
+      "facebook",
+      "tiktok",
+      "website_atual",
+      "idiomas",
+      "estacionamento",
+      "mbway",
+      "wifi",
+      "reservas",
+      "entregas",
+      "anos_experiencia",
+      "certificacoes"
+    ],
+    "perguntas_especificas": [
+      {
+        "id": "especialidade",
+        "label": "Especialidade (joias, relógios, ambos)",
+        "tipo": "texto"
+      },
+      {
+        "id": "faz_reparacoes",
+        "label": "Faz reparações?",
+        "tipo": "sim_nao"
+      },
+      {
+        "id": "faz_avaliacoes",
+        "label": "Faz avaliação de peças?",
+        "tipo": "sim_nao"
+      }
+    ],
+    "archetype": "premium",
+    "ctas_hero": [
+      {
+        "label": "Visitar loja",
+        "target": "dpl-mapa"
+      },
+      {
+        "label": "Ver coleções",
+        "target": "dpl-servicos"
+      }
+    ],
+    "paletas_sugeridas": [
+      {
+        "id": "luxury",
+        "nome": "Luxury",
+        "cores": [
+          "#17130d",
+          "#c9a24b",
+          "#e8dcc0"
+        ]
+      },
+      {
+        "id": "elegant",
+        "nome": "Elegant",
+        "cores": [
+          "#0f0e0c",
+          "#a89070",
+          "#f0ebe3"
+        ]
+      },
+      {
+        "id": "clean",
+        "nome": "Clean",
+        "cores": [
+          "#faf8f5",
+          "#1a1814",
+          "#b89a5a"
+        ]
+      }
+    ],
+    "cta_bloco": {
+      "titulo": "Visite-nos",
+      "botao": "Como chegar",
+      "target": "dpl-mapa"
+    }
+  }
+}

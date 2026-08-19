@@ -1,0 +1,147 @@
+{
+  "dados": {
+    "nome_negocio": "Café Cidade Nova",
+    "morada": "R. das Mercês 143, 4200-215 Porto",
+    "cidade": "Porto",
+    "telefone": "225025881",
+    "horario": "De Segunda as Sextas das 09:00 as 18:00",
+    "whatsapp": ""
+  },
+  "businessType": {
+    "id": "cafe-pastelaria",
+    "nome": "Café / Pastelaria",
+    "icone": "CA",
+    "tom": "quente, familiar, convidativo",
+    "prompt_contexto": "Café ou pastelaria de bairro em Portugal. O texto evoca o cheiro a café e a pastelaria fresca, o pequeno-almoço e o lanche, o ponto de encontro do dia a dia. Tom simples e caloroso.",
+    "publico_alvo": "Clientes de passagem e habituais que procuram pequeno-almoço, lanche, um café rápido ou doçaria fresca.",
+    "servicos_tipicos": [
+      "Cafetaria",
+      "Pastelaria fresca",
+      "Pequenos-almoços",
+      "Salgados",
+      "Bolos por encomenda",
+      "Snacks e refeições ligeiras"
+    ],
+    "diferenciais_sugeridos": [
+      "Pastelaria feita no dia",
+      "Café de qualidade",
+      "Bolos por encomenda",
+      "Esplanada",
+      "Preços acessíveis"
+    ],
+    "palavras_chave": [
+      "café",
+      "pastelaria",
+      "pequeno-almoço",
+      "bolos por encomenda",
+      "lanche"
+    ],
+    "categorias_google": [
+      "cafe",
+      "bakery"
+    ],
+    "seccoes_landing": [
+      "hero",
+      "sobre",
+      "servicos",
+      "galeria",
+      "mapa",
+      "contactos",
+      "rodape"
+    ],
+    "cores_sugeridas": [
+      "#2b1d14",
+      "#c98a3c",
+      "#e8c9a0"
+    ],
+    "campos_obrigatorios": [
+      "nome_negocio",
+      "responsavel",
+      "telefone",
+      "whatsapp",
+      "morada",
+      "cidade",
+      "horario",
+      "o_que_faz",
+      "principais_servicos",
+      "diferencial"
+    ],
+    "campos_opcionais": [
+      "email",
+      "instagram",
+      "facebook",
+      "tiktok",
+      "website_atual",
+      "idiomas",
+      "estacionamento",
+      "mbway",
+      "wifi",
+      "reservas",
+      "entregas",
+      "anos_experiencia",
+      "certificacoes"
+    ],
+    "perguntas_especificas": [
+      {
+        "id": "especialidades",
+        "label": "Especialidades da casa",
+        "tipo": "texto_longo"
+      },
+      {
+        "id": "faz_encomendas",
+        "label": "Aceita encomendas de bolos?",
+        "tipo": "sim_nao"
+      },
+      {
+        "id": "tem_esplanada",
+        "label": "Tem esplanada?",
+        "tipo": "sim_nao"
+      }
+    ],
+    "archetype": "food",
+    "ctas_hero": [
+      {
+        "label": "Como chegar",
+        "target": "dpl-mapa"
+      },
+      {
+        "label": "Ver especialidades",
+        "target": "dpl-servicos"
+      }
+    ],
+    "paletas_sugeridas": [
+      {
+        "id": "warm",
+        "nome": "Warm",
+        "cores": [
+          "#2b1d14",
+          "#c98a3c",
+          "#e8c9a0"
+        ]
+      },
+      {
+        "id": "natural",
+        "nome": "Natural",
+        "cores": [
+          "#2a241c",
+          "#a67c52",
+          "#d9cbb8"
+        ]
+      },
+      {
+        "id": "clean",
+        "nome": "Clean",
+        "cores": [
+          "#1f1a16",
+          "#d4a574",
+          "#f0e6d8"
+        ]
+      }
+    ],
+    "cta_bloco": {
+      "titulo": "Passe por cá",
+      "botao": "Ver localização",
+      "target": "dpl-mapa"
+    }
+  }
+}

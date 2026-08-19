@@ -1,0 +1,13 @@
+{
+  "logo": {
+    "tipo": "nenhum"
+  },
+  "estilo": "warm",
+  "paleta": "warm",
+  "cores": {
+    "base": "#2b1d14",
+    "destaque": "#c98a3c",
+    "secundaria": "#e8c9a0"
+  },
+  "fotos": []
+}

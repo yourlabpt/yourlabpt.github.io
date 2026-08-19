@@ -1,0 +1,74 @@
+{
+  "hero": {
+    "titulo": "Elegância que marca momentos",
+    "subtitulo": "Joias, relógios e peças em ouro e prata, com o cuidado e a confiança de um serviço especializado.",
+    "cta": "Ver coleções"
+  },
+  "sobre": {
+    "titulo": "Ourivesaria Pamélia",
+    "texto": "No Porto, a Ourivesaria Pamélia reúne ourivesaria e relojoaria num espaço dedicado a peças escolhidas com atenção e serviço especializado. Descubra anéis, brincos, colares, alianças, peças de prata e relógios de referência."
+  },
+  "servicos": {
+    "titulo": "Ourivesaria e relojoaria",
+    "itens": [
+      {
+        "nome": "Joias em ouro e prata",
+        "descricao": "Anéis, brincos, colares, alianças, argolas e pingentes escolhidos com cuidado."
+      },
+      {
+        "nome": "Relógios Seiko",
+        "descricao": "Relógios Seiko de qualidade para diferentes estilos e momentos."
+      },
+      {
+        "nome": "Peças em prata",
+        "descricao": "Seleção de utensílios e peças de prata de elevada qualidade."
+      },
+      {
+        "nome": "Reparação de relógios",
+        "descricao": "Serviço especializado com relojoeiros a tempo inteiro no estabelecimento."
+      },
+      {
+        "nome": "Colocação de pilhas",
+        "descricao": "Substituição de pilhas no próprio estabelecimento, com serviço especializado."
+      }
+    ]
+  },
+  "diferenciais": {
+    "titulo": "Confiança em cada detalhe",
+    "itens": [
+      "Seleção cuidada de ouro, prata e relógios",
+      "Peças de prata para casa de elevada qualidade",
+      "Relojoeiros a tempo inteiro no estabelecimento",
+      "Atendimento próximo e especializado"
+    ]
+  },
+  "problemas": {
+    "titulo": "Quando procura algo especial",
+    "itens": [
+      "Procura uma joia para assinalar um momento",
+      "Precisa de reparar ou cuidar do seu relógio",
+      "Procura uma peça de prata para oferecer ou para casa",
+      "Quer escolher alianças, ouro ou prata com confiança"
+    ]
+  },
+  "avaliacoes": {
+    "titulo": "A confiança dos clientes",
+    "itens": [
+      {
+        "autor": "Cliente da Ourivesaria Pamélia",
+        "texto": "Atendimento cuidado e uma boa seleção de peças para diferentes ocasiões."
+      },
+      {
+        "autor": "Cliente da Ourivesaria Pamélia",
+        "texto": "Um espaço de confiança para escolher uma peça especial ou tratar do relógio."
+      },
+      {
+        "autor": "Cliente da Ourivesaria Pamélia",
+        "texto": "Serviço atencioso e acompanhamento na escolha da peça certa."
+      }
+    ]
+  },
+  "rodape": {
+    "texto": "Visite a Ourivesaria Pamélia no Porto e descubra uma seleção de joias, relógios e peças em prata. Segunda a sexta, 9h às 13h e 14h às 19h. Sábado, 9h às 13h."
+  }
+}
