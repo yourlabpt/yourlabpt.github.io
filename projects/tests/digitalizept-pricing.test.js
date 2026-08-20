@@ -23,8 +23,10 @@ let resolveDeliverables;
 let includesGooglePresence;
 let includesWebsite;
 let suggestPackage;
+let buildDomainCandidates;
 let demoStep;
 let diagnosticoStep;
+let googleStep;
 let buildWhatsAppMessage;
 let buildEmailContent;
 let buildWhatsAppUrl;
@@ -72,6 +74,8 @@ before(async () => {
     const diagMod = await import(pathToFileURL(path.join(appDir, 'steps', 'diagnostico.js')).href);
     demoStep = demoMod.demoStep;
     diagnosticoStep = diagMod.diagnosticoStep;
+    const googleMod = await import(pathToFileURL(path.join(appDir, 'steps', 'google.js')).href);
+    googleStep = googleMod.googleStep;
 });
 
 const IVA = 0.23;
@@ -601,6 +605,25 @@ describe('digitalizept demo flow', () => {
         };
         assert.equal(demoStep.isSubstepValid(website), true);
         assert.equal(demoStep.isValid(website), true);
+    });
+
+    it('skips the operational Google checklist during the sales visit', () => {
+        assert.equal(googleStep.shouldSkip({ data: { proposta: { pacote: 'google_essencial' } } }), true);
+        assert.equal(googleStep.shouldSkip({ data: { proposta: { pacote: 'site_maps' } } }), true);
+    });
+
+    it('derives googlePresence from diagnóstico when closing the deal', async () => {
+        const mod = await import(pathToFileURL(path.join(appDir, 'google-presence.js')).href);
+        const gp = mod.googlePresenceFromWizard({
+            data: {
+                businessType: { id: 'cafe-pastelaria', categorias_google: ['cafe'] },
+                googleDiagnostico: { maps: 'sim_sem_dono', prioridade: 'google' },
+                dados: { website: 'https://cafe.pt', instagram: '@cafe' }
+            }
+        });
+        assert.equal(gp.mapsEstado, 'sem_dono');
+        assert.equal(gp.website, 'https://cafe.pt');
+        assert.equal(gp._fromDiagnostico, true);
     });
 });
 

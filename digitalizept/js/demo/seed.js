@@ -88,7 +88,9 @@ export function ensureSeededDemo(state) {
     if (state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo) {
         return state.data.demo;
     }
+    // AI/HTML edits must not be replaced by the type boilerplate on re-entry.
     if (state.data.demoHtml) return state.data.demo || null;
+    if (String(state.data.demoRaw || '').trim()) return state.data.demo || null;
     const demo = seedDemoFromType(state);
     state.data.demo = demo;
     state.data.demoSeeded = true;

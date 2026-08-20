@@ -26,6 +26,11 @@ const {
 } = require('./lib/digitalizept-geocode');
 const { createRateLimiter } = require('./lib/rate-limit');
 const { findAvailableDomains } = require('./lib/digitalizept-domains');
+const {
+    mergeDemoForResume,
+    resumeWizardPosition,
+    mergeDemoIntoWizardJson
+} = require('./lib/digitalizept-resume');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -2437,9 +2442,15 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
         if (!dados.nome_negocio) dados.nome_negocio = row.nome || '';
 
         const identidade = parseJsonSafe(row.identidade_json, {});
-        const demo = parseJsonSafe(row.demo_json, null);
+        const leadDemo = parseJsonSafe(row.demo_json, null);
         const googlePresence = parseJsonSafe(row.google_presence_json, null);
         const wizardExtra = parseJsonSafe(row.wizard_json, {});
+        const mergedDemo = mergeDemoForResume({
+            leadDemo,
+            leadDemoHtml: row.demo_html || '',
+            wizard: wizardExtra
+        });
+        const { suggestedStep, suggestedSubstep } = resumeWizardPosition(wizardExtra);
 
         // Closed deals: load the latest proposta + legal + project so re-sign updates in place.
         let proposta = wizardExtra.proposta || undefined;
@@ -2516,16 +2527,14 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             identidade: Object.keys(identidade || {}).length
                 ? identidade
                 : (wizardExtra.identidade || undefined),
-            demo: demo && demo.hero ? demo : (wizardExtra.demo || undefined),
+            demo: mergedDemo.demo,
             demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : (wizardExtra.demoUrl || ''),
-            demoPrompt: wizardExtra.demoPrompt || '',
-            demoRaw: wizardExtra.demoRaw || '',
-            demoHtml: (() => {
-                const raw = row.demo_html
-                    || (!row.demo_slug ? (wizardExtra.demoHtml || '') : '');
-                return raw ? sanitizeDemoHtml(raw) : undefined;
-            })(),
-            htmlChangeNote: wizardExtra.htmlChangeNote || undefined,
+            demoPrompt: mergedDemo.demoPrompt || '',
+            demoRaw: mergedDemo.demoRaw || '',
+            demoHtml: mergedDemo.demoHtml ? sanitizeDemoHtml(mergedDemo.demoHtml) : undefined,
+            demoSeeded: mergedDemo.demoSeeded === true ? true : undefined,
+            demoIdentityStamp: mergedDemo.demoIdentityStamp || undefined,
+            htmlChangeNote: mergedDemo.htmlChangeNote || undefined,
             colorPrompt: wizardExtra.colorPrompt || undefined,
             gbpSobre: wizardExtra.gbpSobre || undefined,
             diagPitch: wizardExtra.diagPitch || undefined,
@@ -2555,7 +2564,8 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             leadId: row.id,
             estado: row.estado,
             revisingDeal,
-            suggestedStep: 0,
+            suggestedStep,
+            suggestedSubstep,
             data
         });
     } catch (err) {
@@ -2752,6 +2762,17 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
             db.prepare('UPDATE lead SET morada = ?, cidade = ? WHERE id = ?').run(morada, cidade, leadId);
             scheduleLeadGeocode(leadId, { force: true });
         }
+        if (body.lat != null && body.lng != null) {
+            const lat = parseCoord(body.lat);
+            const lng = parseCoord(body.lng);
+            if (lat == null || lng == null) {
+                return res.status(400).json({ error: 'Coordenadas inválidas.' });
+            }
+            db.prepare(`
+                UPDATE lead SET lat = ?, lng = ?, geocode_status = 'manual', geocoded_at = ?
+                WHERE id = ?
+            `).run(lat, lng, digitalizeptNow(), leadId);
+        }
         if (body.regeocode === true) {
             scheduleLeadGeocode(leadId, { force: true });
         }
@@ -2874,21 +2895,29 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
         let leadId = cleanText(body.leadId, 80);
-        const existing = leadId ? db.prepare('SELECT id, demo_slug FROM lead WHERE id = ?').get(leadId) : null;
+        const existing = leadId
+            ? db.prepare('SELECT id, demo_slug, wizard_json FROM lead WHERE id = ?').get(leadId)
+            : null;
         if (!existing) leadId = crypto.randomUUID();
         const slug = (existing && existing.demo_slug) || digitalizeptSlug(dados.nome_negocio);
         const morada = cleanText(dados.morada, 300);
         const cidade = cleanText(dados.cidade, 120);
+        const demoRaw = typeof body.demoRaw === 'string' ? body.demoRaw : '';
         const persist = db.transaction(() => {
             if (existing) {
                 clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+                const wizardMerged = mergeDemoIntoWizardJson(
+                    parseJsonSafe(existing.wizard_json, {}),
+                    { demo, demoHtml, demoRaw }
+                );
                 db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?,
-                    morada = ?, cidade = ?, telefone = ?, whatsapp = ?, demo_html = ?,
+                    morada = ?, cidade = ?, telefone = ?, whatsapp = ?, demo_html = ?, wizard_json = ?,
                     estado = CASE WHEN estado = 'fechado' THEN estado ELSE 'demonstracao' END
                     WHERE id = ?`).run(
                     JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug,
                     cleanText(dados.nome_negocio, 200), morada, cidade,
-                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), demoHtml, leadId);
+                    cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), demoHtml,
+                    JSON.stringify(wizardMerged), leadId);
                 applyAutoCobertura(db, leadId, 'demo');
             } else {
                 db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, demo_html, criado_em)

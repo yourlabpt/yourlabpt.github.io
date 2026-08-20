@@ -93,7 +93,15 @@ async function applyResumeLead(leadId) {
     delete seed.assinatura;
     delete seed.assinaturaPrestador;
     delete seed.dealResult;
-    seedWizardState(seed, { step: data.suggestedStep || 0, substep: 0 });
+    const step = Number.isFinite(Number(data.suggestedStep))
+        ? Math.max(0, Math.floor(Number(data.suggestedStep)))
+        : (Number.isFinite(Number(seed._wizardStep)) ? Math.max(0, Math.floor(Number(seed._wizardStep))) : 0);
+    const substep = Number.isFinite(Number(data.suggestedSubstep))
+        ? Math.max(0, Math.floor(Number(data.suggestedSubstep)))
+        : (Number.isFinite(Number(seed._wizardSubstep)) ? Math.max(0, Math.floor(Number(seed._wizardSubstep))) : 0);
+    delete seed._wizardStep;
+    delete seed._wizardSubstep;
+    seedWizardState(seed, { step, substep });
     clearResumeParam();
     wizard = null;
     const nome = (seed.dados && seed.dados.nome_negocio) || 'negócio';

@@ -27,6 +27,7 @@ import { ensureProposta } from '../proposal-calc.js';
 import { fetchConfig } from '../settings.js';
 import { renderFollowupShare } from '../demo/followup-ui.js';
 import { currentSubstep, renderAsk } from '../substep.js';
+import { scheduleSaveDraftLead } from '../draft.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -80,11 +81,13 @@ async function publishDemo(ctx) {
                 dados: ctx.state.data.dados,
                 identidade: ctx.state.data.identidade,
                 demo,
-                demoHtml
+                demoHtml,
+                demoRaw: ctx.state.data.demoRaw || ''
             }
         });
         if (response.ok && data.url) {
             ctx.update({ leadId: data.leadId || ctx.state.data.leadId, demoUrl: data.url });
+            scheduleSaveDraftLead(ctx.state, ctx);
             return data.url;
         }
     } catch (_) { /* publishing is best-effort during the visit */ }
@@ -167,6 +170,7 @@ function applyHtml(ctx, raw, showStatus, afterApply) {
     ctx.setValid(true);
     showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
     if (typeof afterApply === 'function') afterApply();
+    scheduleSaveDraftLead(ctx.state, ctx);
     openPreview(ctx.state, ctx, { mode: 'website' });
     publishDemo(ctx).then((url) => {
         if (url) showStatus(`HTML publicado. Link: ${url}`, 'ok');
@@ -181,6 +185,7 @@ function applyJsonDemo(ctx, demo, raw, showStatus) {
     ctx.update({ demo, demoRaw: ctx.state.data.demoRaw, demoHtml: '', demoSeeded: false });
     ctx.setValid(true);
     showStatus(`Demonstração actualizada — ${demo.servicos.itens.length} serviços.`, 'ok');
+    scheduleSaveDraftLead(ctx.state, ctx);
     publishDemo(ctx).then((url) => {
         if (url) showStatus(`Demonstração pronta. Link: ${url}`, 'ok');
     });

@@ -135,7 +135,7 @@ export function setupCoverage({
             if (defaults.lat != null && defaults.lng != null) {
                 const hint = document.createElement('p');
                 hint.className = 'meta';
-                hint.textContent = `Ponto no mapa: ${Number(defaults.lat).toFixed(5)}, ${Number(defaults.lng).toFixed(5)}`;
+                hint.textContent = `Ponto no mapa: ${Number(defaults.lat).toFixed(5)}, ${Number(defaults.lng).toFixed(5)} — pode arrastar o pin no mapa para corrigir.`;
                 form.appendChild(hint);
             }
             const save = document.createElement('button');
@@ -292,10 +292,12 @@ export function setupCoverage({
                 const { response, data } = await api(`/api/digitalizept/leads/${pin.id}/geocode`, { method: 'POST' });
                 regeo.disabled = false;
                 if (!response.ok) {
-                    toast(data.error || 'Não encontrei o sítio. Use “Marcar no mapa” para uma visita.', true);
+                    toast(data.error || 'Não encontrei o sítio. Arraste o pin ou use “Marcar no mapa”.', true);
                     return;
                 }
-                toast('Coordenadas actualizadas.');
+                toast(data.lead && data.lead.geocode_status
+                    ? 'Coordenadas actualizadas a partir da morada (OpenStreetMap).'
+                    : 'Coordenadas actualizadas.');
                 closeDrawer();
                 await refresh();
                 paint();
@@ -305,14 +307,39 @@ export function setupCoverage({
             notes.className = 'btn-secondary';
             notes.textContent = 'Comentários';
             notes.addEventListener('click', () => openNotes({ id: pin.id, nome: pin.nome }));
+            const tip = document.createElement('p');
+            tip.className = 'meta';
+            tip.style.marginTop = '10px';
+            tip.textContent = Number.isFinite(pin.lat)
+                ? 'Para corrigir o sítio: arraste o pin no mapa até ao edifício certo.'
+                : 'Sem pin — use “Localizar pela morada” ou “Marcar no mapa”.';
             actions.append(regeo, notes);
-            panel.appendChild(actions);
+            panel.append(actions, tip);
         });
     }
 
     function openPin(pin) {
         if (pin.kind === 'visita') openVisitForm(pin);
         else openLeadPin(pin);
+    }
+
+    async function savePinPosition(pin, lat, lng) {
+        const path = pin.kind === 'visita'
+            ? `/api/digitalizept/visits/${encodeURIComponent(pin.id)}`
+            : `/api/digitalizept/leads/${encodeURIComponent(pin.id)}`;
+        const { response, data } = await api(path, {
+            method: 'PATCH',
+            body: { lat, lng }
+        });
+        if (!response.ok) {
+            toast((data && data.error) || 'Não foi possível guardar a nova posição.', true);
+            return false;
+        }
+        pin.lat = lat;
+        pin.lng = lng;
+        pin.geocode_status = 'manual';
+        toast('Pin actualizado no mapa.');
+        return true;
     }
 
     function paint() {
@@ -326,16 +353,31 @@ export function setupCoverage({
         mapped.forEach((pin) => {
             const marker = window.L.marker([pin.lat, pin.lng], {
                 icon: pinIcon(pin.color),
-                title: pin.nome || ''
+                title: `${pin.nome || ''} — arraste para corrigir`,
+                draggable: !placing,
+                autoPan: true
             }).addTo(map);
-            marker.on('click', () => openPin(pin));
+            marker.on('click', () => {
+                if (placing) return;
+                openPin(pin);
+            });
+            marker.on('dragstart', () => {
+                closeDrawer();
+            });
+            marker.on('dragend', async () => {
+                const pos = marker.getLatLng();
+                const ok = await savePinPosition(pin, pos.lat, pos.lng);
+                if (!ok) {
+                    marker.setLatLng([pin.lat, pin.lng]);
+                }
+            });
             markers.push(marker);
             bounds.extend([pin.lat, pin.lng]);
         });
         el.coverageStatus.textContent = placing
             ? 'Toque no mapa para marcar o sítio visitado.'
             : (mapped.length
-                ? `${mapped.length} no mapa${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
+                ? `${mapped.length} no mapa · arraste um pin para corrigir a posição${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
                 : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.'));
 
         if (el.coverageUnmapped) {

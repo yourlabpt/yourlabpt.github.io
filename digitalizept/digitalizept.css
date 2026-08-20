@@ -1822,17 +1822,69 @@ html:has(body > .dp-landing) {
 .google-resumo {
     list-style: none;
     padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
+    margin: 12px 0 0;
+    display: grid;
     gap: 8px;
 }
 
 .google-resumo li {
-    padding: 10px 12px;
-    background: #f6f4ef;
-    border-radius: 10px;
-    font-size: 0.92rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.google-resumo-ok {
+    border-color: rgba(46, 125, 50, 0.35);
+}
+
+.google-resumo-warn {
+    border-color: rgba(198, 140, 0, 0.35);
+}
+
+.google-resumo-status {
+    flex-shrink: 0;
+    width: 1.4rem;
+    height: 1.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.google-resumo-body {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.google-resumo-label {
+    display: block;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-color);
+}
+
+.google-resumo-value {
+    display: block;
+    word-break: break-word;
+}
+
+.google-resumo-note {
+    margin: 10px 0 0;
+    font-size: 0.82rem;
+    color: var(--muted-color);
+    line-height: 1.4;
 }
 
 /* Style variants */

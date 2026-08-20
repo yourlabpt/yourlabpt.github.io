@@ -5,6 +5,7 @@ import { fetchConfig } from '../settings.js';
 import { buildContractModel, buildContractDocument } from '../deal/contract.js';
 import { downloadDealContract } from '../deal/download.js';
 import { enqueueDeal } from '../offline-queue.js';
+import { googlePresenceFromWizard } from '../google-presence.js';
 
 const PROJECT_STATES = [
     'Demonstração criada', 'Proposta enviada', 'Contrato assinado', 'Entrada recebida',
@@ -137,7 +138,7 @@ async function render(body, ctx) {
                 demo: ctx.state.data.demo,
                 demoHtml: ctx.state.data.demoHtml || '',
                 proposta: ctx.state.data.proposta,
-                googlePresence: ctx.state.data.googlePresence || null,
+                googlePresence: googlePresenceFromWizard(ctx.state),
                 googleDiagnostico: ctx.state.data.googleDiagnostico || null,
                 clienteLegal: ctx.state.data.clienteLegal,
                 contrato: { html: buildFinalDocument(ctx.state, catalog, config), hash: a.hash || p.hash },

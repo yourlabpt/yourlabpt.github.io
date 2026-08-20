@@ -112,12 +112,19 @@ function paintResumo(control, g, dados) {
     rows.forEach(([label, value]) => {
         const li = document.createElement('li');
         const ok = value && value !== '—' && value !== 'Por confirmar' && value !== 'Nenhum';
-        li.textContent = `${ok ? '✓' : '⚠'} ${label}: ${value}`;
+        li.className = ok ? 'google-resumo-ok' : 'google-resumo-warn';
+        const status = document.createElement('span');
+        status.className = 'google-resumo-status';
+        status.textContent = ok ? '✓' : '⚠';
+        const text = document.createElement('div');
+        text.className = 'google-resumo-body';
+        text.innerHTML = `<span class="google-resumo-label">${label}</span><span class="google-resumo-value">${value}</span>`;
+        li.append(status, text);
         list.appendChild(li);
     });
     control.appendChild(list);
     const note = document.createElement('p');
-    note.className = 'ask-hint';
+    note.className = 'google-resumo-note';
     note.textContent = 'Checklist operacional — executado na conta Google do cliente. Sem promessa de ranking.';
     control.appendChild(note);
 }
@@ -284,7 +291,9 @@ export const googleStep = {
     name: 'Google',
     title: 'Presença no Google',
     subtitle: 'Checklist leve para organizar o Perfil Google do cliente.',
-    shouldSkip: (state) => !includesGooglePresence(ensureProposta(state)),
+    // Sales flow: diagnóstico + demo Google já cobrem a conversa. Checklist operacional
+    // fica para entrega (pasta de trabalho / admin), não repetir perguntas aqui.
+    shouldSkip: () => true,
     isValid,
     isSubstepValid,
     substepCount: (state) => (includesGooglePresence(ensureProposta(state)) ? pagesFor(state).length : 0),

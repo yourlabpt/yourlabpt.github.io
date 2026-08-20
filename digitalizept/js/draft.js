@@ -7,6 +7,8 @@ function wizardSnapshot(state) {
     if (proposta && proposta._calc) {
         // Keep totals for display; strip nothing critical.
     }
+    const step = Number(state.step);
+    const substep = Number(state.substep);
     return {
         googleDiagnostico: d.googleDiagnostico || undefined,
         proposta: proposta || undefined,
@@ -16,6 +18,8 @@ function wizardSnapshot(state) {
         demoPrompt: d.demoPrompt || '',
         demoRaw: d.demoRaw || '',
         demoHtml: d.demoHtml || '',
+        demoSeeded: d.demoSeeded === true,
+        demoIdentityStamp: d.demoIdentityStamp || '',
         htmlChangeNote: d.htmlChangeNote || '',
         colorPrompt: d.colorPrompt || '',
         gbpSobre: d.gbpSobre || '',
@@ -23,7 +27,9 @@ function wizardSnapshot(state) {
         packagePitch: d.packagePitch || '',
         demoGbp: d.demoGbp === true,
         demoUrl: d.demoUrl || '',
-        demo: d.demo || undefined
+        demo: d.demo || undefined,
+        _wizardStep: Number.isFinite(step) && step >= 0 ? Math.floor(step) : 0,
+        _wizardSubstep: Number.isFinite(substep) && substep >= 0 ? Math.floor(substep) : 0
     };
 }
 
@@ -48,6 +54,19 @@ export async function saveDraftLead(state, ctx) {
         return null;
     }
     if (!response.ok || !data.leadId) return null;
-    ctx.update({ leadId: data.leadId });
+    if (ctx && typeof ctx.update === 'function') ctx.update({ leadId: data.leadId });
     return data.leadId;
 }
+
+let draftTimer = null;
+
+/** Debounced draft save — used after AI/HTML edits so we don't spam the API. */
+export function scheduleSaveDraftLead(state, ctx, delayMs = 500) {
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+        draftTimer = null;
+        saveDraftLead(state, ctx).catch(() => { /* best-effort */ });
+    }, delayMs);
+}
+
+export { wizardSnapshot };
