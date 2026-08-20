@@ -68,7 +68,7 @@ export function setupCoverage({
         return pins.filter((p) => {
             if (filterIds.size && !filterIds.has(p.cobertura || 'contacto')) return false;
             if (!q) return true;
-            return `${p.nome} ${p.morada || ''} ${p.cidade || ''} ${p.experiencia || ''} ${p.notas || ''}`
+            return `${p.nome} ${p.morada || ''} ${p.cidade || ''} ${p.experiencia || ''} ${p.notas || ''} ${p.leadNome || ''}`
                 .toLowerCase()
                 .includes(q);
         });
@@ -116,6 +116,11 @@ export function setupCoverage({
     }
 
     function openVisitForm(defaults = {}) {
+        let selectedLeadId = defaults.leadId || '';
+        let selectedLeadNome = defaults.leadNome || '';
+        let selectedHasDeal = defaults.hasDeal === true;
+        let selectedDealEstado = defaults.dealEstado || '';
+
         openDrawer(defaults.id ? 'Visita' : 'Registar visita', (panel) => {
             const form = document.createElement('form');
             form.className = 'admin-form';
@@ -132,6 +137,80 @@ export function setupCoverage({
                 field('Desfecho', cobertura),
                 field('Como correu a visita', experiencia)
             );
+
+            const linkSection = document.createElement('div');
+            linkSection.className = 'coverage-link-section';
+            const linkTitle = document.createElement('p');
+            linkTitle.className = 'field-label';
+            linkTitle.textContent = 'Ligar a lead / proposta';
+            const linkStatus = document.createElement('p');
+            linkStatus.className = 'meta';
+            const search = inputEl('search', '', { placeholder: 'Pesquisar lead por nome ou cidade…' });
+            const select = document.createElement('select');
+            select.className = 'field-input';
+            select.size = 5;
+            select.style.minHeight = '120px';
+
+            function paintLinkStatus() {
+                if (selectedLeadId) {
+                    linkStatus.textContent = selectedHasDeal
+                        ? `Ligado a: ${selectedLeadNome || selectedLeadId} · com proposta${selectedDealEstado ? ` (${selectedDealEstado})` : ''}`
+                        : `Ligado a: ${selectedLeadNome || selectedLeadId}`;
+                } else {
+                    linkStatus.textContent = 'Sem ligação — escolha um lead abaixo (opcional).';
+                }
+            }
+            paintLinkStatus();
+
+            async function loadLeadOptions(query) {
+                const qs = query ? `?q=${encodeURIComponent(query)}` : '';
+                const { response, data } = await api(`/api/digitalizept/leads/options${qs}`);
+                select.innerHTML = '';
+                const none = document.createElement('option');
+                none.value = '';
+                none.textContent = '— Sem ligação —';
+                select.appendChild(none);
+                if (!response.ok) return;
+                (data.options || []).forEach((opt) => {
+                    const o = document.createElement('option');
+                    o.value = opt.id;
+                    o.textContent = `${opt.nome}${opt.cidade ? ` · ${opt.cidade}` : ''}${opt.hasDeal ? ' · com proposta' : ''}`;
+                    if (opt.id === selectedLeadId) o.selected = true;
+                    select.appendChild(o);
+                });
+                if (selectedLeadId && !Array.from(select.options).some((o) => o.value === selectedLeadId)) {
+                    const o = document.createElement('option');
+                    o.value = selectedLeadId;
+                    o.textContent = `${selectedLeadNome || selectedLeadId}${selectedHasDeal ? ' · com proposta' : ''}`;
+                    o.selected = true;
+                    select.appendChild(o);
+                }
+            }
+
+            let searchTimer = null;
+            search.addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => loadLeadOptions(search.value.trim()), 250);
+            });
+            select.addEventListener('change', () => {
+                selectedLeadId = select.value || '';
+                const opt = select.selectedOptions[0];
+                selectedLeadNome = selectedLeadId
+                    ? String(opt.textContent || '').split(' · ')[0]
+                    : '';
+                selectedHasDeal = Boolean(opt && /com proposta/.test(opt.textContent || ''));
+                selectedDealEstado = '';
+                paintLinkStatus();
+            });
+
+            linkSection.append(
+                linkTitle,
+                linkStatus,
+                field('Pesquisar', search),
+                field('Lead', select)
+            );
+            form.appendChild(linkSection);
+
             if (defaults.lat != null && defaults.lng != null) {
                 const hint = document.createElement('p');
                 hint.className = 'meta';
@@ -151,7 +230,8 @@ export function setupCoverage({
                     morada: morada.value.trim(),
                     cidade: cidade.value.trim(),
                     cobertura: cobertura.value,
-                    experiencia: experiencia.value.trim()
+                    experiencia: experiencia.value.trim(),
+                    leadId: selectedLeadId || null
                 };
                 if (defaults.lat != null && defaults.lng != null) {
                     payload.lat = defaults.lat;
@@ -177,9 +257,46 @@ export function setupCoverage({
             });
             panel.appendChild(form);
 
+            const actions = document.createElement('div');
+            actions.className = 'coverage-pin-actions';
+            const openLead = document.createElement('button');
+            openLead.type = 'button';
+            openLead.className = 'btn-secondary';
+            openLead.textContent = 'Abrir lead no mapa';
+            openLead.addEventListener('click', () => {
+                const id = selectedLeadId || defaults.leadId;
+                if (!id) return;
+                const leadPin = pins.find((p) => p.kind === 'lead' && p.id === id);
+                if (leadPin) openLeadPin(leadPin);
+                else toast('Lead ainda não está no mapa — guarde a visita e actualize.', true);
+            });
+            const resume = document.createElement('a');
+            resume.className = 'btn-secondary';
+            resume.textContent = 'Continuar venda';
+            const clearLink = document.createElement('button');
+            clearLink.type = 'button';
+            clearLink.className = 'btn-secondary';
+            clearLink.textContent = 'Remover ligação';
+            clearLink.addEventListener('click', () => {
+                selectedLeadId = '';
+                selectedLeadNome = '';
+                selectedHasDeal = false;
+                selectedDealEstado = '';
+                select.value = '';
+                paintLinkStatus();
+                paintLinkActions();
+            });
+            function paintLinkActions() {
+                const id = selectedLeadId || '';
+                openLead.hidden = !id;
+                resume.hidden = !id;
+                clearLink.hidden = !id;
+                if (id) resume.href = `./?resume=${encodeURIComponent(id)}`;
+            }
+            paintLinkActions();
+            select.addEventListener('change', () => paintLinkActions());
+            actions.append(openLead, resume, clearLink);
             if (defaults.id) {
-                const actions = document.createElement('div');
-                actions.className = 'coverage-pin-actions';
                 const geo = document.createElement('button');
                 geo.type = 'button';
                 geo.className = 'btn-secondary';
@@ -218,8 +335,9 @@ export function setupCoverage({
                     paint();
                 });
                 actions.append(geo, del);
-                panel.appendChild(actions);
             }
+            panel.appendChild(actions);
+            loadLeadOptions('').catch(() => {});
         });
     }
 
@@ -229,6 +347,35 @@ export function setupCoverage({
             meta.className = 'meta';
             meta.textContent = `${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.business_type || '—'}`;
             panel.appendChild(meta);
+            if (pin.hasDeal) {
+                const deal = document.createElement('p');
+                deal.className = 'meta';
+                deal.textContent = `Proposta: ${pin.dealEstado || 'fechada'}`;
+                panel.appendChild(deal);
+            }
+            const visitaIds = Array.isArray(pin.visitaIds) ? pin.visitaIds : [];
+            if (visitaIds.length) {
+                const linkMeta = document.createElement('p');
+                linkMeta.className = 'meta';
+                linkMeta.textContent = `${visitaIds.length} visita(s) de rua ligada(s)`;
+                panel.appendChild(linkMeta);
+                visitaIds.forEach((vid) => {
+                    const visitPin = pins.find((p) => p.kind === 'visita' && p.id === vid);
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn-secondary';
+                    btn.style.width = '100%';
+                    btn.style.marginBottom = '6px';
+                    btn.textContent = visitPin
+                        ? `Abrir visita: ${visitPin.nome || vid.slice(0, 8)}`
+                        : `Abrir visita ${vid.slice(0, 8)}`;
+                    btn.addEventListener('click', () => {
+                        if (visitPin) openVisitForm(visitPin);
+                        else toast('Visita não encontrada no mapa.', true);
+                    });
+                    panel.appendChild(btn);
+                });
+            }
             if (pin.notas) {
                 const prev = document.createElement('p');
                 prev.className = 'meta';
@@ -283,6 +430,31 @@ export function setupCoverage({
                 demo.textContent = 'Abrir demo';
                 actions.appendChild(demo);
             }
+            const createVisit = document.createElement('button');
+            createVisit.type = 'button';
+            createVisit.className = 'btn-secondary';
+            createVisit.textContent = 'Registar visita neste sítio';
+            createVisit.addEventListener('click', async () => {
+                createVisit.disabled = true;
+                try {
+                    const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(pin.id)}/visits`, {
+                        method: 'POST',
+                        body: {}
+                    });
+                    if (!response.ok) {
+                        toast(data.error || 'Não foi possível criar a visita.', true);
+                        return;
+                    }
+                    toast('Visita criada e ligada a este lead.');
+                    await refresh();
+                    paint();
+                    openVisitForm(data.visit || { ...pin, kind: 'visita', leadId: pin.id, id: data.visit && data.visit.id });
+                } catch (_) {
+                    toast('Erro de rede.', true);
+                } finally {
+                    createVisit.disabled = false;
+                }
+            });
             const regeo = document.createElement('button');
             regeo.type = 'button';
             regeo.className = 'btn-secondary';
@@ -295,9 +467,7 @@ export function setupCoverage({
                     toast(data.error || 'Não encontrei o sítio. Arraste o pin ou use “Marcar no mapa”.', true);
                     return;
                 }
-                toast(data.lead && data.lead.geocode_status
-                    ? 'Coordenadas actualizadas a partir da morada (OpenStreetMap).'
-                    : 'Coordenadas actualizadas.');
+                toast('Coordenadas actualizadas a partir da morada (OpenStreetMap).');
                 closeDrawer();
                 await refresh();
                 paint();
@@ -311,9 +481,9 @@ export function setupCoverage({
             tip.className = 'meta';
             tip.style.marginTop = '10px';
             tip.textContent = Number.isFinite(pin.lat)
-                ? 'Para corrigir o sítio: arraste o pin no mapa até ao edifício certo.'
+                ? 'Para corrigir o sítio: arraste o pin no mapa. Pode também registar uma visita de rua ligada.'
                 : 'Sem pin — use “Localizar pela morada” ou “Marcar no mapa”.';
-            actions.append(regeo, notes);
+            actions.append(createVisit, regeo, notes);
             panel.append(actions, tip);
         });
     }
@@ -321,6 +491,49 @@ export function setupCoverage({
     function openPin(pin) {
         if (pin.kind === 'visita') openVisitForm(pin);
         else openLeadPin(pin);
+    }
+
+    async function focusLead(leadId) {
+        await ensure();
+        const pin = pins.find((p) => p.kind === 'lead' && p.id === leadId);
+        if (!pin) {
+            toast('Lead não encontrado no mapa.', true);
+            return false;
+        }
+        if (Number.isFinite(pin.lat) && Number.isFinite(pin.lng) && map) {
+            map.setView([pin.lat, pin.lng], 16);
+        }
+        openLeadPin(pin);
+        return true;
+    }
+
+    async function openOrCreateVisitForLead(leadId) {
+        await ensure();
+        const leadPin = pins.find((p) => p.kind === 'lead' && p.id === leadId);
+        const linked = pins.filter((p) => p.kind === 'visita' && p.leadId === leadId);
+        if (linked.length) {
+            if (Number.isFinite(linked[0].lat) && Number.isFinite(linked[0].lng) && map) {
+                map.setView([linked[0].lat, linked[0].lng], 16);
+            }
+            openVisitForm(linked[0]);
+            return true;
+        }
+        if (leadPin && Number.isFinite(leadPin.lat) && Number.isFinite(leadPin.lng)) {
+            openLeadPin(leadPin);
+            return true;
+        }
+        const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/visits`, {
+            method: 'POST',
+            body: {}
+        });
+        if (!response.ok) {
+            toast((data && data.error) || 'Não foi possível criar a visita.', true);
+            return false;
+        }
+        await refresh();
+        paint();
+        openVisitForm(data.visit);
+        return true;
     }
 
     async function savePinPosition(pin, lat, lng) {
@@ -353,7 +566,11 @@ export function setupCoverage({
         mapped.forEach((pin) => {
             const marker = window.L.marker([pin.lat, pin.lng], {
                 icon: pinIcon(pin.color),
-                title: `${pin.nome || ''} — arraste para corrigir`,
+                title: pin.kind === 'visita' && pin.leadNome
+                    ? `${pin.nome || ''} · ligado a ${pin.leadNome}`
+                    : (pin.kind === 'lead' && pin.visitaCount
+                        ? `${pin.nome || ''} · ${pin.visitaCount} visita(s)`
+                        : `${pin.nome || ''} — arraste para corrigir`),
                 draggable: !placing,
                 autoPan: true
             }).addTo(map);
@@ -377,7 +594,7 @@ export function setupCoverage({
         el.coverageStatus.textContent = placing
             ? 'Toque no mapa para marcar o sítio visitado.'
             : (mapped.length
-                ? `${mapped.length} no mapa · arraste um pin para corrigir a posição${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
+                ? `${mapped.length} no mapa · arraste pins · ligue visitas a leads${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
                 : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.'));
 
         if (el.coverageUnmapped) {
@@ -387,7 +604,7 @@ export function setupCoverage({
                 card.className = 'admin-card';
                 card.innerHTML = `
                     <h3>${pin.nome || 'Sem nome'}</h3>
-                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin</p>
+                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
                 `;
                 const actions = document.createElement('div');
                 actions.className = 'actions';
@@ -480,6 +697,8 @@ export function setupCoverage({
 
     return {
         ensure,
-        repaint: paint
+        repaint: paint,
+        focusLead,
+        openOrCreateVisitForLead
     };
 }

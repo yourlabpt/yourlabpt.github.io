@@ -351,6 +351,13 @@ function renderDemos() {
             actions.appendChild(share);
         }
 
+        const mapBtn = document.createElement('button');
+        mapBtn.type = 'button';
+        mapBtn.className = 'btn-secondary';
+        mapBtn.textContent = 'Mapa / visita';
+        mapBtn.addEventListener('click', () => jumpToLeadMap(l.id));
+        actions.appendChild(mapBtn);
+
         const notes = document.createElement('button');
         notes.type = 'button';
         notes.className = 'btn-secondary';
@@ -484,10 +491,34 @@ function renderDeals() {
             }
         });
 
+        if (d.leadId) {
+            const mapBtn = document.createElement('button');
+            mapBtn.type = 'button';
+            mapBtn.className = 'btn-secondary';
+            mapBtn.textContent = 'Mapa / visita';
+            mapBtn.addEventListener('click', () => jumpToLeadMap(d.leadId));
+            actions.appendChild(mapBtn);
+        }
+
         actions.append(contract, edit, del);
         card.appendChild(actions);
         el.dealsList.appendChild(card);
     });
+}
+
+async function jumpToLeadMap(leadId) {
+    if (!leadId || !coverageUi) {
+        toast('Mapa indisponível.', true);
+        return;
+    }
+    switchTab('coverage');
+    try {
+        const focused = await coverageUi.focusLead(leadId);
+        if (focused) return;
+        await coverageUi.openOrCreateVisitForLead(leadId);
+    } catch (_) {
+        toast('Não foi possível abrir no mapa.', true);
+    }
 }
 
 async function openFollowupShare({ leadId, nome, demo_slug }) {

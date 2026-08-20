@@ -218,8 +218,13 @@ function migrate(db) {
         lng REAL,
         geocode_status TEXT NOT NULL DEFAULT '',
         visitado_em TEXT NOT NULL DEFAULT '',
-        criado_em TEXT NOT NULL
+        criado_em TEXT NOT NULL,
+        lead_id TEXT
     )`);
+    addMissingColumns(db, 'visita', {
+        lead_id: 'TEXT'
+    });
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_visita_lead ON visita(lead_id)`);
 
     try {
         const { backfillLeadGeoFields } = require('./digitalizept-geocode');
@@ -288,6 +293,8 @@ function logEvento(db, entidade, entidadeId, tipo, payload = {}) {
 
 module.exports = {
     DB_PATH,
+    SCHEMA,
+    migrate,
     getDb,
     nowIso,
     logEvento

@@ -2102,6 +2102,42 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     }
 });
 
+app.get('/api/digitalizept/leads/options', requireDigitalizept, (req, res) => {
+    try {
+        const q = cleanText((req.query && req.query.q) || '', 120).toLowerCase();
+        const db = getDigitalizeptDb();
+        const rows = db.prepare(`
+            SELECT id, nome, cidade, estado, lat, lng, demo_slug
+            FROM lead
+            ORDER BY criado_em DESC
+            LIMIT 200
+        `).all();
+        const options = rows
+            .filter((r) => {
+                if (!q) return true;
+                return `${r.nome} ${r.cidade || ''} ${r.estado || ''}`.toLowerCase().includes(q);
+            })
+            .slice(0, 50)
+            .map((r) => {
+                const dealEstado = dealEstadoForLead(db, r.id);
+                return {
+                    id: r.id,
+                    nome: r.nome,
+                    cidade: r.cidade || '',
+                    estado: r.estado || '',
+                    hasDeal: Boolean(dealEstado),
+                    dealEstado: dealEstado || '',
+                    hasCoords: Number.isFinite(r.lat) && Number.isFinite(r.lng),
+                    demo_slug: r.demo_slug || ''
+                };
+            });
+        return res.json({ options });
+    } catch (err) {
+        console.error('digitalizept leads options error:', err.message);
+        return res.status(500).json({ error: 'Failed to load lead options.' });
+    }
+});
+
 app.get('/api/digitalizept/maps-config', requireDigitalizept, (req, res) => {
     return res.json({
         provider: 'osm',
@@ -2147,52 +2183,75 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
             LIMIT 500
         `).all();
         const visits = db.prepare(`
-            SELECT id, nome, morada, cidade, cobertura, experiencia, lat, lng,
-                   geocode_status, visitado_em, criado_em
-            FROM visita
-            ORDER BY criado_em DESC
+            SELECT v.id, v.nome, v.morada, v.cidade, v.cobertura, v.experiencia, v.lat, v.lng,
+                   v.geocode_status, v.visitado_em, v.criado_em, v.lead_id,
+                   l.nome AS lead_nome
+            FROM visita v
+            LEFT JOIN lead l ON l.id = v.lead_id
+            ORDER BY v.criado_em DESC
             LIMIT 500
         `).all();
-        const leadPins = leads.map((r) => ({
-            id: r.id,
-            kind: 'lead',
-            nome: r.nome,
-            business_type: r.business_type,
-            morada: r.morada,
-            cidade: r.cidade,
-            telefone: r.telefone,
-            estado: r.estado,
-            cobertura: r.cobertura || 'contacto',
-            cobertura_locked: Boolean(r.cobertura_locked),
-            demo_slug: r.demo_slug,
-            lat: r.lat,
-            lng: r.lng,
-            geocode_status: r.geocode_status,
-            experiencia: '',
-            notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
-            criado_em: r.criado_em,
-            color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.contacto
-        }));
-        const visitPins = visits.map((r) => ({
-            id: r.id,
-            kind: 'visita',
-            nome: r.nome,
-            business_type: '',
-            morada: r.morada,
-            cidade: r.cidade,
-            telefone: '',
-            estado: '',
-            cobertura: r.cobertura || 'visitado',
-            demo_slug: '',
-            lat: r.lat,
-            lng: r.lng,
-            geocode_status: r.geocode_status,
-            experiencia: r.experiencia || '',
-            notas: '',
-            visitado_em: r.visitado_em,
-            criado_em: r.criado_em,
-            color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.visitado
-        }));
+        const visitsByLead = {};
+        visits.forEach((r) => {
+            if (!r.lead_id) return;
+            if (!visitsByLead[r.lead_id]) visitsByLead[r.lead_id] = [];
+            visitsByLead[r.lead_id].push(r.id);
+        });
+        const leadPins = leads.map((r) => {
+            const visitaIds = visitsByLead[r.id] || [];
+            const dealEstado = dealEstadoForLead(db, r.id);
+            return {
+                id: r.id,
+                kind: 'lead',
+                nome: r.nome,
+                business_type: r.business_type,
+                morada: r.morada,
+                cidade: r.cidade,
+                telefone: r.telefone,
+                estado: r.estado,
+                cobertura: r.cobertura || 'contacto',
+                cobertura_locked: Boolean(r.cobertura_locked),
+                demo_slug: r.demo_slug,
+                lat: r.lat,
+                lng: r.lng,
+                geocode_status: r.geocode_status,
+                experiencia: '',
+                notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
+                criado_em: r.criado_em,
+                visitaIds,
+                visitaCount: visitaIds.length,
+                hasDeal: Boolean(dealEstado),
+                dealEstado: dealEstado || undefined,
+                color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.contacto
+            };
+        });
+        const visitPins = visits.map((r) => {
+            const dealEstado = r.lead_id ? dealEstadoForLead(db, r.lead_id) : '';
+            return {
+                id: r.id,
+                kind: 'visita',
+                nome: r.nome,
+                business_type: '',
+                morada: r.morada,
+                cidade: r.cidade,
+                telefone: '',
+                estado: '',
+                cobertura: r.cobertura || 'visitado',
+                demo_slug: '',
+                lat: r.lat,
+                lng: r.lng,
+                geocode_status: r.geocode_status,
+                experiencia: r.experiencia || '',
+                notas: '',
+                visitado_em: r.visitado_em,
+                criado_em: r.criado_em,
+                leadId: r.lead_id || undefined,
+                leadNome: r.lead_nome || undefined,
+                hasDeal: Boolean(dealEstado),
+                dealEstado: dealEstado || undefined,
+                color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.visitado
+            };
+        });
         return res.json({
             pins: visitPins.concat(leadPins),
             legend: coverageLegend()
@@ -2268,12 +2327,85 @@ app.post('/api/digitalizept/leads/:leadId/geocode', requireDigitalizept, async (
     }
 });
 
+app.post('/api/digitalizept/leads/:leadId/visits', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const lead = db.prepare(`
+            SELECT id, nome, morada, cidade, lat, lng, geocode_status, cobertura
+            FROM lead WHERE id = ?
+        `).get(leadId);
+        if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const body = req.body || {};
+        const cobertura = cleanText(body.cobertura, 40) || 'visitado';
+        if (!isValidCobertura(cobertura)) {
+            return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        }
+        const id = crypto.randomUUID();
+        const now = digitalizeptNow();
+        const experiencia = cleanText(body.experiencia, 4000);
+        db.prepare(`
+            INSERT INTO visita (id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            id,
+            lead.nome || 'Sem nome',
+            lead.morada || '',
+            lead.cidade || '',
+            cobertura,
+            experiencia,
+            lead.lat,
+            lead.lng,
+            (Number.isFinite(lead.lat) && Number.isFinite(lead.lng))
+                ? (lead.geocode_status || 'ok')
+                : '',
+            now,
+            now,
+            leadId
+        );
+        return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
+    } catch (err) {
+        console.error('digitalizept lead visit create error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível criar a visita.' });
+    }
+});
+
 function parseCoord(value) {
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
 }
 
-function visitaFromRow(row) {
+function dealEstadoForLead(db, leadId) {
+    if (!leadId) return '';
+    const row = db.prepare(`
+        SELECT pr.estado
+        FROM proposta p
+        JOIN contrato c ON c.proposta_id = p.id
+        JOIN projeto pr ON pr.contrato_id = c.id
+        WHERE p.lead_id = ?
+        ORDER BY pr.criado_em DESC
+        LIMIT 1
+    `).get(leadId);
+    return (row && row.estado) || '';
+}
+
+function resolveLeadIdInput(db, raw, { requiredIfSet = true } = {}) {
+    if (raw === undefined) return { unset: true };
+    const leadId = cleanText(raw, 80);
+    if (!leadId) return { leadId: null };
+    const lead = db.prepare('SELECT id, nome, estado FROM lead WHERE id = ?').get(leadId);
+    if (!lead) {
+        return { error: 'Lead não encontrado.' };
+    }
+    if (!requiredIfSet) { /* noop */ }
+    return { leadId: lead.id, lead };
+}
+
+function visitaFromRow(row, db = null) {
+    const leadId = row.lead_id || '';
+    const dealEstado = row.deal_estado
+        || (db && leadId ? dealEstadoForLead(db, leadId) : '');
+    const leadNome = row.lead_nome || '';
     return {
         id: row.id,
         kind: 'visita',
@@ -2287,8 +2419,22 @@ function visitaFromRow(row) {
         geocode_status: row.geocode_status,
         visitado_em: row.visitado_em,
         criado_em: row.criado_em,
+        leadId: leadId || undefined,
+        leadNome: leadNome || undefined,
+        hasDeal: Boolean(dealEstado),
+        dealEstado: dealEstado || undefined,
         color: COBERTURA_COLORS[row.cobertura] || COBERTURA_COLORS.visitado
     };
+}
+
+function fetchVisitaEnriched(db, id) {
+    const row = db.prepare(`
+        SELECT v.*, l.nome AS lead_nome
+        FROM visita v
+        LEFT JOIN lead l ON l.id = v.lead_id
+        WHERE v.id = ?
+    `).get(id);
+    return row ? visitaFromRow(row, db) : null;
 }
 
 app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
@@ -2316,16 +2462,18 @@ app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
                 geocodeStatus = geo.status || 'failed';
             }
         }
+        const db = getDigitalizeptDb();
+        const linked = resolveLeadIdInput(db, body.leadId !== undefined ? body.leadId : body.lead_id);
+        if (linked.error) return res.status(400).json({ error: linked.error });
+        const leadId = linked.unset ? null : linked.leadId;
         const id = crypto.randomUUID();
         const now = digitalizeptNow();
         const visitadoEm = cleanText(body.visitado_em, 40) || now;
-        const db = getDigitalizeptDb();
         db.prepare(`
-            INSERT INTO visita (id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocode_status, visitado_em, criado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, now);
-        const row = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
-        return res.json({ ok: true, visit: visitaFromRow(row) });
+            INSERT INTO visita (id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, now, leadId);
+        return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept visit post error:', err.message);
         return res.status(500).json({ error: 'Não foi possível guardar a visita.' });
@@ -2361,17 +2509,22 @@ app.patch('/api/digitalizept/visits/:id', requireDigitalizept, async (req, res) 
         let geocodeStatus = hasManual && lat != null && lng != null
             ? 'manual'
             : existing.geocode_status;
+        let leadId = existing.lead_id || null;
+        if (body.leadId !== undefined || body.lead_id !== undefined) {
+            const linked = resolveLeadIdInput(db, body.leadId !== undefined ? body.leadId : body.lead_id);
+            if (linked.error) return res.status(400).json({ error: linked.error });
+            leadId = linked.leadId;
+        }
         db.prepare(`
             UPDATE visita SET nome = ?, morada = ?, cidade = ?, cobertura = ?, experiencia = ?,
-                lat = ?, lng = ?, geocode_status = ?, visitado_em = ?
+                lat = ?, lng = ?, geocode_status = ?, visitado_em = ?, lead_id = ?
             WHERE id = ?
-        `).run(nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, id);
+        `).run(nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, leadId, id);
 
         if (body.regeocode === true) {
             await geocodeVisitRow(db, id, { force: true, nowIso: digitalizeptNow });
         }
-        const row = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
-        return res.json({ ok: true, visit: visitaFromRow(row) });
+        return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept visit patch error:', err.message);
         return res.status(500).json({ error: 'Não foi possível atualizar a visita.' });
@@ -2398,14 +2551,13 @@ app.post('/api/digitalizept/visits/:id/geocode', requireDigitalizept, async (req
         const existing = db.prepare('SELECT id FROM visita WHERE id = ?').get(id);
         if (!existing) return res.status(404).json({ error: 'Visita não encontrada.' });
         const result = await geocodeVisitRow(db, id, { force: true, nowIso: digitalizeptNow });
-        const row = db.prepare('SELECT * FROM visita WHERE id = ?').get(id);
         if (!result || result.ok === false) {
             return res.status(422).json({
                 error: (result && result.error) || 'Geocoding falhou.',
-                visit: visitaFromRow(row)
+                visit: fetchVisitaEnriched(db, id)
             });
         }
-        return res.json({ ok: true, visit: visitaFromRow(row) });
+        return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept visit geocode error:', err.message);
         return res.status(500).json({ error: 'Não foi possível localizar a visita.' });
@@ -2656,6 +2808,7 @@ app.delete('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) =>
             return res.status(409).json({ error: 'Este lead tem uma proposta fechada. Apague a proposta primeiro.' });
         }
         const del = db.transaction(() => {
+            db.prepare('UPDATE visita SET lead_id = NULL WHERE lead_id = ?').run(leadId);
             db.prepare('DELETE FROM nota WHERE lead_id = ?').run(leadId);
             db.prepare('DELETE FROM evento WHERE entidade = ? AND entidade_id = ?').run('lead', leadId);
             db.prepare('DELETE FROM dados_negocio WHERE lead_id = ?').run(leadId);
