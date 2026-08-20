@@ -113,18 +113,29 @@ function eurosFromCents(cents) {
 
 function closeDrawer() {
     el.drawer.classList.add('hidden');
+    el.drawer.classList.remove('drawer-dock');
     el.drawer.setAttribute('aria-hidden', 'true');
     el.drawerPanel.innerHTML = '';
+    document.body.classList.remove('coverage-dock-open');
+    if (coverageUi && typeof coverageUi.onDrawerClosed === 'function') {
+        coverageUi.onDrawerClosed();
+    }
 }
 
-function openDrawer(title, build) {
+function openDrawer(title, build, options = {}) {
+    const dock = options.dock === true;
     el.drawerPanel.innerHTML = '';
+    el.drawer.classList.toggle('drawer-dock', dock);
+    document.body.classList.toggle('coverage-dock-open', dock);
     const h = document.createElement('h2');
     h.textContent = title;
     el.drawerPanel.appendChild(h);
     build(el.drawerPanel);
     el.drawer.classList.remove('hidden');
     el.drawer.setAttribute('aria-hidden', 'false');
+    if (dock && coverageUi && typeof coverageUi.onDrawerDocked === 'function') {
+        coverageUi.onDrawerDocked();
+    }
 }
 
 function field(label, input) {

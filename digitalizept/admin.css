@@ -459,6 +459,34 @@
     box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18);
 }
 
+/* Desktop: visit form docks beside the map — map stays interactive */
+@media (min-width: 900px) {
+    .admin-drawer.drawer-dock {
+        pointer-events: none;
+    }
+
+    .admin-drawer.drawer-dock .admin-drawer-backdrop {
+        display: none;
+    }
+
+    .admin-drawer.drawer-dock .admin-drawer-panel {
+        pointer-events: auto;
+        width: min(400px, 38vw);
+    }
+
+    body.coverage-dock-open #coverage-map {
+        width: calc(100% - min(400px, 38vw));
+        max-width: calc(100% - min(400px, 38vw));
+    }
+}
+
+/* Mobile: docked form still covers the front (screen is too small to split) */
+@media (max-width: 899px) {
+    .admin-drawer.drawer-dock .admin-drawer-panel {
+        width: 100%;
+    }
+}
+
 .admin-drawer-panel .followup-share {
     margin-top: 0;
     padding-top: 0;

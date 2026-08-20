@@ -74,6 +74,54 @@ export function setupCoverage({
     let markers = [];
     let placing = false;
     let pendingPoint = null;
+    let pendingMarker = null;
+    let coordHintEl = null;
+    let hasFittedView = false;
+    let registeringNewVisit = false;
+
+    function clearPendingMarker() {
+        if (pendingMarker && map) {
+            map.removeLayer(pendingMarker);
+        }
+        pendingMarker = null;
+        coordHintEl = null;
+    }
+
+    function updateCoordHint() {
+        if (!coordHintEl || !pendingPoint) return;
+        coordHintEl.textContent = `Ponto no mapa: ${Number(pendingPoint.lat).toFixed(5)}, ${Number(pendingPoint.lng).toFixed(5)} — arraste o pin ou toque no mapa para corrigir.`;
+    }
+
+    function syncPendingMarker() {
+        if (!map || !window.L || !pendingPoint
+            || !Number.isFinite(pendingPoint.lat)
+            || !Number.isFinite(pendingPoint.lng)) {
+            clearPendingMarker();
+            return;
+        }
+        if (!pendingMarker) {
+            pendingMarker = window.L.marker([pendingPoint.lat, pendingPoint.lng], {
+                icon: pinIcon('#c45c26', '#1b1b1b', 2.4),
+                title: 'Novo sítio — arraste para corrigir',
+                draggable: true,
+                autoPan: true,
+                zIndexOffset: 800
+            }).addTo(map);
+            pendingMarker.on('dragend', () => {
+                const pos = pendingMarker.getLatLng();
+                pendingPoint = { lat: pos.lat, lng: pos.lng };
+                updateCoordHint();
+            });
+        } else {
+            pendingMarker.setLatLng([pendingPoint.lat, pendingPoint.lng]);
+        }
+        updateCoordHint();
+    }
+
+    function invalidateMapSize() {
+        if (!map) return;
+        setTimeout(() => map.invalidateSize({ animate: false }), 60);
+    }
 
     function filtered() {
         const q = (el.coverageFilter.value || '').trim().toLowerCase();
@@ -119,7 +167,7 @@ export function setupCoverage({
                     if (filterIds.has(item.id)) filterIds.delete(item.id);
                     else filterIds.add(item.id);
                     renderLegend();
-                    paint();
+                    paint({ preserveView: true });
                 });
                 row.appendChild(btn);
             });
@@ -180,6 +228,16 @@ export function setupCoverage({
         let selectedLeadNome = defaults.leadNome || '';
         let selectedHasDeal = defaults.hasDeal === true;
         let selectedDealEstado = defaults.dealEstado || '';
+        const isNew = !defaults.id;
+        const dock = isNew;
+        registeringNewVisit = isNew;
+
+        if (isNew && defaults.lat != null && defaults.lng != null) {
+            pendingPoint = { lat: Number(defaults.lat), lng: Number(defaults.lng) };
+        } else if (!isNew) {
+            pendingPoint = null;
+            clearPendingMarker();
+        }
 
         openDrawer(defaults.id ? 'Visita' : 'Registar visita', (panel) => {
             const form = document.createElement('form');
@@ -279,11 +337,19 @@ export function setupCoverage({
             );
             form.appendChild(linkSection);
 
-            if (defaults.lat != null && defaults.lng != null) {
-                const hint = document.createElement('p');
-                hint.className = 'meta';
-                hint.textContent = `Ponto no mapa: ${Number(defaults.lat).toFixed(5)}, ${Number(defaults.lng).toFixed(5)} — pode arrastar o pin no mapa para corrigir.`;
-                form.appendChild(hint);
+            if (isNew || (defaults.lat != null && defaults.lng != null)) {
+                coordHintEl = document.createElement('p');
+                coordHintEl.className = 'meta';
+                const lat = pendingPoint ? pendingPoint.lat : defaults.lat;
+                const lng = pendingPoint ? pendingPoint.lng : defaults.lng;
+                if (lat != null && lng != null) {
+                    coordHintEl.textContent = isNew
+                        ? `Ponto no mapa: ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)} — arraste o pin ou toque no mapa para corrigir.`
+                        : `Ponto no mapa: ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)} — pode arrastar o pin no mapa para corrigir.`;
+                } else {
+                    coordHintEl.textContent = 'Sem ponto ainda — use “Marcar no mapa” ou preencha a morada.';
+                }
+                form.appendChild(coordHintEl);
             }
             const save = document.createElement('button');
             save.type = 'submit';
@@ -302,9 +368,11 @@ export function setupCoverage({
                     experiencia: experiencia.value.trim(),
                     leadId: selectedLeadId || null
                 };
-                if (defaults.lat != null && defaults.lng != null) {
-                    payload.lat = defaults.lat;
-                    payload.lng = defaults.lng;
+                const lat = pendingPoint?.lat ?? defaults.lat;
+                const lng = pendingPoint?.lng ?? defaults.lng;
+                if (lat != null && lng != null) {
+                    payload.lat = lat;
+                    payload.lng = lng;
                 }
                 const path = defaults.id
                     ? `/api/digitalizept/visits/${defaults.id}`
@@ -319,10 +387,12 @@ export function setupCoverage({
                     return;
                 }
                 toast('Visita guardada.');
-                closeDrawer();
+                registeringNewVisit = false;
                 pendingPoint = null;
+                clearPendingMarker();
+                closeDrawer();
                 await refresh();
-                paint();
+                paint({ preserveView: true });
             });
             panel.appendChild(form);
 
@@ -383,7 +453,7 @@ export function setupCoverage({
                     toast('Ponto actualizado.');
                     closeDrawer();
                     await refresh();
-                    paint();
+                    paint({ preserveView: true });
                 });
                 const del = document.createElement('button');
                 del.type = 'button';
@@ -401,13 +471,14 @@ export function setupCoverage({
                     toast('Visita apagada.');
                     closeDrawer();
                     await refresh();
-                    paint();
+                    paint({ preserveView: true });
                 });
                 actions.append(geo, del);
             }
             panel.appendChild(actions);
             loadLeadOptions('').catch(() => {});
-        });
+            if (isNew) syncPendingMarker();
+        }, { dock });
     }
 
     function openLeadPin(pin) {
@@ -489,7 +560,7 @@ export function setupCoverage({
                 toast('Cobertura actualizada.');
                 closeDrawer();
                 await refresh();
-                paint();
+                paint({ preserveView: true });
             });
             panel.appendChild(form);
             const actions = document.createElement('div');
@@ -525,7 +596,7 @@ export function setupCoverage({
                     }
                     toast('Visita criada e ligada a este lead.');
                     await refresh();
-                    paint();
+                    paint({ preserveView: true });
                     openVisitForm(data.visit || { ...pin, kind: 'visita', leadId: pin.id, id: data.visit && data.visit.id });
                 } catch (_) {
                     toast('Erro de rede.', true);
@@ -548,7 +619,7 @@ export function setupCoverage({
                 toast('Coordenadas actualizadas a partir da morada (OpenStreetMap).');
                 closeDrawer();
                 await refresh();
-                paint();
+                paint({ preserveView: true });
             });
             const notes = document.createElement('button');
             notes.type = 'button';
@@ -609,7 +680,7 @@ export function setupCoverage({
             return false;
         }
         await refresh();
-        paint();
+        paint({ preserveView: true });
         openVisitForm(data.visit);
         return true;
     }
@@ -640,13 +711,14 @@ export function setupCoverage({
                 const ok = await savePinPosition(pin, prevLat, prevLng);
                 if (!ok) return;
                 toast('Posição anterior restaurada.');
-                paint();
+                paint({ preserveView: true });
             }
         });
     }
 
-    function paint() {
+    function paint(opts = {}) {
         if (!map || !window.L) return;
+        const preserveView = opts.preserveView === true || hasFittedView;
         markers.forEach((m) => map.removeLayer(m));
         markers = [];
         const shown = filtered();
@@ -657,18 +729,17 @@ export function setupCoverage({
             const marker = window.L.marker([pin.lat, pin.lng], {
                 icon: pinIcon(pin.color, pin.strokeColor, pin.strokeWidth),
                 title: `${pin.nome || ''} — ${tagLabel(pin, legend)}`,
-                draggable: !placing,
+                draggable: !placing && !registeringNewVisit,
                 autoPan: true
             }).addTo(map);
             marker.on('click', () => {
-                if (placing) return;
+                if (placing || registeringNewVisit) return;
                 openPin(pin);
             });
             let dragOrigin = null;
             marker.on('dragstart', () => {
                 const ll = marker.getLatLng();
                 dragOrigin = { lat: ll.lat, lng: ll.lng };
-                closeDrawer();
             });
             marker.on('dragend', async () => {
                 const pos = marker.getLatLng();
@@ -690,11 +761,14 @@ export function setupCoverage({
             markers.push(marker);
             bounds.extend([pin.lat, pin.lng]);
         });
+        syncPendingMarker();
         el.coverageStatus.textContent = placing
-            ? 'Toque no mapa para marcar o sítio visitado.'
-            : (mapped.length
-                ? `${mapped.length} no mapa · arraste um pin · Desfazer no aviso a seguir${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
-                : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.'));
+            ? 'Toque no mapa para marcar o sítio visitado (o zoom actual mantém-se).'
+            : (registeringNewVisit
+                ? 'A preencher visita — pode pan/zoom e corrigir o pin laranja.'
+                : (mapped.length
+                    ? `${mapped.length} no mapa · arraste um pin · Desfazer no aviso a seguir${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
+                    : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.')));
 
         if (el.coverageUnmapped) {
             el.coverageUnmapped.innerHTML = '';
@@ -718,23 +792,34 @@ export function setupCoverage({
             });
         }
 
-        if (mapped.length === 1) {
-            map.setView([mapped[0].lat, mapped[0].lng], 15);
-        } else if (mapped.length > 1) {
-            map.fitBounds(bounds.pad(0.12));
-        } else {
-            map.setView([PORTUGAL.lat, PORTUGAL.lng], PORTUGAL.zoom);
+        if (!preserveView) {
+            if (mapped.length === 1) {
+                map.setView([mapped[0].lat, mapped[0].lng], 15);
+            } else if (mapped.length > 1) {
+                map.fitBounds(bounds.pad(0.12));
+            } else {
+                map.setView([PORTUGAL.lat, PORTUGAL.lng], PORTUGAL.zoom);
+            }
+            hasFittedView = true;
         }
     }
 
     function setPlacing(on) {
+        if (on) {
+            registeringNewVisit = false;
+            pendingPoint = null;
+            clearPendingMarker();
+            if (el.drawer && !el.drawer.classList.contains('hidden')) {
+                closeDrawer();
+            }
+        }
         placing = on;
         if (el.coveragePlaceBtn) {
             el.coveragePlaceBtn.classList.toggle('active', on);
             el.coveragePlaceBtn.textContent = on ? 'A marcar… toque no mapa' : 'Marcar no mapa';
         }
         if (map) map.getContainer().style.cursor = on ? 'crosshair' : '';
-        paint();
+        paint({ preserveView: true });
     }
 
     async function ensure() {
@@ -750,14 +835,20 @@ export function setupCoverage({
                 attribution: '&copy; OpenStreetMap'
             }).addTo(map);
             map.on('click', (event) => {
-                if (!placing) return;
-                pendingPoint = { lat: event.latlng.lat, lng: event.latlng.lng };
-                setPlacing(false);
-                openVisitForm(pendingPoint);
+                if (placing) {
+                    pendingPoint = { lat: event.latlng.lat, lng: event.latlng.lng };
+                    setPlacing(false);
+                    openVisitForm(pendingPoint);
+                    return;
+                }
+                if (registeringNewVisit) {
+                    pendingPoint = { lat: event.latlng.lat, lng: event.latlng.lng };
+                    syncPendingMarker();
+                }
             });
         }
-        setTimeout(() => map.invalidateSize(), 80);
-        paint();
+        invalidateMapSize();
+        paint({ preserveView: hasFittedView });
     }
 
     async function downloadExport() {
@@ -796,8 +887,21 @@ export function setupCoverage({
 
     return {
         ensure,
-        repaint: paint,
+        repaint: (opts) => paint({ preserveView: true, ...(opts || {}) }),
         focusLead,
-        openOrCreateVisitForLead
+        openOrCreateVisitForLead,
+        onDrawerDocked() {
+            invalidateMapSize();
+            syncPendingMarker();
+        },
+        onDrawerClosed() {
+            registeringNewVisit = false;
+            if (!placing) {
+                pendingPoint = null;
+                clearPendingMarker();
+            }
+            invalidateMapSize();
+            paint({ preserveView: true });
+        }
     };
 }
