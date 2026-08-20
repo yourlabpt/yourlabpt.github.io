@@ -3,6 +3,7 @@ import { getToken, setToken, clearToken } from './auth.js';
 import { formatEuros } from './format.js';
 import { downloadDealContract } from './deal/download.js';
 import { setupCoverage } from './admin-coverage.js';
+import { renderMapsCockpit } from './admin-maps.js';
 import { fetchConfig } from './settings.js';
 import { renderFollowupShare } from './demo/followup-ui.js';
 
@@ -18,9 +19,15 @@ const FASES = [
 
 const GOOGLE_STATES = [
     { id: 'nao_incluido', label: 'Não incluído' },
-    { id: 'por_criar', label: 'Por criar' },
+    { id: 'nao_iniciado', label: 'Por iniciar' },
+    { id: 'em_falta_dados', label: 'Dados em falta' },
     { id: 'em_curso', label: 'Em curso' },
-    { id: 'feito', label: 'Feito' }
+    { id: 'a_aguardar_verificacao', label: 'A aguardar verificação' },
+    { id: 'verificado', label: 'Verificado' },
+    { id: 'falhou', label: 'Falhou' },
+    // legacy values still selectable if stored
+    { id: 'por_criar', label: 'Por criar (legado)' },
+    { id: 'feito', label: 'Feito (legado)' }
 ];
 
 const el = {
@@ -446,16 +453,28 @@ function renderDeals() {
         const card = document.createElement('article');
         card.className = 'admin-card';
         const fase = FASES.find((f) => f.id === d.estado)?.label || d.estado;
+        const googleLabel = d.estado_google_label
+            || GOOGLE_STATES.find((f) => f.id === d.estado_google)?.label
+            || d.estado_google
+            || '—';
         card.innerHTML = `
             <h3>${d.nome || d.cliente_nome || 'Negócio'}</h3>
             <p class="meta">${d.cliente_nome || ''} · ${packageLabel(d.itens_json)} · ${eurosFromCents(d.total_com_iva_centimos)} · ${d.template_versao || 'v1'}</p>
-            <p class="meta">Fase: ${fase} · Google: ${d.estado_google || '—'} · ${new Date(d.criado_em).toLocaleDateString('pt-PT')}</p>
+            <p class="meta">Fase: ${fase} · Google: ${googleLabel} · ${new Date(d.criado_em).toLocaleDateString('pt-PT')}</p>
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';
+        if (d.hasGoogle) {
+            const mapsBtn = document.createElement('button');
+            mapsBtn.type = 'button';
+            mapsBtn.className = 'btn-primary';
+            mapsBtn.textContent = d.googleOnly ? 'Entrega Google' : 'Presença Google';
+            mapsBtn.addEventListener('click', () => openMapsDelivery(d));
+            actions.appendChild(mapsBtn);
+        }
         if (d.leadId) {
             const revise = document.createElement('a');
-            revise.className = 'btn-primary';
+            revise.className = d.hasGoogle ? 'btn-secondary' : 'btn-primary';
             revise.href = `./?resume=${encodeURIComponent(d.leadId)}`;
             revise.textContent = 'Editar proposta';
             actions.appendChild(revise);
@@ -667,6 +686,44 @@ async function openNotes(lead) {
     });
 }
 
+async function openMapsDelivery(deal) {
+    openDrawer(`Presença Google — ${deal.nome || deal.cliente_nome || 'Negócio'}`, async (panel) => {
+        const loading = document.createElement('p');
+        loading.className = 'admin-hint';
+        loading.textContent = 'A carregar entrega Google…';
+        panel.appendChild(loading);
+        try {
+            const { response, data } = await api(
+                `/api/digitalizept/deals/${encodeURIComponent(deal.projectId)}/maps`
+            );
+            if (!response.ok) {
+                panel.innerHTML = '';
+                const err = document.createElement('p');
+                err.className = 'admin-hint';
+                err.textContent = data.error || 'Não foi possível abrir a entrega Google.';
+                panel.appendChild(err);
+                toast(data.error || 'Falha.', true);
+                return;
+            }
+            const paint = (cockpit) => {
+                renderMapsCockpit(panel, cockpit, {
+                    api,
+                    toast,
+                    field,
+                    onUpdated: (next) => {
+                        if (next && next.projectId) paint(next);
+                        loadDeals().catch(() => {});
+                    }
+                });
+            };
+            paint(data);
+        } catch (_) {
+            panel.innerHTML = '';
+            toast('Erro de rede.', true);
+        }
+    }, { dock: true });
+}
+
 function openDealEditor(deal) {
     openDrawer(`Proposta — ${deal.nome || deal.cliente_nome}`, (panel) => {
         const form = document.createElement('form');
@@ -747,6 +804,22 @@ async function loadDeals() {
 
 async function bootData() {
     await Promise.all([loadCatalog(), loadLeads(), loadDeals()]);
+    await openMapsDeepLink();
+}
+
+async function openMapsDeepLink() {
+    const hash = String(window.location.hash || '');
+    const match = hash.match(/google-delivery\?project=([^&]+)/i)
+        || hash.match(/[#&]maps=([^&]+)/i);
+    if (!match) return;
+    const projectId = decodeURIComponent(match[1]);
+    switchTab('deals');
+    const deal = deals.find((d) => d.projectId === projectId);
+    if (!deal) {
+        toast('Proposta não encontrada para entrega Google.', true);
+        return;
+    }
+    openMapsDelivery(deal);
 }
 
 coverageUi = setupCoverage({

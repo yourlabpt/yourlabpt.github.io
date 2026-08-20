@@ -43,6 +43,9 @@ const {
     resumeWizardPosition,
     mergeDemoIntoWizardJson
 } = require('./lib/digitalizept-resume');
+const mapsPresenca = require('./lib/maps/presenca');
+const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/states');
+const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -2851,10 +2854,90 @@ app.get('/api/digitalizept/deals', requireDigitalizept, (req, res) => {
             ORDER BY pr.criado_em DESC
             LIMIT 200
         `).all();
-        return res.json({ deals: rows });
+        const deals = rows.map((r) => {
+            const proposta = parsePropostaItens(r.itens_json);
+            const estadoGoogle = normalizeEstado(
+                r.estado_google,
+                includesGooglePresence(proposta) ? 'nao_iniciado' : 'nao_incluido'
+            );
+            return {
+                ...r,
+                estado_google: estadoGoogle,
+                estado_google_label: ESTADO_LABELS[estadoGoogle] || estadoGoogle,
+                hasGoogle: includesGooglePresence(proposta),
+                googleOnly: isGoogleOnlyDeal(proposta),
+                pacote: proposta.pacote,
+                extras: proposta.extras
+            };
+        });
+        return res.json({ deals });
     } catch (err) {
         console.error('digitalizept deals error:', err.message);
         return res.status(500).json({ error: 'Failed to load deals.' });
+    }
+});
+
+app.get('/api/digitalizept/deals/:projectId/maps', requireDigitalizept, (req, res) => {
+    try {
+        const projectId = cleanText(req.params.projectId, 80);
+        const db = getDigitalizeptDb();
+        const cockpit = mapsPresenca.buildCockpit(db, projectId, { nowIso: digitalizeptNow });
+        if (cockpit.error) return res.status(cockpit.status || 400).json({ error: cockpit.error });
+        return res.json({ ok: true, ...cockpit });
+    } catch (err) {
+        console.error('digitalizept maps cockpit error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível carregar a presença em mapas.' });
+    }
+});
+
+app.post('/api/digitalizept/deals/:projectId/maps/google/start', requireDigitalizept, async (req, res) => {
+    try {
+        const projectId = cleanText(req.params.projectId, 80);
+        const db = getDigitalizeptDb();
+        const out = await mapsPresenca.startDelivery(db, projectId, {
+            nowIso: digitalizeptNow,
+            logEvento: digitalizeptLogEvento
+        });
+        if (out.error) return res.status(out.status || 400).json({ error: out.error });
+        return res.json(out);
+    } catch (err) {
+        console.error('digitalizept maps start error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível iniciar a entrega Google.' });
+    }
+});
+
+app.post('/api/digitalizept/deals/:projectId/maps/google/steps', requireDigitalizept, (req, res) => {
+    try {
+        const projectId = cleanText(req.params.projectId, 80);
+        const body = req.body || {};
+        const stepId = cleanText(body.stepId, 40);
+        if (!stepId) return res.status(400).json({ error: 'Passo em falta.' });
+        const db = getDigitalizeptDb();
+        const cockpit = mapsPresenca.toggleStep(db, projectId, stepId, body.done !== false, {
+            nowIso: digitalizeptNow
+        });
+        if (cockpit.error) return res.status(cockpit.status || 400).json({ error: cockpit.error });
+        return res.json({ ok: true, ...cockpit });
+    } catch (err) {
+        console.error('digitalizept maps step error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível actualizar o passo.' });
+    }
+});
+
+app.post('/api/digitalizept/deals/:projectId/maps/google/action', requireDigitalizept, (req, res) => {
+    try {
+        const projectId = cleanText(req.params.projectId, 80);
+        const action = cleanText((req.body || {}).action, 40);
+        const db = getDigitalizeptDb();
+        const out = mapsPresenca.applyGoogleAction(db, projectId, action, {
+            nowIso: digitalizeptNow,
+            logEvento: digitalizeptLogEvento
+        });
+        if (out.error) return res.status(out.status || 400).json({ error: out.error });
+        return res.json(out);
+    } catch (err) {
+        console.error('digitalizept maps action error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível actualizar o estado Google.' });
     }
 });
 
@@ -2877,10 +2960,25 @@ app.patch('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res) 
         if (!row) return res.status(404).json({ error: 'Projeto não encontrado.' });
 
         const estado = body.estado != null ? cleanText(body.estado, 60) : row.estado;
-        const estadoGoogle = body.estado_google != null ? cleanText(body.estado_google, 60) : row.estado_google;
+        let estadoGoogle = body.estado_google != null ? cleanText(body.estado_google, 60) : row.estado_google;
         const estadoDominio = body.estado_dominio != null ? cleanText(body.estado_dominio, 60) : row.estado_dominio;
         if (body.estado != null && !PROJECT_FASES.includes(estado)) {
             return res.status(400).json({ error: 'Fase inválida.' });
+        }
+        if (body.estado_google != null) {
+            if (estadoGoogle === 'nao_incluido') {
+                /* keep */
+            } else if (!isValidEstado(estadoGoogle)) {
+                return res.status(400).json({ error: 'Estado Google inválido.' });
+            } else {
+                estadoGoogle = normalizeEstado(estadoGoogle);
+            }
+            const googleRow = mapsPresenca.ensurePresencaRow(db, projectId, 'google', digitalizeptNow);
+            if (estadoGoogle !== 'nao_incluido') {
+                db.prepare(`
+                    UPDATE presenca_mapa SET estado = ?, actualizado_em = ? WHERE id = ?
+                `).run(estadoGoogle, digitalizeptNow(), googleRow.id);
+            }
         }
         db.prepare(`UPDATE projeto SET estado = ?, estado_google = ?, estado_dominio = ? WHERE id = ?`)
             .run(estado, estadoGoogle, estadoDominio, projectId);
@@ -3522,11 +3620,11 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                     ? 'cliente_zip'
                     : (proposta.dominio && proposta.dominio.escolhido ? 'a_registar' : 'por_comprar');
                 db.prepare(`UPDATE projeto SET estado_google = CASE
-                        WHEN estado_google IN ('nao_incluido', 'por_criar') THEN ?
+                        WHEN estado_google IN ('nao_incluido', 'por_criar', 'nao_iniciado') THEN ?
                         ELSE estado_google END,
                     estado_dominio = ?
                     WHERE id = ?`).run(
-                    hasGoogle ? 'por_criar' : 'nao_incluido',
+                    hasGoogle ? 'nao_iniciado' : 'nao_incluido',
                     dominioEstadoRev,
                     projetoId
                 );
@@ -3569,7 +3667,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                     VALUES (?, ?, 'contrato_assinado', ?, ?, ?)`).run(
                     projetoId,
                     contratoId,
-                    hasGoogle ? 'por_criar' : 'nao_incluido',
+                    hasGoogle ? 'nao_iniciado' : 'nao_incluido',
                     dominioEstado,
                     now
                 );
@@ -3620,7 +3718,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             leadId,
             estado: (projectRow && projectRow.estado) || 'contrato_assinado',
             estados: {
-                google: (projectRow && projectRow.estado_google) || (hasGoogle ? 'por_criar' : 'nao_incluido'),
+                google: (projectRow && projectRow.estado_google) || (hasGoogle ? 'nao_iniciado' : 'nao_incluido'),
                 dominio: dominioEstado
             },
             dominio: proposta.dominio || null,

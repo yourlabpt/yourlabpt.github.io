@@ -424,8 +424,42 @@
     border-top: 1px solid var(--admin-border, rgba(0, 0, 0, 0.08));
 }
 
-.coverage-link-section .field-label {
-    margin-bottom: 4px;
+.maps-destinos,
+.maps-missing,
+.maps-steps,
+.maps-script {
+    margin: 12px 0;
+}
+
+.maps-destino-row,
+.maps-step-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 8px 0;
+    font-size: 0.9rem;
+}
+
+.maps-step-row strong {
+    display: block;
+    font-weight: 700;
+}
+
+.maps-script-pre {
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: 0.82rem;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 6px 0 10px;
+    max-height: 220px;
+    overflow: auto;
+}
+
+.maps-missing ul {
+    margin: 4px 0 0;
+    padding-left: 1.2rem;
 }
 
 /* ---------- Drawer ---------- */

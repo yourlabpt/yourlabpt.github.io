@@ -229,6 +229,35 @@ function migrate(db) {
     });
     db.exec(`CREATE INDEX IF NOT EXISTS idx_visita_lead ON visita(lead_id)`);
 
+    db.exec(`CREATE TABLE IF NOT EXISTS presenca_mapa (
+        id TEXT PRIMARY KEY,
+        projeto_id TEXT NOT NULL REFERENCES projeto(id),
+        fornecedor TEXT NOT NULL,
+        estado TEXT NOT NULL DEFAULT 'nao_iniciado',
+        referencia_externa TEXT NOT NULL DEFAULT '',
+        submetido_em TEXT NOT NULL DEFAULT '',
+        verificado_em TEXT NOT NULL DEFAULT '',
+        ultimo_erro TEXT NOT NULL DEFAULT '',
+        tentativas INTEGER NOT NULL DEFAULT 0,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        criado_em TEXT NOT NULL,
+        actualizado_em TEXT NOT NULL,
+        UNIQUE (projeto_id, fornecedor)
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_presenca_projeto ON presenca_mapa(projeto_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_presenca_estado ON presenca_mapa(estado)`);
+
+    // Schema reserved for Phase 3 Google OAuth — unused in v1.
+    db.exec(`CREATE TABLE IF NOT EXISTS credencial_oauth (
+        id TEXT PRIMARY KEY,
+        cliente_id TEXT NOT NULL,
+        fornecedor TEXT NOT NULL,
+        refresh_token_cifrado TEXT NOT NULL DEFAULT '',
+        scopes TEXT NOT NULL DEFAULT '',
+        revogado_em TEXT NOT NULL DEFAULT '',
+        criado_em TEXT NOT NULL
+    )`);
+
     try {
         const {
             backfillLeadGeoFields,
