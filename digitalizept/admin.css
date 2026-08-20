@@ -339,6 +339,26 @@
 
 .coverage-legend {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.coverage-legend-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.coverage-legend-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--admin-muted);
+}
+
+.coverage-legend-row {
+    display: flex;
     flex-wrap: wrap;
     gap: 6px;
 }

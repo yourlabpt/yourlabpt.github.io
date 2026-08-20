@@ -29,10 +29,12 @@ function loadLeaflet() {
     return loadScript(LEAFLET_JS);
 }
 
-function pinIcon(color) {
-    const fill = color || '#a9a8a3';
+function pinIcon(fill, stroke, strokeWidth) {
+    const color = fill || '#8e8a84';
+    const outline = stroke || '#1b1b1b';
+    const width = strokeWidth || 1.2;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
-      <path fill="${fill}" stroke="#1b1b1b" stroke-width="1.2" d="M14 1C7.4 1 2 6.4 2 13c0 9.2 12 21.5 12 21.5S26 22.2 26 13C26 6.4 20.6 1 14 1z"/>
+      <path fill="${color}" stroke="${outline}" stroke-width="${width}" d="M14 1C7.4 1 2 6.4 2 13c0 9.2 12 21.5 12 21.5S26 22.2 26 13C26 6.4 20.6 1 14 1z"/>
       <circle cx="14" cy="13" r="4.2" fill="#faf8f4"/>
     </svg>`;
     return window.L.divIcon({
@@ -42,6 +44,16 @@ function pinIcon(color) {
         iconAnchor: [14, 34],
         popupAnchor: [0, -28]
     });
+}
+
+function tagLabel(pin, legend) {
+    const etapas = legend?.etapas || (Array.isArray(legend) ? legend : []);
+    const resultados = legend?.resultados || [];
+    const etapaId = pin.etapa || pin.cobertura || '';
+    const resId = pin.resultado || '';
+    const etapa = etapas.find((i) => i.id === etapaId)?.label || etapaId;
+    const resultado = resultados.find((i) => i.id === resId)?.label || '';
+    return resultado ? `${etapa} · ${resultado}` : etapa;
 }
 
 export function setupCoverage({
@@ -56,7 +68,7 @@ export function setupCoverage({
     onUnauthorized
 }) {
     let pins = [];
-    let legend = [];
+    let legend = { etapas: [], resultados: [] };
     let filterIds = new Set();
     let map = null;
     let markers = [];
@@ -66,9 +78,13 @@ export function setupCoverage({
     function filtered() {
         const q = (el.coverageFilter.value || '').trim().toLowerCase();
         return pins.filter((p) => {
-            if (filterIds.size && !filterIds.has(p.cobertura || 'contacto')) return false;
+            if (filterIds.size) {
+                const etapa = p.etapa || p.cobertura || 'contacto_remoto';
+                const resultado = p.resultado || '';
+                if (!filterIds.has(etapa) && !(resultado && filterIds.has(resultado))) return false;
+            }
             if (!q) return true;
-            return `${p.nome} ${p.morada || ''} ${p.cidade || ''} ${p.experiencia || ''} ${p.notas || ''} ${p.leadNome || ''}`
+            return `${p.nome} ${p.morada || ''} ${p.cidade || ''} ${p.experiencia || ''} ${p.notas || ''} ${p.leadNome || ''} ${p.etapa || ''} ${p.resultado || ''}`
                 .toLowerCase()
                 .includes(q);
         });
@@ -76,28 +92,48 @@ export function setupCoverage({
 
     function renderLegend() {
         el.coverageLegend.innerHTML = '';
-        legend.forEach((item) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = `coverage-chip${filterIds.has(item.id) ? ' active' : ''}`;
-            const dot = document.createElement('span');
-            dot.className = 'coverage-chip-dot';
-            dot.style.background = item.color;
-            btn.append(dot, document.createTextNode(item.label));
-            btn.addEventListener('click', () => {
-                if (filterIds.has(item.id)) filterIds.delete(item.id);
-                else filterIds.add(item.id);
-                renderLegend();
-                paint();
+        const addGroup = (title, items) => {
+            if (!items?.length) return;
+            const group = document.createElement('div');
+            group.className = 'coverage-legend-group';
+            const label = document.createElement('span');
+            label.className = 'coverage-legend-title';
+            label.textContent = title;
+            group.appendChild(label);
+            const row = document.createElement('div');
+            row.className = 'coverage-legend-row';
+            items.forEach((item) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `coverage-chip${filterIds.has(item.id) ? ' active' : ''}`;
+                const dot = document.createElement('span');
+                dot.className = 'coverage-chip-dot';
+                if (item.axis === 'resultado') {
+                    dot.style.background = '#faf8f4';
+                    dot.style.boxShadow = `inset 0 0 0 2px ${item.color}`;
+                } else {
+                    dot.style.background = item.color;
+                }
+                btn.append(dot, document.createTextNode(item.label));
+                btn.addEventListener('click', () => {
+                    if (filterIds.has(item.id)) filterIds.delete(item.id);
+                    else filterIds.add(item.id);
+                    renderLegend();
+                    paint();
+                });
+                row.appendChild(btn);
             });
-            el.coverageLegend.appendChild(btn);
-        });
+            group.appendChild(row);
+            el.coverageLegend.appendChild(group);
+        };
+        addGroup('Etapa', legend.etapas || []);
+        addGroup('Resultado', legend.resultados || []);
     }
 
-    function coberturaSelect(selected) {
+    function etapaSelect(selected) {
         const select = document.createElement('select');
         select.className = 'field-input';
-        legend.forEach((item) => {
+        (legend.etapas || []).forEach((item) => {
             const opt = document.createElement('option');
             opt.value = item.id;
             opt.textContent = item.label;
@@ -107,11 +143,35 @@ export function setupCoverage({
         return select;
     }
 
+    function resultadoSelect(selected) {
+        const select = document.createElement('select');
+        select.className = 'field-input';
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = '— (sem resultado)';
+        select.appendChild(none);
+        (legend.resultados || []).forEach((item) => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.label;
+            if ((selected || '') === item.id) opt.selected = true;
+            select.appendChild(opt);
+        });
+        return select;
+    }
+
     async function refresh() {
         const { response, data } = await api('/api/digitalizept/coverage');
         if (!response.ok) throw new Error('coverage');
         pins = data.pins || [];
-        legend = data.legend || [];
+        const raw = data.legend;
+        if (raw && !Array.isArray(raw) && (raw.etapas || raw.resultados)) {
+            legend = raw;
+        } else if (Array.isArray(raw)) {
+            legend = { etapas: raw, resultados: [] };
+        } else {
+            legend = { etapas: [], resultados: [] };
+        }
         renderLegend();
     }
 
@@ -124,17 +184,25 @@ export function setupCoverage({
         openDrawer(defaults.id ? 'Visita' : 'Registar visita', (panel) => {
             const form = document.createElement('form');
             form.className = 'admin-form';
+            if (defaults.etapa || defaults.cobertura || defaults.resultado) {
+                const tagsHint = document.createElement('p');
+                tagsHint.className = 'meta';
+                tagsHint.textContent = tagLabel(defaults, legend);
+                form.appendChild(tagsHint);
+            }
             const nome = inputEl('text', defaults.nome || '');
             const morada = inputEl('text', defaults.morada || '');
             const cidade = inputEl('text', defaults.cidade || '');
             const experiencia = inputEl('textarea', defaults.experiencia || '', { rows: 6 });
             experiencia.placeholder = 'Como correu: quem atendeu, horário, objecção, o que tentar da próxima vez…';
-            const cobertura = coberturaSelect(defaults.cobertura || 'visitado');
+            const etapa = etapaSelect(defaults.etapa || defaults.cobertura || 'visitado');
+            const resultado = resultadoSelect(defaults.resultado || '');
             form.append(
                 field('Nome do sítio', nome),
                 field('Morada', morada),
                 field('Cidade', cidade),
-                field('Desfecho', cobertura),
+                field('Etapa', etapa),
+                field('Resultado', resultado),
                 field('Como correu a visita', experiencia)
             );
 
@@ -229,7 +297,8 @@ export function setupCoverage({
                     nome: nome.value.trim(),
                     morada: morada.value.trim(),
                     cidade: cidade.value.trim(),
-                    cobertura: cobertura.value,
+                    etapa: etapa.value,
+                    resultado: resultado.value || '',
                     experiencia: experiencia.value.trim(),
                     leadId: selectedLeadId || null
                 };
@@ -343,6 +412,10 @@ export function setupCoverage({
 
     function openLeadPin(pin) {
         openDrawer(pin.nome || 'Negócio', (panel) => {
+            const tagsLine = document.createElement('p');
+            tagsLine.className = 'meta';
+            tagsLine.textContent = tagLabel(pin, legend) || 'Etapa por definir';
+            panel.appendChild(tagsLine);
             const meta = document.createElement('p');
             meta.className = 'meta';
             meta.textContent = `${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.business_type || '—'}`;
@@ -384,11 +457,13 @@ export function setupCoverage({
             }
             const form = document.createElement('form');
             form.className = 'admin-form';
-            const cobertura = coberturaSelect(pin.cobertura || 'contacto');
+            const etapa = etapaSelect(pin.etapa || pin.cobertura || 'contacto_remoto');
+            const resultado = resultadoSelect(pin.resultado || '');
             const experiencia = inputEl('textarea', '', { rows: 4 });
             experiencia.placeholder = 'Como correu nesta visita…';
             form.append(
-                field('Desfecho na rua', cobertura),
+                field('Etapa', etapa),
+                field('Resultado', resultado),
                 field('Como correu (acrescenta uma nota)', experiencia)
             );
             const save = document.createElement('button');
@@ -398,7 +473,10 @@ export function setupCoverage({
             form.appendChild(save);
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();
-                const body = { cobertura: cobertura.value };
+                const body = {
+                    etapa: etapa.value,
+                    resultado: resultado.value || ''
+                };
                 if (experiencia.value.trim()) body.experiencia = experiencia.value.trim();
                 const { response, data } = await api(`/api/digitalizept/leads/${pin.id}`, {
                     method: 'PATCH',
@@ -565,12 +643,8 @@ export function setupCoverage({
         const bounds = window.L.latLngBounds([]);
         mapped.forEach((pin) => {
             const marker = window.L.marker([pin.lat, pin.lng], {
-                icon: pinIcon(pin.color),
-                title: pin.kind === 'visita' && pin.leadNome
-                    ? `${pin.nome || ''} · ligado a ${pin.leadNome}`
-                    : (pin.kind === 'lead' && pin.visitaCount
-                        ? `${pin.nome || ''} · ${pin.visitaCount} visita(s)`
-                        : `${pin.nome || ''} — arraste para corrigir`),
+                icon: pinIcon(pin.color, pin.strokeColor, pin.strokeWidth),
+                title: `${pin.nome || ''} — ${tagLabel(pin, legend)}`,
                 draggable: !placing,
                 autoPan: true
             }).addTo(map);
@@ -594,7 +668,7 @@ export function setupCoverage({
         el.coverageStatus.textContent = placing
             ? 'Toque no mapa para marcar o sítio visitado.'
             : (mapped.length
-                ? `${mapped.length} no mapa · arraste pins · ligue visitas a leads${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
+                ? `${mapped.length} no mapa · cor = etapa · anel = resultado${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
                 : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.'));
 
         if (el.coverageUnmapped) {
@@ -604,7 +678,7 @@ export function setupCoverage({
                 card.className = 'admin-card';
                 card.innerHTML = `
                     <h3>${pin.nome || 'Sem nome'}</h3>
-                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
+                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${tagLabel(pin, legend)} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
                 `;
                 const actions = document.createElement('div');
                 actions.className = 'actions';

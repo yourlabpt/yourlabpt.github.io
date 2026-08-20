@@ -5,32 +5,64 @@
  * Strategy: structured search first (street + city + Portugal), then free-text
  * fallback. Prefer house/building/amenity hits over city centroids so pins
  * land on the shop, not the town centre.
+ *
+ * Coverage pins use two tags:
+ *   etapa (fill)     — funnel progress
+ *   resultado (stroke) — parked / lost / won
+ * The DB column `cobertura` stores etapa; `resultado` is its own column.
  */
-const COBERTURA_VALUES = [
-    'contacto',
+
+const ETAPA_VALUES = [
+    'contacto_remoto',
     'visitado',
-    'demo',
+    'demo_criada',
+    'demo_apresentada'
+];
+
+const ETAPA_LABELS = {
+    contacto_remoto: 'Contacto Remoto',
+    visitado: 'Visitado',
+    demo_criada: 'Demo criada',
+    demo_apresentada: 'Demo apresentada'
+};
+
+const ETAPA_COLORS = {
+    contacto_remoto: '#8e8a84',
+    visitado: '#1f1f1f',
+    demo_criada: '#d4b896',
+    demo_apresentada: '#c9a227'
+};
+
+const RESULTADO_VALUES = [
     'futuro',
-    'nao_interessa',
+    'sem_interesse',
     'digitalizado'
 ];
 
-const COBERTURA_LABELS = {
-    contacto: 'Contacto',
-    visitado: 'Visitado',
-    demo: 'Demo apresentada',
+const RESULTADO_LABELS = {
     futuro: 'Futuro',
-    nao_interessa: 'Não interessa',
+    sem_interesse: 'Sem Interesse',
     digitalizado: 'Digitalizado'
 };
 
-const COBERTURA_COLORS = {
-    contacto: '#a9a8a3',
-    visitado: '#1b1b1b',
-    demo: '#e8d5b7',
-    futuro: '#7a8a99',
-    nao_interessa: '#ff6b6b',
-    digitalizado: '#4ade80'
+const RESULTADO_COLORS = {
+    futuro: '#5b7c99',
+    sem_interesse: '#e05a5a',
+    digitalizado: '#3d9a6a'
+};
+
+/** @deprecated use ETAPA_*; kept as aliases for older imports */
+const COBERTURA_VALUES = ETAPA_VALUES;
+const COBERTURA_LABELS = ETAPA_LABELS;
+const COBERTURA_COLORS = ETAPA_COLORS;
+
+const OLD_COBERTURA_REMAP = {
+    contacto: { etapa: 'contacto_remoto', resultado: '' },
+    visitado: { etapa: 'visitado', resultado: '' },
+    demo: { etapa: 'demo_apresentada', resultado: '' },
+    futuro: { etapa: 'visitado', resultado: 'futuro' },
+    nao_interessa: { etapa: 'visitado', resultado: 'sem_interesse' },
+    digitalizado: { etapa: 'demo_apresentada', resultado: 'digitalizado' }
 };
 
 const NOMINATIM_GAP_MS = 1100;
@@ -55,8 +87,81 @@ function mapsApiKey() {
     return '';
 }
 
+function isValidEtapa(value) {
+    return ETAPA_VALUES.includes(String(value || ''));
+}
+
+function isValidResultado(value) {
+    const v = String(value || '');
+    return v === '' || RESULTADO_VALUES.includes(v);
+}
+
+/** Accepts new etapa ids or legacy cobertura ids. */
 function isValidCobertura(value) {
-    return COBERTURA_VALUES.includes(String(value || ''));
+    const v = String(value || '');
+    return isValidEtapa(v) || Boolean(OLD_COBERTURA_REMAP[v]);
+}
+
+function normalizeEtapa(value, fallback = 'contacto_remoto') {
+    const v = String(value || '').trim();
+    if (isValidEtapa(v)) return v;
+    if (OLD_COBERTURA_REMAP[v]) return OLD_COBERTURA_REMAP[v].etapa;
+    return fallback;
+}
+
+function normalizeResultado(value) {
+    const v = String(value || '').trim();
+    if (!v) return '';
+    if (RESULTADO_VALUES.includes(v)) return v;
+    if (v === 'nao_interessa') return 'sem_interesse';
+    return '';
+}
+
+function pinColors(etapa, resultado) {
+    const fill = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
+    const res = normalizeResultado(resultado);
+    if (res) {
+        return {
+            color: fill,
+            strokeColor: RESULTADO_COLORS[res] || '#1b1b1b',
+            strokeWidth: 2.8
+        };
+    }
+    return {
+        color: fill,
+        strokeColor: '#1b1b1b',
+        strokeWidth: 1.2
+    };
+}
+
+function etapaRank(etapa) {
+    const idx = ETAPA_VALUES.indexOf(normalizeEtapa(etapa));
+    return idx < 0 ? 0 : idx;
+}
+
+/**
+ * One-shot: split legacy single cobertura into etapa (cobertura column) + resultado.
+ */
+function remapCoberturaToEtapaResultado(db) {
+    const oldIds = Object.keys(OLD_COBERTURA_REMAP);
+    ['lead', 'visita'].forEach((table) => {
+        const cols = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+        if (!cols.has('cobertura') || !cols.has('resultado')) return;
+        const rows = db.prepare(`SELECT id, cobertura, resultado FROM ${table}`).all();
+        const update = db.prepare(`UPDATE ${table} SET cobertura = ?, resultado = ? WHERE id = ?`);
+        rows.forEach((row) => {
+            const mapped = OLD_COBERTURA_REMAP[row.cobertura];
+            if (!mapped) return;
+            const nextResultado = row.resultado || mapped.resultado || '';
+            update.run(mapped.etapa, nextResultado, row.id);
+        });
+        // Also rewrite default leftovers that somehow still use old ids
+        oldIds.forEach((oldId) => {
+            const mapped = OLD_COBERTURA_REMAP[oldId];
+            db.prepare(`UPDATE ${table} SET cobertura = ?, resultado = CASE WHEN resultado = '' OR resultado IS NULL THEN ? ELSE resultado END WHERE cobertura = ?`)
+                .run(mapped.etapa, mapped.resultado || '', oldId);
+        });
+    });
 }
 
 function buildAddressQuery(morada, cidade, nome) {
@@ -281,43 +386,73 @@ function extractCidadeFromDadosJson(obrigatoriosJson, opcionaisJson) {
 
 function backfillLeadGeoFields(db) {
     const rows = db.prepare(`
-        SELECT l.id, l.cidade, l.cobertura, l.estado,
+        SELECT l.id, l.cidade, l.cobertura, l.resultado, l.estado,
                d.obrigatorios_json, d.opcionais_json
         FROM lead l
         LEFT JOIN dados_negocio d ON d.lead_id = l.id
     `).all();
     const updateCidade = db.prepare('UPDATE lead SET cidade = ? WHERE id = ?');
-    const updateCobertura = db.prepare('UPDATE lead SET cobertura = ? WHERE id = ?');
+    const updateTags = db.prepare('UPDATE lead SET cobertura = ?, resultado = ? WHERE id = ?');
     rows.forEach((row) => {
         if (!row.cidade) {
             const cidade = extractCidadeFromDadosJson(row.obrigatorios_json, row.opcionais_json);
             if (cidade) updateCidade.run(cidade, row.id);
         }
         if (!row.cobertura) {
-            let cobertura = 'contacto';
-            if (row.estado === 'fechado') cobertura = 'digitalizado';
-            else if (row.estado === 'demonstracao') cobertura = 'demo';
-            updateCobertura.run(cobertura, row.id);
+            let etapa = 'contacto_remoto';
+            let resultado = row.resultado || '';
+            if (row.estado === 'fechado') {
+                etapa = 'demo_apresentada';
+                resultado = resultado || 'digitalizado';
+            } else if (row.estado === 'demonstracao') {
+                etapa = 'demo_criada';
+            }
+            updateTags.run(etapa, resultado, row.id);
         }
     });
 }
 
 function formatCoverageExport(pins, legend) {
     const labels = {};
-    (legend || []).forEach((item) => { labels[item.id] = item.label; });
+    const flat = Array.isArray(legend)
+        ? legend
+        : [...(legend?.etapas || []), ...(legend?.resultados || [])];
+    flat.forEach((item) => { labels[item.id] = item.label; });
     const groups = {};
     pins.forEach((pin) => {
-        const id = pin.cobertura || 'contacto';
-        if (!groups[id]) groups[id] = [];
-        groups[id].push(pin);
+        const etapa = pin.etapa || pin.cobertura || 'contacto_remoto';
+        const resultado = pin.resultado || '';
+        const key = resultado ? `${etapa}|${resultado}` : etapa;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(pin);
     });
-    const order = ['nao_interessa', 'visitado', 'contacto', 'demo', 'futuro', 'digitalizado'];
+    const order = [
+        'contacto_remoto',
+        'visitado',
+        'demo_criada',
+        'demo_apresentada'
+    ];
     const seen = new Set();
     const sections = [];
-    order.concat(Object.keys(groups)).forEach((id) => {
-        if (seen.has(id) || !groups[id] || !groups[id].length) return;
-        seen.add(id);
-        sections.push({ id, label: labels[id] || id, items: groups[id] });
+    order.forEach((id) => {
+        Object.keys(groups).filter((k) => k === id || k.startsWith(`${id}|`)).forEach((key) => {
+            if (seen.has(key) || !groups[key].length) return;
+            seen.add(key);
+            const [etapa, resultado] = key.split('|');
+            const label = resultado
+                ? `${labels[etapa] || etapa} · ${labels[resultado] || resultado}`
+                : (labels[etapa] || etapa);
+            sections.push({ id: key, label, items: groups[key] });
+        });
+    });
+    Object.keys(groups).forEach((key) => {
+        if (seen.has(key) || !groups[key].length) return;
+        seen.add(key);
+        const [etapa, resultado] = key.split('|');
+        const label = resultado
+            ? `${labels[etapa] || etapa} · ${labels[resultado] || resultado}`
+            : (labels[etapa] || etapa);
+        sections.push({ id: key, label, items: groups[key] });
     });
 
     const when = (iso) => {
@@ -330,8 +465,8 @@ function formatCoverageExport(pins, legend) {
         'DIGITALIZE PORTUGAL — REGISTO DE COBERTURA',
         `Gerado em ${new Date().toLocaleString('pt-PT')}`,
         '',
-        'Sítios já contactados na rua. Não voltar a bater à mesma porta',
-        'sem ler a experiência. Use isto para afinar a abordagem.',
+        'Sítios já contactados na rua. Etapa = progresso; Resultado = Futuro / Sem Interesse / Digitalizado.',
+        'Não voltar a bater à mesma porta sem ler a experiência.',
         ''
     ];
 
@@ -341,8 +476,11 @@ function formatCoverageExport(pins, legend) {
         section.items.forEach((pin) => {
             const where = [pin.morada, pin.cidade].filter(Boolean).join(', ') || 'morada por preencher';
             const kind = pin.kind === 'visita' ? 'visita de rua' : 'lead';
+            const etapa = pin.etapa || pin.cobertura || '';
+            const resultado = pin.resultado || '';
             lines.push(`${pin.nome || 'Sem nome'}  [${kind}]`);
             lines.push(`  Onde: ${where}`);
+            lines.push(`  Etapa: ${labels[etapa] || etapa || '—'}${resultado ? ` · Resultado: ${labels[resultado] || resultado}` : ''}`);
             if (pin.telefone) lines.push(`  Tel: ${pin.telefone}`);
             if (pin.visitado_em) lines.push(`  Visita: ${when(pin.visitado_em)}`);
             else if (pin.criado_em) lines.push(`  Registo: ${when(pin.criado_em)}`);
@@ -371,11 +509,25 @@ function formatCoverageExport(pins, legend) {
 }
 
 module.exports = {
+    ETAPA_VALUES,
+    ETAPA_LABELS,
+    ETAPA_COLORS,
+    RESULTADO_VALUES,
+    RESULTADO_LABELS,
+    RESULTADO_COLORS,
     COBERTURA_VALUES,
     COBERTURA_LABELS,
     COBERTURA_COLORS,
+    OLD_COBERTURA_REMAP,
     mapsApiKey,
+    isValidEtapa,
+    isValidResultado,
     isValidCobertura,
+    normalizeEtapa,
+    normalizeResultado,
+    pinColors,
+    etapaRank,
+    remapCoberturaToEtapaResultado,
     buildAddressQuery,
     geocodeAddress,
     geocodeLeadRow,

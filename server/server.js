@@ -15,11 +15,23 @@ const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
 const { sanitizeDemoHtml } = require('./lib/sanitize-demo-html');
 const {
+    isValidEtapa,
+    isValidResultado,
     isValidCobertura,
+    normalizeEtapa,
+    normalizeResultado,
+    pinColors,
+    etapaRank,
     geocodeLeadRow,
     geocodeVisitRow,
     geocodeAddress,
     formatCoverageExport,
+    ETAPA_VALUES,
+    ETAPA_LABELS,
+    ETAPA_COLORS,
+    RESULTADO_VALUES,
+    RESULTADO_LABELS,
+    RESULTADO_COLORS,
     COBERTURA_VALUES,
     COBERTURA_LABELS,
     COBERTURA_COLORS
@@ -1926,10 +1938,41 @@ function scheduleLeadGeocode(leadId, { force = false } = {}) {
     });
 }
 
-function applyAutoCobertura(db, leadId, nextAuto) {
+/** Auto-advance lead etapa (stored in cobertura). Never downgrades; skips if locked or already demo_apresentada. */
+function applyAutoEtapa(db, leadId, nextAuto) {
     const row = db.prepare('SELECT cobertura, cobertura_locked FROM lead WHERE id = ?').get(leadId);
     if (!row || row.cobertura_locked) return;
-    db.prepare('UPDATE lead SET cobertura = ? WHERE id = ?').run(nextAuto, leadId);
+    const current = normalizeEtapa(row.cobertura, 'contacto_remoto');
+    if (current === 'demo_apresentada') return;
+    const next = normalizeEtapa(nextAuto, '');
+    if (!isValidEtapa(next)) return;
+    if (etapaRank(next) <= etapaRank(current)) return;
+    db.prepare('UPDATE lead SET cobertura = ? WHERE id = ?').run(next, leadId);
+}
+
+function applyAutoCobertura(db, leadId, nextAuto) {
+    const mapped = nextAuto === 'demo' ? 'demo_criada' : nextAuto;
+    applyAutoEtapa(db, leadId, mapped);
+}
+
+function applyAutoResultado(db, leadId, resultado) {
+    const next = normalizeResultado(resultado);
+    if (!next) return;
+    db.prepare('UPDATE lead SET resultado = ? WHERE id = ?').run(next, leadId);
+}
+
+function resolveEtapaInput(raw, fallback) {
+    if (raw === undefined || raw === null) return { unset: true };
+    const etapa = normalizeEtapa(raw, '');
+    if (!isValidEtapa(etapa)) return { error: 'Etapa inválida.' };
+    return { etapa };
+}
+
+function resolveResultadoInput(raw) {
+    if (raw === undefined) return { unset: true };
+    const resultado = normalizeResultado(raw);
+    if (!isValidResultado(resultado)) return { error: 'Resultado inválido.' };
+    return { resultado };
 }
 
 function clearGeocodeIfAddressChanged(db, leadId, morada, cidade) {
@@ -2047,7 +2090,7 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
             if (!leadId) {
                 leadId = crypto.randomUUID();
                 db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'rascunho', 'contacto', ?)`).run(
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'rascunho', 'contacto_remoto', ?)`).run(
                     leadId, cleanText(businessType.id, 80), nome,
                     morada, cidade, telefone, whatsapp, now);
                 db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
@@ -2142,6 +2185,16 @@ app.get('/api/digitalizept/maps-config', requireDigitalizept, (req, res) => {
     return res.json({
         provider: 'osm',
         configured: true,
+        etapas: ETAPA_VALUES.map((id) => ({
+            id,
+            label: ETAPA_LABELS[id],
+            color: ETAPA_COLORS[id]
+        })),
+        resultados: RESULTADO_VALUES.map((id) => ({
+            id,
+            label: RESULTADO_LABELS[id],
+            color: RESULTADO_COLORS[id]
+        })),
         cobertura: COBERTURA_VALUES.map((id) => ({
             id,
             label: COBERTURA_LABELS[id],
@@ -2163,11 +2216,34 @@ function leadNotesMap(db) {
 }
 
 function coverageLegend() {
-    return COBERTURA_VALUES.map((id) => ({
-        id,
-        label: COBERTURA_LABELS[id],
-        color: COBERTURA_COLORS[id]
-    }));
+    return {
+        etapas: ETAPA_VALUES.map((id) => ({
+            id,
+            axis: 'etapa',
+            label: ETAPA_LABELS[id],
+            color: ETAPA_COLORS[id]
+        })),
+        resultados: RESULTADO_VALUES.map((id) => ({
+            id,
+            axis: 'resultado',
+            label: RESULTADO_LABELS[id],
+            color: RESULTADO_COLORS[id]
+        }))
+    };
+}
+
+function pinTagFields(etapaRaw, resultadoRaw, etapaFallback) {
+    const etapa = normalizeEtapa(etapaRaw, etapaFallback);
+    const resultado = normalizeResultado(resultadoRaw);
+    const colors = pinColors(etapa, resultado);
+    return {
+        etapa,
+        cobertura: etapa,
+        resultado: resultado || undefined,
+        color: colors.color,
+        strokeColor: colors.strokeColor,
+        strokeWidth: colors.strokeWidth
+    };
 }
 
 app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
@@ -2176,14 +2252,14 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
         const notes = leadNotesMap(db);
         const leads = db.prepare(`
             SELECT id, business_type, nome, morada, cidade, telefone, whatsapp, estado,
-                   cobertura, cobertura_locked, demo_slug, lat, lng, geocode_status,
+                   cobertura, resultado, cobertura_locked, demo_slug, lat, lng, geocode_status,
                    notas_admin, criado_em
             FROM lead
             ORDER BY criado_em DESC
             LIMIT 500
         `).all();
         const visits = db.prepare(`
-            SELECT v.id, v.nome, v.morada, v.cidade, v.cobertura, v.experiencia, v.lat, v.lng,
+            SELECT v.id, v.nome, v.morada, v.cidade, v.cobertura, v.resultado, v.experiencia, v.lat, v.lng,
                    v.geocode_status, v.visitado_em, v.criado_em, v.lead_id,
                    l.nome AS lead_nome
             FROM visita v
@@ -2200,6 +2276,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
         const leadPins = leads.map((r) => {
             const visitaIds = visitsByLead[r.id] || [];
             const dealEstado = dealEstadoForLead(db, r.id);
+            const tags = pinTagFields(r.cobertura, r.resultado, 'contacto_remoto');
             return {
                 id: r.id,
                 kind: 'lead',
@@ -2209,7 +2286,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 cidade: r.cidade,
                 telefone: r.telefone,
                 estado: r.estado,
-                cobertura: r.cobertura || 'contacto',
+                ...tags,
                 cobertura_locked: Boolean(r.cobertura_locked),
                 demo_slug: r.demo_slug,
                 lat: r.lat,
@@ -2221,12 +2298,12 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 visitaIds,
                 visitaCount: visitaIds.length,
                 hasDeal: Boolean(dealEstado),
-                dealEstado: dealEstado || undefined,
-                color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.contacto
+                dealEstado: dealEstado || undefined
             };
         });
         const visitPins = visits.map((r) => {
             const dealEstado = r.lead_id ? dealEstadoForLead(db, r.lead_id) : '';
+            const tags = pinTagFields(r.cobertura, r.resultado, 'visitado');
             return {
                 id: r.id,
                 kind: 'visita',
@@ -2236,7 +2313,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 cidade: r.cidade,
                 telefone: '',
                 estado: '',
-                cobertura: r.cobertura || 'visitado',
+                ...tags,
                 demo_slug: '',
                 lat: r.lat,
                 lng: r.lng,
@@ -2248,8 +2325,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 leadId: r.lead_id || undefined,
                 leadNome: r.lead_nome || undefined,
                 hasDeal: Boolean(dealEstado),
-                dealEstado: dealEstado || undefined,
-                color: COBERTURA_COLORS[r.cobertura] || COBERTURA_COLORS.visitado
+                dealEstado: dealEstado || undefined
             };
         });
         return res.json({
@@ -2267,11 +2343,11 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
         const db = getDigitalizeptDb();
         const notes = leadNotesMap(db);
         const leads = db.prepare(`
-            SELECT id, nome, morada, cidade, telefone, cobertura, notas_admin, criado_em
+            SELECT id, nome, morada, cidade, telefone, cobertura, resultado, notas_admin, criado_em
             FROM lead ORDER BY criado_em DESC LIMIT 500
         `).all();
         const visits = db.prepare(`
-            SELECT nome, morada, cidade, cobertura, experiencia, visitado_em, criado_em
+            SELECT nome, morada, cidade, cobertura, resultado, experiencia, visitado_em, criado_em
             FROM visita ORDER BY criado_em DESC LIMIT 500
         `).all();
         const exportPins = visits.map((r) => ({
@@ -2279,7 +2355,7 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
             nome: r.nome,
             morada: r.morada,
             cidade: r.cidade,
-            cobertura: r.cobertura || 'visitado',
+            ...pinTagFields(r.cobertura, r.resultado, 'visitado'),
             experiencia: r.experiencia || '',
             visitado_em: r.visitado_em,
             criado_em: r.criado_em
@@ -2289,7 +2365,7 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
             morada: r.morada,
             cidade: r.cidade,
             telefone: r.telefone,
-            cobertura: r.cobertura || 'contacto',
+            ...pinTagFields(r.cobertura, r.resultado, 'contacto_remoto'),
             notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
             criado_em: r.criado_em
         })));
@@ -2332,27 +2408,37 @@ app.post('/api/digitalizept/leads/:leadId/visits', requireDigitalizept, (req, re
         const leadId = cleanText(req.params.leadId, 80);
         const db = getDigitalizeptDb();
         const lead = db.prepare(`
-            SELECT id, nome, morada, cidade, lat, lng, geocode_status, cobertura
+            SELECT id, nome, morada, cidade, lat, lng, geocode_status, cobertura, resultado
             FROM lead WHERE id = ?
         `).get(leadId);
         if (!lead) return res.status(404).json({ error: 'Lead não encontrado.' });
         const body = req.body || {};
-        const cobertura = cleanText(body.cobertura, 40) || 'visitado';
-        if (!isValidCobertura(cobertura)) {
-            return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        const etapaRaw = body.etapa != null ? body.etapa : body.cobertura;
+        const etapa = etapaRaw != null
+            ? normalizeEtapa(etapaRaw, 'visitado')
+            : 'visitado';
+        if (!isValidEtapa(etapa)) {
+            return res.status(400).json({ error: 'Etapa inválida.' });
+        }
+        const resultado = body.resultado != null
+            ? normalizeResultado(body.resultado)
+            : '';
+        if (!isValidResultado(resultado)) {
+            return res.status(400).json({ error: 'Resultado inválido.' });
         }
         const id = crypto.randomUUID();
         const now = digitalizeptNow();
         const experiencia = cleanText(body.experiencia, 4000);
         db.prepare(`
-            INSERT INTO visita (id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO visita (id, nome, morada, cidade, cobertura, resultado, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             id,
             lead.nome || 'Sem nome',
             lead.morada || '',
             lead.cidade || '',
-            cobertura,
+            etapa,
+            resultado,
             experiencia,
             lead.lat,
             lead.lng,
@@ -2363,6 +2449,7 @@ app.post('/api/digitalizept/leads/:leadId/visits', requireDigitalizept, (req, re
             now,
             leadId
         );
+        applyAutoEtapa(db, leadId, 'visitado');
         return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept lead visit create error:', err.message);
@@ -2406,13 +2493,14 @@ function visitaFromRow(row, db = null) {
     const dealEstado = row.deal_estado
         || (db && leadId ? dealEstadoForLead(db, leadId) : '');
     const leadNome = row.lead_nome || '';
+    const tags = pinTagFields(row.cobertura, row.resultado, 'visitado');
     return {
         id: row.id,
         kind: 'visita',
         nome: row.nome,
         morada: row.morada,
         cidade: row.cidade,
-        cobertura: row.cobertura || 'visitado',
+        ...tags,
         experiencia: row.experiencia || '',
         lat: row.lat,
         lng: row.lng,
@@ -2422,8 +2510,7 @@ function visitaFromRow(row, db = null) {
         leadId: leadId || undefined,
         leadNome: leadNome || undefined,
         hasDeal: Boolean(dealEstado),
-        dealEstado: dealEstado || undefined,
-        color: COBERTURA_COLORS[row.cobertura] || COBERTURA_COLORS.visitado
+        dealEstado: dealEstado || undefined
     };
 }
 
@@ -2442,9 +2529,14 @@ app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
         const body = req.body || {};
         const nome = cleanText(body.nome, 200);
         if (!nome) return res.status(400).json({ error: 'Indique o nome do sítio.' });
-        const cobertura = cleanText(body.cobertura, 40) || 'visitado';
-        if (!isValidCobertura(cobertura)) {
-            return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        const etapaRaw = body.etapa != null ? body.etapa : body.cobertura;
+        const etapa = normalizeEtapa(etapaRaw, 'visitado');
+        if (!isValidEtapa(etapa)) {
+            return res.status(400).json({ error: 'Etapa inválida.' });
+        }
+        const resultado = body.resultado != null ? normalizeResultado(body.resultado) : '';
+        if (!isValidResultado(resultado)) {
+            return res.status(400).json({ error: 'Resultado inválido.' });
         }
         const morada = cleanText(body.morada, 300);
         const cidade = cleanText(body.cidade, 120);
@@ -2470,9 +2562,10 @@ app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
         const now = digitalizeptNow();
         const visitadoEm = cleanText(body.visitado_em, 40) || now;
         db.prepare(`
-            INSERT INTO visita (id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, now, leadId);
+            INSERT INTO visita (id, nome, morada, cidade, cobertura, resultado, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, nome, morada, cidade, etapa, resultado, experiencia, lat, lng, geocodeStatus, visitadoEm, now, leadId);
+        if (leadId) applyAutoEtapa(db, leadId, 'visitado');
         return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept visit post error:', err.message);
@@ -2489,11 +2582,20 @@ app.patch('/api/digitalizept/visits/:id', requireDigitalizept, async (req, res) 
         if (!existing) return res.status(404).json({ error: 'Visita não encontrada.' });
         const nome = body.nome != null ? cleanText(body.nome, 200) : existing.nome;
         if (!nome) return res.status(400).json({ error: 'Indique o nome do sítio.' });
-        const cobertura = body.cobertura != null
-            ? cleanText(body.cobertura, 40)
-            : existing.cobertura;
-        if (!isValidCobertura(cobertura)) {
-            return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        let etapa = existing.cobertura;
+        if (body.etapa != null || body.cobertura != null) {
+            const etapaRaw = body.etapa != null ? body.etapa : body.cobertura;
+            etapa = normalizeEtapa(etapaRaw, 'visitado');
+            if (!isValidEtapa(etapa)) {
+                return res.status(400).json({ error: 'Etapa inválida.' });
+            }
+        }
+        let resultado = existing.resultado || '';
+        if (body.resultado != null) {
+            resultado = normalizeResultado(body.resultado);
+            if (!isValidResultado(resultado)) {
+                return res.status(400).json({ error: 'Resultado inválido.' });
+            }
         }
         const morada = body.morada != null ? cleanText(body.morada, 300) : existing.morada;
         const cidade = body.cidade != null ? cleanText(body.cidade, 120) : existing.cidade;
@@ -2516,10 +2618,10 @@ app.patch('/api/digitalizept/visits/:id', requireDigitalizept, async (req, res) 
             leadId = linked.leadId;
         }
         db.prepare(`
-            UPDATE visita SET nome = ?, morada = ?, cidade = ?, cobertura = ?, experiencia = ?,
+            UPDATE visita SET nome = ?, morada = ?, cidade = ?, cobertura = ?, resultado = ?, experiencia = ?,
                 lat = ?, lng = ?, geocode_status = ?, visitado_em = ?, lead_id = ?
             WHERE id = ?
-        `).run(nome, morada, cidade, cobertura, experiencia, lat, lng, geocodeStatus, visitadoEm, leadId, id);
+        `).run(nome, morada, cidade, etapa, resultado, experiencia, lat, lng, geocodeStatus, visitadoEm, leadId, id);
 
         if (body.regeocode === true) {
             await geocodeVisitRow(db, id, { force: true, nowIso: digitalizeptNow });
@@ -2893,13 +2995,22 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
             db.prepare('UPDATE lead SET notas_admin = ? WHERE id = ?')
                 .run(cleanText(body.notas_admin, 4000), leadId);
         }
-        if (body.cobertura != null) {
-            const cobertura = cleanText(body.cobertura, 40);
-            if (!isValidCobertura(cobertura)) {
-                return res.status(400).json({ error: 'Estado de cobertura inválido.' });
+        if (body.cobertura != null || body.etapa != null) {
+            const etapaRaw = body.etapa != null ? body.etapa : body.cobertura;
+            const etapa = normalizeEtapa(etapaRaw, '');
+            if (!isValidEtapa(etapa)) {
+                return res.status(400).json({ error: 'Etapa inválida.' });
             }
             db.prepare('UPDATE lead SET cobertura = ?, cobertura_locked = 1 WHERE id = ?')
-                .run(cobertura, leadId);
+                .run(etapa, leadId);
+        }
+        if (body.resultado != null) {
+            const resultado = normalizeResultado(body.resultado);
+            if (!isValidResultado(resultado)) {
+                return res.status(400).json({ error: 'Resultado inválido.' });
+            }
+            db.prepare('UPDATE lead SET resultado = ?, cobertura_locked = 1 WHERE id = ?')
+                .run(resultado, leadId);
         }
         if (body.experiencia) {
             const texto = cleanText(body.experiencia, 4000);
@@ -2930,10 +3041,16 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
             scheduleLeadGeocode(leadId, { force: true });
         }
         const updated = db.prepare(`
-            SELECT id, nome, morada, cidade, cobertura, cobertura_locked, lat, lng, geocode_status, estado, demo_slug
+            SELECT id, nome, morada, cidade, cobertura, resultado, cobertura_locked, lat, lng, geocode_status, estado, demo_slug
             FROM lead WHERE id = ?
         `).get(leadId);
-        return res.json({ ok: true, lead: updated });
+        return res.json({
+            ok: true,
+            lead: {
+                ...updated,
+                ...pinTagFields(updated.cobertura, updated.resultado, 'contacto_remoto')
+            }
+        });
     } catch (err) {
         console.error('digitalizept lead patch error:', err.message);
         return res.status(500).json({ error: 'Não foi possível atualizar o lead.' });
@@ -3071,10 +3188,10 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
                     cleanText(dados.nome_negocio, 200), morada, cidade,
                     cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60), demoHtml,
                     JSON.stringify(wizardMerged), leadId);
-                applyAutoCobertura(db, leadId, 'demo');
+                applyAutoEtapa(db, leadId, 'demo_criada');
             } else {
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, demo_html, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'demonstracao', 'demo', ?, ?, ?, ?, ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, resultado, demo_json, identidade_json, demo_slug, demo_html, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'demonstracao', 'demo_criada', '', ?, ?, ?, ?, ?)`).run(
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
                     morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug, demoHtml, now);
@@ -3331,7 +3448,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             if (existingLead) {
                 clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
                 db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?,
-                    estado = 'fechado', cobertura = 'digitalizado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?,
+                    estado = 'fechado', resultado = 'digitalizado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?,
                     google_presence_json = ?
                     WHERE id = ?`).run(
                     cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
@@ -3347,8 +3464,8 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                         VALUES (?, ?, ?, ?, ?)`).run(dadosId, leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
                 }
             } else {
-                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, demo_json, identidade_json, demo_slug, work_path, google_presence_json, criado_em)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'fechado', 'digitalizado', ?, ?, ?, ?, ?, ?)`).run(
+                db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, resultado, demo_json, identidade_json, demo_slug, work_path, google_presence_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'fechado', 'demo_apresentada', 'digitalizado', ?, ?, ?, ?, ?, ?)`).run(
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
                     morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(body.demo || {}), JSON.stringify(body.identidade || {}),

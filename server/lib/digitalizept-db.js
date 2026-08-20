@@ -185,8 +185,9 @@ function migrate(db) {
         google_presence_json: "TEXT NOT NULL DEFAULT '{}'",
         wizard_json: "TEXT NOT NULL DEFAULT '{}'",
         cidade: "TEXT NOT NULL DEFAULT ''",
-        cobertura: "TEXT NOT NULL DEFAULT 'contacto'",
+        cobertura: "TEXT NOT NULL DEFAULT 'contacto_remoto'",
         cobertura_locked: 'INTEGER NOT NULL DEFAULT 0',
+        resultado: "TEXT NOT NULL DEFAULT ''",
         lat: 'REAL',
         lng: 'REAL',
         geocoded_at: "TEXT NOT NULL DEFAULT ''",
@@ -219,15 +220,21 @@ function migrate(db) {
         geocode_status TEXT NOT NULL DEFAULT '',
         visitado_em TEXT NOT NULL DEFAULT '',
         criado_em TEXT NOT NULL,
-        lead_id TEXT
+        lead_id TEXT,
+        resultado TEXT NOT NULL DEFAULT ''
     )`);
     addMissingColumns(db, 'visita', {
-        lead_id: 'TEXT'
+        lead_id: 'TEXT',
+        resultado: "TEXT NOT NULL DEFAULT ''"
     });
     db.exec(`CREATE INDEX IF NOT EXISTS idx_visita_lead ON visita(lead_id)`);
 
     try {
-        const { backfillLeadGeoFields } = require('./digitalizept-geocode');
+        const {
+            backfillLeadGeoFields,
+            remapCoberturaToEtapaResultado
+        } = require('./digitalizept-geocode');
+        remapCoberturaToEtapaResultado(db);
         backfillLeadGeoFields(db);
     } catch (err) {
         console.error('digitalizept: cobertura backfill failed:', err.message);
