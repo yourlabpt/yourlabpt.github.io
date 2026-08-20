@@ -629,8 +629,20 @@ export function setupCoverage({
         pin.lat = lat;
         pin.lng = lng;
         pin.geocode_status = 'manual';
-        toast('Pin actualizado no mapa.');
         return true;
+    }
+
+    function offerPinMoveUndo(pin, prevLat, prevLng) {
+        toast('Pin actualizado no mapa.', false, {
+            duration: 10000,
+            actionLabel: 'Desfazer',
+            onAction: async () => {
+                const ok = await savePinPosition(pin, prevLat, prevLng);
+                if (!ok) return;
+                toast('Posição anterior restaurada.');
+                paint();
+            }
+        });
     }
 
     function paint() {
@@ -652,15 +664,28 @@ export function setupCoverage({
                 if (placing) return;
                 openPin(pin);
             });
+            let dragOrigin = null;
             marker.on('dragstart', () => {
+                const ll = marker.getLatLng();
+                dragOrigin = { lat: ll.lat, lng: ll.lng };
                 closeDrawer();
             });
             marker.on('dragend', async () => {
                 const pos = marker.getLatLng();
+                const prev = dragOrigin;
+                dragOrigin = null;
+                if (prev
+                    && Math.abs(prev.lat - pos.lat) < 1e-8
+                    && Math.abs(prev.lng - pos.lng) < 1e-8) {
+                    return;
+                }
                 const ok = await savePinPosition(pin, pos.lat, pos.lng);
                 if (!ok) {
-                    marker.setLatLng([pin.lat, pin.lng]);
+                    if (prev) marker.setLatLng([prev.lat, prev.lng]);
+                    return;
                 }
+                if (prev) offerPinMoveUndo(pin, prev.lat, prev.lng);
+                else toast('Pin actualizado no mapa.');
             });
             markers.push(marker);
             bounds.extend([pin.lat, pin.lng]);
@@ -668,7 +693,7 @@ export function setupCoverage({
         el.coverageStatus.textContent = placing
             ? 'Toque no mapa para marcar o sítio visitado.'
             : (mapped.length
-                ? `${mapped.length} no mapa · cor = etapa · anel = resultado${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
+                ? `${mapped.length} no mapa · arraste um pin · Desfazer no aviso a seguir${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
                 : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.'));
 
         if (el.coverageUnmapped) {

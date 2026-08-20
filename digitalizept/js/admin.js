@@ -55,12 +55,31 @@ let leads = [];
 let deals = [];
 let coverageUi = null;
 
-function toast(message, isError = false) {
+function toast(message, isError = false, options = {}) {
+    document.querySelectorAll('.toast').forEach((n) => n.remove());
     const node = document.createElement('div');
     node.className = `toast${isError ? ' error' : ''}`;
-    node.textContent = message;
+    const duration = Number(options.duration) > 0 ? Number(options.duration) : 2800;
+    if (options.actionLabel && typeof options.onAction === 'function') {
+        const text = document.createElement('span');
+        text.textContent = message;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-action';
+        btn.textContent = options.actionLabel;
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            node.remove();
+            options.onAction();
+        });
+        node.append(text, btn);
+    } else {
+        node.textContent = message;
+    }
     document.body.appendChild(node);
-    setTimeout(() => node.remove(), 2800);
+    setTimeout(() => {
+        if (node.isConnected) node.remove();
+    }, duration);
 }
 
 function showLogin(message = '') {

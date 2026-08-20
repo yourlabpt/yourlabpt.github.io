@@ -530,6 +530,30 @@
 /* Toast stays usable on light admin */
 .admin-body .toast {
     color: #f7f4ee;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-body .toast-action {
+    appearance: none;
+    border: 1px solid rgba(247, 244, 238, 0.45);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.admin-body .toast-action:hover {
+    background: rgba(247, 244, 238, 0.12);
 }
 
 @media (max-width: 520px) {
