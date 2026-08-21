@@ -181,7 +181,7 @@ function appendField(grid, field, value, missing, attr, attrValue) {
     return control;
 }
 
-export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMapsLookup } = {}) {
+export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMapsLookup, onWebsiteZip } = {}) {
     host.innerHTML = '';
     host.className = 'dossier';
     if (!payload || !payload.lead) {
@@ -203,6 +203,12 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMa
     const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
     resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
     toolbar.append(back, saveTop, resume);
+    if (typeof onWebsiteZip === 'function') {
+        const zip = el('button', 'btn-secondary', 'Descarregar website (ZIP)');
+        zip.type = 'button';
+        zip.addEventListener('click', () => onWebsiteZip(payload.lead.id, zip));
+        toolbar.appendChild(zip);
+    }
     if (payload.demo && payload.demo.url) {
         const demoLink = el('a', 'btn-secondary', 'Abrir demo');
         demoLink.href = payload.demo.url;

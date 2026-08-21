@@ -492,3 +492,43 @@ export function createWebsiteZipButton(ctx, { className = 'btn-secondary', label
     });
     return btn;
 }
+
+export async function downloadStandaloneWebsiteZipFromLead(leadId, { api } = {}) {
+    if (!leadId || typeof api !== 'function') {
+        throw new Error('Lead em falta.');
+    }
+    const { response, data } = await api(
+        `/api/digitalizept/leads/${encodeURIComponent(leadId)}/resume`
+    );
+    if (!response.ok) {
+        throw new Error((data && data.error) || 'Não foi possível carregar a demo.');
+    }
+    return downloadStandaloneWebsiteZip({ data: (data && data.data) || {} });
+}
+
+export function createLeadWebsiteZipButton({
+    api,
+    leadId,
+    toast,
+    className = 'btn-secondary',
+    label = 'Descarregar website (ZIP)'
+} = {}) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className;
+    btn.textContent = label;
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+            const folder = await downloadStandaloneWebsiteZipFromLead(leadId, { api });
+            if (typeof toast === 'function') toast(`Website descarregado (${folder}.zip).`);
+        } catch (err) {
+            if (typeof toast === 'function') {
+                toast((err && err.message) || 'Não foi possível criar o ZIP.', true);
+            }
+        } finally {
+            btn.disabled = false;
+        }
+    });
+    return btn;
+}

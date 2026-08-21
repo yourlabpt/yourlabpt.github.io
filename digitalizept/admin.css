@@ -459,6 +459,40 @@
     border-top: 1px solid var(--admin-border, rgba(0, 0, 0, 0.08));
 }
 
+.maps-how {
+    margin: 0 0 12px;
+}
+
+.maps-how-lead {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.maps-close-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 0 12px;
+}
+
+.maps-close-row .btn-secondary {
+    min-width: 96px;
+}
+
+.maps-state-actions {
+    margin-top: 16px;
+}
+
+.maps-script summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.maps-script .btn-secondary {
+    margin: 6px 8px 0 0;
+}
+
 .maps-destinos,
 .maps-missing,
 .maps-steps,
@@ -574,23 +608,29 @@
 }
 
 .admin-drawer-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     display: flex;
     align-items: center;
     gap: 10px;
     margin: 0 0 16px;
+    padding: 16px 0 12px;
+    background: var(--admin-surface);
 }
 
 .admin-drawer-back {
     flex: 0 0 auto;
-    width: 40px;
+    min-width: 40px;
     height: 40px;
     margin: 0;
-    padding: 0;
+    padding: 0 12px;
     border: 1px solid var(--admin-border, #d4cdc0);
     border-radius: 8px;
     background: var(--admin-surface, #fff);
     color: var(--admin-ink);
-    font-size: 1.35rem;
+    font-size: 0.9rem;
+    font-weight: 600;
     line-height: 1;
     cursor: pointer;
 }

@@ -66,7 +66,7 @@ describe('maps presence — google guided adapter', () => {
         assert.equal(result.estado, 'em_curso');
         assert.ok(result.steps.some((s) => s.id === 'perfil_100'));
         assert.ok(result.guiaoVideo.includes('Café Central'));
-        assert.ok(result.contaScript.includes('PRIMARY_OWNER'));
+        assert.ok(result.contaScript.includes('YourLab'));
     });
 
     it('registry exposes stubs without enabling them', () => {

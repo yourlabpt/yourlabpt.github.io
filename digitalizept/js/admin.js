@@ -4,6 +4,7 @@ import { formatEuros } from './format.js';
 import { downloadDealContract } from './deal/download.js';
 import { setupCoverage } from './admin-coverage.js';
 import { renderMapsCockpit } from './admin-maps.js';
+import { createLeadWebsiteZipButton, downloadStandaloneWebsiteZipFromLead } from './demo/site-zip.js';
 import { fetchConfig } from './settings.js';
 import { renderFollowupShare } from './demo/followup-ui.js';
 import { renderLeadDossier, dossierHash, leadIdFromHash } from './admin-lead.js';
@@ -157,9 +158,9 @@ function openDrawer(title, build, options = {}) {
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'admin-drawer-back';
-    back.setAttribute('aria-label', 'Voltar');
-    back.title = 'Voltar';
-    back.textContent = '←';
+    back.setAttribute('aria-label', 'Fechar');
+    back.title = 'Fechar';
+    back.textContent = 'Fechar';
     back.addEventListener('click', () => closeDrawer());
     const h = document.createElement('h2');
     h.textContent = title;
@@ -519,6 +520,16 @@ function renderDemos() {
             actions.appendChild(share);
         }
 
+        if (l.id) {
+            actions.appendChild(createLeadWebsiteZipButton({
+                api,
+                leadId: l.id,
+                toast,
+                className: 'btn-secondary',
+                label: 'Descarregar website (ZIP)'
+            }));
+        }
+
         const callState = confirmCallState(l);
         if (callState.status === 'due' || callState.status === 'waiting') {
             const tel = telHref(l);
@@ -618,7 +629,7 @@ function renderDeals() {
             const mapsBtn = document.createElement('button');
             mapsBtn.type = 'button';
             mapsBtn.className = 'btn-primary';
-            mapsBtn.textContent = d.googleOnly ? 'Entrega Maps / Business' : 'Presença Maps / Business';
+            mapsBtn.textContent = 'Presença Maps';
             mapsBtn.addEventListener('click', () => openMapsDelivery(d));
             actions.appendChild(mapsBtn);
         }
@@ -657,6 +668,15 @@ function renderDeals() {
                 }));
                 actions.appendChild(share);
             }
+        }
+        if (d.leadId) {
+            actions.appendChild(createLeadWebsiteZipButton({
+                api,
+                leadId: d.leadId,
+                toast,
+                className: 'btn-secondary',
+                label: 'Descarregar website (ZIP)'
+            }));
         }
         const contract = document.createElement('button');
         contract.type = 'button';
@@ -786,6 +806,17 @@ async function openLeadDossier(leadId) {
                 throw new Error((looked.data && looked.data.error) || 'Não consegui ler o link.');
             }
             return looked.data;
+        };
+        handlers.onWebsiteZip = async (id, btn) => {
+            if (btn) btn.disabled = true;
+            try {
+                const folder = await downloadStandaloneWebsiteZipFromLead(id, { api });
+                toast(`Website descarregado (${folder}.zip).`);
+            } catch (err) {
+                toast((err && err.message) || 'Não foi possível criar o ZIP.', true);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         };
         renderLeadDossier(root, data, handlers);
     } catch (_) {
@@ -940,41 +971,52 @@ async function openNotes(lead) {
 }
 
 async function openMapsDelivery(deal) {
-    openDrawer(`Maps / Perfil da Empresa — ${deal.nome || deal.cliente_nome || 'Negócio'}`, async (panel) => {
-        const loading = document.createElement('p');
-        loading.className = 'admin-hint';
-        loading.textContent = 'A carregar entrega Google…';
-        panel.appendChild(loading);
-        try {
-            const { response, data } = await api(
-                `/api/digitalizept/deals/${encodeURIComponent(deal.projectId)}/maps`
-            );
-            if (!response.ok) {
-                panel.innerHTML = '';
-                const err = document.createElement('p');
-                err.className = 'admin-hint';
-                err.textContent = data.error || 'Não foi possível abrir a entrega Google.';
-                panel.appendChild(err);
-                toast(data.error || 'Falha.', true);
-                return;
-            }
-            const paint = (cockpit) => {
-                renderMapsCockpit(panel, cockpit, {
-                    api,
-                    toast,
-                    field,
-                    onUpdated: (next) => {
-                        if (next && next.projectId) paint(next);
-                        loadDeals().catch(() => {});
-                    }
-                });
-            };
-            paint(data);
-        } catch (_) {
-            panel.innerHTML = '';
-            toast('Erro de rede.', true);
-        }
-    }, { dock: true });
+    const title = `Google Maps — ${deal.nome || deal.cliente_nome || 'Negócio'}`;
+    openDrawer(title, (panel) => {
+        const host = document.createElement('div');
+        host.className = 'maps-cockpit';
+        panel.appendChild(host);
+        host.appendChild(Object.assign(document.createElement('p'), {
+            className: 'admin-hint',
+            textContent: 'A carregar o guião…'
+        }));
+
+        const paint = (cockpit) => {
+            if (!cockpit || !cockpit.projectId) return;
+            renderMapsCockpit(host, cockpit, {
+                api,
+                toast,
+                onClose: closeDrawer,
+                onUpdated: (next) => {
+                    const nextCockpit = next && next.presenca ? next : (next && next.cockpit);
+                    if (nextCockpit && nextCockpit.projectId) paint(nextCockpit);
+                    loadDeals().catch(() => {});
+                }
+            });
+        };
+
+        api(`/api/digitalizept/deals/${encodeURIComponent(deal.projectId)}/maps`)
+            .then(({ response, data }) => {
+                if (!response.ok) {
+                    host.innerHTML = '';
+                    host.appendChild(Object.assign(document.createElement('p'), {
+                        className: 'admin-hint',
+                        textContent: data.error || 'Não foi possível abrir o guião.'
+                    }));
+                    toast(data.error || 'Falha.', true);
+                    return;
+                }
+                paint(data);
+            })
+            .catch(() => {
+                host.innerHTML = '';
+                host.appendChild(Object.assign(document.createElement('p'), {
+                    className: 'admin-hint',
+                    textContent: 'Erro de rede. Toque em Fechar e tente outra vez.'
+                }));
+                toast('Erro de rede.', true);
+            });
+    });
 }
 
 function openDealEditor(deal) {

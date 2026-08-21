@@ -1,81 +1,77 @@
 /**
- * Admin cockpit — guided Maps (público) / Perfil da Empresa delivery for closed deals.
+ * Admin cockpit — guided Maps / Perfil da Empresa delivery for closed deals.
  */
+
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+}
+
+function detailsBlock(title, text) {
+    const wrap = document.createElement('details');
+    wrap.className = 'maps-script';
+    const summary = document.createElement('summary');
+    summary.textContent = title;
+    const pre = el('pre', 'maps-script-pre', text);
+    wrap.append(summary, pre);
+    return { wrap, pre };
+}
+
+function addCloseRow(host, onClose) {
+    if (typeof onClose !== 'function') return;
+    const row = el('div', 'maps-close-row');
+    const btn = el('button', 'btn-secondary');
+    btn.type = 'button';
+    btn.textContent = 'Fechar';
+    btn.addEventListener('click', onClose);
+    row.appendChild(btn);
+    host.appendChild(row);
+}
 
 export function renderMapsCockpit(panel, cockpit, {
     api,
     toast,
-    field,
-    onUpdated
+    onUpdated,
+    onClose
 }) {
     panel.innerHTML = '';
-    const title = document.createElement('h2');
-    title.textContent = `Maps (público) / Perfil da Empresa — ${cockpit.lead?.nome || 'Negócio'}`;
-    panel.appendChild(title);
+    addCloseRow(panel, onClose);
 
-    const meta = document.createElement('p');
-    meta.className = 'meta';
-    const pacote = cockpit.proposta?.pacote || '—';
-    meta.textContent = [
-        `Pacote: ${pacote}${cockpit.perfilCompleto ? ' + Perfil 100%' : ''}`,
-        cockpit.googleOnly ? 'entrega = Google verificado' : 'site pode entregar sem Google',
-        `Estado: ${cockpit.presenca?.estadoLabel || cockpit.estadoGoogle || '—'}`
-    ].join(' · ');
-    panel.appendChild(meta);
+    const how = el('div', 'maps-how');
+    how.append(
+        el('p', 'maps-how-lead', 'Guião para o telemóvel do cliente. A ficha no Google Maps fica na conta dele, não na sua.'),
+        el('p', 'admin-hint', 'Maps = o que o público vê. Perfil da Empresa = o painel do dono (app Google Business). Só avançamos com ele ao lado.')
+    );
+    panel.appendChild(how);
 
-    if (cockpit.teslaNote) {
-        const tesla = document.createElement('p');
-        tesla.className = 'admin-hint';
-        tesla.textContent = cockpit.teslaNote;
-        panel.appendChild(tesla);
-    }
-
-    const dest = document.createElement('div');
-    dest.className = 'maps-destinos';
-    const destTitle = document.createElement('p');
-    destTitle.className = 'field-label';
-    destTitle.textContent = 'Destinos';
-    dest.appendChild(destTitle);
-    (cockpit.providers || []).forEach((p) => {
-        const row = document.createElement('label');
-        row.className = 'maps-destino-row';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.disabled = !p.enabled;
-        cb.checked = p.id === 'google' && p.enabled;
-        const text = document.createElement('span');
-        text.textContent = `${p.nome} — ${p.capabilityLabel || p.capability}`;
-        row.append(cb, text);
-        dest.appendChild(row);
-    });
-    panel.appendChild(dest);
+    const status = el('p', 'meta');
+    status.textContent = [
+        cockpit.lead?.nome || 'Negócio',
+        cockpit.proposta?.pacote ? `pacote ${cockpit.proposta.pacote}` : '',
+        cockpit.presenca?.estadoLabel || cockpit.estadoGoogle || ''
+    ].filter(Boolean).join(' · ');
+    panel.appendChild(status);
 
     if (Array.isArray(cockpit.missing) && cockpit.missing.length) {
-        const miss = document.createElement('div');
-        miss.className = 'maps-missing';
-        const h = document.createElement('p');
-        h.className = 'field-label';
-        h.textContent = 'Dados em falta';
-        miss.appendChild(h);
+        const miss = el('div', 'maps-missing');
+        miss.appendChild(el('p', 'field-label', 'Falta preencher na ficha do negócio'));
         const ul = document.createElement('ul');
         cockpit.missing.forEach((m) => {
-            const li = document.createElement('li');
-            li.textContent = m.label || m.id;
-            ul.appendChild(li);
+            ul.appendChild(el('li', '', m.label || m.id));
         });
         miss.appendChild(ul);
+        miss.appendChild(el('p', 'admin-hint', 'Volte à proposta, complete estes dados, e abra este guião outra vez.'));
         panel.appendChild(miss);
     }
 
-    const actions = document.createElement('div');
-    actions.className = 'coverage-pin-actions';
-
-    const start = document.createElement('button');
+    const actions = el('div', 'coverage-pin-actions');
+    const start = el('button', 'btn-primary');
     start.type = 'button';
-    start.className = 'btn-primary';
-    start.textContent = cockpit.presenca?.estado === 'nao_iniciado' || cockpit.presenca?.estado === 'em_falta_dados'
-        ? 'Começar entrega Google'
-        : 'Actualizar guião / continuar';
+    const notStarted = cockpit.presenca?.estado === 'nao_iniciado'
+        || cockpit.presenca?.estado === 'em_falta_dados';
+    start.textContent = notStarted ? 'Começar' : 'Actualizar lista de passos';
     start.addEventListener('click', async () => {
         start.disabled = true;
         try {
@@ -84,10 +80,10 @@ export function renderMapsCockpit(panel, cockpit, {
                 { method: 'POST', body: {} }
             );
             if (!response.ok) {
-                toast(data.error || 'Falha ao iniciar.', true);
+                toast(data.error || 'Não foi possível começar.', true);
                 return;
             }
-            toast(data.result?.ok ? 'Entrega em curso.' : 'Ainda há dados em falta.');
+            toast(data.result?.ok ? 'Lista de passos pronta. Vá um a um com o cliente.' : 'Ainda faltam dados na ficha.');
             if (typeof onUpdated === 'function') onUpdated(data.cockpit || data);
         } finally {
             start.disabled = false;
@@ -96,23 +92,14 @@ export function renderMapsCockpit(panel, cockpit, {
     actions.appendChild(start);
     panel.appendChild(actions);
 
-    const stepsWrap = document.createElement('div');
-    stepsWrap.className = 'maps-steps';
-    const stepsTitle = document.createElement('p');
-    stepsTitle.className = 'field-label';
-    stepsTitle.textContent = 'Passos com o cliente';
-    stepsWrap.appendChild(stepsTitle);
-
+    const stepsWrap = el('div', 'maps-steps');
+    stepsWrap.appendChild(el('p', 'field-label', 'Com o cliente, neste ordem'));
     const steps = cockpit.presenca?.steps || [];
     if (!steps.length) {
-        const empty = document.createElement('p');
-        empty.className = 'meta';
-        empty.textContent = 'Carregue “Começar entrega” para gerar a checklist.';
-        stepsWrap.appendChild(empty);
+        stepsWrap.appendChild(el('p', 'meta', 'Toque em Começar para ver os passos.'));
     } else {
-        steps.forEach((step) => {
-            const row = document.createElement('label');
-            row.className = 'maps-step-row';
+        steps.forEach((step, i) => {
+            const row = el('label', 'maps-step-row');
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked = Boolean(step.done);
@@ -125,21 +112,19 @@ export function renderMapsCockpit(panel, cockpit, {
                     );
                     if (!response.ok) {
                         cb.checked = !cb.checked;
-                        toast(data.error || 'Falha.', true);
+                        toast(data.error || 'Não gravou.', true);
                         return;
                     }
-                    if (typeof onUpdated === 'function') onUpdated(data);
+                    if (typeof onUpdated === 'function') onUpdated(data.cockpit || data);
                 } finally {
                     cb.disabled = false;
                 }
             });
             const body = document.createElement('span');
-            const strong = document.createElement('strong');
-            strong.textContent = step.title;
-            const detail = document.createElement('span');
-            detail.className = 'meta';
-            detail.textContent = step.detail || '';
-            body.append(strong, document.createElement('br'), detail);
+            body.append(
+                el('strong', '', `${i + 1}. ${step.title}`),
+                el('span', 'meta', step.detail || '')
+            );
             row.append(cb, body);
             stepsWrap.appendChild(row);
         });
@@ -147,34 +132,28 @@ export function renderMapsCockpit(panel, cockpit, {
     panel.appendChild(stepsWrap);
 
     if (cockpit.presenca?.contaScript) {
-        const conta = document.createElement('div');
-        conta.className = 'maps-script';
-        const h = document.createElement('p');
-        h.className = 'field-label';
-        h.textContent = 'Conta Google (4 min)';
-        const pre = document.createElement('pre');
-        pre.className = 'maps-script-pre';
-        pre.textContent = cockpit.presenca.contaScript;
-        conta.append(h, pre);
-        panel.appendChild(conta);
+        const { wrap, pre } = detailsBlock('Como abrir a conta Google (no telemóvel dele)', cockpit.presenca.contaScript);
+        const copy = el('button', 'btn-secondary', 'Copiar estes passos');
+        copy.type = 'button';
+        copy.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(pre.textContent);
+                toast('Passos copiados.');
+            } catch (_) {
+                toast('Não foi possível copiar.', true);
+            }
+        });
+        wrap.appendChild(copy);
+        panel.appendChild(wrap);
     }
 
     if (cockpit.presenca?.guiaoVideo) {
-        const video = document.createElement('div');
-        video.className = 'maps-script';
-        const h = document.createElement('p');
-        h.className = 'field-label';
-        h.textContent = 'Guião do vídeo de verificação';
-        const pre = document.createElement('pre');
-        pre.className = 'maps-script-pre';
-        pre.textContent = cockpit.presenca.guiaoVideo;
-        const copy = document.createElement('button');
+        const { wrap, pre } = detailsBlock('O que filmar para a Google aceitar o perfil', cockpit.presenca.guiaoVideo);
+        const copy = el('button', 'btn-secondary', 'Copiar guião do vídeo');
         copy.type = 'button';
-        copy.className = 'btn-secondary';
-        copy.textContent = 'Copiar guião';
         copy.addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(cockpit.presenca.guiaoVideo);
+                await navigator.clipboard.writeText(pre.textContent);
                 toast('Guião copiado.');
             } catch (_) {
                 toast('Não foi possível copiar.', true);
@@ -185,76 +164,59 @@ export function renderMapsCockpit(panel, cockpit, {
         wa.target = '_blank';
         wa.rel = 'noopener';
         wa.href = `https://wa.me/?text=${encodeURIComponent(cockpit.presenca.guiaoVideo)}`;
-        wa.textContent = 'Enviar por WhatsApp';
-        video.append(h, pre, copy, wa);
-        panel.appendChild(video);
+        wa.textContent = 'Enviar guião por WhatsApp';
+        wrap.append(copy, wa);
+        panel.appendChild(wrap);
     }
 
-    const stateActions = document.createElement('div');
-    stateActions.className = 'coverage-pin-actions';
-    stateActions.style.marginTop = '16px';
-
+    const stateActions = el('div', 'coverage-pin-actions maps-state-actions');
     async function runAction(action, okMsg) {
         const { response, data } = await api(
             `/api/digitalizept/deals/${encodeURIComponent(cockpit.projectId)}/maps/google/action`,
             { method: 'POST', body: { action } }
         );
         if (!response.ok) {
-            toast(data.error || 'Falha.', true);
+            toast(data.error || 'Não foi possível actualizar.', true);
             return;
         }
-        toast(data.delivered ? 'Google aceite — projeto marcado como entregue.' : okMsg);
+        toast(data.delivered ? 'A Google aceitou. Entrega marcada como feita.' : okMsg);
         if (typeof onUpdated === 'function') onUpdated(data.cockpit || data);
     }
 
-    const waitBtn = document.createElement('button');
+    const waitBtn = el('button', 'btn-secondary', 'Já pedi a verificação à Google');
     waitBtn.type = 'button';
-    waitBtn.className = 'btn-secondary';
-    waitBtn.textContent = 'Validação pedida / vídeo enviado';
-    waitBtn.addEventListener('click', () => runAction('aguardar_verificacao', 'A aguardar o Google.'));
+    waitBtn.addEventListener('click', () => runAction('aguardar_verificacao', 'À espera da Google. Pode demorar dias.'));
 
-    const okBtn = document.createElement('button');
+    const okBtn = el('button', 'btn-primary', cockpit.googleOnly
+        ? 'A Google aceitou — concluir'
+        : 'A Google aceitou');
     okBtn.type = 'button';
-    okBtn.className = 'btn-primary';
-    okBtn.textContent = cockpit.googleOnly
-        ? 'Google aceitou — concluir entrega'
-        : 'Google aceitou';
-    okBtn.addEventListener('click', () => runAction('verificado', 'Marcado como verificado.'));
+    okBtn.addEventListener('click', () => runAction('verificado', 'Marcado como aceite.'));
 
-    const failBtn = document.createElement('button');
+    const failBtn = el('button', 'btn-secondary', 'Não deu — marcar falha');
     failBtn.type = 'button';
-    failBtn.className = 'btn-secondary';
-    failBtn.textContent = 'Marcar falha';
     failBtn.addEventListener('click', () => {
-        if (!window.confirm('Marcar a presença Google como falhada?')) return;
+        if (!window.confirm('Marcar a presença no Google como falhada?')) return;
         runAction('falhou', 'Estado: falhou.');
     });
-
     stateActions.append(waitBtn, okBtn, failBtn);
     panel.appendChild(stateActions);
 
     if (cockpit.presenca?.mensagemClienteRascunho) {
-        const draft = document.createElement('div');
-        draft.className = 'maps-script';
-        const h = document.createElement('p');
-        h.className = 'field-label';
-        h.textContent = 'Rascunho para o cliente (não envia sozinho)';
-        const pre = document.createElement('pre');
-        pre.className = 'maps-script-pre';
-        pre.textContent = cockpit.presenca.mensagemClienteRascunho;
-        const copy = document.createElement('button');
+        const { wrap, pre } = detailsBlock('Mensagem pronta para o cliente (não envia sozinha)', cockpit.presenca.mensagemClienteRascunho);
+        const copy = el('button', 'btn-secondary', 'Copiar mensagem');
         copy.type = 'button';
-        copy.className = 'btn-secondary';
-        copy.textContent = 'Copiar mensagem';
         copy.addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(cockpit.presenca.mensagemClienteRascunho);
+                await navigator.clipboard.writeText(pre.textContent);
                 toast('Mensagem copiada.');
             } catch (_) {
                 toast('Não foi possível copiar.', true);
             }
         });
-        draft.append(h, pre, copy);
-        panel.appendChild(draft);
+        wrap.appendChild(copy);
+        panel.appendChild(wrap);
     }
+
+    addCloseRow(panel, onClose);
 }

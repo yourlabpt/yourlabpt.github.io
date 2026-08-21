@@ -61,40 +61,40 @@ function deliverySteps(ctx = {}) {
     const steps = [
         {
             id: 'conta',
-            title: 'Conta Google do negócio',
-            detail: 'Gmail do negócio no telemóvel do dono (+ 2FA). A conta tem de ser dele — nunca a sua.'
+            title: 'Conta Google do dono',
+            detail: 'No telemóvel dele. Gmail do negócio + verificação em dois passos. Nunca a sua conta.'
         },
         {
             id: 'criar_reivindicar',
-            title: 'Criar ou reivindicar o perfil',
-            detail: 'Perfil novo, sem dono, ou pedir acesso a outro dono. App Google Business / Maps.'
+            title: 'Abrir o perfil',
+            detail: 'App Google Business, ou Maps → Gerir o seu Perfil. Criar, reivindicar, ou pedir acesso.'
         },
         {
             id: 'dados_base',
-            title: 'Dados base',
-            detail: 'Nome, categoria, morada, pin, telefone, horário, descrição.'
+            title: 'Preencher a ficha',
+            detail: 'Nome, categoria, morada, pin no mapa, telefone, horário e uma descrição curta.'
         },
         {
             id: 'visuais',
-            title: 'Visuais',
-            detail: 'Logo, capa, fachada, interior. Captar no local se fizer sentido.'
+            title: 'Fotos',
+            detail: 'Logótipo, fachada, interior. Tire no sítio se ainda não existirem.'
         },
         {
             id: 'validacao',
-            title: 'Pedir validação',
-            detail: 'Vídeo (preferido), cartão ou chamada. Prazo do Google — tipicamente alguns dias úteis.'
+            title: 'Pedir verificação à Google',
+            detail: 'Vídeo (melhor), carta ou chamada. A Google decide; costuma demorar alguns dias.'
         },
         {
             id: 'pin',
-            title: 'Confirmar pin no Maps',
-            detail: 'Verificar que o ponto no mapa está na montra certa.'
+            title: 'Confirmar o sítio no Maps',
+            detail: 'O pin tem de cair na montra certa, não no prédio ao lado.'
         }
     ];
     if (perfil100) {
         steps.splice(4, 0, {
             id: 'perfil_100',
-            title: 'Perfil 100%',
-            detail: 'Serviços, produtos, atributos, WhatsApp, redes e links.'
+            title: 'Completar o perfil',
+            detail: 'Serviços, produtos, WhatsApp e redes, se o pacote incluir o perfil completo.'
         });
     }
     return steps;
@@ -102,10 +102,10 @@ function deliverySteps(ctx = {}) {
 
 function contaGoogleScript() {
     return [
-        '1. No telemóvel do dono, abrir Definições → Google → a conta dele (ou criar Gmail do negócio).',
-        '2. Activar verificação em dois passos.',
-        '3. Abrir a app Google Business Profile (ou Maps → “Gerir o seu Perfil”).',
-        '4. Não use a sua conta YourLab como PRIMARY_OWNER — o dono fica sempre o cliente.'
+        '1. No telemóvel do dono: Definições → Google → a conta dele (ou crie um Gmail só do negócio).',
+        '2. Ligue a verificação em dois passos.',
+        '3. Abra a app Google Business Profile. Se não tiver: no Maps, toque em Gerir o seu Perfil.',
+        '4. Quem fica dono da ficha é sempre o cliente. Não use a sua conta YourLab.'
     ].join('\n');
 }
 
@@ -113,28 +113,26 @@ function guiaoVideo(dados) {
     const nome = dados.nome || 'o negócio';
     const onde = [dados.morada, dados.cidade].filter(Boolean).join(', ') || 'a morada do estabelecimento';
     return [
-        `Guião de vídeo para validar “${nome}” no Google`,
+        `Vídeo para a Google aceitar «${nome}»`,
         '',
-        'Grave UMA única gravação contínua (sem cortes), em português ou só com imagem clara:',
+        'Uma gravação só, sem cortes, 1 a 2 minutos:',
         '',
-        `1. Comece fora, na fachada / sinalética de ${nome} em ${onde}. Mostre o nome legível.`,
-        '2. Entre pela porta principal e percorra o interior (balcão, zona de clientes, produtos ou serviços).',
-        '3. Mostre uma acção de gestão: abrir o horário na parede, atender um cliente, ou o telemóvel com a app Business.',
-        '4. Termine de novo na fachada.',
+        `1. Comece fora, na fachada de ${nome} em ${onde}. O nome tem de se ler.`,
+        '2. Entre pela porta e mostre o interior (balcão, clientes, produtos).',
+        '3. Mostre que gere o sítio: horário na parede, atender alguém, ou a app aberta.',
+        '4. Acabe outra vez na fachada.',
         '',
-        'Duração típica: 1–2 minutos. Luz natural ajuda. Não edite o vídeo.',
-        'A revisão é feita por um humano do lado da Google (pode demorar vários dias).'
+        'Luz natural ajuda. Não edite o vídeo. A Google pode demorar vários dias a responder.'
     ].join('\n');
 }
 
 function mensagemClienteVerificado(dados) {
     const nome = dados.nome || 'o seu negócio';
     return [
-        `Olá! Boas notícias: a presença de ${nome} no Google Maps / Perfil da Empresa já foi aceite.`,
-        'Os clientes passam a ver os dados correctos (morada, telefone, horário).',
-        'Se quiser, no próximo contacto mostramos como pedir avaliações reais.',
+        `Olá! O ${nome} já aparece bem no Google Maps (morada, telefone e horário).`,
+        'Se quiser, no próximo contacto mostramos como pedir avaliações.',
         '',
-        '— YourLab / Digitalize Portugal'
+        '— YourLab'
     ].join('\n');
 }
 
