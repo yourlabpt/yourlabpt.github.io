@@ -215,14 +215,16 @@ function buildSobre(demo, fotos) {
     return s;
 }
 
-function buildServicos(demo, businessType) {
+function buildServicos(demo, businessType, fotos) {
     if (!demo.servicos || !Array.isArray(demo.servicos.itens) || !demo.servicos.itens.length) return null;
-    const s = section('dpl-servicos', 'dpl-servicos');
+    const layout = businessType.servicos_layout || 'cards';
+    const s = section('dpl-servicos', `dpl-servicos dpl-servicos-${layout}`);
     s.appendChild(sectionTitle(demo.servicos.titulo || rotulo(businessType, 'servicos', 'Serviços')));
-    const grid = el('div', 'dpl-servicos-grid');
+    const grid = el('div', `dpl-servicos-grid dpl-servicos-grid-${layout}`);
     demo.servicos.itens.forEach((item, i) => {
-        const card = el('article', `dpl-servico-card dpl-servico-card-${i % 3}`);
-        card.appendChild(visualPlane(`dpl-servico-visual dpl-servico-visual-${i % 3}`));
+        const card = el('article', `dpl-servico-card dpl-servico-${layout}`);
+        const url = Array.isArray(fotos) && fotos[i];
+        if (url) card.appendChild(photoOrPlane(fotos, i, 'dpl-servico-photo', ''));
         const body = el('div', 'dpl-servico-body');
         body.appendChild(el('h3', 'dpl-servico-nome', item.nome));
         if (item.descricao) body.appendChild(el('p', 'dpl-servico-desc', item.descricao));
@@ -548,7 +550,7 @@ export function renderLanding(state) {
     const builders = {
         hero: () => buildHero(dados, identidade, demo, businessType, fotos),
         sobre: () => buildSobre(demo, fotos),
-        servicos: () => buildServicos(demo, businessType),
+        servicos: () => buildServicos(demo, businessType, fotos),
         diferenciais: () => buildDiferenciais(demo),
         problemas: () => buildProblemas(demo, businessType),
         avaliacoes: () => buildAvaliacoes(demo, dados),

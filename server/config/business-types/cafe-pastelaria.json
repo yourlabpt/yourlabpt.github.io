@@ -101,6 +101,7 @@
     }
   ],
   "archetype": "food",
+  "servicos_layout": "menu",
   "ctas_hero": [
     {
       "label": "Como chegar",
@@ -196,6 +197,14 @@
         "autor": "Rui",
         "texto": "Venho todas as manhãs. É o meu sítio."
       }
+    ],
+    "servicos_itens": [
+      { "nome": "Cafetaria", "descricao": "Café, meia de leite e galão como deve ser." },
+      { "nome": "Pastelaria fresca", "descricao": "Nata, bolos do dia e o doce do fim-de-semana." },
+      { "nome": "Pequenos-almoços", "descricao": "Torrada, sandes e o primeiro café da manhã." },
+      { "nome": "Salgados", "descricao": "Rissóis, empadas e o lanche da tarde." },
+      { "nome": "Bolos por encomenda", "descricao": "Aniversários e o bolo do sábado, feitos cá." },
+      { "nome": "Snacks ligeiros", "descricao": "Quando o almoço tem de ser rápido." }
     ]
   }
 }

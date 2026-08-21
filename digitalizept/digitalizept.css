@@ -1604,7 +1604,7 @@ html:has(body > .dp-landing) {
     box-shadow: none;
 }
 
-.dp-landing[data-archetype="clinica"] .dpl-servico-visual {
+.dp-landing[data-archetype="clinica"] .dpl-servico-photo {
     height: 200px;
 }
 
@@ -1666,7 +1666,7 @@ html:has(body > .dp-landing) {
     border-radius: 4px;
 }
 
-/* Services — image-led cards */
+/* Services — text cards. Colour planes sit on the hero/gallery, not on top of each item. */
 .dpl-servicos {
     background: #f3f0ea;
 }
@@ -1686,20 +1686,15 @@ html:has(body > .dp-landing) {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
 }
 
-.dpl-servico-visual {
+.dpl-servico-photo {
     height: 140px;
 }
 
-.dpl-servico-visual-1 {
-    background:
-        radial-gradient(100% 90% at 80% 20%, color-mix(in srgb, var(--l-secundaria) 60%, transparent), transparent 55%),
-        linear-gradient(145deg, var(--l-secundaria), var(--l-base));
-}
-
-.dpl-servico-visual-2 {
-    background:
-        radial-gradient(100% 90% at 20% 80%, color-mix(in srgb, var(--l-destaque) 55%, transparent), transparent 55%),
-        linear-gradient(145deg, var(--l-destaque), var(--l-base));
+.dpl-servico-photo .dpl-photo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .dpl-servico-body {
@@ -1717,6 +1712,72 @@ html:has(body > .dp-landing) {
     font-size: 0.92rem;
     line-height: 1.5;
     color: var(--l-muted);
+}
+
+.dpl-servicos-grid-menu {
+    gap: 0;
+    max-width: 640px;
+}
+
+.dpl-servico-menu {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--l-base) 12%, transparent);
+}
+
+.dpl-servico-menu .dpl-servico-body {
+    display: grid;
+    gap: 4px;
+    padding: 18px 0;
+}
+
+.dpl-servico-menu .dpl-servico-nome {
+    font-size: 1.12rem;
+}
+
+.dpl-servicos-grid-catalog {
+    gap: 14px;
+}
+
+.dpl-servico-catalog {
+    border-radius: 16px;
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--l-base) 10%, transparent);
+    background: #fff;
+}
+
+.dpl-servico-catalog .dpl-servico-body {
+    padding: 22px 20px 24px;
+}
+
+.dp-landing[data-category="cafe-pastelaria"] .dpl-hero {
+    min-height: min(62vh, 520px);
+}
+
+.dp-landing[data-category="cafe-pastelaria"] .dpl-servicos {
+    background: #f6efe4;
+}
+
+.dp-landing[data-category="cafe-pastelaria"] .dpl-hero-title {
+    font-weight: 600;
+}
+
+.dp-landing[data-category="loja-flores-decoracao"] .dpl-hero {
+    min-height: min(68vh, 560px);
+}
+
+.dp-landing[data-category="loja-flores-decoracao"] .dpl-hero-title {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.dp-landing[data-category="loja-flores-decoracao"] .dpl-servicos {
+    background: #f7f4ee;
+}
+
+.dp-landing[data-category="loja-flores-decoracao"] .dpl-h2 {
+    font-weight: 600;
 }
 
 /* Differentiators */
@@ -2151,7 +2212,15 @@ html:has(body > .dp-landing) {
         grid-template-columns: repeat(3, 1fr);
     }
 
-    .dpl-servico-visual {
+    .dpl-servicos-grid-menu {
+        grid-template-columns: 1fr;
+    }
+
+    .dpl-servicos-grid-catalog {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dpl-servico-photo {
         height: 160px;
     }
 

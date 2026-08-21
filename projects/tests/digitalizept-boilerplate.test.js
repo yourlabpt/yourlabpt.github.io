@@ -65,4 +65,40 @@ describe('digitalizept landing boilerplate', async () => {
         assert.ok(demo.avaliacoes.itens.length >= 2);
         assert.ok(demo.servicos.itens.some((item) => item.nome === 'Almoços'));
     });
+
+    it('seeds a café page as a morning counter, not a restaurant menu', () => {
+        const type = JSON.parse(require('fs').readFileSync(
+            require('path').join(__dirname, '../../server/config/business-types/cafe-pastelaria.json'),
+            'utf8'
+        ));
+        const demo = seedDemoFromType({
+            data: {
+                businessType: type,
+                dados: { nome_negocio: 'Café Central', cidade: 'Porto' }
+            }
+        });
+        assert.equal(type.servicos_layout, 'menu');
+        assert.match(demo.hero.titulo, /café/i);
+        assert.ok(demo.servicos.itens.some((item) => item.nome === 'Cafetaria'));
+        assert.ok(demo.servicos.itens.some((item) => /nata|galão|café/i.test(item.descricao)));
+        assert.equal(demo.servicos.itens.some((item) => item.nome === 'Almoços'), false);
+    });
+
+    it('seeds a florist page around ramos, not café copy', () => {
+        const type = JSON.parse(require('fs').readFileSync(
+            require('path').join(__dirname, '../../server/config/business-types/loja-flores-decoracao.json'),
+            'utf8'
+        ));
+        const demo = seedDemoFromType({
+            data: {
+                businessType: type,
+                dados: { nome_negocio: 'Flores da Praça', cidade: 'Aveiro' }
+            }
+        });
+        assert.equal(type.servicos_layout, 'catalog');
+        assert.match(demo.hero.titulo, /ramo/i);
+        assert.ok(demo.servicos.itens.some((item) => /ramos/i.test(item.nome)));
+        assert.ok(demo.servicos.itens.some((item) => /planta|ramo|flor/i.test(item.descricao)));
+        assert.equal(demo.servicos.itens.some((item) => item.nome === 'Cafetaria'), false);
+    });
 });

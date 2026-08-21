@@ -19,6 +19,30 @@ function padItems(items, min, fallback) {
     return next;
 }
 
+function seedServicos(businessType, dados, seed) {
+    const fromSeed = Array.isArray(seed.servicos_itens) ? seed.servicos_itens : [];
+    const source = (fromSeed.length
+        ? fromSeed
+        : (Array.isArray(businessType.servicos_tipicos) ? businessType.servicos_tipicos : [])
+    ).slice(0, L.servicos.maxItens);
+    return padItems(
+        source.map((item) => {
+            if (item && typeof item === 'object') {
+                return {
+                    nome: clamp(item.nome, L.servicos.nome),
+                    descricao: clamp(item.descricao || dados.principais_servicos || '', L.servicos.descricao)
+                };
+            }
+            return {
+                nome: clamp(item, L.servicos.nome),
+                descricao: clamp(dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao)
+            };
+        }).filter((item) => item.nome),
+        L.servicos.minItens,
+        (i) => ({ nome: `Serviço ${i + 1}`, descricao: '' })
+    );
+}
+
 function seedReviews(businessType, dados) {
     const fromType = businessType.demo_seed && Array.isArray(businessType.demo_seed.avaliacoes)
         ? businessType.demo_seed.avaliacoes
@@ -51,19 +75,11 @@ export function seedDemoFromType(state) {
     const seed = businessType.demo_seed || {};
     const nome = dados.nome_negocio || seed.nome_negocio || businessType.nome || 'O seu negócio';
     const cidade = dados.cidade || seed.cidade || '';
-    const servicosFonte = Array.isArray(businessType.servicos_tipicos) ? businessType.servicos_tipicos : [];
     const diffsFonte = Array.isArray(businessType.diferenciais_sugeridos)
         ? businessType.diferenciais_sugeridos
         : [];
 
-    const servicos = padItems(
-        servicosFonte.slice(0, L.servicos.maxItens).map((name) => ({
-            nome: clamp(name, L.servicos.nome),
-            descricao: clamp(dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao)
-        })).filter((item) => item.nome),
-        L.servicos.minItens,
-        (i) => ({ nome: `Serviço ${i + 1}`, descricao: '' })
-    );
+    const servicos = seedServicos(businessType, dados, seed);
 
     const diferenciais = padItems(
         diffsFonte.slice(0, L.diferenciais.maxItens).map((item) => clamp(item, L.diferenciais.item)).filter(Boolean),
