@@ -341,7 +341,15 @@ app.get('/demos/spyfu/api/spyfu/*', async (req, res) => {
 });
 
 // Serve static files
-app.use(express.static(path.join(__dirname, '..')));
+app.use(express.static(path.join(__dirname, '..'), {
+    setHeaders(res, filePath) {
+        if (/[\\/]digitalizept[\\/](sw\.js|.*\.html|manifest\.webmanifest)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'no-store');
+        } else if (/[\\/]digitalizept[\\/].*\.(js|css)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 
 // Create inquiries directory if it doesn't exist
 const inquiriesDir = path.join(__dirname, 'inquiries');

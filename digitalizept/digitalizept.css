@@ -113,6 +113,17 @@ button, input, textarea, select {
     min-height: 1em;
 }
 
+.btn-refresh-login {
+    margin-top: 16px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
 /* ---------- App shell ---------- */
 .app {
     max-width: 480px;
@@ -199,6 +210,8 @@ button, input, textarea, select {
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .btn-new-deal {
@@ -638,13 +651,18 @@ button, input, textarea, select {
 }
 
 .logo-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
 }
 
 .logo-actions .btn-primary,
 .logo-actions .btn-secondary {
     height: 46px;
+}
+
+.logo-actions-wide {
+    grid-column: 1 / -1;
 }
 
 .id-disclaimer {

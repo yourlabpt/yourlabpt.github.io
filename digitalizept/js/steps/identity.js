@@ -5,6 +5,59 @@ import { applyCustomCores, buildColorPrompt, parseCores } from '../demo/colors.j
 
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
 const MAX_FOTOS = 6;
+const IMAGE_ACCEPT = 'image/*,image/heic,image/heif,.heic,.heif';
+
+// iOS home-screen PWAs open the camera and skip the library if `capture` is set.
+export function imagePickerConfig(source, { multiple = false } = {}) {
+    const config = { accept: IMAGE_ACCEPT };
+    if (source === 'camera') config.capture = 'environment';
+    else if (multiple) config.multiple = true;
+    return config;
+}
+
+function makeFileInput(config) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = config.accept;
+    input.className = 'hidden';
+    if (config.capture) input.setAttribute('capture', config.capture);
+    if (config.multiple) input.multiple = true;
+    return input;
+}
+
+function bindFileInput(input, onFiles) {
+    input.addEventListener('change', async () => {
+        const files = Array.from(input.files || []);
+        input.value = '';
+        if (!files.length) return;
+        await onFiles(files);
+    });
+}
+
+function createImageSourceInputs({ multiple = false, onFiles }) {
+    const camera = makeFileInput(imagePickerConfig('camera'));
+    const library = makeFileInput(imagePickerConfig('library', { multiple }));
+    bindFileInput(camera, onFiles);
+    bindFileInput(library, onFiles);
+    return { camera, library };
+}
+
+function imageSourceButtons({ camera, library, cameraLabel, libraryLabel }) {
+    const actions = document.createElement('div');
+    actions.className = 'logo-actions';
+    const cameraBtn = document.createElement('button');
+    cameraBtn.type = 'button';
+    cameraBtn.className = 'btn-primary';
+    cameraBtn.textContent = cameraLabel;
+    cameraBtn.addEventListener('click', () => camera.click());
+    const libraryBtn = document.createElement('button');
+    libraryBtn.type = 'button';
+    libraryBtn.className = 'btn-primary';
+    libraryBtn.textContent = libraryLabel;
+    libraryBtn.addEventListener('click', () => library.click());
+    actions.append(cameraBtn, libraryBtn);
+    return actions;
+}
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -96,19 +149,13 @@ function renderLogo(body, ctx, identidade, persist) {
     const dados = getDados(ctx.state);
     const { control } = renderAsk(body, {
         title: 'Tem logótipo?',
-        hint: 'Se não tiver, usamos o nome do negócio.',
+        hint: 'Câmara ou fotos já no telemóvel. Se não tiver, usamos o nome do negócio.',
         index: 0,
         total: 3
     });
 
     const preview = document.createElement('div');
     preview.className = 'logo-preview';
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.className = 'hidden';
 
     function renderPreview() {
         preview.innerHTML = '';
@@ -128,8 +175,8 @@ function renderLogo(body, ctx, identidade, persist) {
         }
     }
 
-    input.addEventListener('change', async () => {
-        const file = input.files && input.files[0];
+    async function onFiles(files) {
+        const file = files[0];
         if (!file) return;
         try {
             const dataUrl = await fileToDataUrl(file, 512);
@@ -139,18 +186,18 @@ function renderLogo(body, ctx, identidade, persist) {
         } catch (_) {
             ctx.showToast('Não foi possível carregar a imagem.', true);
         }
-    });
+    }
 
-    const actions = document.createElement('div');
-    actions.className = 'logo-actions';
-    const uploadBtn = document.createElement('button');
-    uploadBtn.type = 'button';
-    uploadBtn.className = 'btn-primary';
-    uploadBtn.textContent = 'Carregar / tirar foto';
-    uploadBtn.addEventListener('click', () => input.click());
+    const { camera, library } = createImageSourceInputs({ onFiles });
+    const actions = imageSourceButtons({
+        camera,
+        library,
+        cameraLabel: 'Tirar foto',
+        libraryLabel: 'Das fotos'
+    });
     const noneBtn = document.createElement('button');
     noneBtn.type = 'button';
-    noneBtn.className = 'btn-secondary';
+    noneBtn.className = 'btn-secondary logo-actions-wide';
     noneBtn.textContent = 'Não tenho';
     noneBtn.addEventListener('click', () => {
         identidade.logo = { tipo: 'nenhum' };
@@ -158,8 +205,8 @@ function renderLogo(body, ctx, identidade, persist) {
         renderPreview();
         scheduleGoNext(ctx.goNext);
     });
-    actions.append(uploadBtn, noneBtn);
-    control.append(preview, actions, input);
+    actions.appendChild(noneBtn);
+    control.append(preview, actions, camera, library);
     renderPreview();
 }
 
@@ -348,7 +395,7 @@ function renderPalette(body, ctx, identidade, persist) {
 function renderFotos(body, ctx, identidade, persist) {
     const { control } = renderAsk(body, {
         title: 'Tirar fotos agora?',
-        hint: 'Fotos reais do estabelecimento tornam a demo muito mais convincente. Pode saltar.',
+        hint: 'Câmara ou fotos já no telemóvel. Fotos reais tornam a demo mais convincente. Pode saltar.',
         index: 2,
         total: 3
     });
@@ -385,16 +432,11 @@ function renderFotos(body, ctx, identidade, persist) {
         }
     }
 
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.multiple = true;
-    input.className = 'hidden';
-
-    input.addEventListener('change', async () => {
-        const files = Array.from(input.files || []);
-        if (!files.length) return;
+    async function onFiles(files) {
+        if (identidade.fotos.length >= MAX_FOTOS) {
+            ctx.showToast(`Máximo ${MAX_FOTOS} fotos.`, true);
+            return;
+        }
         const room = MAX_FOTOS - identidade.fotos.length;
         for (const file of files.slice(0, room)) {
             try {
@@ -404,34 +446,27 @@ function renderFotos(body, ctx, identidade, persist) {
                 ctx.showToast('Uma foto falhou.', true);
             }
         }
-        input.value = '';
         persist();
         paint();
-    });
+    }
 
-    const actions = document.createElement('div');
-    actions.className = 'logo-actions';
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'btn-primary';
-    addBtn.textContent = identidade.fotos.length ? 'Adicionar fotos' : 'Sim — tirar / carregar';
-    addBtn.addEventListener('click', () => {
-        if (identidade.fotos.length >= MAX_FOTOS) {
-            ctx.showToast(`Máximo ${MAX_FOTOS} fotos.`, true);
-            return;
-        }
-        input.click();
+    const { camera, library } = createImageSourceInputs({ multiple: true, onFiles });
+    const actions = imageSourceButtons({
+        camera,
+        library,
+        cameraLabel: 'Tirar foto',
+        libraryLabel: 'Das fotos'
     });
     const skipBtn = document.createElement('button');
     skipBtn.type = 'button';
-    skipBtn.className = 'btn-secondary';
+    skipBtn.className = 'btn-secondary logo-actions-wide';
     skipBtn.textContent = 'Agora não';
     skipBtn.addEventListener('click', () => {
         persist();
         scheduleGoNext(ctx.goNext);
     });
-    actions.append(addBtn, skipBtn);
-    control.append(preview, actions, input);
+    actions.appendChild(skipBtn);
+    control.append(preview, actions, camera, library);
     paint();
 }
 

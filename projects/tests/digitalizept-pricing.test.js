@@ -15,6 +15,7 @@ let parseDemoOutput;
 let isDataStepValid;
 let dataStep;
 let identityStep;
+let imagePickerConfig;
 let servicesStep;
 let invalidateDemoIfDriverField;
 let isDominioValid;
@@ -69,6 +70,7 @@ before(async () => {
     dataStep = dataMod.dataStep;
     invalidateDemoIfDriverField = dataMod.invalidateDemoIfDriverField;
     identityStep = identityMod.identityStep;
+    imagePickerConfig = identityMod.imagePickerConfig;
     servicesStep = servicesMod.servicesStep;
     const demoMod = await import(pathToFileURL(path.join(appDir, 'steps', 'demo.js')).href);
     const diagMod = await import(pathToFileURL(path.join(appDir, 'steps', 'diagnostico.js')).href);
@@ -500,6 +502,21 @@ describe('digitalizept one-question substeps', () => {
         const state = { substep: 0, data: { businessType: { id: 'restaurante' } } };
         assert.equal(identityStep.substepCount(state), 3);
         assert.equal(identityStep.isSubstepValid(state), true);
+    });
+
+    it('opens the camera only when capture is requested, otherwise the library', () => {
+        const camera = imagePickerConfig('camera');
+        assert.equal(camera.capture, 'environment');
+        assert.equal(camera.multiple, undefined);
+        assert.match(camera.accept, /image\/\*/);
+
+        const oneFromLibrary = imagePickerConfig('library');
+        assert.equal(oneFromLibrary.capture, undefined);
+        assert.equal(oneFromLibrary.multiple, undefined);
+
+        const manyFromLibrary = imagePickerConfig('library', { multiple: true });
+        assert.equal(manyFromLibrary.capture, undefined);
+        assert.equal(manyFromLibrary.multiple, true);
     });
 
     it('does not shrink extras to urgência while the catalog is still loading', () => {

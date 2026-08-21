@@ -5,6 +5,9 @@ import { clearSettingsCache, fetchSettings } from './settings.js';
 import { clearCatalogCache, fetchCatalog } from './catalog.js';
 import { flushDealQueue, queuedDealCount } from './offline-queue.js';
 import { saveDraftLead } from './draft.js';
+import { confirmAndRefreshApp, registerDigitalizeptSw } from './pwa.js';
+
+registerDigitalizeptSw();
 
 const el = {
     loginOverlay: document.getElementById('login-overlay'),
@@ -202,6 +205,8 @@ function bindEvents() {
     el.loginForm.addEventListener('submit', handleLoginSubmit);
     el.logoutBtn.addEventListener('click', logout);
     el.newDealBtn.addEventListener('click', startNewDeal);
+    document.getElementById('refreshAppBtn')?.addEventListener('click', confirmAndRefreshApp);
+    document.getElementById('refreshAppLoginBtn')?.addEventListener('click', confirmAndRefreshApp);
 }
 
 async function boot() {

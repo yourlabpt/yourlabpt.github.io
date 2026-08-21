@@ -15,6 +15,9 @@ import {
     formatCountdown,
     maybeNotifyDueCall
 } from './demo/confirm-call.js';
+import { confirmAndRefreshApp, registerDigitalizeptSw } from './pwa.js';
+
+registerDigitalizeptSw();
 
 const FASES = [
     { id: 'demonstracao_criada', label: 'Demonstração' },
@@ -1123,6 +1126,9 @@ el.logoutBtn.addEventListener('click', async () => {
     clearToken();
     showLogin();
 });
+
+document.getElementById('refreshAppBtn')?.addEventListener('click', confirmAndRefreshApp);
+document.getElementById('refreshAppLoginBtn')?.addEventListener('click', confirmAndRefreshApp);
 
 document.querySelectorAll('.admin-tab').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));

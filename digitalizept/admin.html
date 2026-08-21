@@ -18,6 +18,7 @@
                 <button type="submit">Entrar</button>
             </form>
             <div id="login-error"></div>
+            <button id="refreshAppLoginBtn" type="button" class="btn-refresh-login">Atualizar app (limpar cache)</button>
         </div>
     </div>
 
@@ -28,6 +29,7 @@
                 <p>Preços, demos e propostas</p>
             </div>
             <div class="admin-header-actions">
+                <button id="refreshAppBtn" type="button" class="btn-secondary">Atualizar</button>
                 <a class="btn-secondary" href="./">Venda</a>
                 <button id="logout-btn" type="button" class="btn-logout">Sair</button>
             </div>
@@ -97,10 +99,5 @@
     </div>
 
     <script type="module" src="./js/admin.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js', { scope: '/digitalizept/' }).catch(() => {});
-        }
-    </script>
 </body>
 </html>
