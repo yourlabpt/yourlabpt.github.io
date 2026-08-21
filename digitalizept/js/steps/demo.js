@@ -19,6 +19,7 @@ import {
     assertPromptFitsChat,
     clipboardSizeLabel
 } from '../demo/html.js';
+import { createWebsiteZipButton } from '../demo/site-zip.js';
 import {
     buildGbpSobrePrompt,
     plainAiText,
@@ -347,8 +348,16 @@ function renderWebsiteDemo(body, ctx) {
         ctx.showToast('Demo actualizada com cores, logo e fotos.');
         showStatus('Demo actualizada com a identidade actual.', 'ok');
     });
-    previewBtnWrap.append(previewBtn, refreshBtn);
-    previewGroup.append(previewTitle, previewHint, live, previewBtnWrap, status);
+    const zipBtn = createWebsiteZipButton(ctx, {
+        className: 'btn-secondary',
+        label: 'Descarregar website (ZIP)'
+    });
+    zipBtn.title = 'Código e servidor para continuar o site real no computador. Não fica guardado na app.';
+    previewBtnWrap.append(previewBtn, refreshBtn, zipBtn);
+    const zipHint = document.createElement('p');
+    zipHint.className = 'id-disclaimer';
+    zipHint.textContent = 'Se o cliente quiser o site a sério: descarregue o ZIP. HTML, fotos, CSS e servidor local — nada fica guardado na app.';
+    previewGroup.append(previewTitle, previewHint, live, previewBtnWrap, zipHint, status);
     body.appendChild(previewGroup);
 
     const followupHost = document.createElement('div');

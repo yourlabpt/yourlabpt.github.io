@@ -6,6 +6,8 @@ import { buildContractModel, buildContractDocument } from '../deal/contract.js';
 import { downloadDealContract } from '../deal/download.js';
 import { enqueueDeal } from '../offline-queue.js';
 import { googlePresenceFromWizard } from '../google-presence.js';
+import { createWebsiteZipButton } from '../demo/site-zip.js';
+import { currentDemoHtml } from '../demo/html.js';
 
 const PROJECT_STATES = [
     'Demonstração criada', 'Proposta enviada', 'Contrato assinado', 'Entrada recebida',
@@ -184,6 +186,15 @@ async function render(body, ctx) {
         sendWrap.className = 'id-section';
         sendWrap.append(sendBtn, status);
         body.appendChild(sendWrap);
+        if (currentDemoHtml(ctx.state)) {
+            const zipBtn = createWebsiteZipButton(ctx, {
+                className: 'btn-secondary',
+                label: 'Descarregar website (ZIP)'
+            });
+            zipBtn.style.width = '100%';
+            zipBtn.style.marginTop = '10px';
+            body.appendChild(zipBtn);
+        }
         ctx.setValid(true);
         return;
     }
@@ -232,6 +243,16 @@ async function render(body, ctx) {
     body.appendChild(project);
 
     addDownloadButton('Descarregar PDF do contrato', { primary: true });
+
+    if (currentDemoHtml(ctx.state)) {
+        const zipBtn = createWebsiteZipButton(ctx, {
+            className: 'btn-secondary',
+            label: 'Descarregar website (ZIP)'
+        });
+        zipBtn.style.width = '100%';
+        zipBtn.style.marginTop = '10px';
+        body.appendChild(zipBtn);
+    }
 
     const demoUrl = result.demoUrl || ctx.state.data.demoUrl;
     if (demoUrl) {

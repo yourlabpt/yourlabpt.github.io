@@ -1208,6 +1208,7 @@ body:has(.app) {
     flex: 1;
 }
 
+/* dp-site-export-start */
 /* ---------- Generated landing (door-to-door demo) ---------- */
 .dp-landing {
     --l-base: #1b1b1b;
@@ -2282,6 +2283,7 @@ html:has(body > .dp-landing) {
         min-width: 60px;
     }
 }
+/* dp-site-export-end */
 
 /* ---------- Services (Etapa 5) ---------- */
 .svc-list {
