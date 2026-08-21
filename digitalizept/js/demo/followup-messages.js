@@ -1,34 +1,71 @@
-export const DEFAULT_WHATSAPP_TEMPLATE = `{{saudacao}} Sr. {{clienteNome}} 👋
-É o {{vendedorNome}}, da YourLab — estive aí {{visitaQuando}} e mostrei-lhe a página do {{negocioNome}}.
-Aqui fica o link para ver com calma:
-{{link}}
-Não está publicada nem aparece no Google. É um exemplo que preparei com informação que já está pública, só para lhe mostrar o que dá para fazer.
-Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos.
-Se não for de interesse, diga-me e não volto a incomodar 👍`;
+export const WA_TEMPLATES = {
+    1: `{{saudacao}} Sr. {{clienteNome}} 👋
+Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-export const DEFAULT_EMAIL_SUBJECT = 'A página que lhe mostrei hoje — {{negocioNome}}';
+_"É fácil encontrar-nos. É depois do café, ao lado da farmácia."_
 
-export const DEFAULT_EMAIL_BODY = `Bom dia Sr. {{clienteNome}},
+Pena é que o Google não conheça o café do Zé 🙂
 
-Foi um gosto falar consigo {{visitaQuando}}.
+Preparei isto para a *{{negocioNome}}*, sem lhe pedir nada:
 
-Como combinámos, aqui fica a demonstração que preparei para o {{negocioNome}}:
 {{link}}
 
-É um exemplo, feito com informação que já está pública sobre o vosso negócio. Não está publicada, não aparece no Google e não é o vosso site oficial — serve para lhe mostrar, na prática, como poderia ser.
+Não está publicado nem aparece no Google — é só para ver.
 
-Como lhe disse, somos uma empresa de tecnologia. Fazemos o site, a configuração da vossa ficha no Google e a parte legal obrigatória — Livro de Reclamações Eletrónico, política de privacidade e identificação da empresa. Não fazemos fotografia profissional, redes sociais nem publicidade; quando é preciso, indico quem faça bem.
+Se gostar, digo-lhe como fica a funcionar a sério. Se não for de interesse, diga-me e não volto a incomodar 👍`,
 
-Fica tudo em nome da vossa empresa: o domínio, o alojamento e a conta Google. Não ficam dependentes de nós.
+    2: `Também arrumei a casa da *{{negocioNome}}* no Google, para ver como ficaria quando alguém procura "{{oQueFaz}} em {{zona}}":
 
-Se fizer sentido avançarmos, digo-lhe exatamente quanto custa e quanto tempo demora, sem compromisso. Passo aí {{followupDia}} de manhã, ou ligo-lhe — como preferir.
+{{linkGoogle}}
 
-Com os melhores cumprimentos,
-{{vendedorNome}}
-YourLab
-{{vendedorTelefone}} · {{site}}
+Fica tudo em nome da empresa — a morada na internet, o espaço onde a página fica guardada e a conta do Google. Não fica preso a nós.
 
-Se preferir não voltar a receber mensagens nossas, responda a este email com "remover" e retiramos os vossos contactos de imediato.`;
+*490 €* — tudo tratado e no ar em 3 dias
+*190 €* — só a página, para pôr no ar por si
+*90 €* — só a parte do Google
+
+Sem IVA. Se começar pelos 90 € ou 190 €, desconta-se do resto.`,
+
+    3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}} 👋
+
+Aqui fica a página que lhe mostrei:
+
+{{link}}
+
+Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos.`
+};
+
+export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
+
+export const DEFAULT_EMAIL_SUBJECT = 'Fizemos isto para a {{negocioNome}} — sem lhe pedir nada';
+
+export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}},
+
+Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+
+"É fácil encontrar-nos. É depois do café, ao lado da farmácia."
+Pena é que o Google não conheça o café do Zé.
+
+Preparei isto para a {{negocioNome}}, sem lhe pedir nada:
+{{link}}
+
+Também arrumei a casa no Google:
+{{linkGoogle}}
+
+Não está publicado. Se gostar, digo-lhe como fica a funcionar a sério (490 € tudo / 190 € só a página / 90 € só o Google, sem IVA).
+
+{{vendedorNome}} · YourLab, {{zona}}
+{{vendedorTelefone}} · {{site}}`;
+
+const WA_LABELS = {
+    1: '1 · Mensagem principal',
+    2: '2 · Depois da resposta (Google e preços)',
+    3: '3 · Depois da visita'
+};
+
+export function waStepLabel(step) {
+    return WA_LABELS[Number(step)] || WA_LABELS[1];
+}
 
 function greetingForHour(hour) {
     return hour < 13 ? 'Bom dia' : 'Boa tarde';
@@ -56,6 +93,12 @@ export function normalizePhoneForWa(raw) {
     return digits;
 }
 
+function googleSearchUrl(nome, oQueFaz, zona, morada) {
+    const query = [nome, oQueFaz, morada, zona].filter(Boolean).join(' ');
+    if (!query) return 'https://www.google.com/maps';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 export function buildFollowupContext(state, config) {
     const dados = (state && state.data && state.data.dados) || {};
     const provider = (config && config.provider) || {};
@@ -69,6 +112,10 @@ export function buildFollowupContext(state, config) {
     const site = String(provider.site || 'yourlabpt.com').trim().replace(/^https?:\/\//, '');
     const followupDia = String(state.data.followupDia || 'amanhã').trim() || 'amanhã';
     const link = absoluteDemoUrl(state.data.demoUrl);
+    const zona = String(dados.cidade || dados.zona || '').trim() || 'Portugal';
+    const tipo = (state.data.businessType && state.data.businessType.nome) || '';
+    const oQueFaz = String(dados.o_que_faz || dados.principais_servicos || tipo || 'negócio local').trim();
+    const morada = String(dados.morada || '').trim();
 
     return {
         saudacao: greetingForHour(hour),
@@ -80,6 +127,9 @@ export function buildFollowupContext(state, config) {
         visitaQuando,
         followupDia,
         link,
+        zona,
+        oQueFaz,
+        linkGoogle: googleSearchUrl(negocioNome, oQueFaz, zona, morada),
         clienteEmail: String(dados.email || '').trim(),
         clienteWhatsApp: normalizePhoneForWa(dados.whatsapp || dados.telefone)
     };
@@ -91,9 +141,15 @@ export function fillTemplate(template, ctx) {
     });
 }
 
-export function buildWhatsAppMessage(state, config) {
+export function buildWhatsAppMessage(state, config, step = 1) {
     const ctx = buildFollowupContext(state, config);
-    const tpl = state.data.followupWhatsApp || DEFAULT_WHATSAPP_TEMPLATE;
+    const n = Number(step) || 1;
+    const editKey = `followupWa${n}`;
+    const edited = state.data && state.data[editKey];
+    if (edited && !String(edited).includes('{{')) return String(edited);
+    const tpl = (edited && String(edited).includes('{{'))
+        ? edited
+        : (WA_TEMPLATES[n] || WA_TEMPLATES[1]);
     return fillTemplate(tpl, ctx);
 }
 
@@ -119,4 +175,13 @@ export function buildMailtoUrl(email, subject, body) {
     if (body) params.set('body', body);
     const qs = params.toString();
     return qs ? `mailto:${to}?${qs}` : `mailto:${to}`;
+}
+
+export function nextSendableWaStep(followup) {
+    const f = followup || {};
+    const step = Number(f.waStep) || 0;
+    if (step <= 0) return 1;
+    if (step === 1 && f.replied1At) return 2;
+    if (step === 2 && f.replied2At) return 3;
+    return 0;
 }

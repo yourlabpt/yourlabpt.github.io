@@ -192,7 +192,8 @@ function migrate(db) {
         lng: 'REAL',
         geocoded_at: "TEXT NOT NULL DEFAULT ''",
         geocode_status: "TEXT NOT NULL DEFAULT ''",
-        demo_html: "TEXT NOT NULL DEFAULT ''"
+        demo_html: "TEXT NOT NULL DEFAULT ''",
+        followup_json: "TEXT NOT NULL DEFAULT '{}'"
     });
     addMissingColumns(db, 'contrato', {
         html_path: "TEXT NOT NULL DEFAULT ''"

@@ -32,6 +32,7 @@
                 <button id="logout-btn" type="button" class="btn-logout">Sair</button>
             </div>
         </header>
+        <div id="call-queue" class="call-queue hidden" hidden></div>
 
         <nav class="admin-tabs" role="tablist">
             <button type="button" class="admin-tab active" data-tab="catalog">Catálogo</button>
@@ -52,8 +53,9 @@
             <section id="tab-leads" class="admin-panel hidden">
                 <div class="admin-toolbar">
                     <input id="leads-filter" class="field-input" type="search" placeholder="Filtrar leads…">
+                    <button id="leads-email-demos-btn" type="button" class="btn-primary">Email HTML às demos</button>
                 </div>
-                <p class="admin-hint">Leads em aberto. Continuar venda reabre o wizard com os dados já guardados (do início, editáveis).</p>
+                <p class="admin-hint">Leads em aberto. Continuar venda reabre o wizard com os dados já guardados (do início, editáveis). O email HTML da demo vai para todos os que têm demo publicada e endereço.</p>
                 <div id="leads-list" class="admin-list"></div>
             </section>
 

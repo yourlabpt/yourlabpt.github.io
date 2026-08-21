@@ -46,6 +46,7 @@ const {
 const mapsPresenca = require('./lib/maps/presenca');
 const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/states');
 const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
+const outreach = require('./lib/digitalizept-outreach');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -1990,6 +1991,72 @@ function clearGeocodeIfAddressChanged(db, leadId, morada, cidade) {
     }
 }
 
+function digitalizeptPublicOrigin(req) {
+    const env = cleanText(process.env.PUBLIC_ORIGIN || process.env.YOURLAB_SITE, 200);
+    if (env) {
+        if (/^https?:\/\//i.test(env)) return env.replace(/\/$/, '');
+        return `https://${env.replace(/\/$/, '')}`;
+    }
+    const proto = (req && (req.get('x-forwarded-proto') || req.protocol)) || 'https';
+    const host = (req && (req.get('x-forwarded-host') || req.get('host'))) || 'yourlabpt.com';
+    return `${proto}://${host}`.replace(/\/$/, '');
+}
+
+function saveLeadFollowup(db, leadId, followup) {
+    db.prepare('UPDATE lead SET followup_json = ? WHERE id = ?')
+        .run(JSON.stringify(followup), leadId);
+    return followup;
+}
+
+function loadLeadOutreachRow(db, leadId) {
+    return db.prepare(`
+        SELECT l.id, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.business_type,
+               l.demo_slug, l.lat, l.lng, l.followup_json, l.estado, l.cobertura,
+               d.obrigatorios_json, d.opcionais_json,
+               cl.email AS legal_email, cl.nome AS legal_nome
+        FROM lead l
+        LEFT JOIN dados_negocio d ON d.lead_id = l.id
+        LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
+        WHERE l.id = ?
+    `).get(leadId);
+}
+
+function buildLeadOutreach(db, leadId, req, extras = {}) {
+    const row = loadLeadOutreachRow(db, leadId);
+    if (!row) return null;
+    const types = loadBusinessTypes();
+    const businessType = types.find((t) => t.id === row.business_type) || { nome: row.business_type };
+    const dados = {
+        nome_negocio: row.nome || '',
+        morada: row.morada || '',
+        cidade: row.cidade || '',
+        telefone: row.telefone || '',
+        whatsapp: row.whatsapp || '',
+        ...parseJsonSafe(row.obrigatorios_json, {}),
+        ...parseJsonSafe(row.opcionais_json, {}),
+        legalEmail: row.legal_email || ''
+    };
+    if (!dados.responsavel && row.legal_nome) dados.responsavel = row.legal_nome;
+    if (!dados.email && row.legal_email) dados.email = row.legal_email;
+    const followup = outreach.parseFollowup(row.followup_json);
+    if (!followup.unsubToken) followup.unsubToken = outreach.newUnsubToken();
+    const origin = digitalizeptPublicOrigin(req);
+    const ctx = outreach.buildOutreachContext({
+        dados,
+        provider: DIGITALIZEPT_PROVIDER,
+        origin,
+        demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : '',
+        demoSlug: row.demo_slug || '',
+        followupDia: extras.followupDia || 'amanhã',
+        visitaQuando: extras.visita === 'tarde' ? 'esta tarde' : extras.visitaQuando,
+        unsubToken: followup.unsubToken,
+        businessTypeNome: businessType.nome || '',
+        lat: row.lat,
+        lng: row.lng
+    });
+    return { row, dados, followup, ctx, origin };
+}
+
 function parseJsonSafe(raw, fallback) {
     try {
         const parsed = JSON.parse(raw || '');
@@ -2134,14 +2201,46 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
-                   l.cobertura, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng,
+                   l.cobertura, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng, l.followup_json,
+                   d.obrigatorios_json, d.opcionais_json, cl.email AS legal_email,
                    p.total_com_iva_centimos, p.iva_rate
             FROM lead l
             LEFT JOIN proposta p ON p.lead_id = l.id
+            LEFT JOIN dados_negocio d ON d.lead_id = l.id
+            LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
             ORDER BY l.criado_em DESC
             LIMIT 200
         `).all();
-        return res.json({ leads: rows });
+        return res.json({
+            leads: rows.map((r) => {
+                const followup = outreach.parseFollowup(r.followup_json);
+                const email = outreach.leadEmailFromRows(r.obrigatorios_json, r.opcionais_json, r.legal_email);
+                return {
+                    id: r.id,
+                    business_type: r.business_type,
+                    nome: r.nome,
+                    morada: r.morada,
+                    cidade: r.cidade,
+                    telefone: r.telefone,
+                    whatsapp: r.whatsapp,
+                    estado: r.estado,
+                    cobertura: r.cobertura,
+                    demo_slug: r.demo_slug,
+                    notas_admin: r.notas_admin,
+                    criado_em: r.criado_em,
+                    lat: r.lat,
+                    lng: r.lng,
+                    total_com_iva_centimos: r.total_com_iva_centimos,
+                    iva_rate: r.iva_rate,
+                    email,
+                    followupWaStep: followup.waStep,
+                    followupEmailSent: Boolean(followup.emailSentAt),
+                    followupUnsubscribed: followup.unsubscribed === true,
+                    callDueAt: followup.callDueAt || '',
+                    callDoneAt: followup.callDoneAt || ''
+                };
+            })
+        });
     } catch (err) {
         console.error('digitalizept leads error:', err.message);
         return res.status(500).json({ error: 'Failed to load leads.' });
@@ -2720,7 +2819,7 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
         const row = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
                    l.demo_slug, l.demo_json, l.identidade_json, l.google_presence_json, l.wizard_json,
-                   l.demo_html,
+                   l.demo_html, l.followup_json,
                    d.obrigatorios_json, d.opcionais_json
             FROM lead l
             LEFT JOIN dados_negocio d ON d.lead_id = l.id
@@ -2841,6 +2940,7 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             packagePitch: wizardExtra.packagePitch || undefined,
             demoGbp: wizardExtra.demoGbp === true,
             googleDiagnostico: wizardExtra.googleDiagnostico || undefined,
+            followup: outreach.parseFollowup(row.followup_json),
             proposta,
             googlePresence: (googlePresence && Object.keys(googlePresence).length)
                 ? googlePresence
@@ -3360,6 +3460,242 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
     } catch (err) {
         console.error('digitalizept publish demo error:', err.message);
         return res.status(500).json({ error: 'Não foi possível publicar a demonstração.' });
+    }
+});
+
+app.get('/api/digitalizept/unsub', (req, res) => {
+    try {
+        const token = cleanText((req.query && req.query.t) || '', 80);
+        if (!token) {
+            return res.status(400).type('html').send('<p>Ligação inválida.</p>');
+        }
+        const db = getDigitalizeptDb();
+        const rows = db.prepare(`SELECT id, followup_json FROM lead WHERE followup_json LIKE ?`)
+            .all(`%${token}%`);
+        const match = rows.find((r) => outreach.parseFollowup(r.followup_json).unsubToken === token);
+        if (!match) {
+            return res.status(404).type('html').send('<p>Já não está na lista, ou a ligação expirou.</p>');
+        }
+        const followup = outreach.parseFollowup(match.followup_json);
+        followup.unsubscribed = true;
+        saveLeadFollowup(db, match.id, followup);
+        return res.type('html').send('<p>Removido. Não voltamos a enviar emails da Digitalize Portugal para este contacto.</p>');
+    } catch (err) {
+        console.error('digitalizept unsub error:', err.message);
+        return res.status(500).type('html').send('<p>Não foi possível processar o pedido.</p>');
+    }
+});
+
+app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req);
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        saveLeadFollowup(db, leadId, packed.followup);
+        const { ctx, followup } = packed;
+        return res.json({
+            ok: true,
+            followup,
+            email: packed.dados.email || '',
+            whatsapp: packed.dados.whatsapp || packed.dados.telefone || '',
+            hasDemo: Boolean(packed.row.demo_slug),
+            messages: {
+                1: outreach.waTextForStep(1, ctx, followup.edits),
+                2: outreach.waTextForStep(2, ctx, followup.edits),
+                3: outreach.waTextForStep(3, ctx, followup.edits)
+            },
+            emailSubject: outreach.emailSubjectFor(ctx, followup.edits),
+            emailText: outreach.renderEmailText(ctx),
+            nextWaStep: outreach.nextSendableWaStep(followup)
+        });
+    } catch (err) {
+        console.error('digitalizept outreach get error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível carregar o envio.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req, {
+            followupDia: cleanText(body.followupDia, 80),
+            visita: cleanText(body.visita, 20)
+        });
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const step = Number(body.step);
+        if (![1, 2, 3].includes(step)) {
+            return res.status(400).json({ error: 'Passo WhatsApp inválido.' });
+        }
+        const next = outreach.nextSendableWaStep(packed.followup);
+        if (step !== next && packed.followup.waStep < step) {
+            return res.status(409).json({
+                error: step === 2 || step === 3
+                    ? 'Marque que o cliente respondeu antes de enviar a mensagem seguinte.'
+                    : 'Este passo ainda não está disponível.',
+                followup: packed.followup,
+                nextWaStep: next
+            });
+        }
+        const now = digitalizeptNow();
+        packed.followup.waStep = Math.max(packed.followup.waStep, step);
+        packed.followup[`wa${step}SentAt`] = now;
+        if (body.text) {
+            packed.followup.edits[`wa${step}`] = cleanText(body.text, 4000);
+        }
+        packed.followup = outreach.scheduleConfirmCall(packed.followup, now);
+        saveLeadFollowup(db, leadId, packed.followup);
+        if (step === 1) {
+            applyAutoEtapa(db, leadId, 'demo_criada');
+            const texto = `WhatsApp 1 enviado (${now.slice(0, 16).replace('T', ' ')}).`;
+            db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
+                .run(crypto.randomUUID(), leadId, texto, now);
+        }
+        return res.json({ ok: true, followup: packed.followup });
+    } catch (err) {
+        console.error('digitalizept outreach wa error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível actualizar o WhatsApp.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/outreach/reply', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const step = Number((req.body || {}).step);
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req);
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        if (!outreach.canMarkReply(packed.followup, step)) {
+            return res.status(409).json({
+                error: 'Não há uma mensagem à espera de resposta neste passo.',
+                followup: packed.followup
+            });
+        }
+        packed.followup[`replied${step}At`] = digitalizeptNow();
+        saveLeadFollowup(db, leadId, packed.followup);
+        return res.json({
+            ok: true,
+            followup: packed.followup,
+            nextWaStep: outreach.nextSendableWaStep(packed.followup)
+        });
+    } catch (err) {
+        console.error('digitalizept outreach reply error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível registar a resposta.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/outreach/call-done', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req);
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const now = digitalizeptNow();
+        packed.followup.callDoneAt = now;
+        saveLeadFollowup(db, leadId, packed.followup);
+        const nome = packed.row.nome || 'negócio';
+        db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
+            .run(crypto.randomUUID(), leadId, `Ligação de confirmação feita (${nome}).`, now);
+        return res.json({ ok: true, followup: packed.followup });
+    } catch (err) {
+        console.error('digitalizept call-done error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível marcar a ligação.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, async (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req, {
+            followupDia: cleanText(body.followupDia, 80),
+            visita: cleanText(body.visita, 20)
+        });
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        if (packed.followup.unsubscribed) {
+            return res.status(409).json({ error: 'Este contacto pediu para não receber emails.' });
+        }
+        const to = packed.dados.email || packed.ctx.clienteEmail;
+        if (!to) return res.status(400).json({ error: 'Este lead não tem email.' });
+        if (!packed.row.demo_slug) {
+            return res.status(400).json({ error: 'Publique a demo antes de enviar o email.' });
+        }
+        const subject = cleanText(body.subject, 240) || outreach.emailSubjectFor(packed.ctx, packed.followup.edits);
+        const text = String(body.text || outreach.renderEmailText(packed.ctx));
+        const html = outreach.renderEmailHtml(packed.ctx);
+        const result = await sendProjectNotificationEmail({ to, subject, text, html });
+        if (!result.sent) {
+            return res.status(503).json({ error: result.reason || 'SMTP não configurado.' });
+        }
+        const now = digitalizeptNow();
+        packed.followup.emailSentAt = now;
+        if (body.subject) packed.followup.edits.emailSubject = subject;
+        packed.followup = outreach.scheduleConfirmCall(packed.followup, now);
+        saveLeadFollowup(db, leadId, packed.followup);
+        applyAutoEtapa(db, leadId, 'demo_criada');
+        scheduleLeadGeocode(leadId, { force: false });
+        db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
+            .run(crypto.randomUUID(), leadId, `Email HTML da demo enviado para ${to}.`, now);
+        return res.json({ ok: true, followup: packed.followup, sent: true });
+    } catch (err) {
+        console.error('digitalizept outreach email error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível enviar o email.' });
+    }
+});
+
+app.post('/api/digitalizept/outreach/email-demos', requireDigitalizept, async (req, res) => {
+    try {
+        const force = Boolean(req.body && req.body.force);
+        const db = getDigitalizeptDb();
+        const rows = db.prepare(`
+            SELECT l.id
+            FROM lead l
+            WHERE l.demo_slug IS NOT NULL AND l.demo_slug != ''
+            LIMIT 500
+        `).all();
+        const results = { sent: 0, skipped: 0, failed: 0, errors: [] };
+        for (const row of rows) {
+            const packed = buildLeadOutreach(db, row.id, req);
+            if (!packed) {
+                results.skipped += 1;
+                continue;
+            }
+            if (packed.followup.unsubscribed) {
+                results.skipped += 1;
+                continue;
+            }
+            if (packed.followup.emailSentAt && !force) {
+                results.skipped += 1;
+                continue;
+            }
+            const to = packed.dados.email || packed.ctx.clienteEmail;
+            if (!to) {
+                results.skipped += 1;
+                continue;
+            }
+            const subject = outreach.emailSubjectFor(packed.ctx, packed.followup.edits);
+            const text = outreach.renderEmailText(packed.ctx);
+            const html = outreach.renderEmailHtml(packed.ctx);
+            const result = await sendProjectNotificationEmail({ to, subject, text, html });
+            if (!result.sent) {
+                results.failed += 1;
+                results.errors.push({ id: row.id, error: result.reason });
+                continue;
+            }
+            packed.followup.emailSentAt = digitalizeptNow();
+            packed.followup = outreach.scheduleConfirmCall(packed.followup, packed.followup.emailSentAt);
+            saveLeadFollowup(db, row.id, packed.followup);
+            applyAutoEtapa(db, row.id, 'demo_criada');
+            scheduleLeadGeocode(row.id, { force: false });
+            results.sent += 1;
+        }
+        return res.json({ ok: true, ...results });
+    } catch (err) {
+        console.error('digitalizept bulk email error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível enviar os emails.' });
     }
 });
 

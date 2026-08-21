@@ -567,12 +567,13 @@ describe('digitalizept one-question substeps', () => {
 
 describe('digitalizept demo flow', () => {
     it('diagnóstico ends before pacotes — only understanding questions', () => {
-        assert.equal(diagnosticoStep.substepCount(), 5);
+        assert.equal(diagnosticoStep.substepCount(), 6);
         const state = {
-            substep: 4,
+            substep: 5,
             data: {
                 googleDiagnostico: {
                     exemploVisto: true,
+                    diferencaVista: true,
                     maps: 'sim_acesso',
                     validado: 'sim',
                     website: 'nao',
@@ -646,8 +647,15 @@ describe('digitalizept followup messages', () => {
         const wa = buildWhatsAppMessage(state, config);
         assert.match(wa, /Sr\. Silva/);
         assert.match(wa, /Café do Zé/);
-        assert.match(wa, /sexta-feira/);
         assert.match(wa, /\/d\/cafe-exemplo/);
+        assert.match(wa, /YourLab, aqui de/);
+
+        const wa2 = buildWhatsAppMessage(state, config, 2);
+        assert.match(wa2, /490 €/);
+        assert.match(wa2, /google\.com\/maps/);
+
+        const wa3 = buildWhatsAppMessage(state, config, 3);
+        assert.match(wa3, /sexta-feira/);
 
         const email = buildEmailContent(state, config);
         assert.match(email.subject, /Café do Zé/);

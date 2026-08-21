@@ -41,6 +41,41 @@
     margin-bottom: 18px;
 }
 
+.call-queue {
+    margin: -6px 0 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--admin-border, #d8d8d8);
+    background: #fff;
+}
+
+.call-queue-due {
+    border-color: #1c1c1c;
+}
+
+.call-queue-title {
+    margin: 0 0 8px;
+    font-weight: 650;
+    font-size: 0.95rem;
+}
+
+.call-queue-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.call-queue-row .call-countdown,
+.call-meta .call-countdown {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.call-meta-due,
+.call-queue-row-due {
+    font-weight: 650;
+}
+
 .admin-header h1 {
     margin: 0;
     font-size: 1.45rem;

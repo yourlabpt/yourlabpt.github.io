@@ -6,6 +6,13 @@ import { setupCoverage } from './admin-coverage.js';
 import { renderMapsCockpit } from './admin-maps.js';
 import { fetchConfig } from './settings.js';
 import { renderFollowupShare } from './demo/followup-ui.js';
+import {
+    askCallNotifyPermission,
+    confirmCallState,
+    formatCallDue,
+    formatCountdown,
+    maybeNotifyDueCall
+} from './demo/confirm-call.js';
 
 const FASES = [
     { id: 'demonstracao_criada', label: 'Demonstração' },
@@ -44,6 +51,7 @@ const el = {
     demosFilter: document.getElementById('leads-filter'),
     dealsFilter: document.getElementById('deals-filter'),
     catalogAddBtn: document.getElementById('catalog-add-btn'),
+    leadsEmailDemosBtn: document.getElementById('leads-email-demos-btn'),
     coverageFilter: document.getElementById('coverage-filter'),
     coverageLegend: document.getElementById('coverage-legend'),
     coverageMap: document.getElementById('coverage-map'),
@@ -54,7 +62,7 @@ const el = {
     coverageExportBtn: document.getElementById('coverage-export-btn'),
     drawer: document.getElementById('drawer'),
     drawerPanel: document.getElementById('drawer-panel'),
-    drawerBackdrop: document.getElementById('drawer-backdrop')
+    callQueue: document.getElementById('call-queue')
 };
 
 let catalog = [];
@@ -348,6 +356,93 @@ function openServiceEditor(servico) {
     });
 }
 
+function telHref(lead) {
+    const raw = String((lead && (lead.whatsapp || lead.telefone)) || '').replace(/\s+/g, '');
+    return raw ? `tel:${raw}` : '';
+}
+
+function callMetaHtml(lead) {
+    const state = confirmCallState(lead);
+    if (state.status === 'none') return '';
+    if (state.status === 'done') {
+        return '<p class="meta">Ligação de confirmação: feita</p>';
+    }
+    const dueClass = state.status === 'due' ? ' call-meta-due' : '';
+    const count = state.status === 'due' ? 'agora' : formatCountdown(state.remainingMs);
+    const when = state.dueAt ? ` · ${formatCallDue(state.dueAt)}` : '';
+    return `<p class="meta call-meta${dueClass}" data-call-due="${lead.callDueAt}">Ligar: <span class="call-countdown">${count}</span>${when}</p>`;
+}
+
+async function markCallDone(leadId) {
+    try {
+        const { response, data } = await api(
+            `/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/call-done`,
+            { method: 'POST', body: {} }
+        );
+        if (!response.ok) {
+            toast((data && data.error) || 'Não foi possível marcar a ligação.', true);
+            return;
+        }
+        toast('Ligação marcada como feita.');
+        await loadLeads();
+    } catch (_) {
+        toast('Erro de rede.', true);
+    }
+}
+
+function renderCallQueue() {
+    const box = el.callQueue;
+    if (!box) return;
+    const open = leads.filter((l) => l.estado !== 'fechado');
+    const due = open.filter((l) => confirmCallState(l).status === 'due');
+    const waiting = open.filter((l) => confirmCallState(l).status === 'waiting');
+    due.forEach((l) => maybeNotifyDueCall(l));
+    if (!due.length && !waiting.length) {
+        box.classList.add('hidden');
+        box.setAttribute('hidden', '');
+        box.innerHTML = '';
+        return;
+    }
+    box.removeAttribute('hidden');
+    box.classList.remove('hidden');
+    box.classList.toggle('call-queue-due', due.length > 0);
+    const headline = due.length
+        ? `Ligar agora (${due.length}) — confirmar que receberam. Pessoa real, não spam.`
+        : `Ligações a confirmar receção (${waiting.length})`;
+    box.innerHTML = `<p class="call-queue-title">${headline}</p>${[...due, ...waiting].slice(0, 8).map((l) => {
+        const state = confirmCallState(l);
+        const tel = telHref(l);
+        const count = state.status === 'due' ? 'agora' : formatCountdown(state.remainingMs);
+        return `<div class="call-queue-row" data-call-due="${l.callDueAt || ''}">
+            <strong>${l.nome || 'Sem nome'}</strong>
+            <span class="call-countdown">${count}</span>
+            ${tel ? `<a class="btn-primary" href="${tel}">Ligar</a>` : ''}
+            <button type="button" class="btn-secondary" data-call-done="${l.id}">Já liguei</button>
+        </div>`;
+    }).join('')}`;
+    box.querySelectorAll('[data-call-done]').forEach((btn) => {
+        btn.addEventListener('click', () => markCallDone(btn.getAttribute('data-call-done')));
+    });
+}
+
+function tickCallCountdowns() {
+    document.querySelectorAll('[data-call-due]').forEach((node) => {
+        const dueAt = node.getAttribute('data-call-due');
+        const span = node.querySelector('.call-countdown');
+        if (!dueAt || !span) return;
+        const state = confirmCallState({ callDueAt: dueAt });
+        span.textContent = state.status === 'due' ? 'agora' : formatCountdown(state.remainingMs);
+        node.classList.toggle('call-meta-due', state.status === 'due');
+        node.classList.toggle('call-queue-row-due', state.status === 'due' && node.classList.contains('call-queue-row'));
+    });
+    const crossed = leads.some((l) => l.estado !== 'fechado' && confirmCallState(l).status === 'due');
+    if (crossed && el.callQueue && !el.callQueue.classList.contains('call-queue-due')) {
+        renderCallQueue();
+    } else {
+        leads.filter((l) => confirmCallState(l).status === 'due').forEach((l) => maybeNotifyDueCall(l));
+    }
+}
+
 function renderDemos() {
     const q = (el.demosFilter.value || '').trim().toLowerCase();
     const items = leads.filter((l) => l.estado !== 'fechado').filter((l) => {
@@ -359,6 +454,7 @@ function renderDemos() {
     el.demosList.innerHTML = '';
     if (!items.length) {
         el.demosList.innerHTML = '<p class="admin-empty">Sem leads em aberto.</p>';
+        renderCallQueue();
         return;
     }
     items.forEach((l) => {
@@ -369,6 +465,8 @@ function renderDemos() {
             <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
             ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
+            ${l.followupWaStep || l.followupEmailSent ? `<p class="meta">Envio: WA ${l.followupWaStep || 0}/3${l.followupEmailSent ? ' · email enviado' : ''}${l.followupUnsubscribed ? ' · REMOVER' : ''}</p>` : ''}
+            ${callMetaHtml(l)}
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';
@@ -398,6 +496,24 @@ function renderDemos() {
                 demo_slug: l.demo_slug
             }));
             actions.appendChild(share);
+        }
+
+        const callState = confirmCallState(l);
+        if (callState.status === 'due' || callState.status === 'waiting') {
+            const tel = telHref(l);
+            if (tel) {
+                const callLink = document.createElement('a');
+                callLink.className = callState.status === 'due' ? 'btn-primary' : 'btn-secondary';
+                callLink.href = tel;
+                callLink.textContent = 'Ligar';
+                actions.appendChild(callLink);
+            }
+            const done = document.createElement('button');
+            done.type = 'button';
+            done.className = 'btn-secondary';
+            done.textContent = 'Já liguei';
+            done.addEventListener('click', () => markCallDone(l.id));
+            actions.appendChild(done);
         }
 
         const mapBtn = document.createElement('button');
@@ -439,6 +555,7 @@ function renderDemos() {
         card.appendChild(actions);
         el.demosList.appendChild(card);
     });
+    renderCallQueue();
 }
 
 function packageLabel(itensJson) {
@@ -637,6 +754,7 @@ async function openFollowupShare({ leadId, nome, demo_slug }) {
             panel.appendChild(host);
             renderFollowupShare(host, ctx, {
                 ...(config || { provider: {} }),
+                api,
                 onPinLead: async (id) => {
                     const { response: geoRes, data: geo } = await api(
                         `/api/digitalizept/leads/${encodeURIComponent(id)}/geocode`,
@@ -830,6 +948,10 @@ async function loadDeals() {
 
 async function bootData() {
     await Promise.all([loadCatalog(), loadLeads(), loadDeals()]);
+    askCallNotifyPermission();
+    if (!window.__callTick) {
+        window.__callTick = setInterval(tickCallCountdowns, 1000);
+    }
     await openMapsDeepLink();
 }
 
@@ -900,6 +1022,36 @@ el.coverageFilter.addEventListener('input', () => {
     if (coverageUi) coverageUi.repaint();
 });
 el.catalogAddBtn.addEventListener('click', () => openServiceEditor(null));
+if (el.leadsEmailDemosBtn) {
+    el.leadsEmailDemosBtn.addEventListener('click', async () => {
+        const eligible = leads.filter((l) => l.demo_slug && l.email && !l.followupUnsubscribed);
+        const pending = eligible.filter((l) => !l.followupEmailSent);
+        if (!pending.length) {
+            toast(eligible.length
+                ? 'Todas as demos com email já receberam este envio.'
+                : 'Não há leads com demo publicada e email.');
+            return;
+        }
+        if (!window.confirm(`Enviar o email HTML da demo a ${pending.length} cliente(s)?`)) return;
+        el.leadsEmailDemosBtn.disabled = true;
+        try {
+            const { response, data } = await api('/api/digitalizept/outreach/email-demos', {
+                method: 'POST',
+                body: {}
+            });
+            if (!response.ok) {
+                toast((data && data.error) || 'Não foi possível enviar.', true);
+                return;
+            }
+            toast(`Enviados ${data.sent || 0}. Ignorados ${data.skipped || 0}. Falhas ${data.failed || 0}. Countdown das ligações a correr.`);
+            await loadLeads();
+        } catch (_) {
+            toast('Erro de rede.', true);
+        } finally {
+            el.leadsEmailDemosBtn.disabled = false;
+        }
+    });
+}
 el.drawerBackdrop.addEventListener('click', closeDrawer);
 
 (async function boot() {

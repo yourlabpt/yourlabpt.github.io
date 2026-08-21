@@ -941,8 +941,69 @@ button, input, textarea, select {
     word-break: break-all;
 }
 
-.followup-link-missing {
-    color: var(--danger-color);
+.followup-seq-status {
+    font-size: 0.85rem;
+    color: var(--muted-color);
+    margin: 0 0 10px;
+}
+
+.followup-tabs {
+    display: flex;
+    gap: 6px;
+    margin: 0 0 8px;
+}
+
+.followup-tab {
+    flex: 1;
+    min-height: 36px;
+    border: 1px solid var(--border-color);
+    background: var(--surface-color, #fff);
+    color: var(--text-color);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.followup-tab.active {
+    border-color: var(--accent-color, #1c1c1c);
+    font-weight: 600;
+}
+
+.followup-call {
+    margin: 10px 0 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    background: var(--surface-muted, rgba(0, 0, 0, 0.03));
+}
+
+.followup-call-due {
+    border-color: var(--accent-color, #1c1c1c);
+}
+
+.followup-call-title {
+    margin: 0 0 4px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.followup-call-count {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.35rem;
+    letter-spacing: 0.02em;
+}
+
+.followup-call-hint {
+    margin: 6px 0 10px;
+    font-size: 0.85rem;
+    color: var(--muted-color);
+    line-height: 1.4;
+}
+
+.followup-call-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .followup-preview {

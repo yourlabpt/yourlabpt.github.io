@@ -322,6 +322,11 @@ function renderWebsiteDemo(body, ctx) {
         if (!config) return;
         followupUi = renderFollowupShare(followupHost, ctx, {
             ...config,
+            api: async (path, options) => {
+                const { getToken } = await import('../auth.js');
+                const { apiRequest } = await import('../api.js');
+                return apiRequest(path, { ...options, token: getToken() });
+            },
             onPinLead: async (leadId) => {
                 const { getToken } = await import('../auth.js');
                 const { apiRequest } = await import('../api.js');
