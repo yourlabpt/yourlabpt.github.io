@@ -7,6 +7,7 @@ function ensureDiag(state) {
     if (!state.data.googleDiagnostico || typeof state.data.googleDiagnostico !== 'object') {
         state.data.googleDiagnostico = {
             exemploVisto: false,
+            diferencaVista: false,
             maps: '',
             validado: '',
             website: '',
@@ -14,12 +15,15 @@ function ensureDiag(state) {
             pacoteSugerido: ''
         };
     }
-    return state.data.googleDiagnostico;
+    const d = state.data.googleDiagnostico;
+    if (typeof d.diferencaVista !== 'boolean') d.diferencaVista = false;
+    return d;
 }
 
 function pagesFor() {
     return [
         { kind: 'exemplo' },
+        { kind: 'diferenca' },
         { kind: 'maps' },
         { kind: 'validado' },
         { kind: 'website' },
@@ -32,6 +36,7 @@ function isSubstepValid(state) {
     const page = pagesFor()[currentSubstep(state)];
     if (!page) return false;
     if (page.kind === 'exemplo') return d.exemploVisto === true;
+    if (page.kind === 'diferenca') return d.diferencaVista === true;
     if (page.kind === 'maps') return Boolean(d.maps);
     if (page.kind === 'validado') return Boolean(d.validado);
     if (page.kind === 'website') return Boolean(d.website);
@@ -43,6 +48,7 @@ function isValid(state) {
     const d = ensureDiag(state);
     return Boolean(
         d.exemploVisto
+        && d.diferencaVista
         && d.maps
         && d.validado
         && d.website
@@ -53,6 +59,41 @@ function isValid(state) {
 function applySuggestion(state, diag) {
     diag.pacoteSugerido = suggestPackage(diag);
     // Pacote e preços ficam para depois das demonstrações (passo Serviços).
+}
+
+function mountDiferencaBlocks(control) {
+    const wrap = document.createElement('div');
+    wrap.className = 'diag-layers';
+
+    const layers = [
+        {
+            title: 'Google Maps (o que o público vê)',
+            body: 'É a ficha / pin no Maps e no Search. Pode surgir porque alguém indicou que o sítio existe, ou porque o dono reivindicou. Na Google isto é grátis; pode demorar dias até aparecer ou actualizar.'
+        },
+        {
+            title: 'Perfil da Empresa (business.google)',
+            body: 'É o painel do dono: horário, fotos, posts, respostas a avaliações e validação (cartão, vídeo ou chamada). Daqui se controla o que o Maps mostra. Ter e gerir o perfil também é grátis na Google.'
+        },
+        {
+            title: 'Dinheiro — Google vs YourLab',
+            body: 'A Google não cobra pelo perfil. Anúncios / «Promover» são pagos à Google e não estão incluídos. A YourLab cobra o trabalho de configurar (pacotes depois das demos: Essencial Google a partir de €290; upgrade Perfil 100% €80).'
+        }
+    ];
+
+    layers.forEach((layer) => {
+        const block = document.createElement('div');
+        block.className = 'diag-layer';
+        const h = document.createElement('h3');
+        h.className = 'diag-layer-title';
+        h.textContent = layer.title;
+        const p = document.createElement('p');
+        p.className = 'diag-layer-body';
+        p.textContent = layer.body;
+        block.append(h, p);
+        wrap.appendChild(block);
+    });
+
+    control.appendChild(wrap);
 }
 
 async function render(body, ctx) {
@@ -68,8 +109,8 @@ async function render(body, ctx) {
 
     if (page.kind === 'exemplo') {
         const { control } = renderAsk(body, {
-            title: 'Isto é o Perfil Google',
-            hint: 'Mostre ao cliente o que aparece no Maps. Depois seguimos com o diagnóstico.',
+            title: 'O que o cliente vê no Maps',
+            hint: 'Isto é a ficha pública no Maps / Search — não o painel do dono. No passo seguinte explicamos a diferença com business.google.',
             index: idx,
             total: pages.length
         });
@@ -99,7 +140,7 @@ async function render(body, ctx) {
         }
         renderOptionalAi(control, {
             title: 'Frase para a rua (opcional)',
-            hint: 'O pacote continua a ser escolhido pelos toques. Isto é só o que dizer ao mostrar o Maps.',
+            hint: 'O pacote continua a ser escolhido pelos toques. Isto é só o que dizer ao mostrar a ficha no Maps.',
             prompt: ctx.state.data.diagPitchPrompt,
             placeholder: 'Cole a frase…',
             ctx,
@@ -118,17 +159,47 @@ async function render(body, ctx) {
         return;
     }
 
+    if (page.kind === 'diferenca') {
+        const { control } = renderAsk(body, {
+            title: 'Maps ≠ Perfil da Empresa',
+            hint: 'Duas camadas diferentes. Mostre isto ao cliente antes de perguntar o estado actual.',
+            index: idx,
+            total: pages.length
+        });
+        mountDiferencaBlocks(control);
+        askChoices(control, [
+            { id: 'ok', name: 'Percebi a diferença — seguir' }
+        ], {
+            selected: diag.diferencaVista ? 'ok' : '',
+            goNext: ctx.goNext,
+            onSelect: () => {
+                diag.diferencaVista = true;
+                persist();
+            }
+        });
+        persist();
+        return;
+    }
+
     if (page.kind === 'maps') {
         const { control } = renderAsk(body, {
-            title: 'Tem perfil no Google Maps?',
-            hint: 'O estado actual decide se criamos, reivindicamos ou só actualizamos.',
+            title: 'Como está no Maps?',
+            hint: 'Só a ficha pública: aparece no Maps ou não. O acesso de dono (business.google) vem nas opções.',
             index: idx,
             total: pages.length
         });
         askChoices(control, [
-            { id: 'nao', name: 'Não', desc: 'Ainda não aparece no Maps.' },
-            { id: 'sim_sem_dono', name: 'Sim, sem dono', desc: 'Existe mas ninguém gere.' },
-            { id: 'sim_acesso', name: 'Sim, com acesso', desc: 'O cliente já controla o perfil.' },
+            { id: 'nao', name: 'Não aparece', desc: 'Ainda não há ficha / pin no Maps.' },
+            {
+                id: 'sim_sem_dono',
+                name: 'Aparece, sem dono',
+                desc: 'Há ficha no Maps, mas ninguém gere no Perfil da Empresa.'
+            },
+            {
+                id: 'sim_acesso',
+                name: 'Aparece e o cliente gere',
+                desc: 'Já tem acesso ao Perfil da Empresa (business.google).'
+            },
             { id: 'nao_sei', name: 'Não sei', desc: 'Confirmamos juntos no telemóvel.' }
         ], {
             selected: diag.maps,
@@ -144,8 +215,8 @@ async function render(body, ctx) {
 
     if (page.kind === 'validado') {
         const { control } = renderAsk(body, {
-            title: 'O perfil está validado?',
-            hint: 'A validação é do Google (cartão/vídeo/chamada). Nós orientamos; o prazo não controlamos.',
+            title: 'O Perfil da Empresa está validado?',
+            hint: 'Validação (cartão/vídeo/chamada) é do Perfil da Empresa — prova de dono. O Maps pode já mostrar o pin antes disso. Nós orientamos; o prazo não controlamos.',
             index: idx,
             total: pages.length
         });
@@ -153,7 +224,7 @@ async function render(body, ctx) {
             { id: 'nao', name: 'Não' },
             { id: 'em_curso', name: 'Em curso' },
             { id: 'sim', name: 'Sim' },
-            { id: 'na', name: 'N/A', desc: 'Ainda não há perfil.' }
+            { id: 'na', name: 'N/A', desc: 'Ainda não há Perfil da Empresa.' }
         ], {
             selected: diag.validado,
             goNext: ctx.goNext,
@@ -197,7 +268,11 @@ async function render(body, ctx) {
             total: pages.length
         });
         askChoices(control, [
-            { id: 'google', name: 'Aparecer no Google já', desc: 'Perfil Maps primeiro.' },
+            {
+                id: 'google',
+                name: 'Aparecer e gerir no Google',
+                desc: 'Ficha no Maps + Perfil da Empresa.'
+            },
             { id: 'site', name: 'Ter site', desc: 'Landing ou renovação.' },
             { id: 'os_dois', name: 'Os dois', desc: 'Google + site alinhados.' },
             { id: 'varias_paginas', name: 'Várias páginas', desc: 'Site maior (Plus).' }
@@ -217,7 +292,7 @@ async function render(body, ctx) {
 export const diagnosticoStep = {
     name: 'Diagnóstico',
     title: 'Diagnóstico Google',
-    subtitle: 'Perceber o estado actual — sem preços. Pacotes vêm depois das demonstrações.',
+    subtitle: 'Maps (público) vs Perfil da Empresa — estado actual, sem preços de pacote. Pacotes vêm depois das demonstrações.',
     isValid,
     isSubstepValid,
     substepCount: () => pagesFor().length,

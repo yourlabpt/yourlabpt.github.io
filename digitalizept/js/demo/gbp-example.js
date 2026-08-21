@@ -129,7 +129,7 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false } = 
     if (showPitch) {
         const pitch = document.createElement('p');
         pitch.className = 'gbp-pitch';
-        pitch.textContent = 'Isto é o que os clientes vêem no Google e no Maps quando procuram um negócio como o seu.';
+        pitch.textContent = 'Vista pública no Maps / Search — o que os clientes vêem. Não é o painel do dono (business.google).';
         wrap.appendChild(pitch);
     }
 

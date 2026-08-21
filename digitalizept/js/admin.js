@@ -468,7 +468,7 @@ function renderDeals() {
             const mapsBtn = document.createElement('button');
             mapsBtn.type = 'button';
             mapsBtn.className = 'btn-primary';
-            mapsBtn.textContent = d.googleOnly ? 'Entrega Google' : 'Presença Google';
+            mapsBtn.textContent = d.googleOnly ? 'Entrega Maps / Business' : 'Presença Maps / Business';
             mapsBtn.addEventListener('click', () => openMapsDelivery(d));
             actions.appendChild(mapsBtn);
         }
@@ -687,7 +687,7 @@ async function openNotes(lead) {
 }
 
 async function openMapsDelivery(deal) {
-    openDrawer(`Presença Google — ${deal.nome || deal.cliente_nome || 'Negócio'}`, async (panel) => {
+    openDrawer(`Maps / Perfil da Empresa — ${deal.nome || deal.cliente_nome || 'Negócio'}`, async (panel) => {
         const loading = document.createElement('p');
         loading.className = 'admin-hint';
         loading.textContent = 'A carregar entrega Google…';

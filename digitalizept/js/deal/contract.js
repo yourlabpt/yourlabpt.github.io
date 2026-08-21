@@ -30,10 +30,11 @@ const LANDING_BASE = [
 ];
 
 const GOOGLE_BASE = [
-    'Organização da presença no Google Maps / Google Business Profile (conta do cliente)',
-    'Criar, reivindicar ou pedir acesso ao perfil, conforme o estado atual no Maps',
+    'Ficha pública no Google Maps / Search e gestão do Perfil da Empresa em business.google (conta do cliente)',
+    'Criar, reivindicar ou pedir acesso ao Perfil da Empresa, conforme o estado atual da ficha no Maps',
     'Dados base: nome, categoria, morada, pin no mapa, telefone, horário e descrição',
-    'Orientação e apoio à validação do perfil (o prazo depende do Google, tipicamente até cerca de 5 dias úteis)',
+    'Orientação e apoio à validação do Perfil da Empresa (cartão/vídeo/chamada; o prazo depende do Google, tipicamente até cerca de 5 dias úteis)',
+    'O perfil em si é grátis na Google; anúncios / «Promover» não estão incluídos',
     'Não são garantidos resultados comerciais nem posicionamento no Maps'
 ];
 
@@ -51,8 +52,9 @@ const GOOGLE_COMPLETO = [
 ];
 
 const GOOGLE_MAPS_EXISTENTE = [
-    'Atualizar o Perfil Google / Maps já existente: website, contactos e fotos chave',
+    'Atualizar a ficha pública no Maps e o Perfil da Empresa já existente: website, contactos e fotos chave',
     'Confirmar pin no mapa e dados públicos alinhados à landing',
+    'O perfil em si é grátis na Google; anúncios / «Promover» não estão incluídos',
     'Não são garantidos resultados comerciais nem posicionamento no Maps'
 ];
 

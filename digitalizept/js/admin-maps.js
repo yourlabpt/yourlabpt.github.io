@@ -1,5 +1,5 @@
 /**
- * Admin cockpit — guided Google Maps delivery for closed deals.
+ * Admin cockpit — guided Maps (público) / Perfil da Empresa delivery for closed deals.
  */
 
 export function renderMapsCockpit(panel, cockpit, {
@@ -10,7 +10,7 @@ export function renderMapsCockpit(panel, cockpit, {
 }) {
     panel.innerHTML = '';
     const title = document.createElement('h2');
-    title.textContent = `Presença Google — ${cockpit.lead?.nome || 'Negócio'}`;
+    title.textContent = `Maps (público) / Perfil da Empresa — ${cockpit.lead?.nome || 'Negócio'}`;
     panel.appendChild(title);
 
     const meta = document.createElement('p');

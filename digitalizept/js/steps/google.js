@@ -3,9 +3,21 @@ import { includesGooglePresence } from '../deal/contract.js';
 import { ensureProposta } from '../proposal-calc.js';
 
 const MAPS_STATES = [
-    { id: 'nao_existe', name: 'Ainda não existe no Maps', desc: 'Vamos criar o perfil na conta do cliente.' },
-    { id: 'sem_dono', name: 'Existe, sem dono', desc: 'Vamos reivindicar o perfil existente.' },
-    { id: 'outro_dono', name: 'Existe com outro dono', desc: 'Vamos pedir acesso ou orientar o cliente.' }
+    {
+        id: 'nao_existe',
+        name: 'Não aparece no Maps',
+        desc: 'Sem ficha pública — criamos o Perfil da Empresa na conta do cliente.'
+    },
+    {
+        id: 'sem_dono',
+        name: 'Aparece no Maps, sem dono',
+        desc: 'Há ficha pública — reivindicamos o Perfil da Empresa (business.google).'
+    },
+    {
+        id: 'outro_dono',
+        name: 'Aparece com outro dono',
+        desc: 'Pedimos acesso ao Perfil da Empresa ou orientamos o cliente.'
+    }
 ];
 
 const FOTO_OPTS = [
@@ -98,7 +110,7 @@ async function loadChecklist(ctx) {
 
 function paintResumo(control, g, dados) {
     const rows = [
-        ['Maps', MAPS_STATES.find((m) => m.id === g.mapsEstado)?.name || '—'],
+        ['Maps / Perfil', MAPS_STATES.find((m) => m.id === g.mapsEstado)?.name || '—'],
         ['Categoria', g.categoria || '—'],
         ['Horário', dados.horario || 'Por confirmar'],
         ['Atributos', g.atributos.length ? g.atributos.join(', ') : 'Nenhum'],
@@ -125,7 +137,7 @@ function paintResumo(control, g, dados) {
     control.appendChild(list);
     const note = document.createElement('p');
     note.className = 'google-resumo-note';
-    note.textContent = 'Checklist operacional — executado na conta Google do cliente. Sem promessa de ranking.';
+    note.textContent = 'Checklist operacional — ficha no Maps + Perfil da Empresa em business.google (conta do cliente). Perfil grátis na Google; anúncios não incluídos. Sem promessa de ranking.';
     control.appendChild(note);
 }
 
@@ -155,8 +167,8 @@ async function render(body, ctx) {
 
     if (page.kind === 'maps') {
         const { control } = renderAsk(body, {
-            title: 'Como está no Google Maps?',
-            hint: 'Isto define se criamos, reivindicamos ou pedimos acesso.',
+            title: 'Como está no Maps e no Perfil da Empresa?',
+            hint: 'Maps = ficha pública. Perfil da Empresa (business.google) = painel do dono. Define se criamos, reivindicamos ou pedimos acesso.',
             index: idx,
             total: pages.length
         });
@@ -173,7 +185,7 @@ async function render(body, ctx) {
 
     if (page.kind === 'categoria') {
         const { control } = renderAsk(body, {
-            title: 'Categoria no Google',
+            title: 'Categoria no Perfil da Empresa',
             hint: `Sugestão do tipo de negócio: ${suggestedCategory(ctx.state)}`,
             index: idx,
             total: pages.length
@@ -254,8 +266,8 @@ async function render(body, ctx) {
 
     if (page.kind === 'fotos') {
         const { control } = renderAsk(body, {
-            title: 'Fotos para o perfil',
-            hint: 'Fotos do local — não é sessão profissional.',
+            title: 'Fotos para o Perfil da Empresa',
+            hint: 'Fotos do local para a ficha pública no Maps — não é sessão profissional.',
             index: idx,
             total: pages.length
         });
@@ -277,8 +289,8 @@ async function render(body, ctx) {
 
     if (page.kind === 'resumo') {
         const { control } = renderAsk(body, {
-            title: 'Checklist Google',
-            hint: 'Resumo para executar depois na conta do cliente.',
+            title: 'Checklist Maps / Perfil da Empresa',
+            hint: 'Resumo para executar depois em business.google (conta do cliente). Perfil grátis na Google; anúncios não incluídos.',
             index: idx,
             total: pages.length
         });
@@ -290,7 +302,7 @@ async function render(body, ctx) {
 export const googleStep = {
     name: 'Google',
     title: 'Presença no Google',
-    subtitle: 'Checklist leve para organizar o Perfil Google do cliente.',
+    subtitle: 'Checklist: ficha no Maps + Perfil da Empresa (business.google).',
     // Sales flow: diagnóstico + demo Google já cobrem a conversa. Checklist operacional
     // fica para entrega (pasta de trabalho / admin), não repetir perguntas aqui.
     shouldSkip: () => true,

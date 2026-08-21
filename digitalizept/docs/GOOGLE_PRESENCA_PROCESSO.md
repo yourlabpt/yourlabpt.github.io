@@ -2,6 +2,14 @@
 
 Playbook operacional da Digitalize Portugal. Sem automação via Business Profile API.
 
+## Maps vs Perfil da Empresa vs Ads
+
+| Camada | O quê | Custo Google | YourLab |
+|--------|--------|--------------|---------|
+| **Google Maps** | Ficha / pin público. Pode surgir por indicação («este sítio existe») ou reivindicação; demora dias a aparecer/actualizar. | Grátis | Orientar; prazos do Google não controlamos |
+| **Perfil da Empresa** (`business.google`) | Painel do dono (horário, fotos, posts, reviews, validação). Controla o que o Maps mostra. | Grátis ter e gerir | Essencial Google €290; upgrade Perfil 100% €80; ver pacotes abaixo |
+| **Ads / Promover** | Anúncios pagos | Pago à Google | **Não incluído** |
+
 ## Os 10 passos
 
 | # | Passo | O quê |
