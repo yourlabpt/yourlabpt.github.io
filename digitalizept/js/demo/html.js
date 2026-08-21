@@ -121,6 +121,72 @@ function coresOf(identidade) {
     };
 }
 
+function logoDataUrl(identidade) {
+    const logo = (identidade && identidade.logo) || {};
+    return logo.tipo === 'upload' && logo.dataUrl ? String(logo.dataUrl) : '';
+}
+
+function fotosOf(identidade) {
+    return identidade && Array.isArray(identidade.fotos)
+        ? identidade.fotos.filter(Boolean).map(String)
+        : [];
+}
+
+export const DP_LOGO = 'dp-logo://';
+export function dpPhoto(index) {
+    return `dp-photo://${index}`;
+}
+
+const DATA_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+/gi;
+const BLOB_URL_RE = /blob:[^\s"'()<>]+/gi;
+
+function annotateImgSlots(html) {
+    return String(html || '').replace(/<img\b([^>]*?)>/gi, (full, attrs) => {
+        const photo = /dp-photo:\/\/(\d+)/.exec(full);
+        if (photo && !/data-dp-photo\s*=/.test(attrs)) {
+            return `<img data-dp-photo="${photo[1]}"${attrs}>`;
+        }
+        if (/dp-logo:\/\//.test(full) && !/data-dp-logo/.test(attrs)) {
+            return `<img data-dp-logo=""${attrs}>`;
+        }
+        return full;
+    });
+}
+
+export function compactHtmlForAi(html, identidade) {
+    let out = stripInjectedIdentity(String(html || ''));
+    const pairs = [];
+    const logo = logoDataUrl(identidade);
+    if (logo) pairs.push([logo, DP_LOGO]);
+    fotosOf(identidade).forEach((url, i) => {
+        if (url) pairs.push([url, dpPhoto(i)]);
+    });
+    pairs.sort((a, b) => b[0].length - a[0].length);
+    pairs.forEach(([from, to]) => {
+        out = out.split(from).join(to);
+    });
+    out = out.replace(DATA_IMAGE_RE, 'dp-photo://x');
+    out = out.replace(BLOB_URL_RE, 'dp-photo://x');
+    return annotateImgSlots(out);
+}
+
+export function restoreHtmlPlaceholders(html, identidade) {
+    const fotos = fotosOf(identidade);
+    const logo = logoDataUrl(identidade);
+    return String(html || '').replace(/dp-photo:\/\/(\d+|x)/g, (_, key) => {
+        if (key === 'x') return '';
+        return fotos[Number(key)] || '';
+    }).replace(/dp-logo:\/\//g, logo || '');
+}
+
+export function htmlForAi(state) {
+    const html = currentDemoHtml(state)
+        || (state.data && state.data.demo && state.data.demo.hero
+            ? serializeLandingDocument(state)
+            : '');
+    return compactHtmlForAi(html, state.data && state.data.identidade);
+}
+
 export function identityFingerprint(identidade) {
     const cores = coresOf(identidade);
     const logo = (identidade && identidade.logo) || {};
@@ -244,7 +310,7 @@ function applyLogo(doc, identidade, dados) {
 }
 
 function applyFotos(doc, identidade) {
-    const fotos = Array.isArray(identidade && identidade.fotos) ? identidade.fotos.filter(Boolean) : [];
+    const fotos = fotosOf(identidade);
     const hero = doc.querySelector('.dpl-hero-visual');
     if (hero && fotos[0]) fillVisual(hero, fotos[0]);
     const sobre = doc.querySelector('.dpl-sobre-visual');
@@ -253,7 +319,15 @@ function applyFotos(doc, identidade) {
         if (fotos[i]) fillVisual(tile, fotos[i]);
     });
 
-    const landingHasSlots = Boolean(doc.querySelector('.dpl-galeria, .dpl-hero-visual'));
+    doc.querySelectorAll('[data-dp-photo]').forEach((node) => {
+        const index = Number(node.getAttribute('data-dp-photo'));
+        const url = fotos[index];
+        if (!url) return;
+        if (node.tagName === 'IMG' || node.tagName === 'SOURCE') node.setAttribute('src', url);
+        else fillVisual(node, url);
+    });
+
+    const landingHasSlots = Boolean(doc.querySelector('.dpl-galeria, .dpl-hero-visual, [data-dp-photo]'));
     let strip = doc.querySelector('[data-dp-photos]');
     if (landingHasSlots || !fotos.length) {
         if (strip) strip.remove();
@@ -277,7 +351,7 @@ function applyFotos(doc, identidade) {
 }
 
 export function applyIdentityToHtml(html, identidade, dados) {
-    const raw = extractHtml(html);
+    const raw = restoreHtmlPlaceholders(extractHtml(html), identidade);
     if (!raw || typeof DOMParser === 'undefined') return raw;
     try {
         const doc = new DOMParser().parseFromString(raw, 'text/html');
@@ -338,7 +412,14 @@ export function currentDemoHtml(state) {
 export function buildHtmlChangePrompt(state, html, changeNote) {
     const businessType = state.data.businessType || {};
     const dados = state.data.dados || {};
-    const cores = (state.data.identidade && state.data.identidade.cores) || {};
+    const identidade = state.data.identidade || {};
+    const cores = (identidade.cores) || {};
+    const fotos = fotosOf(identidade);
+    const compact = compactHtmlForAi(html, identidade);
+    const slots = [
+        logoDataUrl(identidade) ? 'dp-logo:// (logótipo)' : '',
+        ...fotos.map((_, i) => `dp-photo://${i} (foto ${i + 1})`)
+    ].filter(Boolean);
     const pedido = String(changeNote || '').trim()
         || '(o vendedor descreve as alterações em voz alta ou acrescenta aqui antes de copiar)';
 
@@ -353,7 +434,11 @@ NEGÓCIO
 
 CORES, LOGO E FOTOS
 - Cores (CSS variables): --base: ${cores.base || '#1b1b1b'}; --destaque: ${cores.destaque || '#e8d5b7'}; --secundaria: ${cores.secundaria || '#7a8a99'}.
-- A app injecta depois o logo, as fotos e estas cores. Usa sempre var(--base), var(--destaque), var(--secundaria) e reserva .brand para o logo.
+- Usa sempre var(--base), var(--destaque), var(--secundaria) e reserva .brand para o logo.
+- Fotos e logo no HTML são PLACEHOLDERS curtos, nunca data:image nem base64:
+  ${slots.length ? slots.join(', ') : '(ainda não há fotos — podes deixar dp-photo://0 no sítio da primeira foto)'}.
+- Mantém o placeholder no sítio onde a foto deve ficar. Podes movê-lo. Se não quiseres foto nesse sítio, apaga o placeholder.
+- Em CSS: url(dp-photo://0). A app substitui depois pelas fotos reais.
 
 PEDIDO DE ALTERAÇÃO
 ${pedido}
@@ -367,9 +452,10 @@ REGRAS
 - CSS: variáveis com dois hífenes ASCII, ex. --base e var(--base). Nunca uses travessão (–) nem aspas curvas (“ ”) no CSS.
 - Não inventes moradas, preços ou contactos que não estejam no contexto.
 - O rodapé deve incluir um link "Livro de Reclamações" para https://www.livroreclamacoes.pt/Inicio/ (target=_blank, rel=noopener).
+- NÃO substituas dp-photo:// nem dp-logo:// por URLs reais, stock ou data:image.
 
 HTML ACTUAL
-${html || '(ainda não há HTML — cria a primeira versão a partir do negócio e do pedido.)'}
+${compact || '(ainda não há HTML — cria a primeira versão a partir do negócio e do pedido. Usa dp-photo://0, dp-photo://1 e dp-logo:// nos sítios das imagens.)'}
 `;
 }
 

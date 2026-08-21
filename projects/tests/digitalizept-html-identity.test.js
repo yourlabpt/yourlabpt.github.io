@@ -65,4 +65,58 @@ describe('digitalizept HTML identity overlay', async () => {
         assert.equal(once, twice);
         assert.match(twice, /O resto da história/);
     });
+
+    it('compacts camera photos to placeholders and restores the same slots', () => {
+        const { compactHtmlForAi, restoreHtmlPlaceholders } = htmlMod;
+        const foto0 = `data:image/jpeg;base64,${'A'.repeat(80)}`;
+        const foto1 = `data:image/jpeg;base64,${'B'.repeat(80)}`;
+        const logo = `data:image/png;base64,${'C'.repeat(40)}`;
+        const identidade = {
+            logo: { tipo: 'upload', dataUrl: logo },
+            fotos: [foto0, foto1]
+        };
+        const bulky = `<!DOCTYPE html><html><body>
+<img class="hero" src="${foto0}">
+<div style="background-image:url(${foto1})"></div>
+<img class="brand" src="${logo}">
+</body></html>`;
+        const compact = compactHtmlForAi(bulky, identidade);
+        assert.ok(compact.length < bulky.length);
+        assert.equal(compact.includes('base64'), false);
+        assert.match(compact, /dp-photo:\/\/0/);
+        assert.match(compact, /dp-photo:\/\/1/);
+        assert.match(compact, /dp-logo:\/\//);
+        assert.match(compact, /data-dp-photo="0"/);
+
+        const restored = restoreHtmlPlaceholders(compact, identidade);
+        assert.ok(restored.includes(foto0));
+        assert.ok(restored.includes(foto1));
+        assert.ok(restored.includes(logo));
+        assert.equal(restored.includes('dp-photo://'), false);
+    });
+
+    it('keeps an AI-moved photo slot when compacting unknown leftover data URLs', () => {
+        const { compactHtmlForAi, restoreHtmlPlaceholders, buildHtmlChangePrompt } = htmlMod;
+        const foto0 = `data:image/jpeg;base64,${'D'.repeat(60)}`;
+        const identidade = { fotos: [foto0], logo: { tipo: 'nenhum' }, cores: { base: '#111', destaque: '#aaa', secundaria: '#ccc' } };
+        const pasted = `<html><body><section class="gallery"><img src="dp-photo://0" alt="loja"></section>
+<img src="data:image/jpeg;base64,${'Z'.repeat(50)}"></body></html>`;
+        const compact = compactHtmlForAi(pasted, identidade);
+        assert.match(compact, /dp-photo:\/\/0/);
+        assert.match(compact, /dp-photo:\/\/x/);
+        assert.equal(compact.includes('ZZZZ'), false);
+        const restored = restoreHtmlPlaceholders(compact, identidade);
+        assert.ok(restored.includes(foto0));
+        assert.doesNotMatch(restored, /dp-photo:\/\/0/);
+
+        const prompt = buildHtmlChangePrompt({
+            data: { businessType: { nome: 'Café' }, dados: { nome_negocio: 'Central' }, identidade }
+        }, bulkyPromptHtml(foto0), '');
+        assert.equal(prompt.includes(foto0), false);
+        assert.match(prompt, /dp-photo:\/\/0/);
+    });
 });
+
+function bulkyPromptHtml(foto0) {
+    return `<html><body><img src="${foto0}"></body></html>`;
+}

@@ -8,13 +8,13 @@ import { ensureSeededDemo } from '../demo/seed.js';
 import {
     buildHtmlChangePrompt,
     clipDemoHtml,
-    currentDemoHtml,
+    compactHtmlForAi,
     extractHtml,
+    htmlForAi,
     htmlTooLarge,
     identityFingerprint,
     looksLikeHtml,
-    mountHtmlPreview,
-    serializeLandingDocument
+    mountHtmlPreview
 } from '../demo/html.js';
 import {
     buildGbpSobrePrompt,
@@ -152,11 +152,11 @@ function refreshDemoFromIdentity(ctx, { force = false } = {}) {
 }
 
 function applyHtml(ctx, raw, showStatus, afterApply) {
-    const html = clipDemoHtml(extractHtml(raw));
+    const identidade = ctx.state.data.identidade || {};
+    const html = clipDemoHtml(compactHtmlForAi(extractHtml(raw), identidade));
     if (htmlTooLarge(html)) {
         ctx.showToast('HTML demasiado grande — a usar os primeiros 900 KB.', true);
     }
-    const identidade = ctx.state.data.identidade || {};
     ctx.state.data.demoHtml = html;
     ctx.state.data.demoSeeded = false;
     ctx.update({ demoHtml: html, demoIdentityStamp: identityFingerprint(identidade), demoSeeded: false });
@@ -468,20 +468,19 @@ function renderWebsiteDemo(body, ctx) {
     copyHtmlBtn.className = 'btn-secondary';
     copyHtmlBtn.textContent = 'Copiar HTML';
     copyHtmlBtn.addEventListener('click', () => {
-        const html = currentDemoHtml(ctx.state) || serializeLandingDocument(ctx.state);
+        const html = htmlForAi(ctx.state);
         if (!html) {
             ctx.showToast('Ainda não há HTML para copiar.', true);
             return;
         }
-        copyText(ctx, html, 'HTML copiado.');
+        copyText(ctx, html, 'HTML copiado (fotos em placeholders).');
     });
     const copyChangeBtn = document.createElement('button');
     copyChangeBtn.type = 'button';
     copyChangeBtn.className = 'btn-secondary';
     copyChangeBtn.textContent = 'Copiar prompt de alterações HTML';
     copyChangeBtn.addEventListener('click', () => {
-        const html = currentDemoHtml(ctx.state);
-        const prompt = buildHtmlChangePrompt(ctx.state, html, changeNote.value);
+        const prompt = buildHtmlChangePrompt(ctx.state, htmlForAi(ctx.state), changeNote.value);
         ctx.state.data.htmlChangePrompt = prompt;
         ctx.update({ htmlChangePrompt: prompt, htmlChangeNote: changeNote.value });
         copyText(ctx, prompt, 'Prompt de alterações copiado.');
