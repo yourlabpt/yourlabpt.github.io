@@ -90,6 +90,21 @@ export function normalizePhoneForWa(raw) {
     return digits;
 }
 
+const DEFAULT_VENDEDOR_TELEFONE = '+351936732879';
+
+export function formatSellerPhone(raw) {
+    const digits = String(raw || DEFAULT_VENDEDOR_TELEFONE).replace(/\D/g, '');
+    const national = digits.startsWith('351') ? digits.slice(3) : digits;
+    if (national.length === 9) {
+        return {
+            display: `+351 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`,
+            tel: `+351${national}`
+        };
+    }
+    const fallback = String(raw || DEFAULT_VENDEDOR_TELEFONE).trim();
+    return { display: fallback, tel: fallback.replace(/\s/g, '') };
+}
+
 export function buildFollowupContext(state, config) {
     const dados = (state && state.data && state.data.dados) || {};
     const provider = (config && config.provider) || {};
@@ -99,7 +114,8 @@ export function buildFollowupContext(state, config) {
     const clienteNome = String(dados.responsavel || 'Cliente').trim() || 'Cliente';
     const negocioNome = String(dados.nome_negocio || 'o seu negócio').trim() || 'o seu negócio';
     const vendedorNome = String(provider.responsavel || provider.nome || 'YourLab').trim();
-    const vendedorTelefone = String(provider.telefone || provider.mbway || '').trim();
+    const phone = formatSellerPhone(provider.telefone || provider.mbway);
+    const vendedorTelefone = phone.display;
     const site = String(provider.site || 'yourlabpt.com').trim().replace(/^https?:\/\//, '');
     const followupDia = String(state.data.followupDia || 'amanhã').trim() || 'amanhã';
     const link = absoluteDemoUrl(state.data.demoUrl);
@@ -114,6 +130,7 @@ export function buildFollowupContext(state, config) {
         negocioNome,
         vendedorNome,
         vendedorTelefone,
+        vendedorTelefoneTel: phone.tel,
         site,
         visitaQuando,
         followupDia,

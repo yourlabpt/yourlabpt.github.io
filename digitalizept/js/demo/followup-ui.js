@@ -216,8 +216,8 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
 
         const followup = ctx.state.data.followup || { waStep: 0 };
         const next = nextSendableWaStep(followup);
-        if (followup.unsubscribed) {
-            seqStatus.textContent = 'Este contacto pediu REMOVER — não voltar a enviar email.';
+        if (followup.unsubscribed || ctx.state.data.resultado === 'sem_interesse') {
+            seqStatus.textContent = 'Sem interesse — pediu para não voltar a ser contactado. Não enviar email nem WhatsApp.';
         } else if (followup.waStep >= 3) {
             seqStatus.textContent = 'Sequência WhatsApp completa (3/3).';
         } else if (next) {

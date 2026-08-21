@@ -12,6 +12,9 @@ const {
     waTextForStep,
     renderEmailHtml,
     renderEmailText,
+    renderBrandedNoticeHtml,
+    formatSellerPhone,
+    unsubResultadoFor,
     splitProviderMorada,
     nextConfirmCallAt,
     scheduleConfirmCall,
@@ -47,6 +50,8 @@ describe('digitalizept outreach', () => {
         assert.equal(ctx.saudacao, 'Boa tarde');
         assert.equal(ctx.zona, 'Porto');
         assert.equal(ctx.vendedorEmail, 'tulio@yourlabpt.com');
+        assert.equal(ctx.vendedorTelefone, '+351 910 000 000');
+        assert.equal(ctx.vendedorTelefoneTel, '+351910000000');
         assert.equal(ctx.negocioNomeMailto, encodeURIComponent('Talho da Costa'));
         assert.match(ctx.link, /\/d\/talho-da-costa/);
         assert.equal(ctx.linkGoogle, '');
@@ -135,6 +140,8 @@ describe('digitalizept outreach', () => {
         assert.match(html, /body=Gostei%20do%20que%20vi\.%20Podemos%20falar%3F/);
         assert.match(html, /Sim, vamos falar/);
         assert.match(html, /Abrir o exemplo/);
+        assert.match(html, /\+351 936 732 879/);
+        assert.match(html, /tel:\+351936732879/);
         assert.doesNotMatch(html, /google\.com\/maps/);
         assert.doesNotMatch(html, /\{\{\w+\}\}/);
         assert.doesNotMatch(html, /Ver no Google/);
@@ -148,5 +155,40 @@ describe('digitalizept outreach', () => {
     it('keeps fillTemplate replacements literal', () => {
         assert.equal(fillTemplate('Oi {{nome}}', { nome: 'Ana' }), 'Oi Ana');
         assert.equal(fillTemplate('Oi {{nome}}', {}), 'Oi ');
+    });
+
+    it('formats the seller mobile for display and tel links', () => {
+        assert.deepEqual(formatSellerPhone('+351936732879'), {
+            display: '+351 936 732 879',
+            tel: '+351936732879'
+        });
+        assert.deepEqual(formatSellerPhone(''), {
+            display: '+351 936 732 879',
+            tel: '+351936732879'
+        });
+        assert.equal(unsubResultadoFor(''), 'sem_interesse');
+        assert.equal(unsubResultadoFor('futuro'), 'sem_interesse');
+        assert.equal(unsubResultadoFor('digitalizado'), 'digitalizado');
+    });
+
+    it('renders the branded unsubscribe page with the email chrome', () => {
+        const ctx = buildOutreachContext({
+            dados: { nome_negocio: 'Talho da Costa' },
+            provider: { nome: 'YourLab', nif: '509000000', morada: 'Rua A 1, 4700-000 Braga' }
+        });
+        const html = renderBrandedNoticeHtml({
+            ...ctx,
+            heading: 'Já não voltamos a incomodar.',
+            noticeLine: 'O pedido da Talho da Costa ficou registado.',
+            footerNote: 'Já não enviamos emails para este contacto.'
+        });
+        assert.match(html, /Your/);
+        assert.match(html, /lab\./);
+        assert.match(html, /Digitalize a sua empresa/);
+        assert.match(html, /Já não voltamos a incomodar/);
+        assert.match(html, /Talho da Costa/);
+        assert.match(html, /509000000/);
+        assert.match(html, /Já não enviamos emails para este contacto/);
+        assert.doesNotMatch(html, /\{\{\w+\}\}/);
     });
 });

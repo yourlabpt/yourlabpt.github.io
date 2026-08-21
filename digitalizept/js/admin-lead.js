@@ -438,7 +438,7 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMa
         `Identidade: ${idn.estilo || '—'} / ${idn.paleta || '—'} · logo ${idn.hasLogo ? 'sim' : 'não'} · ${idn.fotoCount || 0} foto(s)`,
         demo.url ? `Demo: ${demo.titulo || demo.slug} (${demo.url})` : 'Demo: ainda não publicada',
         prop.pacote ? `Proposta: ${prop.pacote}${prop.extras.length ? ` + ${prop.extras.join(', ')}` : ''}` : 'Proposta: ainda não fechada',
-        `Envio: WhatsApp ${fu.waStep || 0}/3${fu.emailSentAt ? ' · email enviado' : ''}${fu.callDueAt && !fu.callDoneAt ? ' · ligação pendente' : ''}`
+        `Envio: WhatsApp ${fu.waStep || 0}/3${fu.emailSentAt ? ' · email enviado' : ''}${fu.callDueAt && !fu.callDoneAt ? ' · ligação pendente' : ''}${fu.unsubscribed ? ' · sem interesse (REMOVER)' : ''}`
     ];
     lines.forEach((line) => read.appendChild(el('p', 'meta', line)));
     if ((payload.visits || []).length) {

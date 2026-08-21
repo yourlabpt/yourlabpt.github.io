@@ -18,7 +18,7 @@ const FALLBACK_CONFIG = {
         site: '',
         iban: '',
         mbway: '',
-        telefone: ''
+        telefone: '+351936732879'
     }
 };
 

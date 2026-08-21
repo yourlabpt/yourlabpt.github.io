@@ -479,7 +479,8 @@ function renderDemos() {
             <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
             ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
-            ${l.followupWaStep || l.followupEmailSent ? `<p class="meta">Envio: WA ${l.followupWaStep || 0}/3${l.followupEmailSent ? ' · email enviado' : ''}${l.followupUnsubscribed ? ' · REMOVER' : ''}</p>` : ''}
+            ${l.followupWaStep || l.followupEmailSent ? `<p class="meta">Envio: WA ${l.followupWaStep || 0}/3${l.followupEmailSent ? ' · email enviado' : ''}</p>` : ''}
+            ${l.resultado === 'sem_interesse' || l.followupUnsubscribed ? '<p class="meta">Sem interesse — não voltar a contactar.</p>' : ''}
             ${Number(l.fichaMissing) > 0 ? `<p class="meta">Ficha: ${l.fichaMissing} campo(s) em falta</p>` : '<p class="meta">Ficha: mínimo de contacto ok</p>'}
             ${callMetaHtml(l)}
         `;
@@ -1187,7 +1188,9 @@ if (el.leadsAddBtn) {
 }
 if (el.leadsEmailDemosBtn) {
     el.leadsEmailDemosBtn.addEventListener('click', async () => {
-        const eligible = leads.filter((l) => l.demo_slug && l.email && !l.followupUnsubscribed);
+        const eligible = leads.filter((l) => (
+            l.demo_slug && l.email && !l.followupUnsubscribed && l.resultado !== 'sem_interesse'
+        ));
         const pending = eligible.filter((l) => !l.followupEmailSent);
         if (!pending.length) {
             toast(eligible.length

@@ -138,7 +138,9 @@ const DIGITALIZEPT_PROVIDER = {
     site: cleanText(process.env.YOURLAB_SITE, 120) || 'yourlabpt.com',
     iban: cleanText(process.env.YOURLAB_IBAN, 40),
     mbway: cleanText(process.env.YOURLAB_MBWAY, 40),
-    telefone: cleanText(process.env.YOURLAB_TELEFONE, 40) || cleanText(process.env.YOURLAB_MBWAY, 40)
+    telefone: cleanText(process.env.YOURLAB_TELEFONE, 40)
+        || cleanText(process.env.YOURLAB_MBWAY, 40)
+        || '+351936732879'
 };
 
 const ollamaClient = FORCE_OFFLINE_CHAT
@@ -2021,7 +2023,7 @@ function saveLeadFollowup(db, leadId, followup) {
 function loadLeadOutreachRow(db, leadId) {
     return db.prepare(`
         SELECT l.id, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.business_type,
-               l.demo_slug, l.lat, l.lng, l.followup_json, l.estado, l.cobertura,
+               l.demo_slug, l.lat, l.lng, l.followup_json, l.estado, l.cobertura, l.resultado,
                d.obrigatorios_json, d.opcionais_json,
                cl.email AS legal_email, cl.nome AS legal_nome
         FROM lead l
@@ -2361,7 +2363,7 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
-                   l.cobertura, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng, l.followup_json,
+                   l.cobertura, l.resultado, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng, l.followup_json,
                    d.obrigatorios_json, d.opcionais_json, cl.email AS legal_email,
                    p.total_com_iva_centimos, p.iva_rate
             FROM lead l
@@ -2385,6 +2387,7 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     whatsapp: r.whatsapp,
                     estado: r.estado,
                     cobertura: r.cobertura,
+                    resultado: r.resultado || '',
                     demo_slug: r.demo_slug,
                     notas_admin: r.notas_admin,
                     criado_em: r.criado_em,
@@ -3966,25 +3969,73 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
 });
 
 app.get('/api/digitalizept/unsub', (req, res) => {
+    const sendNotice = (status, heading, noticeLine, footerNote, extra = {}) => {
+        const ctx = outreach.buildOutreachContext({
+            provider: DIGITALIZEPT_PROVIDER,
+            dados: extra.dados || {}
+        });
+        const html = outreach.renderBrandedNoticeHtml({
+            ...ctx,
+            heading,
+            noticeLine,
+            footerNote
+        });
+        return res.status(status).type('html').send(html);
+    };
     try {
         const token = cleanText((req.query && req.query.t) || '', 80);
         if (!token) {
-            return res.status(400).type('html').send('<p>Ligação inválida.</p>');
+            return sendNotice(
+                400,
+                'Esta ligação não funciona.',
+                'Falta o código do pedido. Se ainda receber emails, responda REMOVER — saímos da caixa de entrada no próprio dia.',
+                'Não voltamos a insistir. Se mudou de ideias, é só ligar.'
+            );
         }
         const db = getDigitalizeptDb();
-        const rows = db.prepare(`SELECT id, followup_json FROM lead WHERE followup_json LIKE ?`)
+        const rows = db.prepare(`SELECT id, nome, resultado, followup_json FROM lead WHERE followup_json LIKE ?`)
             .all(`%${token}%`);
         const match = rows.find((r) => outreach.parseFollowup(r.followup_json).unsubToken === token);
         if (!match) {
-            return res.status(404).type('html').send('<p>Já não está na lista, ou a ligação expirou.</p>');
+            return sendNotice(
+                404,
+                'Esta ligação não funciona.',
+                'Não encontrámos este pedido, ou já tinha expirado. Se ainda receber emails, responda REMOVER — saímos no próprio dia.',
+                'Não voltamos a insistir. Se mudou de ideias, é só ligar.'
+            );
         }
         const followup = outreach.parseFollowup(match.followup_json);
+        const already = followup.unsubscribed === true;
         followup.unsubscribed = true;
         saveLeadFollowup(db, match.id, followup);
-        return res.type('html').send('<p>Removido. Não voltamos a enviar emails da Digitalize Portugal para este contacto.</p>');
+        const nextResultado = outreach.unsubResultadoFor(match.resultado);
+        applyAutoResultado(db, match.id, nextResultado);
+        if (!already) {
+            const nome = String(match.nome || 'este contacto').trim() || 'este contacto';
+            db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
+                .run(
+                    crypto.randomUUID(),
+                    match.id,
+                    `Pediu REMOVER no email — ${nome} marcado Sem interesse. Não voltar a contactar.`,
+                    digitalizeptNow()
+                );
+        }
+        const negocio = String(match.nome || 'o seu negócio').trim() || 'o seu negócio';
+        return sendNotice(
+            200,
+            'Já não voltamos a incomodar.',
+            `O pedido da ${negocio} ficou registado. Saímos da caixa de entrada e não voltamos a enviar emails da Digitalize Portugal.`,
+            'Já não enviamos emails para este contacto.',
+            { dados: { nome_negocio: negocio } }
+        );
     } catch (err) {
         console.error('digitalizept unsub error:', err.message);
-        return res.status(500).type('html').send('<p>Não foi possível processar o pedido.</p>');
+        return sendNotice(
+            500,
+            'Não foi possível processar o pedido.',
+            'Tente outra vez daqui a um momento, ou responda REMOVER ao email.',
+            'Não voltamos a insistir. Se mudou de ideias, é só ligar.'
+        );
     }
 });
 
@@ -4117,7 +4168,7 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
             visita: cleanText(body.visita, 20)
         });
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
-        if (packed.followup.unsubscribed) {
+        if (packed.followup.unsubscribed || packed.row.resultado === 'sem_interesse') {
             return res.status(409).json({ error: 'Este contacto pediu para não receber emails.' });
         }
         const to = packed.dados.email || packed.ctx.clienteEmail;
@@ -4165,7 +4216,7 @@ app.post('/api/digitalizept/outreach/email-demos', requireDigitalizept, async (r
                 results.skipped += 1;
                 continue;
             }
-            if (packed.followup.unsubscribed) {
+            if (packed.followup.unsubscribed || packed.row.resultado === 'sem_interesse') {
                 results.skipped += 1;
                 continue;
             }

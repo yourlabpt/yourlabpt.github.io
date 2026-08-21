@@ -15,6 +15,17 @@ const EMAIL_TEMPLATE_PATH = path.join(
     'demo-outreach-email.html'
 );
 
+const NOTICE_TEMPLATE_PATH = path.join(
+    __dirname,
+    '..',
+    '..',
+    'digitalizept',
+    'templates',
+    'branded-notice.html'
+);
+
+const DEFAULT_VENDEDOR_TELEFONE = '+351936732879';
+
 const WA_TEMPLATES = {
     1: `{{saudacao}} Sr. {{clienteNome}}
 
@@ -71,6 +82,31 @@ YourLab, {{zona}}
 
 function loadEmailTemplate() {
     return fs.readFileSync(EMAIL_TEMPLATE_PATH, 'utf8');
+}
+
+function loadNoticeTemplate() {
+    return fs.readFileSync(NOTICE_TEMPLATE_PATH, 'utf8');
+}
+
+function formatSellerPhone(raw) {
+    const digits = String(raw || DEFAULT_VENDEDOR_TELEFONE).replace(/\D/g, '');
+    const national = digits.startsWith('351') ? digits.slice(3) : digits;
+    if (national.length === 9) {
+        return {
+            display: `+351 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`,
+            tel: `+351${national}`
+        };
+    }
+    const fallback = String(raw || DEFAULT_VENDEDOR_TELEFONE).trim();
+    return { display: fallback, tel: fallback.replace(/\s/g, '') };
+}
+
+function unsubResultadoFor(current) {
+    return String(current || '').trim() === 'digitalizado' ? 'digitalizado' : 'sem_interesse';
+}
+
+function renderBrandedNoticeHtml(ctx, templateHtml) {
+    return fillHtmlTemplate(templateHtml || loadNoticeTemplate(), ctx);
 }
 
 function greetingForHour(hour) {
@@ -329,7 +365,9 @@ function buildOutreachContext({
     const empresaLocalidade = String(provider.localidade || parsedProvider.city || '').trim();
     const empresaMorada = String(parsedProvider.street || provider.morada || '').trim();
     const empresaMoradaLinha = [empresaMorada, empresaCp, empresaLocalidade].filter(Boolean).join(', ') || '—';
-    const vendedorTelefone = String(provider.telefone || provider.mbway || '').trim();
+    const phone = formatSellerPhone(provider.telefone || provider.mbway);
+    const vendedorTelefone = phone.display;
+    const vendedorTelefoneTel = phone.tel;
     const vendedorEmail = String(provider.email || '').trim() || 'yourlabpt@gmail.com';
     const ctaBody = 'Gostei do que vi. Podemos falar?';
 
@@ -342,7 +380,7 @@ function buildOutreachContext({
         vendedorNome: String(provider.responsavel || provider.nome || 'YourLab').trim(),
         vendedorEmail,
         vendedorTelefone,
-        vendedorTelefoneTel: String(vendedorTelefone).replace(/\s/g, ''),
+        vendedorTelefoneTel,
         site,
         visitaQuando: visitaQuando || defaultVisitaQuando(hour),
         followupDia: String(followupDia || 'amanhã').trim() || 'amanhã',
@@ -436,6 +474,12 @@ module.exports = {
     renderEmailHtml,
     renderEmailText,
     loadEmailTemplate,
+    loadNoticeTemplate,
+    NOTICE_TEMPLATE_PATH,
+    DEFAULT_VENDEDOR_TELEFONE,
+    formatSellerPhone,
+    unsubResultadoFor,
+    renderBrandedNoticeHtml,
     newUnsubToken,
     leadEmailFromRows
 };
