@@ -11,6 +11,7 @@ export function renderOptionalAi(parent, {
     placeholder = 'Cole aqui o resultado…',
     applyLabel = 'Aplicar resultado',
     ctx,
+    sanitizePrompt,
     onPromptChange,
     onApply
 }) {
@@ -41,7 +42,17 @@ export function renderOptionalAi(parent, {
     copyBtn.type = 'button';
     copyBtn.className = 'btn-secondary';
     copyBtn.textContent = 'Copiar prompt';
-    copyBtn.addEventListener('click', () => copyText(ctx, promptArea.value, 'Prompt copiado.'));
+    copyBtn.addEventListener('click', () => {
+        let text = promptArea.value;
+        if (typeof sanitizePrompt === 'function') {
+            text = sanitizePrompt(text) || '';
+            if (text !== promptArea.value) {
+                promptArea.value = text;
+                if (typeof onPromptChange === 'function') onPromptChange(text);
+            }
+        }
+        copyText(ctx, text, 'Prompt copiado.');
+    });
     promptActions.appendChild(copyBtn);
 
     const pasteArea = document.createElement('textarea');

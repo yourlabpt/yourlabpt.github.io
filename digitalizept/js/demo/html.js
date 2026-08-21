@@ -41,10 +41,13 @@ function straightenCssQuotes(html) {
 }
 
 function injectViewportFix(html) {
-    if (/data-dp-fix/.test(html)) return html;
-    const fix = '<style data-dp-fix>html,body{min-height:100%;margin:0}</style>';
-    if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${fix}</head>`);
-    return `${fix}${html}`;
+    const src = String(html || '').replace(/<style\b[^>]*data-dp-fix[^>]*>[\s\S]*?<\/style>/gi, '');
+    // Last in the document so it wins over AI "app" CSS that locks html/body
+    // (overflow:hidden + height:100%) and leaves only the bottom buttons visible.
+    const fix = '<style data-dp-fix>html,body{min-height:100%;height:auto;margin:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}</style>';
+    if (/<\/body>/i.test(src)) return src.replace(/<\/body>/i, `${fix}</body>`);
+    if (/<\/html>/i.test(src)) return src.replace(/<\/html>/i, `${fix}</html>`);
+    return `${src}${fix}`;
 }
 
 // Identity overlay (colours, logo, photo data-URLs) is applied at preview time.
@@ -98,8 +101,8 @@ export function sanitizeDemoHtml(html) {
     out = out.replace(new RegExp(`var\\(\\s*${ANY_DASH}+`, 'g'), 'var(--');
     out = straightenCssQuotes(out);
     out = stripInjectedIdentity(out);
-    out = injectViewportFix(out);
-    return injectLivroReclamacoesHtml(out);
+    out = injectLivroReclamacoesHtml(out);
+    return injectViewportFix(out);
 }
 
 export function looksLikeHtml(text) {
@@ -137,11 +140,39 @@ export function dpPhoto(index) {
     return `dp-photo://${index}`;
 }
 
-const DATA_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+/gi;
+const DATA_IMAGE_RE = /data:image\/[a-z0-9.+-]+(?:;[a-z0-9.=+-]+)*;base64,[a-z0-9+/=\s_-]*/gi;
+const DATA_IMAGE_FALLBACK_RE = /data:image\/[^\s"'<>)]+/gi;
 const BLOB_URL_RE = /blob:[^\s"'()<>]+/gi;
+const RESOLVED_PLACEHOLDER_RE = /https?:\/\/[^"'>\s]*?(dp-(?:logo|photo):\/\/(?:\d+|x)?)/gi;
+
+function normalizeDataUrl(url) {
+    return String(url || '').replace(/\s+/g, '');
+}
+
+function placeholderForDataUrl(url, identidade) {
+    const compact = normalizeDataUrl(url);
+    if (!compact) return 'dp-photo://x';
+    const logo = normalizeDataUrl(logoDataUrl(identidade));
+    if (logo && compact === logo) return DP_LOGO;
+    const idx = fotosOf(identidade).findIndex((foto) => normalizeDataUrl(foto) === compact);
+    return idx >= 0 ? dpPhoto(idx) : 'dp-photo://x';
+}
+
+function stripDataImages(html, identidade) {
+    return String(html || '')
+        .replace(DATA_IMAGE_RE, (url) => placeholderForDataUrl(url, identidade))
+        .replace(DATA_IMAGE_FALLBACK_RE, (url) => placeholderForDataUrl(url, identidade))
+        .replace(BLOB_URL_RE, 'dp-photo://x')
+        .replace(RESOLVED_PLACEHOLDER_RE, '$1');
+}
 
 function annotateImgSlots(html) {
     return String(html || '').replace(/<img\b([^>]*?)>/gi, (full, attrs) => {
+        if (/dpl-topbar-logo|dpl-hero-logo/.test(full)) {
+            let next = full.replace(/src=(["'])[\s\S]*?\1/i, `src="${DP_LOGO}"`);
+            if (!/data-dp-logo/.test(next)) next = next.replace(/<img\b/i, '<img data-dp-logo=""');
+            return next;
+        }
         const photo = /dp-photo:\/\/(\d+)/.exec(full);
         if (photo && !/data-dp-photo\s*=/.test(attrs)) {
             return `<img data-dp-photo="${photo[1]}"${attrs}>`;
@@ -154,20 +185,7 @@ function annotateImgSlots(html) {
 }
 
 export function compactHtmlForAi(html, identidade) {
-    let out = stripInjectedIdentity(String(html || ''));
-    const pairs = [];
-    const logo = logoDataUrl(identidade);
-    if (logo) pairs.push([logo, DP_LOGO]);
-    fotosOf(identidade).forEach((url, i) => {
-        if (url) pairs.push([url, dpPhoto(i)]);
-    });
-    pairs.sort((a, b) => b[0].length - a[0].length);
-    pairs.forEach(([from, to]) => {
-        out = out.split(from).join(to);
-    });
-    out = out.replace(DATA_IMAGE_RE, 'dp-photo://x');
-    out = out.replace(BLOB_URL_RE, 'dp-photo://x');
-    return annotateImgSlots(out);
+    return annotateImgSlots(stripDataImages(stripInjectedIdentity(String(html || '')), identidade));
 }
 
 export function restoreHtmlPlaceholders(html, identidade) {
@@ -374,12 +392,31 @@ function escapeText(value) {
         .replace(/"/g, '&quot;');
 }
 
+function stateWithImagePlaceholders(state) {
+    const identidade = (state && state.data && state.data.identidade) || {};
+    const fotos = fotosOf(identidade);
+    const logo = identidade.logo || {};
+    return {
+        ...state,
+        data: {
+            ...(state.data || {}),
+            identidade: {
+                ...identidade,
+                logo: logo.tipo === 'upload' && logo.dataUrl
+                    ? { tipo: 'upload', dataUrl: DP_LOGO }
+                    : logo,
+                fotos: fotos.map((_, i) => dpPhoto(i))
+            }
+        }
+    };
+}
+
 export function serializeLandingDocument(state) {
-    const node = renderLanding(state);
+    const node = renderLanding(stateWithImagePlaceholders(state));
     const dados = state.data.dados || {};
     const cores = (state.data.identidade && state.data.identidade.cores) || {};
     const nome = dados.nome_negocio || 'Demonstração';
-    return `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
@@ -399,6 +436,7 @@ export function serializeLandingDocument(state) {
 ${node.outerHTML}
 </body>
 </html>`;
+    return compactHtmlForAi(html, state.data && state.data.identidade);
 }
 
 export function currentDemoHtml(state) {
@@ -465,7 +503,8 @@ export function mountHtmlPreview(host, html, { identidade, dados } = {}) {
     iframe.title = 'Pré-visualização HTML';
     iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
-    iframe.style.cssText = 'width:100%;min-height:70vh;height:100%;border:0;background:#111;display:block;';
+    iframe.style.cssText = 'width:100%;height:100%;border:0;background:#111;display:block;';
+    iframe.setAttribute('scrolling', 'yes');
     host.appendChild(iframe);
     const source = extractHtml(html);
     iframe.srcdoc = identidade

@@ -108,7 +108,16 @@ function openPreview(state, ctx, { mode } = {}) {
     close.type = 'button';
     close.className = 'dp-preview-close';
     close.textContent = 'Fechar';
-    close.addEventListener('click', () => overlay.remove());
+    const previousOverflow = document.body.style.overflow;
+    const closeOverlay = () => {
+        overlay.remove();
+        document.body.style.overflow = previousOverflow;
+        document.removeEventListener('keydown', onKey);
+    };
+    const onKey = (event) => {
+        if (event.key === 'Escape') closeOverlay();
+    };
+    close.addEventListener('click', closeOverlay);
     bar.append(label, close);
 
     const scroll = document.createElement('div');
@@ -136,8 +145,11 @@ function openPreview(state, ctx, { mode } = {}) {
         return;
     }
 
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
     overlay.append(bar, scroll);
     document.body.appendChild(overlay);
+    scroll.scrollTop = 0;
 }
 
 function refreshDemoFromIdentity(ctx, { force = false } = {}) {
@@ -266,7 +278,9 @@ function renderWebsiteDemo(body, ctx) {
 
     const live = document.createElement('div');
     live.className = 'demo-live';
-    live.setAttribute('aria-label', 'Pré-visualização');
+    live.setAttribute('role', 'button');
+    live.setAttribute('tabindex', '0');
+    live.setAttribute('aria-label', 'Pré-visualização — toque para ecrã cheio');
     function paintLive() {
         live.innerHTML = '';
         try {
@@ -280,6 +294,17 @@ function renderWebsiteDemo(body, ctx) {
             }
         } catch (_) { /* keep the rest of the step usable */ }
     }
+    function openLive() {
+        if (!isValid(ctx.state)) return;
+        openPreview(ctx.state, ctx, { mode: 'website' });
+    }
+    live.addEventListener('click', openLive);
+    live.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openLive();
+        }
+    });
     paintLive();
 
     const previewBtnWrap = document.createElement('div');
@@ -398,6 +423,7 @@ function renderWebsiteDemo(body, ctx) {
         placeholder: 'Cole o JSON da landing, ou HTML completo.',
         applyLabel: 'Aplicar resultado',
         ctx,
+        sanitizePrompt: (value) => compactHtmlForAi(value, ctx.state.data.identidade),
         onPromptChange: (value) => {
             ctx.state.data.demoPrompt = value;
             ctx.update({ demoPrompt: value });
@@ -481,9 +507,7 @@ function renderWebsiteDemo(body, ctx) {
     copyChangeBtn.textContent = 'Copiar prompt de alterações HTML';
     copyChangeBtn.addEventListener('click', () => {
         const prompt = buildHtmlChangePrompt(ctx.state, htmlForAi(ctx.state), changeNote.value);
-        ctx.state.data.htmlChangePrompt = prompt;
-        ctx.update({ htmlChangePrompt: prompt, htmlChangeNote: changeNote.value });
-        copyText(ctx, prompt, 'Prompt de alterações copiado.');
+        copyText(ctx, prompt, 'Prompt de alterações copiado (fotos em placeholders).');
     });
     htmlActions.append(copyHtmlBtn, copyChangeBtn);
     extraActions.appendChild(genNowBtn);

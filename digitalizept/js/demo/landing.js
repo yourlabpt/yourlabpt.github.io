@@ -78,9 +78,33 @@ function mapsUrl(dados) {
     return mapsHref(dados);
 }
 
+function nearestScroller(node) {
+    let el = node && node.parentElement;
+    while (el && el !== document.body) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+            return el;
+        }
+        el = el.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+}
+
 function scrollToId(id) {
     const target = document.getElementById(id);
-    if (target) target.scrollIntoView({ behavior: 'smooth' });
+    if (!target) return;
+    const scroller = nearestScroller(target);
+    if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+    }
+    const sRect = scroller.getBoundingClientRect();
+    const tRect = target.getBoundingClientRect();
+    scroller.scrollTo({
+        top: Math.max(0, scroller.scrollTop + (tRect.top - sRect.top) - 8),
+        behavior: 'smooth'
+    });
 }
 
 function resolveCtaAction(target, dados) {

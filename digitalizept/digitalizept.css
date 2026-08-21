@@ -125,12 +125,22 @@ button, input, textarea, select {
 }
 
 /* ---------- App shell ---------- */
+/* Phone: the wizard itself scrolls. Nested 70vh previews used to steal
+   the gesture so the step froze on the bottom buttons. */
+html:has(.app),
+body:has(.app) {
+    height: 100%;
+    overflow: hidden;
+}
+
 .app {
     max-width: 480px;
     margin: 0 auto;
-    min-height: 100vh;
+    height: 100%;
+    min-height: 100%;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .app-header {
@@ -307,6 +317,10 @@ button, input, textarea, select {
 
 .app-main {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     padding: 20px 16px calc(var(--nav-height) + 16px);
 }
 
@@ -336,6 +350,7 @@ button, input, textarea, select {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    justify-content: safe center;
 }
 
 .ask {
@@ -1065,19 +1080,31 @@ button, input, textarea, select {
 }
 
 .demo-live {
+    position: relative;
     margin: 12px 0 16px;
     border-radius: 16px;
     border: 1px solid var(--accent-soft);
-    overflow: auto;
+    overflow: hidden;
     background: #111;
-    min-height: 360px;
-    max-height: 70vh;
+    min-height: 220px;
+    max-height: min(48vh, 380px);
+    cursor: pointer;
 }
 
 .demo-live .dp-preview-frame {
-    min-height: 360px;
-    height: 70vh;
-    max-height: 70vh;
+    min-height: 220px;
+    height: min(48vh, 380px);
+    max-height: min(48vh, 380px);
+    pointer-events: none;
+}
+
+.demo-live .dp-landing,
+.demo-live .dpl-fab {
+    pointer-events: none;
+}
+
+.demo-live .dpl-fab {
+    display: none;
 }
 
 .demo-html-apply {
@@ -1119,8 +1146,11 @@ button, input, textarea, select {
 
 .dp-preview-scroll {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
 .dp-preview-scroll:has(.dp-preview-frame) {

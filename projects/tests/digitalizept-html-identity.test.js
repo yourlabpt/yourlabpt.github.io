@@ -115,6 +115,57 @@ describe('digitalizept HTML identity overlay', async () => {
         assert.equal(prompt.includes(foto0), false);
         assert.match(prompt, /dp-photo:\/\/0/);
     });
+
+    it('strips wrapped, charset and unmatched camera JPEGs from the AI prompt', () => {
+        const { compactHtmlForAi, htmlForAi, buildHtmlChangePrompt } = htmlMod;
+        const jpeg = `data:image/jpeg;base64,/9j/${'A+/'.repeat(300)}==`;
+        const wrapped = `data:image/jpeg;base64,${'Ab'.repeat(40)}\n${'Cd'.repeat(40)}`;
+        const charset = `data:image/png;charset=utf-8;base64,${'E'.repeat(80)}`;
+        const identidade = {
+            logo: { tipo: 'upload', dataUrl: jpeg },
+            fotos: [wrapped],
+            cores: { base: '#7a1f2b', destaque: '#f4c430', secundaria: '#f5efe0' }
+        };
+        const bulky = `<!DOCTYPE html><html><body>
+<img class="dpl-topbar-logo" src="${jpeg}" alt="">
+<div style="background-image:url(${wrapped})"></div>
+<img src="${charset}">
+</body></html>`;
+        const compact = compactHtmlForAi(bulky, identidade);
+        assert.equal(/data:image\/|base64,/i.test(compact), false);
+        assert.match(compact, /dp-logo:\/\//);
+        assert.match(compact, /dp-photo:\/\/0/);
+        assert.match(compact, /dp-photo:\/\/x/);
+
+        const state = {
+            data: {
+                businessType: { nome: 'Restaurante' },
+                dados: { nome_negocio: 'Oficina dos Rissóis' },
+                identidade,
+                demoHtml: bulky
+            }
+        };
+        const forAi = htmlForAi(state);
+        assert.equal(/data:image\/|base64,/i.test(forAi), false);
+        const prompt = buildHtmlChangePrompt(state, forAi, 'mais rissóis');
+        assert.equal(/data:image\/|base64,/i.test(prompt), false);
+        assert.match(prompt, /dp-logo:\/\//);
+        assert.match(prompt, /mais rissóis/);
+    });
+
+    it('unlocks html/body scroll so a demo cannot freeze on the bottom buttons', () => {
+        const locked = `<!DOCTYPE html><html><head><style>html,body{height:100%;overflow:hidden}</style></head>
+<body><header>Hero</header><main>Conteúdo</main></body></html>`;
+        const out = extractHtml(locked);
+        const lastStyle = out.match(/<style data-dp-fix>[\s\S]*?<\/style>/g);
+        assert.ok(lastStyle && lastStyle.length === 1);
+        assert.match(lastStyle[0], /overflow-y:\s*auto/);
+        assert.match(lastStyle[0], /height:\s*auto/);
+        assert.match(out, /<\/style><\/body>/);
+        const stale = extractHtml(out.replace('height:auto', 'height:100%'));
+        assert.match(stale, /height:\s*auto/);
+        assert.equal((stale.match(/data-dp-fix/g) || []).length, 1);
+    });
 });
 
 function bulkyPromptHtml(foto0) {
