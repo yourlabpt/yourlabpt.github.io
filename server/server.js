@@ -48,6 +48,7 @@ const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/st
 const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
 const outreach = require('./lib/digitalizept-outreach');
 const dossier = require('./lib/digitalizept-dossier');
+const { lookupFromMaps } = require('./lib/digitalizept-maps-lookup');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -2197,6 +2198,156 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     }
 });
 
+function applyLeadCoords(db, leadId, lat, lng, status = 'maps') {
+    const a = Number(lat);
+    const b = Number(lng);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+    db.prepare(`
+        UPDATE lead SET lat = ?, lng = ?, geocode_status = ?, geocoded_at = ?
+        WHERE id = ?
+    `).run(a, b, status, digitalizeptNow(), leadId);
+    return true;
+}
+
+app.post('/api/digitalizept/maps-lookup', requireDigitalizept, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const url = cleanText(body.url, 800);
+        if (!url) {
+            return res.status(400).json({ error: 'Cole um link do Google Maps.' });
+        }
+        const result = await lookupFromMaps({
+            url,
+            nome: cleanText(body.nome, 200),
+            lat: body.lat,
+            lng: body.lng
+        });
+        if (!result.ok) {
+            return res.status(400).json({ error: result.error || 'Não consegui ler o link.' });
+        }
+        return res.json(result);
+    } catch (err) {
+        console.error('digitalizept maps-lookup error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível ler o link do Maps.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) => {
+    try {
+        const body = req.body || {};
+        let nome = cleanText(body.nome || (body.dados && body.dados.nome_negocio), 200);
+        let telefone = cleanText(body.telefone || (body.dados && body.dados.telefone), 60);
+        let email = cleanText(body.email || (body.dados && body.dados.email), 160);
+        let whatsapp = cleanText(body.whatsapp || (body.dados && body.dados.whatsapp), 60);
+        let morada = cleanText(body.morada || (body.dados && body.dados.morada), 300);
+        let cidade = cleanText(body.cidade || (body.dados && body.dados.cidade), 120);
+        let mapsUrl = cleanText(body.mapsUrl || body.maps_url || (body.dados && body.dados.maps_url), 800);
+        let businessTypeId = cleanText(body.businessTypeId || body.categoria, 80);
+        let lat = body.lat;
+        let lng = body.lng;
+        let lookupNotes = [];
+        let horario = '';
+        let website = '';
+
+        if (mapsUrl) {
+            const looked = await lookupFromMaps({ url: mapsUrl, nome, lat, lng });
+            if (looked.ok) {
+                const d = looked.dados || {};
+                if (!nome) nome = cleanText(d.nome_negocio, 200);
+                if (!telefone) telefone = cleanText(d.telefone, 60);
+                if (!email) email = cleanText(d.email, 160);
+                if (!whatsapp) whatsapp = cleanText(d.whatsapp, 60);
+                if (!morada) morada = cleanText(d.morada, 300);
+                if (!cidade) cidade = cleanText(d.cidade, 120);
+                horario = cleanText(d.horario, 200);
+                website = cleanText(d.website_atual, 300);
+                if (!businessTypeId || businessTypeId === 'generico') {
+                    businessTypeId = cleanText(looked.businessTypeId, 80) || businessTypeId;
+                }
+                if (!Number.isFinite(Number(lat))) lat = looked.lat;
+                if (!Number.isFinite(Number(lng))) lng = looked.lng;
+                lookupNotes = looked.notes || [];
+                mapsUrl = d.maps_url || mapsUrl;
+            }
+        }
+
+        if (!nome) {
+            return res.status(400).json({ error: 'Falta o nome do negócio.' });
+        }
+        if (!whatsapp && telefone) whatsapp = telefone;
+
+        const types = loadBusinessTypes();
+        const businessType = types.find((t) => t.id === businessTypeId)
+            || types.find((t) => t.id === 'generico')
+            || { id: businessTypeId || 'generico', nome: 'Negócio', campos_obrigatorios: [], campos_opcionais: [], perguntas_especificas: [] };
+        businessTypeId = businessType.id || 'generico';
+
+        const dados = {
+            nome_negocio: nome,
+            morada,
+            cidade,
+            telefone,
+            whatsapp,
+            email,
+            maps_url: mapsUrl
+        };
+        if (horario) dados.horario = horario;
+        if (website) dados.website_atual = website;
+        if (body.dados && typeof body.dados === 'object') {
+            Object.assign(dados, dossier.sanitizeDados(body.dados, cleanText));
+            dados.nome_negocio = nome;
+            dados.telefone = telefone;
+            dados.whatsapp = whatsapp;
+            dados.email = email;
+            dados.morada = morada;
+            dados.cidade = cidade;
+            dados.maps_url = mapsUrl;
+            if (horario) dados.horario = horario;
+            if (website) dados.website_atual = website;
+        }
+        const { obrigatorios, opcionais } = splitDados(dados, businessType);
+        const hasCoords = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+        const etapa = hasCoords ? 'visitado' : 'contacto_remoto';
+        const db = getDigitalizeptDb();
+        const now = digitalizeptNow();
+        const leadId = crypto.randomUUID();
+
+        db.transaction(() => {
+            db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'rascunho', ?, ?)`).run(
+                leadId, businessTypeId, nome, morada, cidade, telefone, whatsapp, etapa, now);
+            db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                VALUES (?, ?, ?, ?, ?)`).run(
+                crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+            if (hasCoords) {
+                applyLeadCoords(db, leadId, lat, lng, mapsUrl ? 'maps' : 'manual');
+            }
+            digitalizeptLogEvento(db, 'lead', leadId, 'rascunho', { nome, origem: 'quick' });
+        })();
+
+        if (!hasCoords) scheduleLeadGeocode(leadId);
+        return res.json({
+            ok: true,
+            leadId,
+            notes: lookupNotes,
+            lead: {
+                id: leadId,
+                nome,
+                business_type: businessTypeId,
+                morada,
+                cidade,
+                telefone,
+                email,
+                lat: hasCoords ? Number(lat) : null,
+                lng: hasCoords ? Number(lng) : null
+            }
+        });
+    } catch (err) {
+        console.error('digitalizept quick lead error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível criar o negócio.' });
+    }
+});
+
 app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
@@ -3300,7 +3451,13 @@ app.put('/api/digitalizept/leads/:leadId/dossier', requireDigitalizept, (req, re
             digitalizeptLogEvento(db, 'lead', leadId, 'ficha', { nome });
         });
         persist();
-        scheduleLeadGeocode(leadId);
+        const lat = Number(body.lat);
+        const lng = Number(body.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            applyLeadCoords(db, leadId, lat, lng, dados.maps_url ? 'maps' : 'manual');
+        } else {
+            scheduleLeadGeocode(leadId);
+        }
         return res.json({ ok: true, ...loadLeadDossier(db, leadId) });
     } catch (err) {
         if (err.status === 400) {

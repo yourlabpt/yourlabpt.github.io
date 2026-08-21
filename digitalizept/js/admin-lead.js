@@ -1,4 +1,5 @@
 const SECTION_ORDER = ['identificacao', 'funcionamento', 'descricao', 'especifico', 'opcional', 'extra'];
+const CONTACT_IDS = ['nome_negocio', 'telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'];
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -38,6 +39,8 @@ function inputFor(field, value) {
     input.type = tipo === 'email' ? 'email' : tipo === 'url' ? 'url' : tipo === 'telefone' ? 'tel' : 'text';
     input.value = value || '';
     if (field.placeholder) input.placeholder = field.placeholder;
+    if (tipo === 'telefone') input.inputMode = 'tel';
+    if (tipo === 'email') input.autocomplete = 'email';
     return input;
 }
 
@@ -72,6 +75,21 @@ function groupFields(fields) {
         groups[secao].push(f);
     });
     return groups;
+}
+
+function isMobile() {
+    return window.matchMedia('(max-width: 640px)').matches;
+}
+
+function section(title, { open = true, className = '' } = {}) {
+    const set = el('details', `dossier-section ${className}`.trim());
+    set.open = open;
+    set.appendChild(el('summary', 'dossier-section-title', title));
+    return set;
+}
+
+function digitsPhone(value) {
+    return String(value || '').replace(/[^\d+]/g, '');
 }
 
 function checklist(completeness) {
@@ -129,7 +147,11 @@ function collectForm(root) {
     const etapaEl = root.querySelector('[data-etapa]');
     const resultadoEl = root.querySelector('[data-resultado]');
     const notasEl = root.querySelector('[data-notas-admin]');
-    return {
+    const latEl = root.querySelector('[data-geo-lat]');
+    const lngEl = root.querySelector('[data-geo-lng]');
+    const lat = latEl && String(latEl.value || '').trim() !== '' ? Number(latEl.value) : NaN;
+    const lng = lngEl && String(lngEl.value || '').trim() !== '' ? Number(lngEl.value) : NaN;
+    const body = {
         businessTypeId: typeEl ? typeEl.value : '',
         dados,
         clienteLegal,
@@ -139,9 +161,27 @@ function collectForm(root) {
         resultado: resultadoEl ? resultadoEl.value : undefined,
         notas_admin: notasEl ? notasEl.value : ''
     };
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        body.lat = lat;
+        body.lng = lng;
+    }
+    return body;
 }
 
-export function renderLeadDossier(host, payload, { onSave, onBack, onToast } = {}) {
+function appendField(grid, field, value, missing, attr, attrValue) {
+    const control = field.tipo === 'select'
+        ? selectFor(field.options, value)
+        : inputFor(field, value);
+    control.setAttribute(attr, attrValue);
+    grid.appendChild(fieldWrap(
+        field.required ? `${field.label} *` : field.label,
+        control,
+        missing
+    ));
+    return control;
+}
+
+export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMapsLookup } = {}) {
     host.innerHTML = '';
     host.className = 'dossier';
     if (!payload || !payload.lead) {
@@ -150,6 +190,7 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast } = {
     }
 
     const miss = missingSet(payload.completeness);
+    const mobile = isMobile();
     const form = el('form', 'dossier-form');
     form.appendChild(checklist(payload.completeness));
 
@@ -157,7 +198,7 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast } = {
     const back = el('button', 'btn-secondary', '← Leads');
     back.type = 'button';
     back.addEventListener('click', () => { if (onBack) onBack(); });
-    const saveTop = el('button', 'btn-primary', 'Guardar ficha');
+    const saveTop = el('button', 'btn-primary', 'Guardar');
     saveTop.type = 'submit';
     const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
     resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
@@ -175,82 +216,181 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast } = {
     meta.textContent = `${payload.businessType.nome || '—'} · ${payload.lead.estado || '—'} · ${payload.lead.criado_em ? new Date(payload.lead.criado_em).toLocaleDateString('pt-PT') : ''}`;
     form.appendChild(meta);
 
-    const typeLabel = fieldWrap('Tipo de negócio', (() => {
-        const select = el('select', 'field-input');
-        select.setAttribute('data-business-type', '1');
-        (payload.businessTypes || []).forEach((t) => {
-            const o = document.createElement('option');
-            o.value = t.id;
-            o.textContent = t.nome;
-            if (t.id === payload.businessType.id) o.selected = true;
-            select.appendChild(o);
-        });
-        return select;
-    })());
-    form.appendChild(typeLabel);
+    const contact = section('Contacto inicial', { open: true, className: 'dossier-contact' });
+    const contactGrid = el('div', 'dossier-grid');
+    const typeSelect = el('select', 'field-input');
+    typeSelect.setAttribute('data-business-type', '1');
+    (payload.businessTypes || []).forEach((t) => {
+        const o = document.createElement('option');
+        o.value = t.id;
+        o.textContent = t.nome;
+        if (t.id === payload.businessType.id) o.selected = true;
+        typeSelect.appendChild(o);
+    });
+    contactGrid.appendChild(fieldWrap('Categoria', typeSelect));
+
+    const byId = new Map((payload.fields || []).map((f) => [f.id, f]));
+    CONTACT_IDS.forEach((id) => {
+        const field = byId.get(id) || { id, label: id, tipo: id === 'email' ? 'email' : id === 'maps_url' ? 'url' : 'texto' };
+        appendField(contactGrid, field, payload.dados[id], miss.has(id), 'data-dados', id);
+    });
+    contact.appendChild(contactGrid);
+
+    const mapsRow = el('div', 'dossier-maps-actions');
+    const mapsBtn = el('button', 'btn-secondary', 'Preencher pelo Maps');
+    mapsBtn.type = 'button';
+    mapsBtn.addEventListener('click', async () => {
+        const urlEl = form.querySelector('[data-dados="maps_url"]');
+        const url = urlEl ? urlEl.value.trim() : '';
+        if (!url) {
+            if (onToast) onToast('Cole o link do Google Maps.', true);
+            if (urlEl) urlEl.focus();
+            return;
+        }
+        if (typeof onMapsLookup !== 'function') return;
+        mapsBtn.disabled = true;
+        mapsBtn.textContent = 'A ler o link…';
+        try {
+            const data = await onMapsLookup(url);
+            if (!data || !data.ok) {
+                if (onToast) onToast((data && data.error) || 'Não consegui ler o link.', true);
+                return;
+            }
+            const dados = data.dados || {};
+            form.querySelectorAll('[data-dados]').forEach((node) => {
+                const key = node.getAttribute('data-dados');
+                const next = dados[key];
+                if (!next || String(node.value || '').trim()) return;
+                node.value = next;
+            });
+            if (data.businessTypeId) {
+                const exists = Array.from(typeSelect.options).some((o) => o.value === data.businessTypeId);
+                if (exists && (!typeSelect.value || typeSelect.value === 'generico')) {
+                    typeSelect.value = data.businessTypeId;
+                }
+            }
+            if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
+                form.querySelector('[data-geo-lat]').value = String(data.lat);
+                form.querySelector('[data-geo-lng]').value = String(data.lng);
+            }
+            if (onToast) onToast('Campos vazios preenchidos. Confirma telefone e email.');
+        } catch (err) {
+            if (onToast) onToast((err && err.message) || 'Erro de rede.', true);
+        } finally {
+            mapsBtn.disabled = false;
+            mapsBtn.textContent = 'Preencher pelo Maps';
+        }
+    });
+    mapsRow.appendChild(mapsBtn);
+    contact.appendChild(mapsRow);
+
+    const chips = el('div', 'dossier-contact-actions');
+    function refreshChips() {
+        chips.innerHTML = '';
+        const tel = digitsPhone((form.querySelector('[data-dados="telefone"]') || {}).value);
+        const wa = digitsPhone((form.querySelector('[data-dados="whatsapp"]') || {}).value) || tel;
+        const mail = String((form.querySelector('[data-dados="email"]') || {}).value || '').trim();
+        if (tel) {
+            const a = el('a', 'btn-secondary', 'Ligar');
+            a.href = `tel:${tel}`;
+            chips.appendChild(a);
+        }
+        if (wa) {
+            const a = el('a', 'btn-secondary', 'WhatsApp');
+            let num = wa.replace(/^\+/, '');
+            if (/^9\d{8}$/.test(num)) num = `351${num}`;
+            a.href = `https://wa.me/${num}`;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            chips.appendChild(a);
+        }
+        if (mail) {
+            const a = el('a', 'btn-secondary', 'Email');
+            a.href = `mailto:${mail}`;
+            chips.appendChild(a);
+        }
+    }
+    contact.appendChild(chips);
+    form.appendChild(contact);
+    form.addEventListener('input', refreshChips);
+    refreshChips();
+
+    const geoLat = el('input', 'field-input');
+    geoLat.type = 'hidden';
+    geoLat.setAttribute('data-geo-lat', '1');
+    geoLat.value = Number.isFinite(payload.lead.lat) ? String(payload.lead.lat) : '';
+    const geoLng = el('input', 'field-input');
+    geoLng.type = 'hidden';
+    geoLng.setAttribute('data-geo-lng', '1');
+    geoLng.value = Number.isFinite(payload.lead.lng) ? String(payload.lead.lng) : '';
+    form.append(geoLat, geoLng);
 
     const groups = groupFields(payload.fields);
     const labels = payload.sectionLabels || {};
     SECTION_ORDER.forEach((secao) => {
-        const list = groups[secao] || [];
+        let list = groups[secao] || [];
+        if (secao === 'identificacao') {
+            list = list.filter((f) => !CONTACT_IDS.includes(f.id));
+        }
         if (!list.length) return;
-        const set = el('fieldset', 'dossier-section');
-        set.appendChild(el('legend', '', labels[secao] || secao));
+        const set = section(labels[secao] || secao, { open: !mobile });
         const grid = el('div', 'dossier-grid');
-        list.forEach((field) => {
-            const control = inputFor(field, payload.dados[field.id]);
-            control.setAttribute('data-dados', field.id);
-            const wrap = fieldWrap(
-                field.required ? `${field.label} *` : field.label,
-                control,
-                miss.has(field.id)
-            );
-            grid.appendChild(wrap);
-        });
+        list.forEach((field) => appendField(grid, field, payload.dados[field.id], miss.has(field.id), 'data-dados', field.id));
         set.appendChild(grid);
         form.appendChild(set);
     });
 
-    const legal = el('fieldset', 'dossier-section');
-    legal.appendChild(el('legend', '', 'Cliente legal (contrato)'));
-    const legalGrid = el('div', 'dossier-grid');
-    (payload.legalFields || []).forEach((field) => {
-        const control = inputFor(
-            { tipo: field.id === 'email' ? 'email' : field.id === 'telefone' ? 'telefone' : 'texto' },
-            payload.clienteLegal[field.id]
-        );
-        control.setAttribute('data-legal', field.id);
-        legalGrid.appendChild(fieldWrap(field.label, control, miss.has(`legal.${field.id}`)));
+    const extraBlocks = [
+        {
+            title: 'Cliente legal (contrato)',
+            open: !mobile,
+            build(grid) {
+                (payload.legalFields || []).forEach((field) => {
+                    appendField(
+                        grid,
+                        { ...field, tipo: field.id === 'email' ? 'email' : field.id === 'telefone' ? 'telefone' : 'texto' },
+                        payload.clienteLegal[field.id],
+                        miss.has(`legal.${field.id}`),
+                        'data-legal',
+                        field.id
+                    );
+                });
+            }
+        },
+        {
+            title: 'Diagnóstico Google',
+            open: !mobile,
+            build(grid) {
+                (payload.diagFields || []).forEach((field) => {
+                    const control = selectFor(field.options, payload.googleDiagnostico[field.id]);
+                    control.setAttribute('data-diag', field.id);
+                    grid.appendChild(fieldWrap(field.label, control));
+                });
+            }
+        },
+        {
+            title: 'Presença Google (entrega)',
+            open: !mobile,
+            build(grid) {
+                (payload.googlePresenceFields || []).forEach((field) => {
+                    const control = field.tipo === 'select'
+                        ? selectFor(field.options, payload.googlePresence[field.id])
+                        : inputFor(field, payload.googlePresence[field.id]);
+                    control.setAttribute('data-gbp', field.id);
+                    grid.appendChild(fieldWrap(field.label, control));
+                });
+            }
+        }
+    ];
+    extraBlocks.forEach((block) => {
+        const set = section(block.title, { open: block.open });
+        const grid = el('div', 'dossier-grid');
+        block.build(grid);
+        set.appendChild(grid);
+        form.appendChild(set);
     });
-    legal.appendChild(legalGrid);
-    form.appendChild(legal);
 
-    const diag = el('fieldset', 'dossier-section');
-    diag.appendChild(el('legend', '', 'Diagnóstico Google'));
-    const diagGrid = el('div', 'dossier-grid');
-    (payload.diagFields || []).forEach((field) => {
-        const control = selectFor(field.options, payload.googleDiagnostico[field.id]);
-        control.setAttribute('data-diag', field.id);
-        diagGrid.appendChild(fieldWrap(field.label, control));
-    });
-    diag.appendChild(diagGrid);
-    form.appendChild(diag);
-
-    const gbp = el('fieldset', 'dossier-section');
-    gbp.appendChild(el('legend', '', 'Presença Google (entrega)'));
-    const gbpGrid = el('div', 'dossier-grid');
-    (payload.googlePresenceFields || []).forEach((field) => {
-        const control = field.tipo === 'select'
-            ? selectFor(field.options, payload.googlePresence[field.id])
-            : inputFor(field, payload.googlePresence[field.id]);
-        control.setAttribute('data-gbp', field.id);
-        gbpGrid.appendChild(fieldWrap(field.label, control));
-    });
-    gbp.appendChild(gbpGrid);
-    form.appendChild(gbp);
-
-    const cover = el('fieldset', 'dossier-section');
-    cover.appendChild(el('legend', '', 'Cobertura'));
+    const cover = section('Cobertura', { open: true });
     const coverGrid = el('div', 'dossier-grid');
     const etapa = selectFor(payload.etapas, payload.lead.cobertura);
     etapa.setAttribute('data-etapa', '1');
@@ -265,8 +405,7 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast } = {
     cover.append(coverGrid, pin);
     form.appendChild(cover);
 
-    const notes = el('fieldset', 'dossier-section');
-    notes.appendChild(el('legend', '', 'Nota interna'));
+    const notes = section('Nota interna', { open: !mobile });
     const notas = el('textarea', 'field-input');
     notas.rows = 3;
     notas.setAttribute('data-notas-admin', '1');
@@ -277,15 +416,14 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast } = {
         payload.notes.forEach((n) => {
             const li = el('li');
             const time = el('time', '', new Date(n.criado_em).toLocaleString('pt-PT'));
-            li.append(time, document.createTextNode(n.texto));
+            li.append(time, document.createTextNode(` ${n.texto}`));
             ul.appendChild(li);
         });
         notes.appendChild(ul);
     }
     form.appendChild(notes);
 
-    const read = el('fieldset', 'dossier-section dossier-readonly');
-    read.appendChild(el('legend', '', 'Estado (só leitura)'));
+    const read = section('Estado (só leitura)', { open: false, className: 'dossier-readonly' });
     const idn = payload.identidade || {};
     const demo = payload.demo || {};
     const prop = payload.proposta || {};

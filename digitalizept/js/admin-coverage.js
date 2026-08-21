@@ -1,4 +1,5 @@
 import { getToken } from './auth.js';
+import { renderQuickLeadForm } from './admin-quick-lead.js';
 
 const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
@@ -80,6 +81,10 @@ export function setupCoverage({
     let coordHintEl = null;
     let hasFittedView = false;
     let registeringNewVisit = false;
+    let registeringNewBusiness = false;
+    let placingKind = 'visit';
+    let quickFormApi = null;
+    let businessTypes = [];
 
     function clearPendingMarker() {
         if (pendingMarker && map) {
@@ -223,6 +228,66 @@ export function setupCoverage({
             legend = { etapas: [], resultados: [] };
         }
         renderLegend();
+    }
+
+    async function loadBusinessTypes() {
+        if (businessTypes.length) return businessTypes;
+        const { response, data } = await api('/api/digitalizept/business-types');
+        if (response.ok) {
+            businessTypes = (data.businessTypes || []).map((t) => ({ id: t.id, nome: t.nome || t.id }));
+        }
+        if (!businessTypes.some((t) => t.id === 'generico')) {
+            businessTypes.unshift({ id: 'generico', nome: 'Genérico' });
+        }
+        return businessTypes;
+    }
+
+    async function openQuickBusiness(defaults = {}) {
+        registeringNewBusiness = true;
+        registeringNewVisit = false;
+        placingKind = 'negocio';
+        const types = await loadBusinessTypes();
+        if (defaults.lat != null && defaults.lng != null) {
+            pendingPoint = { lat: Number(defaults.lat), lng: Number(defaults.lng) };
+        }
+        const coordText = pendingPoint
+            ? `Ponto no mapa: ${pendingPoint.lat.toFixed(5)}, ${pendingPoint.lng.toFixed(5)}`
+            : 'Sem ponto ainda — use “Marcar no mapa” ou cole o link do Maps.';
+        openDrawer('Novo negócio', (panel) => {
+            quickFormApi = renderQuickLeadForm(panel, {
+                types,
+                defaults: {
+                    ...defaults,
+                    lat: pendingPoint ? pendingPoint.lat : defaults.lat,
+                    lng: pendingPoint ? pendingPoint.lng : defaults.lng
+                },
+                api,
+                toast,
+                field,
+                inputEl,
+                coordText,
+                onPlaceOnMap() {
+                    placingKind = 'negocio';
+                    setPlacing(true);
+                    toast('Toque no mapa para fixar o pin.');
+                },
+                async onCreated(data) {
+                    registeringNewBusiness = false;
+                    pendingPoint = null;
+                    clearPendingMarker();
+                    quickFormApi = null;
+                    closeDrawer();
+                    await refresh();
+                    paint({ preserveView: true });
+                    if (data && data.leadId && typeof openDossier === 'function') {
+                        openDossier(data.leadId);
+                    }
+                }
+            });
+            if (pendingPoint && quickFormApi) {
+                quickFormApi.setPoint(pendingPoint.lat, pendingPoint.lng);
+            }
+        }, { dock: true });
     }
 
     function openVisitForm(defaults = {}) {
@@ -575,8 +640,19 @@ export function setupCoverage({
             panel.appendChild(form);
             const actions = document.createElement('div');
             actions.className = 'coverage-pin-actions';
+            if (typeof openDossier === 'function') {
+                const ficha = document.createElement('button');
+                ficha.type = 'button';
+                ficha.className = 'btn-primary';
+                ficha.textContent = 'Ficha';
+                ficha.addEventListener('click', () => {
+                    closeDrawer();
+                    openDossier(pin.id);
+                });
+                actions.appendChild(ficha);
+            }
             const resume = document.createElement('a');
-            resume.className = 'btn-primary';
+            resume.className = 'btn-secondary';
             resume.href = `./?resume=${encodeURIComponent(pin.id)}`;
             resume.textContent = pin.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda';
             actions.appendChild(resume);
@@ -876,12 +952,24 @@ export function setupCoverage({
                 if (placing) {
                     pendingPoint = { lat: event.latlng.lat, lng: event.latlng.lng };
                     setPlacing(false);
-                    openVisitForm(pendingPoint);
+                    if (placingKind === 'negocio') {
+                        if (quickFormApi) {
+                            quickFormApi.setPoint(pendingPoint.lat, pendingPoint.lng);
+                            syncPendingMarker();
+                        } else {
+                            openQuickBusiness(pendingPoint);
+                        }
+                    } else {
+                        openVisitForm(pendingPoint);
+                    }
                     return;
                 }
-                if (registeringNewVisit) {
+                if (registeringNewVisit || registeringNewBusiness) {
                     pendingPoint = { lat: event.latlng.lat, lng: event.latlng.lng };
                     syncPendingMarker();
+                    if (registeringNewBusiness && quickFormApi) {
+                        quickFormApi.setPoint(pendingPoint.lat, pendingPoint.lng);
+                    }
                 }
             });
         }
@@ -916,8 +1004,14 @@ export function setupCoverage({
     if (el.coverageAddBtn) {
         el.coverageAddBtn.addEventListener('click', () => openVisitForm({}));
     }
+    if (el.coverageAddLeadBtn) {
+        el.coverageAddLeadBtn.addEventListener('click', () => openQuickBusiness({}));
+    }
     if (el.coveragePlaceBtn) {
-        el.coveragePlaceBtn.addEventListener('click', () => setPlacing(!placing));
+        el.coveragePlaceBtn.addEventListener('click', () => {
+            if (!registeringNewBusiness) placingKind = 'visit';
+            setPlacing(!placing);
+        });
     }
     if (el.coverageExportBtn) {
         el.coverageExportBtn.addEventListener('click', () => downloadExport());
@@ -935,6 +1029,8 @@ export function setupCoverage({
         },
         onDrawerClosed() {
             registeringNewVisit = false;
+            registeringNewBusiness = false;
+            quickFormApi = null;
             if (!placing) {
                 pendingPoint = null;
                 clearPendingMarker();

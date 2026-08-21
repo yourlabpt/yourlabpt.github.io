@@ -121,6 +121,12 @@ function buildFieldCatalog(businessType, standardFields, dados) {
         fields.push(fieldDef(id, standardFields, extra));
     };
 
+    ['nome_negocio', 'telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'].forEach((id) => {
+        push(id, {
+            required: PUBLIC_REQUIRED.includes(id),
+            secao: 'identificacao'
+        });
+    });
     (type.campos_obrigatorios || []).forEach((id) => push(id, { required: true }));
     (type.perguntas_especificas || []).forEach((q) => {
         push(q.id, {

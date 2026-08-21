@@ -759,3 +759,122 @@
 .dossier-readonly .meta {
     margin: 4px 0;
 }
+
+.dossier-section-title {
+    cursor: pointer;
+    font-weight: 650;
+    list-style: none;
+    padding: 2px 0;
+}
+
+.dossier-section-title::before {
+    content: '▸ ';
+}
+
+.dossier-section[open] > .dossier-section-title::before {
+    content: '▾ ';
+}
+
+.dossier-section > .dossier-grid {
+    margin-top: 10px;
+}
+
+.dossier-section-title::-webkit-details-marker {
+    display: none;
+}
+
+.dossier-contact-actions,
+.dossier-maps-actions,
+.quick-lead-maps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.quick-lead-maps {
+    margin-top: 0;
+}
+
+.quick-lead-maps .field-input {
+    flex: 1 1 160px;
+}
+
+.dossier-contact-actions .btn-secondary,
+.dossier-maps-actions .btn-secondary {
+    min-height: 44px;
+}
+
+@media (max-width: 640px) {
+    .admin-app {
+        padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
+    }
+
+    .admin-body .field-input,
+    .admin-body select.field-input,
+    .admin-body textarea.field-input {
+        font-size: 16px;
+        min-height: 48px;
+        padding: 12px 14px;
+    }
+
+    .admin-body .btn-primary,
+    .admin-body .btn-secondary {
+        min-height: 48px;
+        height: auto;
+        padding: 12px 14px;
+        white-space: normal;
+    }
+
+    .dossier-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .dossier-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--admin-bg, #f7f4ee);
+        padding: 8px 0;
+        margin: 0 0 10px;
+    }
+
+    .dossier-toolbar .btn-primary,
+    .dossier-toolbar .btn-secondary {
+        flex: 1 1 calc(50% - 8px);
+    }
+
+    .dossier-savebar {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+        background: var(--admin-bg, #f7f4ee);
+    }
+
+    .dossier-savebar .btn-primary {
+        width: 100%;
+    }
+
+    .coverage-actions .btn-primary,
+    .coverage-actions .btn-secondary {
+        flex: 1 1 calc(50% - 8px);
+    }
+
+    .admin-toolbar .btn-primary,
+    .admin-toolbar .btn-secondary {
+        flex: 1 1 auto;
+    }
+
+    .admin-card .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .admin-card .actions .btn-primary,
+    .admin-card .actions .btn-secondary {
+        flex: 1 1 calc(50% - 8px);
+    }
+}

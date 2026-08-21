@@ -67,7 +67,9 @@ const OLD_COBERTURA_REMAP = {
 
 const NOMINATIM_GAP_MS = 1100;
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE = 'https://nominatim.openstreetmap.org/reverse';
 const PHOTON_BASE = 'https://photon.komoot.io/api/';
+const NOMINATIM_UA = 'YourLab-DigitalizePortugal/1.0 (https://yourlabpt.com)';
 
 // Prefer precise place types over admin/city centroids.
 const PRECISE_TYPES = new Set([
@@ -351,7 +353,7 @@ async function nominatimFetch(params) {
     const url = `${NOMINATIM_BASE}?${qs.toString()}`;
     const response = await fetch(url, {
         headers: {
-            'User-Agent': 'YourLab-DigitalizePortugal/1.0 (https://yourlabpt.com)',
+            'User-Agent': NOMINATIM_UA,
             'Accept-Language': 'pt'
         }
     });
@@ -407,7 +409,7 @@ async function photonFetch(query) {
     const url = `${PHOTON_BASE}?${qs.toString()}`;
     const response = await fetch(url, {
         headers: {
-            'User-Agent': 'YourLab-DigitalizePortugal/1.0 (https://yourlabpt.com)',
+            'User-Agent': NOMINATIM_UA,
             'Accept-Language': 'pt'
         }
     });
@@ -520,6 +522,99 @@ async function geocodeAddress(morada, cidade, opts = {}) {
     });
 }
 
+function addressFromNominatim(hit) {
+    const a = (hit && hit.address) || {};
+    const road = a.road || a.pedestrian || a.footway || a.residential || a.neighbourhood || '';
+    const hn = a.house_number || '';
+    const street = [road, hn].filter(Boolean).join(' ').trim();
+    const morada = [street, a.postcode].filter(Boolean).join(', ');
+    const cidade = a.city || a.town || a.village || a.municipality || a.county || '';
+    return {
+        morada,
+        cidade,
+        formatted: (hit && hit.display_name) || [morada, cidade].filter(Boolean).join(', ')
+    };
+}
+
+async function reverseGeocode(lat, lng) {
+    const a = Number(lat);
+    const b = Number(lng);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) {
+        return { ok: false, status: 'no_coords', error: 'Coordenadas em falta.' };
+    }
+    return enqueueNominatim(async () => {
+        try {
+            const qs = new URLSearchParams({
+                format: 'jsonv2',
+                addressdetails: '1',
+                zoom: '18',
+                lat: String(a),
+                lon: String(b)
+            });
+            const response = await fetch(`${NOMINATIM_REVERSE}?${qs.toString()}`, {
+                headers: {
+                    'User-Agent': NOMINATIM_UA,
+                    'Accept-Language': 'pt'
+                }
+            });
+            if (!response.ok) {
+                return { ok: false, status: 'http_error', error: `HTTP ${response.status}` };
+            }
+            const hit = await response.json();
+            if (!hit || hit.error) {
+                return { ok: false, status: 'not_found', error: (hit && hit.error) || 'not_found' };
+            }
+            const addr = addressFromNominatim(hit);
+            const nome = (hit.name && String(hit.name).trim())
+                || (hit.address && (hit.address.amenity || hit.address.shop || hit.address.office))
+                || '';
+            return {
+                ok: true,
+                lat: Number(hit.lat) || a,
+                lng: Number(hit.lon) || b,
+                nome,
+                morada: addr.morada,
+                cidade: addr.cidade,
+                formatted: addr.formatted,
+                source: 'nominatim-reverse'
+            };
+        } catch (err) {
+            return { ok: false, status: 'network', error: err.message || 'network' };
+        }
+    });
+}
+
+async function searchPlaceName(query) {
+    const q = String(query || '').trim();
+    if (!q) return { ok: false, status: 'no_query', error: 'Nome em falta.' };
+    return enqueueNominatim(async () => {
+        try {
+            let hits = [];
+            const nom = await nominatimFetch({ q: `${q}, Portugal` });
+            if (nom.ok) hits = hits.concat(nom.hits);
+            if (!hits.length) {
+                const photon = await photonFetch(q);
+                if (photon.ok) hits = hits.concat(photon.hits);
+            }
+            const hit = pickBestHit(hits, { morada: q, cidade: '' });
+            if (!hit) return { ok: false, status: 'not_found', error: 'Não encontrei o sítio.' };
+            const addr = addressFromNominatim(hit);
+            return {
+                ok: true,
+                lat: Number(hit.lat),
+                lng: Number(hit.lon),
+                nome: hit.name || q,
+                morada: addr.morada,
+                cidade: addr.cidade,
+                formatted: addr.formatted || hit.display_name,
+                source: hit.source || 'nominatim'
+            };
+        } catch (err) {
+            return { ok: false, status: 'network', error: err.message || 'network' };
+        }
+    });
+}
+
 async function geocodeLeadRow(db, leadId, { force = false, nowIso } = {}) {
     const lead = db.prepare(`
         SELECT id, nome, morada, cidade, lat, lng, geocode_status, geocoded_at
@@ -529,7 +624,7 @@ async function geocodeLeadRow(db, leadId, { force = false, nowIso } = {}) {
 
     const hasCoords = Number.isFinite(lead.lat) && Number.isFinite(lead.lng);
     // Keep manual pins unless the operator forces a re-geocode.
-    if (!force && hasCoords && (lead.geocode_status === 'ok' || lead.geocode_status === 'manual')) {
+    if (!force && hasCoords && (lead.geocode_status === 'ok' || lead.geocode_status === 'manual' || lead.geocode_status === 'maps')) {
         return { skipped: true, reason: 'cached' };
     }
 
@@ -759,6 +854,8 @@ module.exports = {
     buildAddressQuery,
     parsePortugueseAddress,
     geocodeAddress,
+    reverseGeocode,
+    searchPlaceName,
     geocodeLeadRow,
     geocodeVisitRow,
     extractCidadeFromDadosJson,

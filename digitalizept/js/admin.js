@@ -7,6 +7,7 @@ import { renderMapsCockpit } from './admin-maps.js';
 import { fetchConfig } from './settings.js';
 import { renderFollowupShare } from './demo/followup-ui.js';
 import { renderLeadDossier, dossierHash, leadIdFromHash } from './admin-lead.js';
+import { renderQuickLeadForm } from './admin-quick-lead.js';
 import {
     askCallNotifyPermission,
     confirmCallState,
@@ -59,10 +60,13 @@ const el = {
     coverageStatus: document.getElementById('coverage-status'),
     coverageUnmapped: document.getElementById('coverage-unmapped'),
     coverageAddBtn: document.getElementById('coverage-add-btn'),
+    coverageAddLeadBtn: document.getElementById('coverage-add-lead-btn'),
+    leadsAddBtn: document.getElementById('leads-add-btn'),
     coveragePlaceBtn: document.getElementById('coverage-place-btn'),
     coverageExportBtn: document.getElementById('coverage-export-btn'),
     drawer: document.getElementById('drawer'),
     drawerPanel: document.getElementById('drawer-panel'),
+    drawerBackdrop: document.getElementById('drawer-backdrop'),
     callQueue: document.getElementById('call-queue')
 };
 
@@ -70,6 +74,7 @@ let catalog = [];
 let leads = [];
 let deals = [];
 let coverageUi = null;
+let businessTypes = [];
 
 function toast(message, isError = false, options = {}) {
     document.querySelectorAll('.toast').forEach((n) => n.remove());
@@ -704,6 +709,33 @@ function renderDeals() {
     });
 }
 
+async function loadBusinessTypes() {
+    if (businessTypes.length) return businessTypes;
+    const { response, data } = await api('/api/digitalizept/business-types');
+    if (response.ok) {
+        businessTypes = (data.businessTypes || []).map((t) => ({ id: t.id, nome: t.nome || t.id }));
+    }
+    return businessTypes;
+}
+
+async function openQuickLead() {
+    const types = await loadBusinessTypes();
+    openDrawer('Novo negócio', (panel) => {
+        renderQuickLeadForm(panel, {
+            types,
+            api,
+            toast,
+            field,
+            inputEl,
+            async onCreated(data) {
+                closeDrawer();
+                await loadLeads();
+                if (data && data.leadId) await openLeadDossier(data.leadId);
+            }
+        });
+    });
+}
+
 async function openLeadDossier(leadId) {
     if (!leadId) {
         toast('Lead em falta.', true);
@@ -741,6 +773,16 @@ async function openLeadDossier(leadId) {
             toast('Ficha guardada.');
             renderLeadDossier(root, saved.data, handlers);
             loadLeads().catch(() => {});
+        };
+        handlers.onMapsLookup = async (url) => {
+            const looked = await api('/api/digitalizept/maps-lookup', {
+                method: 'POST',
+                body: { url }
+            });
+            if (!looked.response.ok) {
+                throw new Error((looked.data && looked.data.error) || 'Não consegui ler o link.');
+            }
+            return looked.data;
         };
         renderLeadDossier(root, data, handlers);
     } catch (_) {
@@ -1092,6 +1134,9 @@ el.coverageFilter.addEventListener('input', () => {
     if (coverageUi) coverageUi.repaint();
 });
 el.catalogAddBtn.addEventListener('click', () => openServiceEditor(null));
+if (el.leadsAddBtn) {
+    el.leadsAddBtn.addEventListener('click', () => openQuickLead());
+}
 if (el.leadsEmailDemosBtn) {
     el.leadsEmailDemosBtn.addEventListener('click', async () => {
         const eligible = leads.filter((l) => l.demo_slug && l.email && !l.followupUnsubscribed);
@@ -1123,6 +1168,11 @@ if (el.leadsEmailDemosBtn) {
     });
 }
 el.drawerBackdrop.addEventListener('click', closeDrawer);
+
+window.addEventListener('hashchange', () => {
+    const dossierId = leadIdFromHash(window.location.hash);
+    if (dossierId) openLeadDossier(dossierId);
+});
 
 (async function boot() {
     if (!getToken()) {
