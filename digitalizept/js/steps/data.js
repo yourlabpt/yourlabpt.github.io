@@ -2,6 +2,7 @@ import { fetchSettings } from '../settings.js';
 import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
 import { currentSubstep, renderAsk, askText, askToggle, askChoices } from '../substep.js';
 import { buildDadosCopyPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
+import { isCustomDemo } from '../demo/seed.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -171,6 +172,7 @@ function clearDemoState(state) {
 
 export function invalidateDemoIfDriverField(state, fieldId) {
     if (!DEMO_DRIVER_FIELDS.has(fieldId)) return false;
+    if (isCustomDemo(state)) return false;
     clearDemoState(state);
     return true;
 }

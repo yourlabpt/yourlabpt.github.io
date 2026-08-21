@@ -118,6 +118,25 @@ describe('digitalizept seed guard and wizard snapshot', () => {
         const result = seed.ensureSeededDemo(state);
         assert.equal(result, null);
         assert.equal(state.data.demo, undefined);
+        assert.notEqual(state.data.demoSeeded, true);
+    });
+
+    it('does not replace an AI JSON demo with the type boilerplate', async () => {
+        const seed = await import(pathToFileURL(path.join(appDir, 'demo', 'seed.js')).href);
+        const custom = { hero: { titulo: 'Texto da AI', subtitulo: 'Não apagar' } };
+        const state = {
+            data: {
+                businessType: { id: 'cafe-pastelaria', nome: 'Café', servicos_tipicos: ['X'] },
+                dados: { nome_negocio: 'Café Central' },
+                demo: custom,
+                demoRaw: '{"hero":{"titulo":"Texto da AI"}}',
+                demoSeeded: false
+            }
+        };
+        const result = seed.ensureSeededDemo(state);
+        assert.equal(result, custom);
+        assert.equal(state.data.demo.hero.titulo, 'Texto da AI');
+        assert.equal(state.data.demoSeeded, false);
     });
 
     it('wizardSnapshot includes step, substep and demo metadata', async () => {

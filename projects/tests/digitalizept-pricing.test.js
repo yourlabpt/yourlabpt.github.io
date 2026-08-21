@@ -534,8 +534,8 @@ describe('digitalizept one-question substeps', () => {
         const state = {
             data: {
                 demo: { hero: { titulo: 'Demo antiga' } },
-                demoRaw: '{"hero":{"titulo":"Demo antiga"}}',
-                demoHtml: '<html>demo antiga</html>',
+                demoRaw: '',
+                demoHtml: '',
                 demoSeeded: true,
                 demoUrl: 'https://old.example/demo',
                 demoIdentityStamp: 'abc123'
@@ -549,6 +549,31 @@ describe('digitalizept one-question substeps', () => {
         assert.equal(state.data.demoSeeded, false);
         assert.equal(state.data.demoUrl, '');
         assert.equal(state.data.demoIdentityStamp, '');
+    });
+
+    it('keeps an AI or HTML demo when core business data changes', () => {
+        const htmlState = {
+            data: {
+                demo: { hero: { titulo: 'Boilerplate' } },
+                demoHtml: '<html>demo da AI</html>',
+                demoSeeded: true
+            }
+        };
+        assert.equal(invalidateDemoIfDriverField(htmlState, 'nome_negocio'), false);
+        assert.match(htmlState.data.demoHtml, /demo da AI/);
+        assert.equal(htmlState.data.demo.hero.titulo, 'Boilerplate');
+
+        const jsonState = {
+            data: {
+                demo: { hero: { titulo: 'Texto da AI' } },
+                demoRaw: '{"hero":{"titulo":"Texto da AI"}}',
+                demoHtml: '',
+                demoSeeded: false
+            }
+        };
+        assert.equal(invalidateDemoIfDriverField(jsonState, 'cidade'), false);
+        assert.equal(jsonState.data.demo.hero.titulo, 'Texto da AI');
+        assert.equal(jsonState.data.demoSeeded, false);
     });
 
     it('does not invalidate demo for non-driver fields', () => {

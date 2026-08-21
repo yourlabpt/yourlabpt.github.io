@@ -166,7 +166,8 @@ function applyHtml(ctx, raw, showStatus, afterApply) {
     const identidade = ctx.state.data.identidade || {};
     const html = clipDemoHtml(applyIdentityToHtml(extractHtml(raw), identidade, ctx.state.data.dados));
     ctx.state.data.demoHtml = html;
-    ctx.update({ demoHtml: html, demoIdentityStamp: identityFingerprint(identidade) });
+    ctx.state.data.demoSeeded = false;
+    ctx.update({ demoHtml: html, demoIdentityStamp: identityFingerprint(identidade), demoSeeded: false });
     ctx.setValid(true);
     showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
     if (typeof afterApply === 'function') afterApply();

@@ -36,6 +36,15 @@ function seedReviews(businessType, dados) {
     ];
 }
 
+export function isCustomDemo(state) {
+    const d = (state && state.data) || {};
+    if (String(d.demoHtml || '').trim()) return true;
+    if (d.demoSeeded === true) return false;
+    if (d.demo && d.demo.hero && d.demo.hero.titulo) return true;
+    if (String(d.demoRaw || '').trim()) return true;
+    return false;
+}
+
 export function seedDemoFromType(state) {
     const businessType = (state.data && state.data.businessType) || {};
     const dados = (state.data && state.data.dados) || {};
@@ -105,12 +114,12 @@ export function seedDemoFromType(state) {
 }
 
 export function ensureSeededDemo(state) {
+    if (isCustomDemo(state)) {
+        return state.data.demo || null;
+    }
     if (state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo) {
         return state.data.demo;
     }
-    // AI/HTML edits must not be replaced by the type boilerplate on re-entry.
-    if (state.data.demoHtml) return state.data.demo || null;
-    if (String(state.data.demoRaw || '').trim()) return state.data.demo || null;
     const demo = seedDemoFromType(state);
     state.data.demo = demo;
     state.data.demoSeeded = true;
