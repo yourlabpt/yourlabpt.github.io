@@ -21,6 +21,20 @@ function injectLivroReclamacoes(html) {
     return `${src}${LIVRO_SNIPPET}`;
 }
 
+function stripInjectedIdentity(html) {
+    let out = String(html || '');
+    out = out.replace(/<style\b[^>]*data-dp-identity[^>]*>[\s\S]*?<\/style>/gi, '');
+    out = out.replace(/<img\b[^>]*data-dp-injected-logo[^>]*\/?>/gi, '');
+    out = out.replace(/<(div|span)\b[^>]*data-dp-photos[^>]*>[\s\S]*?<\/\1>/gi, '');
+    const truncated = /<(div|span)\b[^>]*data-dp-photos[^>]*>/i.exec(out);
+    if (truncated) out = out.slice(0, truncated.index);
+    if (/<html\b/i.test(out) && !/<\/html>/i.test(out)) {
+        if (/<body\b/i.test(out) && !/<\/body>/i.test(out)) out += '</body>';
+        out += '</html>';
+    }
+    return out;
+}
+
 function sanitizeDemoHtml(html) {
     let out = closeUnclosedStyle(String(html || ''));
     out = out.replace(new RegExp(`var\\(\\s*${ANY_DASH}+`, 'g'), 'var(--');
@@ -30,6 +44,7 @@ function sanitizeDemoHtml(html) {
             .replace(/[\u2018\u2019\u201A\u201B]/g, "'");
         return `<style${attrs}>${clean}</style>`;
     });
+    out = stripInjectedIdentity(out);
     return injectLivroReclamacoes(out);
 }
 

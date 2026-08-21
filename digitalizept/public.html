@@ -28,7 +28,10 @@
                     root.replaceWith((() => {
                         const host = document.createElement('div');
                         host.className = 'dp-public-frame-host';
-                        mountHtmlPreview(host, data.demoHtml);
+                        mountHtmlPreview(host, data.demoHtml, {
+                            identidade: data.identidade,
+                            dados: data.dados
+                        });
                         return host;
                     })());
                 } else {

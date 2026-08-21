@@ -47,6 +47,23 @@ function injectViewportFix(html) {
     return `${fix}${html}`;
 }
 
+// Identity overlay (colours, logo, photo data-URLs) is applied at preview time.
+// Persisting it inside demoHtml inlines camera JPEGs, blows the 900 KB cap, and
+// clipDemoHtml then slices the document in half — hero + broken <img>, rest gone.
+export function stripInjectedIdentity(html) {
+    let out = String(html || '');
+    out = out.replace(/<style\b[^>]*data-dp-identity[^>]*>[\s\S]*?<\/style>/gi, '');
+    out = out.replace(/<img\b[^>]*data-dp-injected-logo[^>]*\/?>/gi, '');
+    out = out.replace(/<(div|span)\b[^>]*data-dp-photos[^>]*>[\s\S]*?<\/\1>/gi, '');
+    const truncated = /<(div|span)\b[^>]*data-dp-photos[^>]*>/i.exec(out);
+    if (truncated) out = out.slice(0, truncated.index);
+    if (/<html\b/i.test(out) && !/<\/html>/i.test(out)) {
+        if (/<body\b/i.test(out) && !/<\/body>/i.test(out)) out += '</body>';
+        out += '</html>';
+    }
+    return out;
+}
+
 const LIVRO_SNIPPET = `<p class="dpl-rodape-legal" data-dp-livro><a class="dpl-rodape-livro" href="${LIVRO_RECLAMACOES_URL}" target="_blank" rel="noopener noreferrer">Livro de Reclamações</a></p>`;
 
 function injectLivroReclamacoesHtml(html) {
@@ -80,6 +97,7 @@ export function sanitizeDemoHtml(html) {
     let out = closeUnclosedStyle(String(html || ''));
     out = out.replace(new RegExp(`var\\(\\s*${ANY_DASH}+`, 'g'), 'var(--');
     out = straightenCssQuotes(out);
+    out = stripInjectedIdentity(out);
     out = injectViewportFix(out);
     return injectLivroReclamacoesHtml(out);
 }
@@ -162,17 +180,7 @@ function applyCores(doc, cores) {
   --l-secundaria: ${cores.secundaria};
 }
 [data-dp-photos] {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 14px 20px;
-}
-[data-dp-photos] img {
-  height: 112px;
-  width: 148px;
-  object-fit: cover;
-  border-radius: 12px;
-  flex: 0 0 auto;
+  display: none !important;
 }
 img[data-dp-injected-logo] {
   height: 32px;
@@ -254,10 +262,10 @@ function applyFotos(doc, identidade) {
     if (!strip) {
         strip = doc.createElement('div');
         strip.setAttribute('data-dp-photos', '');
-        const header = doc.querySelector('header, .topbar');
-        if (header) header.insertAdjacentElement('afterend', strip);
-        else if (doc.body) doc.body.insertBefore(strip, doc.body.firstChild);
+        if (doc.body) doc.body.appendChild(strip);
+        else return;
     }
+    strip.setAttribute('hidden', '');
     strip.textContent = '';
     fotos.forEach((url, i) => {
         const img = doc.createElement('img');
@@ -365,7 +373,7 @@ ${html || '(ainda não há HTML — cria a primeira versão a partir do negócio
 `;
 }
 
-export function mountHtmlPreview(host, html) {
+export function mountHtmlPreview(host, html, { identidade, dados } = {}) {
     const iframe = document.createElement('iframe');
     iframe.className = 'dp-preview-frame';
     iframe.title = 'Pré-visualização HTML';
@@ -373,6 +381,9 @@ export function mountHtmlPreview(host, html) {
     iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.style.cssText = 'width:100%;min-height:70vh;height:100%;border:0;background:#111;display:block;';
     host.appendChild(iframe);
-    iframe.srcdoc = extractHtml(html);
+    const source = extractHtml(html);
+    iframe.srcdoc = identidade
+        ? applyIdentityToHtml(source, identidade, dados)
+        : source;
     return iframe;
 }
