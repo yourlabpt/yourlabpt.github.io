@@ -696,3 +696,66 @@
         font-size: 0.82rem;
     }
 }
+
+.dossier-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.dossier-check {
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--admin-border, #d8d8d8);
+    background: #fff;
+}
+
+.dossier-check-ok {
+    border-color: #1c1c1c;
+}
+
+.dossier-check-title {
+    margin: 0 0 6px;
+    font-weight: 650;
+}
+
+.dossier-check-list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--admin-muted);
+    font-size: 0.9rem;
+}
+
+.dossier-section {
+    border: 1px solid var(--admin-border, #d8d8d8);
+    margin: 0 0 14px;
+    padding: 12px 14px 16px;
+    background: #fff;
+}
+
+.dossier-section legend {
+    padding: 0 6px;
+    font-weight: 650;
+}
+
+.dossier-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px 14px;
+}
+
+.dossier-form .field-missing .field-label {
+    color: #8a3b2a;
+}
+
+.dossier-savebar {
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0 4px;
+    background: linear-gradient(transparent, var(--admin-bg, #f7f4ee) 30%);
+}
+
+.dossier-readonly .meta {
+    margin: 4px 0;
+}

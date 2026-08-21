@@ -1,43 +1,43 @@
 export const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}} 👋
+    1: `{{saudacao}} Sr. {{clienteNome}}
+
 Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-_"É fácil encontrar-nos. É depois do café, ao lado da farmácia."_
-
-Pena é que o Google não conheça o café do Zé 🙂
+"É fácil encontrar-nos. É depois do café, ao lado da farmácia."
+Pena é que o Google não conheça o café do Zé.
 
 Preparei isto para a *{{negocioNome}}*, sem lhe pedir nada:
 
 {{link}}
 
-Não está publicado nem aparece no Google — é só para ver.
+Não está publicado nem aparece no Google. É só para ver.
 
-Se gostar, digo-lhe como fica a funcionar a sério. Se não for de interesse, diga-me e não volto a incomodar 👍`,
+Se gostar, digo-lhe como fica a funcionar a sério. Se não for de interesse, diga-me e não volto a incomodar.`,
 
-    2: `Também arrumei a casa da *{{negocioNome}}* no Google, para ver como ficaria quando alguém procura "{{oQueFaz}} em {{zona}}":
+    2: `Também arrumei a casa da *{{negocioNome}}* no Google. No email vê a ficha como ficaria quando alguém procura "{{oQueFaz}} em {{zona}}". É um demonstrador, ainda não está publicado.
 
-{{linkGoogle}}
+{{link}}
 
-Fica tudo em nome da empresa — a morada na internet, o espaço onde a página fica guardada e a conta do Google. Não fica preso a nós.
+Fica tudo em nome da empresa: a morada na internet, o espaço onde a página fica guardada e a conta do Google. Não fica preso a nós.
 
-*490 €* — tudo tratado e no ar em 3 dias
-*190 €* — só a página, para pôr no ar por si
-*90 €* — só a parte do Google
+*490 euros* - tudo tratado e no ar em 3 dias
+*190 euros* - só a página, para pôr no ar por si
+*90 euros* - só a parte do Google
 
-Sem IVA. Se começar pelos 90 € ou 190 €, desconta-se do resto.`,
+Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.`,
 
-    3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}} 👋
+    3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}}.
 
 Aqui fica a página que lhe mostrei:
 
 {{link}}
 
-Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos.`
+Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã - são 10 minutos.`
 };
 
 export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
 
-export const DEFAULT_EMAIL_SUBJECT = 'Fizemos isto para a {{negocioNome}} — sem lhe pedir nada';
+export const DEFAULT_EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
 
 export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}},
 
@@ -46,16 +46,16 @@ Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 "É fácil encontrar-nos. É depois do café, ao lado da farmácia."
 Pena é que o Google não conheça o café do Zé.
 
-Preparei isto para a {{negocioNome}}, sem lhe pedir nada:
+Preparei uma página e um demonstrador da ficha Google para a {{negocioNome}}, sem lhe pedir nada. Nada disto está publicado.
+
 {{link}}
 
-Também arrumei a casa no Google:
-{{linkGoogle}}
+Se gostar, digo-lhe como fica a funcionar a sério (490 euros tudo / 190 só a página / 90 só o Google, sem IVA).
 
-Não está publicado. Se gostar, digo-lhe como fica a funcionar a sério (490 € tudo / 190 € só a página / 90 € só o Google, sem IVA).
-
-{{vendedorNome}} · YourLab, {{zona}}
-{{vendedorTelefone}} · {{site}}`;
+{{vendedorNome}}
+YourLab, {{zona}}
+{{vendedorTelefone}}
+{{site}}`;
 
 const WA_LABELS = {
     1: '1 · Mensagem principal',
@@ -93,12 +93,6 @@ export function normalizePhoneForWa(raw) {
     return digits;
 }
 
-function googleSearchUrl(nome, oQueFaz, zona, morada) {
-    const query = [nome, oQueFaz, morada, zona].filter(Boolean).join(' ');
-    if (!query) return 'https://www.google.com/maps';
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-}
-
 export function buildFollowupContext(state, config) {
     const dados = (state && state.data && state.data.dados) || {};
     const provider = (config && config.provider) || {};
@@ -129,7 +123,12 @@ export function buildFollowupContext(state, config) {
         link,
         zona,
         oQueFaz,
-        linkGoogle: googleSearchUrl(negocioNome, oQueFaz, zona, morada),
+        horario: String(dados.horario || 'Horário a confirmar').trim() || 'Horário a confirmar',
+        telefone: String(dados.telefone || dados.whatsapp || '').trim(),
+        moradaLinha: [morada, zona].filter(Boolean).join(', ') || 'Morada a confirmar',
+        categoriaFicha: zona ? `${oQueFaz} · ${zona}` : oQueFaz,
+        inicial: (negocioNome.replace(/^o seu /i, '').charAt(0) || 'G').toUpperCase(),
+        linkGoogle: '',
         clienteEmail: String(dados.email || '').trim(),
         clienteWhatsApp: normalizePhoneForWa(dados.whatsapp || dados.telefone)
     };

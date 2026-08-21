@@ -66,6 +66,7 @@ export function setupCoverage({
     inputEl,
     openNotes,
     openFollowup,
+    openDossier,
     onUnauthorized
 }) {
     let pins = [];

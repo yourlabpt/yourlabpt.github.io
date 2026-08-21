@@ -47,6 +47,7 @@ const mapsPresenca = require('./lib/maps/presenca');
 const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/states');
 const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
 const outreach = require('./lib/digitalizept-outreach');
+const dossier = require('./lib/digitalizept-dossier');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -2237,7 +2238,16 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     followupEmailSent: Boolean(followup.emailSentAt),
                     followupUnsubscribed: followup.unsubscribed === true,
                     callDueAt: followup.callDueAt || '',
-                    callDoneAt: followup.callDoneAt || ''
+                    callDoneAt: followup.callDoneAt || '',
+                    fichaMissing: dossier.assessCompleteness({
+                        nome_negocio: r.nome,
+                        morada: r.morada,
+                        cidade: r.cidade,
+                        telefone: r.telefone,
+                        whatsapp: r.whatsapp,
+                        ...parseJsonSafe(r.obrigatorios_json, {}),
+                        ...parseJsonSafe(r.opcionais_json, {})
+                    }, { email: email }, []).missing.filter((m) => m.group === 'publico' || m.group === 'envio').length
                 };
             })
         });
@@ -2971,6 +2981,333 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
     } catch (err) {
         console.error('digitalizept resume lead error:', err.message);
         return res.status(500).json({ error: 'Não foi possível reabrir este lead.' });
+    }
+});
+
+function pickKnown(source, keys) {
+    const out = {};
+    const src = source && typeof source === 'object' ? source : {};
+    keys.forEach((key) => {
+        if (src[key] == null) return;
+        out[key] = src[key];
+    });
+    return out;
+}
+
+function loadLeadDossier(db, leadId) {
+    const row = db.prepare(`
+        SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
+               l.cobertura, l.resultado, l.lat, l.lng, l.geocode_status, l.demo_slug, l.demo_json,
+               l.identidade_json, l.google_presence_json, l.wizard_json, l.demo_html, l.followup_json,
+               l.notas_admin, l.criado_em, l.work_path,
+               d.obrigatorios_json, d.opcionais_json
+        FROM lead l
+        LEFT JOIN dados_negocio d ON d.lead_id = l.id
+        WHERE l.id = ?
+    `).get(leadId);
+    if (!row) return null;
+
+    const types = loadBusinessTypes();
+    const standardFields = loadStandardFields();
+    const businessType = types.find((t) => t.id === row.business_type)
+        || { id: row.business_type, nome: row.business_type || 'Negócio' };
+    const wizardExtra = parseJsonSafe(row.wizard_json, {});
+    const dados = {
+        nome_negocio: row.nome || '',
+        morada: row.morada || '',
+        cidade: row.cidade || '',
+        telefone: row.telefone || '',
+        whatsapp: row.whatsapp || '',
+        ...parseJsonSafe(row.obrigatorios_json, {}),
+        ...parseJsonSafe(row.opcionais_json, {})
+    };
+    if (!dados.nome_negocio) dados.nome_negocio = row.nome || '';
+
+    const legalRow = db.prepare(
+        'SELECT nome, nif, morada, email, telefone FROM cliente_legal WHERE lead_id = ?'
+    ).get(leadId);
+    const clienteLegal = legalRow || wizardExtra.clienteLegal || {
+        nome: '', nif: '', morada: '', email: '', telefone: ''
+    };
+
+    let proposta = wizardExtra.proposta || null;
+    let projectId = '';
+    if (row.estado === 'fechado') {
+        const deal = db.prepare(`
+            SELECT p.itens_json, p.desconto_pct, p.total_com_iva_centimos, pr.id AS projectId
+            FROM proposta p
+            JOIN contrato c ON c.proposta_id = p.id
+            JOIN projeto pr ON pr.contrato_id = c.id
+            WHERE p.lead_id = ?
+            ORDER BY p.criado_em DESC
+            LIMIT 1
+        `).get(leadId);
+        if (deal) {
+            projectId = deal.projectId || '';
+            const itens = parseJsonSafe(deal.itens_json, {});
+            proposta = {
+                pacote: itens.pacote || '',
+                extras: Array.isArray(itens.extras) ? itens.extras : [],
+                manutencao: itens.manutencao || '',
+                descontoPct: Number(deal.desconto_pct) || 0,
+                contrapartida: itens.contrapartida || '',
+                _calc: { totalComIva: deal.total_com_iva_centimos }
+            };
+        }
+    }
+
+    const identidade = parseJsonSafe(row.identidade_json, {}) || wizardExtra.identidade || {};
+    const googlePresence = parseJsonSafe(row.google_presence_json, null)
+        || wizardExtra.googlePresence
+        || {};
+    const leadDemo = parseJsonSafe(row.demo_json, null);
+    const mergedDemo = mergeDemoForResume({
+        leadDemo,
+        leadDemoHtml: row.demo_html || '',
+        wizard: wizardExtra
+    });
+    const fields = dossier.buildFieldCatalog(businessType, standardFields, dados);
+    const completeness = dossier.assessCompleteness(dados, clienteLegal, fields);
+    const notes = db.prepare(`
+        SELECT id, texto, criado_em FROM nota WHERE lead_id = ? ORDER BY criado_em DESC LIMIT 30
+    `).all(leadId);
+    const visits = db.prepare(`
+        SELECT id, nome, morada, cidade, cobertura, resultado, experiencia, visitado_em
+        FROM visita WHERE lead_id = ? ORDER BY visitado_em DESC LIMIT 20
+    `).all(leadId);
+
+    return {
+        lead: {
+            id: row.id,
+            business_type: row.business_type,
+            nome: row.nome,
+            estado: row.estado,
+            cobertura: row.cobertura || '',
+            resultado: row.resultado || '',
+            lat: row.lat,
+            lng: row.lng,
+            geocode_status: row.geocode_status || '',
+            demo_slug: row.demo_slug || '',
+            notas_admin: row.notas_admin || '',
+            criado_em: row.criado_em,
+            work_path: row.work_path || '',
+            projectId
+        },
+        businessType: {
+            id: businessType.id,
+            nome: businessType.nome || businessType.id
+        },
+        businessTypes: types.map((t) => ({ id: t.id, nome: t.nome || t.id })),
+        fields,
+        sectionLabels: dossier.SECTION_LABELS,
+        dados,
+        clienteLegal: {
+            nome: clienteLegal.nome || '',
+            nif: clienteLegal.nif || '',
+            morada: clienteLegal.morada || '',
+            email: clienteLegal.email || '',
+            telefone: clienteLegal.telefone || ''
+        },
+        googleDiagnostico: wizardExtra.googleDiagnostico || {},
+        googlePresence,
+        diagFields: dossier.DIAG_FIELDS,
+        googlePresenceFields: dossier.GOOGLE_PRESENCE_FIELDS,
+        legalFields: dossier.LEGAL_FIELDS,
+        identidade: dossier.identitySummary(identidade),
+        demo: dossier.demoSummary(mergedDemo.demo, row.demo_slug),
+        proposta: dossier.propostaSummary(proposta),
+        followup: outreach.parseFollowup(row.followup_json),
+        completeness,
+        notes,
+        visits,
+        etapas: ETAPA_VALUES.map((id) => ({ id, label: ETAPA_LABELS[id] })),
+        resultados: [
+            { id: '', label: 'Sem resultado' },
+            ...RESULTADO_VALUES.map((id) => ({ id, label: RESULTADO_LABELS[id] }))
+        ]
+    };
+}
+
+app.get('/api/digitalizept/leads/:leadId/dossier', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const payload = loadLeadDossier(db, leadId);
+        if (!payload) return res.status(404).json({ error: 'Lead não encontrado.' });
+        return res.json({ ok: true, ...payload });
+    } catch (err) {
+        console.error('digitalizept dossier get error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível carregar a ficha.' });
+    }
+});
+
+app.put('/api/digitalizept/leads/:leadId/dossier', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const row = db.prepare(`
+            SELECT l.id, l.business_type, l.wizard_json, l.google_presence_json
+            FROM lead l WHERE l.id = ?
+        `).get(leadId);
+        if (!row) return res.status(404).json({ error: 'Lead não encontrado.' });
+
+        const types = loadBusinessTypes();
+        const typeId = cleanText(body.businessTypeId, 80) || row.business_type;
+        const businessType = types.find((t) => t.id === typeId)
+            || { id: typeId, nome: typeId, campos_obrigatorios: [], campos_opcionais: [], perguntas_especificas: [] };
+
+        const existing = db.prepare(`
+            SELECT l.nome, l.morada, l.cidade, l.telefone, l.whatsapp,
+                   d.obrigatorios_json, d.opcionais_json
+            FROM lead l LEFT JOIN dados_negocio d ON d.lead_id = l.id WHERE l.id = ?
+        `).get(leadId);
+        const existingDados = {
+            nome_negocio: existing.nome || '',
+            morada: existing.morada || '',
+            cidade: existing.cidade || '',
+            telefone: existing.telefone || '',
+            whatsapp: existing.whatsapp || '',
+            ...parseJsonSafe(existing.obrigatorios_json, {}),
+            ...parseJsonSafe(existing.opcionais_json, {})
+        };
+        const dados = {
+            ...existingDados,
+            ...dossier.sanitizeDados(body.dados, cleanText)
+        };
+        const nome = cleanText(dados.nome_negocio, 200);
+        if (!nome) {
+            return res.status(400).json({ error: 'Falta o nome do negócio.' });
+        }
+        const morada = cleanText(dados.morada, 300);
+        const cidade = cleanText(dados.cidade, 120);
+        const telefone = cleanText(dados.telefone, 60);
+        const whatsapp = cleanText(dados.whatsapp, 60);
+        const { obrigatorios, opcionais } = splitDados(dados, businessType);
+        const wizard = parseJsonSafe(row.wizard_json, {});
+
+        if (body.googleDiagnostico && typeof body.googleDiagnostico === 'object') {
+            const prev = wizard.googleDiagnostico && typeof wizard.googleDiagnostico === 'object'
+                ? wizard.googleDiagnostico
+                : {};
+            wizard.googleDiagnostico = {
+                ...prev,
+                ...pickKnown(body.googleDiagnostico, ['maps', 'validado', 'website', 'prioridade', 'pacoteSugerido'])
+            };
+            ['maps', 'validado', 'website', 'prioridade', 'pacoteSugerido'].forEach((key) => {
+                if (wizard.googleDiagnostico[key] != null) {
+                    wizard.googleDiagnostico[key] = cleanText(wizard.googleDiagnostico[key], 80);
+                }
+            });
+        }
+        let nextPresence = null;
+        if (body.googlePresence && typeof body.googlePresence === 'object') {
+            const prevPresence = parseJsonSafe(row.google_presence_json, {})
+                || (wizard.googlePresence && typeof wizard.googlePresence === 'object' ? wizard.googlePresence : {});
+            nextPresence = {
+                ...prevPresence,
+                ...pickKnown(body.googlePresence, [
+                    'mapsEstado', 'categoria', 'descricao', 'website', 'instagram', 'facebook', 'fotos'
+                ])
+            };
+            ['mapsEstado', 'categoria', 'website', 'instagram', 'facebook', 'fotos'].forEach((key) => {
+                if (nextPresence[key] != null) nextPresence[key] = cleanText(nextPresence[key], 300);
+            });
+            if (nextPresence.descricao != null) nextPresence.descricao = cleanText(nextPresence.descricao, 2000);
+            wizard.googlePresence = nextPresence;
+        }
+
+        let clienteLegal = null;
+        if (body.clienteLegal && typeof body.clienteLegal === 'object') {
+            clienteLegal = {
+                nome: cleanText(body.clienteLegal.nome, 200),
+                nif: cleanText(body.clienteLegal.nif, 20),
+                morada: cleanText(body.clienteLegal.morada, 300),
+                email: cleanText(body.clienteLegal.email, 160),
+                telefone: cleanText(body.clienteLegal.telefone, 60)
+            };
+            wizard.clienteLegal = clienteLegal;
+        }
+
+        const persist = db.transaction(() => {
+            clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+            db.prepare(`
+                UPDATE lead SET business_type = ?, nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?
+                WHERE id = ?
+            `).run(typeId, nome, morada, cidade, telefone, whatsapp, leadId);
+
+            const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
+            if (dadosRow) {
+                db.prepare('UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?')
+                    .run(JSON.stringify(obrigatorios), JSON.stringify(opcionais), dadosRow.id);
+            } else {
+                db.prepare(`
+                    INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?)
+                `).run(
+                    crypto.randomUUID(), leadId,
+                    JSON.stringify(obrigatorios), JSON.stringify(opcionais), digitalizeptNow()
+                );
+            }
+
+            if (body.notas_admin != null) {
+                db.prepare('UPDATE lead SET notas_admin = ? WHERE id = ?')
+                    .run(cleanText(body.notas_admin, 4000), leadId);
+            }
+            if (body.cobertura != null || body.etapa != null) {
+                const etapa = normalizeEtapa(body.etapa != null ? body.etapa : body.cobertura, '');
+                if (!isValidEtapa(etapa)) {
+                    throw Object.assign(new Error('Etapa inválida.'), { status: 400 });
+                }
+                db.prepare('UPDATE lead SET cobertura = ?, cobertura_locked = 1 WHERE id = ?')
+                    .run(etapa, leadId);
+            }
+            if (body.resultado != null) {
+                const resultado = normalizeResultado(body.resultado);
+                if (body.resultado !== '' && !isValidResultado(resultado)) {
+                    throw Object.assign(new Error('Resultado inválido.'), { status: 400 });
+                }
+                db.prepare('UPDATE lead SET resultado = ?, cobertura_locked = 1 WHERE id = ?')
+                    .run(resultado, leadId);
+            }
+            if (nextPresence) {
+                db.prepare('UPDATE lead SET google_presence_json = ? WHERE id = ?')
+                    .run(JSON.stringify(nextPresence), leadId);
+            }
+            if (clienteLegal) {
+                const existingLegal = db.prepare('SELECT id FROM cliente_legal WHERE lead_id = ?').get(leadId);
+                const hasAny = Object.values(clienteLegal).some((v) => String(v || '').trim());
+                if (existingLegal) {
+                    db.prepare(`
+                        UPDATE cliente_legal SET nome = ?, nif = ?, morada = ?, email = ?, telefone = ?
+                        WHERE id = ?
+                    `).run(
+                        clienteLegal.nome, clienteLegal.nif, clienteLegal.morada,
+                        clienteLegal.email, clienteLegal.telefone, existingLegal.id
+                    );
+                } else if (hasAny) {
+                    db.prepare(`
+                        INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `).run(
+                        crypto.randomUUID(), leadId, clienteLegal.nome, clienteLegal.nif,
+                        clienteLegal.morada, clienteLegal.email, clienteLegal.telefone
+                    );
+                }
+            }
+            db.prepare('UPDATE lead SET wizard_json = ? WHERE id = ?')
+                .run(JSON.stringify(wizard), leadId);
+            digitalizeptLogEvento(db, 'lead', leadId, 'ficha', { nome });
+        });
+        persist();
+        scheduleLeadGeocode(leadId);
+        return res.json({ ok: true, ...loadLeadDossier(db, leadId) });
+    } catch (err) {
+        if (err.status === 400) {
+            return res.status(400).json({ error: err.message });
+        }
+        console.error('digitalizept dossier put error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar a ficha.' });
     }
 });
 

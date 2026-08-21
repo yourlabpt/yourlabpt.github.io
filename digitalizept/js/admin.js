@@ -6,6 +6,7 @@ import { setupCoverage } from './admin-coverage.js';
 import { renderMapsCockpit } from './admin-maps.js';
 import { fetchConfig } from './settings.js';
 import { renderFollowupShare } from './demo/followup-ui.js';
+import { renderLeadDossier, dossierHash, leadIdFromHash } from './admin-lead.js';
 import {
     askCallNotifyPermission,
     confirmCallState,
@@ -188,9 +189,13 @@ function switchTab(name) {
     document.querySelectorAll('.admin-tab').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.tab === name);
     });
-    ['catalog', 'leads', 'deals', 'coverage'].forEach((id) => {
-        document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== name);
+    ['catalog', 'leads', 'deals', 'coverage', 'dossier'].forEach((id) => {
+        const panel = document.getElementById(`tab-${id}`);
+        if (panel) panel.classList.toggle('hidden', id !== name);
     });
+    if (name !== 'dossier' && leadIdFromHash(window.location.hash)) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
     if (name === 'coverage' && coverageUi) {
         coverageUi.ensure().catch((err) => {
             if (el.coverageStatus) {
@@ -466,16 +471,24 @@ function renderDemos() {
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
             ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
             ${l.followupWaStep || l.followupEmailSent ? `<p class="meta">Envio: WA ${l.followupWaStep || 0}/3${l.followupEmailSent ? ' · email enviado' : ''}${l.followupUnsubscribed ? ' · REMOVER' : ''}</p>` : ''}
+            ${Number(l.fichaMissing) > 0 ? `<p class="meta">Ficha: ${l.fichaMissing} campo(s) em falta</p>` : '<p class="meta">Ficha: mínimo de contacto ok</p>'}
             ${callMetaHtml(l)}
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';
 
         const resume = document.createElement('a');
-        resume.className = 'btn-primary';
+        resume.className = 'btn-secondary';
         resume.href = `./?resume=${encodeURIComponent(l.id)}`;
         resume.textContent = 'Continuar venda';
         actions.appendChild(resume);
+
+        const ficha = document.createElement('button');
+        ficha.type = 'button';
+        ficha.className = 'btn-primary';
+        ficha.textContent = 'Ficha';
+        ficha.addEventListener('click', () => openLeadDossier(l.id));
+        actions.appendChild(ficha);
 
         if (l.demo_slug) {
             const open = document.createElement('a');
@@ -618,6 +631,13 @@ function renderDeals() {
             actions.appendChild(demo);
 
             if (d.leadId) {
+                const ficha = document.createElement('button');
+                ficha.type = 'button';
+                ficha.className = 'btn-primary';
+                ficha.textContent = 'Ficha';
+                ficha.addEventListener('click', () => openLeadDossier(d.leadId));
+                actions.appendChild(ficha);
+
                 const share = document.createElement('button');
                 share.type = 'button';
                 share.className = 'btn-secondary';
@@ -682,6 +702,50 @@ function renderDeals() {
         card.appendChild(actions);
         el.dealsList.appendChild(card);
     });
+}
+
+async function openLeadDossier(leadId) {
+    if (!leadId) {
+        toast('Lead em falta.', true);
+        return;
+    }
+    closeDrawer();
+    switchTab('dossier');
+    const root = document.getElementById('dossier-root');
+    if (!root) return;
+    root.innerHTML = '<p class="admin-hint">A carregar ficha…</p>';
+    if (leadIdFromHash(window.location.hash) !== leadId) {
+        history.replaceState(null, '', dossierHash(leadId));
+    }
+    try {
+        const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/dossier`);
+        if (!response.ok) {
+            root.innerHTML = `<p class="admin-empty">${(data && data.error) || 'Não foi possível carregar a ficha.'}</p>`;
+            return;
+        }
+        const handlers = {};
+        handlers.onToast = toast;
+        handlers.onBack = () => {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+            switchTab('leads');
+        };
+        handlers.onSave = async (body) => {
+            const saved = await api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/dossier`, {
+                method: 'PUT',
+                body
+            });
+            if (!saved.response.ok) {
+                toast((saved.data && saved.data.error) || 'Não foi possível guardar.', true);
+                throw new Error((saved.data && saved.data.error) || 'save');
+            }
+            toast('Ficha guardada.');
+            renderLeadDossier(root, saved.data, handlers);
+            loadLeads().catch(() => {});
+        };
+        renderLeadDossier(root, data, handlers);
+    } catch (_) {
+        root.innerHTML = '<p class="admin-empty">Erro de rede.</p>';
+    }
 }
 
 async function jumpToLeadMap(leadId) {
@@ -952,6 +1016,11 @@ async function bootData() {
     if (!window.__callTick) {
         window.__callTick = setInterval(tickCallCountdowns, 1000);
     }
+    const dossierId = leadIdFromHash(window.location.hash);
+    if (dossierId) {
+        await openLeadDossier(dossierId);
+        return;
+    }
     await openMapsDeepLink();
 }
 
@@ -980,6 +1049,7 @@ coverageUi = setupCoverage({
     inputEl,
     openNotes,
     openFollowup: openFollowupShare,
+    openDossier: openLeadDossier,
     onUnauthorized
 });
 

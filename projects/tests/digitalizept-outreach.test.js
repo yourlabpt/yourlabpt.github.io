@@ -11,6 +11,7 @@ const {
     buildOutreachContext,
     waTextForStep,
     renderEmailHtml,
+    renderEmailText,
     splitProviderMorada,
     nextConfirmCallAt,
     scheduleConfirmCall,
@@ -45,7 +46,7 @@ describe('digitalizept outreach', () => {
         assert.equal(ctx.saudacao, 'Boa tarde');
         assert.equal(ctx.zona, 'Porto');
         assert.match(ctx.link, /\/d\/talho-da-costa/);
-        assert.match(ctx.linkGoogle, /google\.com\/maps/);
+        assert.equal(ctx.linkGoogle, '');
         assert.match(ctx.linkRemover, /unsub\?t=abc123/);
 
         const wa1 = waTextForStep(1, ctx);
@@ -124,8 +125,16 @@ describe('digitalizept outreach', () => {
         assert.match(html, /Loja X/);
         assert.match(html, /509000000/);
         assert.match(html, /yourlabpt.com\/d\/loja-x/);
+        assert.match(html, /Demonstrador/);
+        assert.match(html, /Sou o/);
+        assert.doesNotMatch(html, /google\.com\/maps/);
         assert.doesNotMatch(html, /\{\{negocioNome\}\}/);
+        assert.doesNotMatch(html, /Ver no Google/);
+        assert.doesNotMatch(html, /Digitalize a sua empresa/);
         assert.doesNotMatch(html, /IF_IMAGEM_GOOGLE/);
+        const text = renderEmailText(ctx);
+        assert.match(text, /yourlabpt.com\/d\/loja-x/);
+        assert.doesNotMatch(text, /google\.com\/maps/);
     });
 
     it('keeps fillTemplate replacements literal', () => {

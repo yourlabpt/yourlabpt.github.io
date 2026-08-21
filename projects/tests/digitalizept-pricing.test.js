@@ -651,8 +651,9 @@ describe('digitalizept followup messages', () => {
         assert.match(wa, /YourLab, aqui de/);
 
         const wa2 = buildWhatsAppMessage(state, config, 2);
-        assert.match(wa2, /490 €/);
-        assert.match(wa2, /google\.com\/maps/);
+        assert.match(wa2, /490 euros/);
+        assert.match(wa2, /demonstrador/);
+        assert.doesNotMatch(wa2, /google\.com\/maps/);
 
         const wa3 = buildWhatsAppMessage(state, config, 3);
         assert.match(wa3, /sexta-feira/);
