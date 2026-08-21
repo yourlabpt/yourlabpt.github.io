@@ -10,6 +10,8 @@ export function renderOptionalAi(parent, {
     prompt = '',
     placeholder = 'Cole aqui o resultado…',
     applyLabel = 'Aplicar resultado',
+    open = false,
+    pasteRows = 3,
     ctx,
     sanitizePrompt,
     onPromptChange,
@@ -17,6 +19,7 @@ export function renderOptionalAi(parent, {
 }) {
     const details = document.createElement('details');
     details.className = 'palette-custom optional-ai';
+    details.open = Boolean(open);
     const summary = document.createElement('summary');
     summary.textContent = title;
     details.appendChild(summary);
@@ -57,7 +60,7 @@ export function renderOptionalAi(parent, {
 
     const pasteArea = document.createElement('textarea');
     pasteArea.className = 'field-input demo-paste';
-    pasteArea.rows = 3;
+    pasteArea.rows = Number(pasteRows) > 0 ? Number(pasteRows) : 3;
     pasteArea.placeholder = placeholder;
     pasteArea.addEventListener('paste', () => {
         setTimeout(() => {

@@ -159,11 +159,26 @@ function placeholderForDataUrl(url, identidade) {
 }
 
 function stripDataImages(html, identidade) {
-    return String(html || '')
-        .replace(DATA_IMAGE_RE, (url) => placeholderForDataUrl(url, identidade))
-        .replace(DATA_IMAGE_FALLBACK_RE, (url) => placeholderForDataUrl(url, identidade))
-        .replace(BLOB_URL_RE, 'dp-photo://x')
-        .replace(RESOLVED_PLACEHOLDER_RE, '$1');
+    let out = String(html || '');
+    out = out.replace(
+        /(\b(?:src|href)\s*=\s*)(["'])(data:image\/[\s\S]*?)\2/gi,
+        (_, attr, quote, url) => `${attr}${quote}${placeholderForDataUrl(url, identidade)}${quote}`
+    );
+    out = out.replace(
+        /(url\(\s*)(['"]?)(data:image\/[\s\S]*?)\2(\s*\))/gi,
+        (_, open, quote, url, close) => `${open}${quote}${placeholderForDataUrl(url, identidade)}${quote}${close}`
+    );
+    out = out.replace(DATA_IMAGE_RE, (url) => placeholderForDataUrl(url, identidade));
+    out = out.replace(DATA_IMAGE_FALLBACK_RE, (url) => placeholderForDataUrl(url, identidade));
+    out = out.replace(
+        /data:image\/[a-z0-9.+-]+(?:;[^,"'<>\s]*)*;base64,[\s\S]*?(?=["'<>)]|$)/gi,
+        (url) => placeholderForDataUrl(url, identidade)
+    );
+    out = out.replace(BLOB_URL_RE, 'dp-photo://x');
+    out = out.replace(RESOLVED_PLACEHOLDER_RE, '$1');
+    out = out.replace(/^[A-Za-z0-9+/]{48,}={0,2}\s*$/gm, '');
+    out = out.replace(/\n{3,}/g, '\n\n');
+    return out;
 }
 
 function annotateImgSlots(html) {
@@ -186,6 +201,32 @@ function annotateImgSlots(html) {
 
 export function compactHtmlForAi(html, identidade) {
     return annotateImgSlots(stripDataImages(stripInjectedIdentity(String(html || '')), identidade));
+}
+
+export function demoHtmlUnusable(html) {
+    const s = String(html || '');
+    if (!s.trim()) return true;
+    if (/data:image\//i.test(s)) return true;
+    if (/base64,/i.test(s)) return true;
+    if (/^[A-Za-z0-9+/]{48,}={0,2}\s*$/m.test(s)) return true;
+    return false;
+}
+
+export function scrubDemoState(state) {
+    if (!state || !state.data) return state;
+    const identidade = state.data.identidade;
+    const html = state.data.demoHtml;
+    if (typeof html === 'string' && html && (/data:image|base64,|blob:/i.test(html) || html.length > 120000)) {
+        const compact = compactHtmlForAi(html, identidade);
+        state.data.demoHtml = demoHtmlUnusable(compact) ? '' : compact;
+    }
+    const prompt = state.data.demoPrompt;
+    if (typeof prompt === 'string' && /data:image|base64,/i.test(prompt)) {
+        const compact = compactHtmlForAi(prompt, identidade);
+        state.data.demoPrompt = /data:image\/|base64,/i.test(compact) ? '' : compact;
+    }
+    if (typeof state.data.htmlChangePrompt === 'string') state.data.htmlChangePrompt = '';
+    return state;
 }
 
 export function restoreHtmlPlaceholders(html, identidade) {
@@ -440,7 +481,11 @@ ${node.outerHTML}
 }
 
 export function currentDemoHtml(state) {
-    if (state.data.demoHtml) return String(state.data.demoHtml);
+    const stored = String((state.data && state.data.demoHtml) || '');
+    if (stored) {
+        const compact = compactHtmlForAi(stored, state.data && state.data.identidade);
+        if (!demoHtmlUnusable(compact)) return compact;
+    }
     if (state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo) {
         return serializeLandingDocument(state);
     }

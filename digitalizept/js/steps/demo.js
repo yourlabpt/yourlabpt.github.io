@@ -14,7 +14,8 @@ import {
     htmlTooLarge,
     identityFingerprint,
     looksLikeHtml,
-    mountHtmlPreview
+    mountHtmlPreview,
+    scrubDemoState
 } from '../demo/html.js';
 import {
     buildGbpSobrePrompt,
@@ -258,6 +259,18 @@ function renderWebsiteDemo(body, ctx) {
     ensureSeededDemo(ctx.state);
     ctx.update({ demo: ctx.state.data.demo, demoSeeded: ctx.state.data.demoSeeded === true });
 
+    const beforeHtml = ctx.state.data.demoHtml || '';
+    const beforePrompt = ctx.state.data.demoPrompt || '';
+    scrubDemoState(ctx.state);
+    if (!ctx.state.data.demoPrompt) ctx.state.data.demoPrompt = buildPrompt(ctx.state);
+    if ((ctx.state.data.demoHtml || '') !== beforeHtml || (ctx.state.data.demoPrompt || '') !== beforePrompt) {
+        ctx.update({
+            demoHtml: ctx.state.data.demoHtml || '',
+            demoPrompt: ctx.state.data.demoPrompt
+        });
+        if ((ctx.state.data.demoHtml || '') !== beforeHtml) publishDemo(ctx);
+    }
+
     const status = document.createElement('div');
     status.className = 'demo-status';
     function showStatus(message, kind) {
@@ -370,46 +383,6 @@ function renderWebsiteDemo(body, ctx) {
         publishDemo(ctx);
     }
 
-    const htmlBox = document.createElement('div');
-    htmlBox.className = 'id-section';
-    const htmlTitle = document.createElement('h3');
-    htmlTitle.className = 'field-group-title';
-    htmlTitle.textContent = 'Cole o HTML da demo';
-    const htmlHint = document.createElement('p');
-    htmlHint.className = 'id-disclaimer';
-    htmlHint.textContent = 'Cole o documento completo. A pré-visualização abre em seguida.';
-    const htmlPaste = document.createElement('textarea');
-    htmlPaste.className = 'field-input demo-paste';
-    htmlPaste.rows = 6;
-    htmlPaste.placeholder = '<!DOCTYPE html>…';
-    function usePastedHtml() {
-        const raw = htmlPaste.value.trim();
-        if (!raw) {
-            ctx.showToast('Cole o HTML primeiro.', true);
-            return;
-        }
-        if (!looksLikeHtml(raw)) {
-            ctx.showToast('Isto não parece HTML. Cole o documento completo.', true);
-            return;
-        }
-        applyHtml(ctx, raw, showStatus, () => {
-            previewBtn.disabled = false;
-            paintLive();
-        });
-    }
-    htmlPaste.addEventListener('paste', () => {
-        setTimeout(() => {
-            if (looksLikeHtml(htmlPaste.value)) usePastedHtml();
-        }, 0);
-    });
-    const htmlApply = document.createElement('button');
-    htmlApply.type = 'button';
-    htmlApply.className = 'btn-primary demo-html-apply';
-    htmlApply.textContent = 'Aplicar HTML';
-    htmlApply.addEventListener('click', usePastedHtml);
-    htmlBox.append(htmlTitle, htmlHint, htmlPaste, htmlApply);
-    body.appendChild(htmlBox);
-
     if (!ctx.state.data.demoPrompt) {
         ctx.state.data.demoPrompt = buildPrompt(ctx.state);
     }
@@ -417,11 +390,13 @@ function renderWebsiteDemo(body, ctx) {
     const aiHost = document.createElement('div');
     aiHost.className = 'id-section';
     renderOptionalAi(aiHost, {
-        title: 'Melhorar com AI (opcional)',
-        hint: 'Copie o prompt da landing (JSON) ou peça uma app mock em HTML. O modelo de base fica no ecrã até aplicar.',
+        title: 'HTML e AI',
+        hint: 'Um sítio só: copie o prompt, cole o HTML ou o JSON, e aplique. As fotos vão como dp-logo:// e dp-photo://0.',
         prompt: ctx.state.data.demoPrompt,
-        placeholder: 'Cole o JSON da landing, ou HTML completo.',
-        applyLabel: 'Aplicar resultado',
+        placeholder: 'Cole aqui o HTML completo ou o JSON…',
+        applyLabel: 'Aplicar',
+        open: true,
+        pasteRows: 8,
         ctx,
         sanitizePrompt: (value) => compactHtmlForAi(value, ctx.state.data.identidade),
         onPromptChange: (value) => {

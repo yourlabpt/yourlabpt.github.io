@@ -153,6 +153,49 @@ describe('digitalizept HTML identity overlay', async () => {
         assert.match(prompt, /mais rissóis/);
     });
 
+    it('scrubs a truncated JPEG landing so the AI prompt has no leftover base64 lines', () => {
+        const { compactHtmlForAi, htmlForAi, scrubDemoState, demoHtmlUnusable } = htmlMod;
+        const jpegHead = `data:image/jpeg;base64,/9j/${'A+/'.repeat(80)}`;
+        const leftoverLines = Array.from({ length: 12 }, () => 'B'.repeat(76)).join('\n');
+        const truncated = `<!DOCTYPE html><html><body>
+<img class="dpl-topbar-logo" src="${jpegHead}
+${leftoverLines}
+<section class="dpl-avaliacoes"><h2>Quem já se sentou</h2></section>
+</body></html>`;
+        const compact = compactHtmlForAi(truncated, {
+            logo: { tipo: 'upload', dataUrl: `data:image/jpeg;base64,/9j/${'A+/'.repeat(80)}==` }
+        });
+        assert.equal(/data:image\/|base64,/i.test(compact), false);
+        assert.doesNotMatch(compact, /^B{48,}/m);
+        assert.match(compact, /dpl-avaliacoes/);
+        assert.match(compact, /dp-logo:\/\//);
+
+        const wrapped = `<img src="data:image/jpeg;base64,${'Ab'.repeat(40)}\n${'Cd'.repeat(40)}">`;
+        const wrappedOut = compactHtmlForAi(wrapped, { fotos: [`data:image/jpeg;base64,${'Ab'.repeat(40)}${'Cd'.repeat(40)}`] });
+        assert.equal(/data:image\/|base64,/i.test(wrappedOut), false);
+        assert.match(wrappedOut, /dp-photo:\/\/0/);
+
+        const state = {
+            data: {
+                identidade: { logo: { tipo: 'upload', dataUrl: jpegHead } },
+                demoHtml: truncated,
+                demoPrompt: `HTML ACTUAL\n${truncated}`
+            }
+        };
+        scrubDemoState(state);
+        assert.equal(/data:image\/|base64,/i.test(state.data.demoHtml || ''), false);
+        assert.equal(/data:image\/|base64,/i.test(state.data.demoPrompt || ''), false);
+        const forAi = htmlForAi({
+            data: {
+                identidade: state.data.identidade,
+                demoHtml: truncated,
+                demo: { hero: { titulo: 'Oficina' } }
+            }
+        });
+        assert.equal(demoHtmlUnusable(forAi), false);
+        assert.equal(/data:image\/|base64,/i.test(forAi), false);
+    });
+
     it('unlocks html/body scroll so a demo cannot freeze on the bottom buttons', () => {
         const locked = `<!DOCTYPE html><html><head><style>html,body{height:100%;overflow:hidden}</style></head>
 <body><header>Hero</header><main>Conteúdo</main></body></html>`;

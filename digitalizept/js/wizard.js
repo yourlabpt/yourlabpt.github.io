@@ -11,6 +11,7 @@ import { signatureStep } from './steps/signature.js';
 import { conclusionStep } from './steps/conclusion.js';
 import { saveDraftLead } from './draft.js';
 import { cancelScheduledGoNext, currentSubstep } from './substep.js';
+import { scrubDemoState } from './demo/html.js';
 
 // localStorage, not sessionStorage: a locked phone or a tab the browser evicts
 // mid-visit must not cost a deal that is halfway to a signature.
@@ -37,6 +38,7 @@ export function seedWizardState(data, { step = 0, substep = 0 } = {}) {
         substep: Number.isFinite(Number(substep)) ? Math.max(0, Math.floor(Number(substep))) : 0,
         data: data && typeof data === 'object' ? data : {}
     };
+    scrubDemoState(state);
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (_) { /* ignore */ }
@@ -72,7 +74,10 @@ const STEPS = [
 function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) return JSON.parse(raw);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            return scrubDemoState(parsed);
+        }
     } catch (_) { /* ignore */ }
     return { step: 0, substep: 0, data: {} };
 }
@@ -116,6 +121,7 @@ export function createWizard({ onUnauthorized, showToast }) {
 
     function persist() {
         try {
+            scrubDemoState(state);
             if (typeof state.data.demoHtml === 'string' && state.data.demoHtml.length > 900000) {
                 state.data.demoHtml = state.data.demoHtml.slice(0, 900000);
             }

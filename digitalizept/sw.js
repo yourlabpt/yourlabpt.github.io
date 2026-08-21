@@ -1,4 +1,4 @@
-const CACHE = 'digitalizept-v49';
+const CACHE = 'digitalizept-v51';
 const SHELL = [
     '/digitalizept/',
     '/digitalizept/index.html',
