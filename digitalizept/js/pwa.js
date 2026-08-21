@@ -1,7 +1,19 @@
 const SW_URL = '/digitalizept/sw.js';
 const SW_SCOPE = '/digitalizept/';
+const NOCACHE_PARAM = '_nocache';
+
+function stripNocacheParam() {
+    try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has(NOCACHE_PARAM)) return;
+        url.searchParams.delete(NOCACHE_PARAM);
+        const next = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState(null, '', next);
+    } catch (_) { /* ignore */ }
+}
 
 export function registerDigitalizeptSw() {
+    stripNocacheParam();
     if (!('serviceWorker' in navigator)) return;
 
     navigator.serviceWorker.register(SW_URL, {
@@ -28,6 +40,15 @@ export function registerDigitalizeptSw() {
     }
 }
 
+async function bustHttpCache() {
+    const here = window.location.pathname + window.location.search;
+    const assets = [here, SW_URL, '/digitalizept/digitalizept.css', '/digitalizept/js/app.js', '/digitalizept/js/pwa.js'];
+    await Promise.all(assets.map((href) => fetch(href, {
+        cache: 'reload',
+        credentials: 'same-origin'
+    }).catch(() => {})));
+}
+
 export async function hardRefreshApp() {
     try {
         if ('serviceWorker' in navigator) {
@@ -38,11 +59,14 @@ export async function hardRefreshApp() {
             const keys = await caches.keys();
             await Promise.all(keys.map((key) => caches.delete(key)));
         }
+        await bustHttpCache();
     } catch (_) { /* still reload */ }
-    window.location.reload();
+
+    const url = new URL(window.location.href);
+    url.searchParams.set(NOCACHE_PARAM, String(Date.now()));
+    window.location.replace(`${url.pathname}${url.search}${url.hash}`);
 }
 
 export function confirmAndRefreshApp() {
-    if (!window.confirm('Atualizar a app? Limpa o cache e carrega a versão nova.')) return;
     return hardRefreshApp();
 }
