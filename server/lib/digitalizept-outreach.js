@@ -54,18 +54,15 @@ Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, 
 
 const EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
 
-const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}},
+const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+Estamos em 2026 e a vossa história ainda não está escrita em lado nenhum.
 
-"É fácil encontrar-nos. É depois do café, ao lado da farmácia."
-Pena é que o Google não conheça o café do Zé.
-
-Preparei uma página e um demonstrador da ficha Google para a {{negocioNome}}, sem lhe pedir nada. Nada disto está publicado.
+Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, sem lhe pedir nada. São exemplos — não estão publicados.
 
 {{link}}
 
-Se gostar, digo-lhe como fica a funcionar a sério (490 euros tudo / 190 só a página / 90 só o Google, sem IVA). Se não for de interesse, responda REMOVER.
+Gostou? Responda a este email e falamos. 490 euros tudo / 190 só a página / 90 só o Google, sem IVA. Se não for de interesse, responda REMOVER.
 
 {{vendedorNome}}
 YourLab, {{zona}}
@@ -104,10 +101,14 @@ function applyOptionalBlocks(html, ctx) {
         .replace(/<!--IF_IMAGEM_SITE-->([\s\S]*?)<!--\/IF_IMAGEM_SITE-->/g, ctx.imagemSite ? '$1' : '');
 }
 
+const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto']);
+
 function fillHtmlTemplate(template, ctx) {
     const escaped = {};
     Object.keys(ctx || {}).forEach((key) => {
-        escaped[key] = escapeHtml(ctx[key]);
+        escaped[key] = HTML_RAW_KEYS.has(key)
+            ? String(ctx[key] == null ? '' : ctx[key])
+            : escapeHtml(ctx[key]);
     });
     return fillTemplate(applyOptionalBlocks(template, ctx), escaped);
 }
@@ -329,12 +330,17 @@ function buildOutreachContext({
     const empresaMorada = String(parsedProvider.street || provider.morada || '').trim();
     const empresaMoradaLinha = [empresaMorada, empresaCp, empresaLocalidade].filter(Boolean).join(', ') || '—';
     const vendedorTelefone = String(provider.telefone || provider.mbway || '').trim();
+    const vendedorEmail = String(provider.email || '').trim() || 'yourlabpt@gmail.com';
+    const ctaBody = 'Gostei do que vi. Podemos falar?';
 
     return {
         saudacao: greetingForHour(hour),
         clienteNome: String(dados.responsavel || 'Cliente').trim() || 'Cliente',
         negocioNome,
+        negocioNomeMailto: encodeURIComponent(negocioNome),
+        ctaBodyMailto: encodeURIComponent(ctaBody),
         vendedorNome: String(provider.responsavel || provider.nome || 'YourLab').trim(),
+        vendedorEmail,
         vendedorTelefone,
         vendedorTelefoneTel: String(vendedorTelefone).replace(/\s/g, ''),
         site,

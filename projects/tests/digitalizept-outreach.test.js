@@ -36,6 +36,7 @@ describe('digitalizept outreach', () => {
                 nif: '123456789',
                 morada: 'Rua Exemplo 10, 4000-001 Porto',
                 telefone: '910000000',
+                email: 'tulio@yourlabpt.com',
                 site: 'yourlabpt.com'
             },
             origin: 'https://yourlabpt.com',
@@ -45,6 +46,8 @@ describe('digitalizept outreach', () => {
         });
         assert.equal(ctx.saudacao, 'Boa tarde');
         assert.equal(ctx.zona, 'Porto');
+        assert.equal(ctx.vendedorEmail, 'tulio@yourlabpt.com');
+        assert.equal(ctx.negocioNomeMailto, encodeURIComponent('Talho da Costa'));
         assert.match(ctx.link, /\/d\/talho-da-costa/);
         assert.equal(ctx.linkGoogle, '');
         assert.match(ctx.linkRemover, /unsub\?t=abc123/);
@@ -125,13 +128,18 @@ describe('digitalizept outreach', () => {
         assert.match(html, /Loja X/);
         assert.match(html, /509000000/);
         assert.match(html, /yourlabpt.com\/d\/loja-x/);
-        assert.match(html, /Demonstrador/);
-        assert.match(html, /Sou o/);
+        assert.match(html, /São exemplos/);
+        assert.match(html, /sou o/);
+        assert.match(html, /Digitalize a sua empresa/);
+        assert.match(html, /mailto:yourlabpt@gmail.com\?subject=Gostei%20-%20Loja%20X/);
+        assert.match(html, /body=Gostei%20do%20que%20vi\.%20Podemos%20falar%3F/);
+        assert.match(html, /Sim, vamos falar/);
+        assert.match(html, /Abrir o exemplo/);
         assert.doesNotMatch(html, /google\.com\/maps/);
-        assert.doesNotMatch(html, /\{\{negocioNome\}\}/);
+        assert.doesNotMatch(html, /\{\{\w+\}\}/);
         assert.doesNotMatch(html, /Ver no Google/);
-        assert.doesNotMatch(html, /Digitalize a sua empresa/);
         assert.doesNotMatch(html, /IF_IMAGEM_GOOGLE/);
+        assert.doesNotMatch(html, /<!--IF_IMAGEM_SITE-->/);
         const text = renderEmailText(ctx);
         assert.match(text, /yourlabpt.com\/d\/loja-x/);
         assert.doesNotMatch(text, /google\.com\/maps/);

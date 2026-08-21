@@ -39,18 +39,15 @@ export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
 
 export const DEFAULT_EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
 
-export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}},
+export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+Estamos em 2026 e a vossa história ainda não está escrita em lado nenhum.
 
-"É fácil encontrar-nos. É depois do café, ao lado da farmácia."
-Pena é que o Google não conheça o café do Zé.
-
-Preparei uma página e um demonstrador da ficha Google para a {{negocioNome}}, sem lhe pedir nada. Nada disto está publicado.
+Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, sem lhe pedir nada. São exemplos — não estão publicados.
 
 {{link}}
 
-Se gostar, digo-lhe como fica a funcionar a sério (490 euros tudo / 190 só a página / 90 só o Google, sem IVA).
+Gostou? Responda a este email e falamos. 490 euros tudo / 190 só a página / 90 só o Google, sem IVA.
 
 {{vendedorNome}}
 YourLab, {{zona}}
