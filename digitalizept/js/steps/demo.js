@@ -15,7 +15,9 @@ import {
     identityFingerprint,
     looksLikeHtml,
     mountHtmlPreview,
-    scrubDemoState
+    scrubDemoState,
+    assertPromptFitsChat,
+    clipboardSizeLabel
 } from '../demo/html.js';
 import {
     buildGbpSobrePrompt,
@@ -391,7 +393,7 @@ function renderWebsiteDemo(body, ctx) {
     aiHost.className = 'id-section';
     renderOptionalAi(aiHost, {
         title: 'HTML e AI',
-        hint: 'Um sítio só: copie o prompt, cole o HTML ou o JSON, e aplique. As fotos vão como dp-logo:// e dp-photo://0.',
+        hint: 'Um sítio só. Copie o prompt, cole no Claude na caixa de mensagem (não como ficheiro) e depois cole o HTML ou JSON abaixo.',
         prompt: ctx.state.data.demoPrompt,
         placeholder: 'Cole aqui o HTML completo ou o JSON…',
         applyLabel: 'Aplicar',
@@ -474,7 +476,12 @@ function renderWebsiteDemo(body, ctx) {
             ctx.showToast('Ainda não há HTML para copiar.', true);
             return;
         }
-        copyText(ctx, html, 'HTML copiado (fotos em placeholders).');
+        const check = assertPromptFitsChat(html);
+        if (!check.ok) {
+            ctx.showToast(check.error, true);
+            return;
+        }
+        copyText(ctx, html, `HTML copiado (${clipboardSizeLabel(html)}). Cole na mensagem, não como ficheiro.`);
     });
     const copyChangeBtn = document.createElement('button');
     copyChangeBtn.type = 'button';
@@ -482,7 +489,12 @@ function renderWebsiteDemo(body, ctx) {
     copyChangeBtn.textContent = 'Copiar prompt de alterações HTML';
     copyChangeBtn.addEventListener('click', () => {
         const prompt = buildHtmlChangePrompt(ctx.state, htmlForAi(ctx.state), changeNote.value);
-        copyText(ctx, prompt, 'Prompt de alterações copiado (fotos em placeholders).');
+        const check = assertPromptFitsChat(prompt);
+        if (!check.ok) {
+            ctx.showToast(check.error, true);
+            return;
+        }
+        copyText(ctx, prompt, `Prompt copiado (${clipboardSizeLabel(prompt)}). Cole na mensagem, não como ficheiro.`);
     });
     htmlActions.append(copyHtmlBtn, copyChangeBtn);
     extraActions.appendChild(genNowBtn);

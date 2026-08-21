@@ -500,46 +500,55 @@ export function buildHtmlChangePrompt(state, html, changeNote) {
     const fotos = fotosOf(identidade);
     const compact = compactHtmlForAi(html, identidade);
     const slots = [
-        logoDataUrl(identidade) ? 'dp-logo:// (logótipo)' : '',
-        ...fotos.map((_, i) => `dp-photo://${i} (foto ${i + 1})`)
+        logoDataUrl(identidade) ? 'dp-logo://' : '',
+        ...fotos.map((_, i) => dpPhoto(i))
     ].filter(Boolean);
     const pedido = String(changeNote || '').trim()
         || '(o vendedor descreve as alterações em voz alta ou acrescenta aqui antes de copiar)';
 
-    return `És um frontend a construir uma DEMO interactiva para mostrar a um cliente na rua.
-Não é o site final: dados e acções são MOCK em memória (variáveis JS). Sem backend, sem APIs reais, sem localStorage.
+    return `És um frontend. Demo de rua para um cliente. Sem backend, sem APIs, sem localStorage. Estado só em variáveis JS.
 
-NEGÓCIO
-- Nome: ${dados.nome_negocio || '—'}
-- Tipo: ${businessType.nome || '—'}
-- O que faz: ${dados.o_que_faz || '—'}
-- Serviços: ${dados.principais_servicos || '—'}
+IMPORTANTE: o HTML ACTUAL está NESTA mensagem, em texto. Não há anexo. Não peça o ficheiro nem as fotos.
 
-CORES, LOGO E FOTOS
-- Cores (CSS variables): --base: ${cores.base || '#1b1b1b'}; --destaque: ${cores.destaque || '#e8d5b7'}; --secundaria: ${cores.secundaria || '#7a8a99'}.
-- Usa sempre var(--base), var(--destaque), var(--secundaria) e reserva .brand para o logo.
-- Fotos e logo no HTML são PLACEHOLDERS curtos, nunca data:image nem base64:
-  ${slots.length ? slots.join(', ') : '(ainda não há fotos — podes deixar dp-photo://0 no sítio da primeira foto)'}.
-- Mantém o placeholder no sítio onde a foto deve ficar. Podes movê-lo. Se não quiseres foto nesse sítio, apaga o placeholder.
-- Em CSS: url(dp-photo://0). A app substitui depois pelas fotos reais.
+NEGÓCIO: ${dados.nome_negocio || '—'} (${businessType.nome || '—'}).
+${dados.o_que_faz ? `O que faz: ${dados.o_que_faz}.` : ''}
+${dados.principais_servicos ? `Serviços: ${dados.principais_servicos}.` : ''}
 
-PEDIDO DE ALTERAÇÃO
+CORES: --base: ${cores.base || '#1b1b1b'}; --destaque: ${cores.destaque || '#e8d5b7'}; --secundaria: ${cores.secundaria || '#7a8a99'}.
+Usa var(--base), var(--destaque), var(--secundaria). Logo: classe .brand e src="dp-logo://".
+Fotos: ${slots.length ? slots.join(', ') : 'dp-photo://0'}. Nunca data:image nem base64. Podes mover os placeholders; não os substituas por URLs.
+
+PEDIDO
 ${pedido}
 
 REGRAS
-- Devolve UM documento HTML completo (DOCTYPE, css e js inline). Nada antes, nada depois. Sem markdown.
-- Português de Portugal. Sem dizer "demo", "template" ou "mock" no ecrã.
-- Pode ser uma landing OU uma web app (login falso, listagens, formulários que avançam de ecrã).
-- Cliques devem mudar de vista imediatamente (sem página em branco).
-- Estado da app: variáveis JS em memória. Proibido localStorage, cookies, fetch ou APIs.
-- CSS: variáveis com dois hífenes ASCII, ex. --base e var(--base). Nunca uses travessão (–) nem aspas curvas (“ ”) no CSS.
-- Não inventes moradas, preços ou contactos que não estejam no contexto.
-- O rodapé deve incluir um link "Livro de Reclamações" para https://www.livroreclamacoes.pt/Inicio/ (target=_blank, rel=noopener).
-- NÃO substituas dp-photo:// nem dp-logo:// por URLs reais, stock ou data:image.
+- Responde só com UM HTML completo (DOCTYPE, CSS e JS inline). Sem markdown, sem texto à volta.
+- Português de Portugal. Não escrever "demo", "template" ou "mock" no ecrã.
+- Cliques mudam de vista de imediato.
+- Não inventes moradas, preços ou contactos que não estejam no HTML ou no pedido.
+- Rodapé: link "Livro de Reclamações" para https://www.livroreclamacoes.pt/Inicio/ (target=_blank, rel=noopener).
 
 HTML ACTUAL
-${compact || '(ainda não há HTML — cria a primeira versão a partir do negócio e do pedido. Usa dp-photo://0, dp-photo://1 e dp-logo:// nos sítios das imagens.)'}
+${compact || '(ainda não há HTML — cria a primeira versão. Usa dp-photo://0 e dp-logo://.)'}
 `;
+}
+
+export const AI_CLIPBOARD_MAX = 70000;
+
+export function clipboardSizeLabel(text) {
+    const n = String(text || '').length;
+    return n < 1000 ? `${n} caracteres` : `${(n / 1024).toFixed(1)} KB`;
+}
+
+export function assertPromptFitsChat(text) {
+    const s = String(text || '');
+    if (/data:image\/|base64,/i.test(s)) {
+        return { ok: false, error: 'O HTML ainda tem fotos embebidas. Toque em Recarregar sem cache e copie outra vez.' };
+    }
+    if (s.length > AI_CLIPBOARD_MAX) {
+        return { ok: false, error: 'O texto é demasiado grande para colar no Claude. Deve caber na mensagem, não num ficheiro.' };
+    }
+    return { ok: true };
 }
 
 export function mountHtmlPreview(host, html, { identidade, dados } = {}) {

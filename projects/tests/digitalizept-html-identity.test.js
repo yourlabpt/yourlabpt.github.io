@@ -114,6 +114,10 @@ describe('digitalizept HTML identity overlay', async () => {
         }, bulkyPromptHtml(foto0), '');
         assert.equal(prompt.includes(foto0), false);
         assert.match(prompt, /dp-photo:\/\/0/);
+        assert.match(prompt, /Não há anexo/);
+        const { assertPromptFitsChat } = htmlMod;
+        assert.equal(assertPromptFitsChat(prompt).ok, true);
+        assert.equal(assertPromptFitsChat(bulkyPromptHtml(foto0)).ok, false);
     });
 
     it('strips wrapped, charset and unmatched camera JPEGs from the AI prompt', () => {
