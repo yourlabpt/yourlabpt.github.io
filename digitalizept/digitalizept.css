@@ -214,6 +214,27 @@ button, input, textarea, select {
     justify-content: flex-end;
 }
 
+.btn-refresh-app {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid var(--accent-soft);
+    background: var(--secondary-dark);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.btn-refresh-app:hover {
+    border-color: rgba(232, 213, 183, 0.45);
+    color: var(--text-light);
+    background: var(--accent-dark);
+}
+
 .btn-new-deal {
     flex-shrink: 0;
     height: 36px;
