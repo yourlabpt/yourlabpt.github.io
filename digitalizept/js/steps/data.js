@@ -77,7 +77,7 @@ const CORE_PAGES = [
     {
         id: 'horario',
         title: 'Qual é o horário?',
-        hint: 'Pode deixar em branco e preencher depois.',
+        hint: 'Como está na montra. Ex.: seg–sáb 9h–19h.',
         required: false
     },
     {
@@ -93,32 +93,32 @@ function extraPages(state, standardFields) {
     const used = new Set([...PUBLIC_REQUIRED, ...PUBLIC_EXTRA]);
     const pages = [];
 
-    function addId(id) {
+    function addId(id, extra = {}) {
         if (!id || used.has(id)) return;
         used.add(id);
         const def = (standardFields && standardFields[id]) || { label: id, tipo: 'texto' };
         pages.push({
             id,
-            title: def.label || id,
-            hint: 'Opcional — Continuar sem preencher está bem.',
+            title: extra.title || def.label || id,
+            hint: extra.hint || 'Opcional — Continuar sem preencher está bem.',
             required: false,
-            def
+            def: { ...def, ...extra.def }
         });
     }
 
-    (businessType.campos_obrigatorios || []).forEach(addId);
     (Array.isArray(businessType.perguntas_especificas) ? businessType.perguntas_especificas : []).forEach((q) => {
         if (!q || !q.id || used.has(q.id)) return;
         used.add(q.id);
         pages.push({
             id: q.id,
-            title: q.label || q.id,
-            hint: 'Opcional.',
+            title: q.title || q.label || q.id,
+            hint: q.hint || 'Opcional — se não souber agora, avance.',
             required: false,
             def: q
         });
     });
-    (businessType.campos_opcionais || []).forEach(addId);
+    (businessType.campos_obrigatorios || []).forEach((id) => addId(id));
+    (businessType.campos_opcionais || []).forEach((id) => addId(id));
     return pages;
 }
 
@@ -129,8 +129,9 @@ function pagesFor(state, standardFields) {
     }));
     const gate = {
         id: '_more',
-        title: 'Quer acrescentar mais agora?',
-        hint: 'Nome do responsável, o que faz, e o resto. Pode ficar para depois do fecho.',
+        title: (getBusinessType(state) && getBusinessType(state).gate_mais)
+            || 'Quer acrescentar mais agora?',
+        hint: 'Perguntas deste tipo de negócio (pratos, marcas, marcações…). Pode ficar para depois.',
         kind: 'gate'
     };
     if (!state.data.dadosMore) return [...core, gate];
@@ -246,7 +247,7 @@ async function render(body, ctx) {
     if (page.kind === 'gate') {
         askChoices(control, [
             { id: 'no', name: 'Agora não', desc: 'Seguir para o diagnóstico' },
-            { id: 'yes', name: 'Sim', desc: 'Responsável, descrição e mais detalhes' }
+            { id: 'yes', name: 'Sim', desc: 'Perguntas deste ofício e o resto da ficha' }
         ], {
             selected: ctx.state.data.dadosMore === true ? 'yes' : 'no',
             goNext: ctx.goNext,

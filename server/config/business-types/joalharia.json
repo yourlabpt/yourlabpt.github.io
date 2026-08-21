@@ -34,8 +34,11 @@
     "hero",
     "servicos",
     "sobre",
+    "confianca",
     "galeria",
-    "diferenciais",
+    "avaliacoes",
+    "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -75,8 +78,9 @@
   "perguntas_especificas": [
     {
       "id": "especialidade",
-      "label": "Especialidade (joias, relógios, ambos)",
-      "tipo": "texto"
+      "label": "Especialidade",
+      "tipo": "texto",
+      "hint": "Joias, relógios, alianças — o que a loja é, na prática."
     },
     {
       "id": "faz_reparacoes",
@@ -86,6 +90,11 @@
     {
       "id": "faz_avaliacoes",
       "label": "Faz avaliação de peças?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "faz_gravacoes",
+      "label": "Faz gravações?",
       "tipo": "sim_nao"
     }
   ],
@@ -133,5 +142,56 @@
     "titulo": "Visite-nos",
     "botao": "Como chegar",
     "target": "dpl-mapa"
+  },
+  "gate_mais": "Quer falar de joias, relógios e reparações?",
+  "destaques_campo": "especialidade",
+  "rotulos": {
+    "servicos": "O que encontrará",
+    "destaques": "Especialidade",
+    "sobre": "A casa",
+    "galeria": "Peças e atelier",
+    "contactos": "Visite-nos"
+  },
+  "nav": [
+    {
+      "label": "Coleção",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Loja",
+      "target": "dpl-mapa"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_reparacoes",
+      "label": "Reparações"
+    },
+    {
+      "id": "faz_avaliacoes",
+      "label": "Avaliação de peças"
+    },
+    {
+      "id": "faz_gravacoes",
+      "label": "Gravação"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Ourivesaria Ferreira",
+    "cidade": "Viana do Castelo",
+    "titulo": "Peças que ficam na família",
+    "subtitulo": "Joias, relógios e o cuidado de quem trabalha o ouro há gerações.",
+    "sobre": "{nome} é uma ourivesaria de rua. Alianças, reparações e o tempo certo para escolher uma peça.",
+    "rodape": "Visite a loja. Estamos no centro de Viana.",
+    "avaliacoes": [
+      {
+        "autor": "Clara",
+        "texto": "Escolheram a aliança com calma. Voltámos para as alianças dos padrinhos."
+      },
+      {
+        "autor": "André",
+        "texto": "Repararam o relógio do meu pai. Trabalho limpo."
+      }
+    ]
   }
 }

@@ -1162,12 +1162,19 @@ html:has(body > .dp-landing) {
     z-index: 5;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    gap: 12px;
     min-height: 56px;
     padding: 10px 18px;
     background: rgba(255, 255, 255, 0.94);
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     backdrop-filter: blur(8px);
+}
+
+.dpl-topbar-brand-wrap {
+    display: flex;
+    align-items: center;
+    min-width: 0;
 }
 
 .dpl-topbar-brand {
@@ -1317,6 +1324,44 @@ html:has(body > .dp-landing) {
     max-width: 460px;
     margin: 0 auto 28px;
     opacity: 0.94;
+}
+
+.dpl-hero-place {
+    margin: 0 0 10px;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.82;
+}
+
+.dpl-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px 12px;
+}
+
+.dpl-nav-link {
+    font-size: 0.82rem;
+    font-weight: 650;
+    color: var(--l-base);
+    text-decoration: none;
+    padding: 8px 4px;
+}
+
+.dpl-nav-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+    .dpl-nav {
+        display: none;
+    }
+
+    .dpl-topbar {
+        justify-content: center;
+    }
 }
 
 .dpl-btn {
@@ -1873,6 +1918,74 @@ html:has(body > .dp-landing) {
     font-size: 0.95rem;
     color: #333;
     letter-spacing: 0.01em;
+}
+
+.dpl-chip-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dpl-chip {
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--l-secundaria) 22%, #fff);
+    color: var(--l-base);
+    font-weight: 650;
+    font-size: 0.92rem;
+}
+
+.dpl-chip-trust {
+    background: color-mix(in srgb, var(--l-destaque) 28%, #fff);
+}
+
+.dpl-horario {
+    text-align: center;
+    background: #f7f5f1;
+}
+
+.dpl-horario-text {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 650;
+    color: var(--l-base);
+}
+
+.dpl-horario-note {
+    margin: 10px 0 0;
+    color: #5c564c;
+}
+
+.dpl-antes-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.dpl-antes-tile {
+    min-height: 180px;
+    border-radius: 12px;
+}
+
+.dpl-btn-ig {
+    background: #c13584;
+    color: #fff;
+}
+
+.dp-landing[data-archetype="retail"] .dpl-hero-title {
+    letter-spacing: -0.03em;
+}
+
+.dp-landing[data-category="mecanico-automovel"] .dpl-btn-cta,
+.dp-landing[data-category="drogaria-ferragens"] .dpl-btn-cta {
+    border-radius: 10px;
+}
+
+.dp-landing[data-category="joalharia"] .dpl-topbar {
+    background: color-mix(in srgb, var(--l-base) 8%, #fff);
 }
 
 .dpl-btn-maps {

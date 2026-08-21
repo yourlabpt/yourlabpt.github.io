@@ -34,10 +34,12 @@
     "hero",
     "servicos",
     "problemas",
+    "confianca",
     "diferenciais",
     "cta_bloco",
     "galeria",
     "avaliacoes",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -78,7 +80,8 @@
     {
       "id": "marcas_especializacao",
       "label": "Marcas ou especialização",
-      "tipo": "texto"
+      "tipo": "texto",
+      "hint": "Todas as marcas, ou mais diesel, clássicos, comerciais…"
     },
     {
       "id": "faz_ipo",
@@ -87,7 +90,12 @@
     },
     {
       "id": "carro_substituicao",
-      "label": "Disponibiliza carro de substituição?",
+      "label": "Tem carro de substituição?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "faz_diagnostico",
+      "label": "Faz diagnóstico electrónico?",
       "tipo": "sim_nao"
     }
   ],
@@ -136,5 +144,65 @@
     "botao": "WhatsApp / Ligar",
     "target": "whatsapp"
   },
-  "problemas_titulo": "Problemas que resolvemos"
+  "problemas_titulo": "Problemas que resolvemos",
+  "gate_mais": "Quer falar de marcas, IPO e carro de substituição?",
+  "rotulos": {
+    "servicos": "Serviços",
+    "problemas": "Quando precisa da oficina",
+    "sobre": "A oficina",
+    "galeria": "O espaço",
+    "confianca": "Confiança",
+    "contactos": "Pedir orçamento"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Orçamento",
+      "target": "dpl-cta-bloco"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_ipo",
+      "label": "Pré-inspeção IPO"
+    },
+    {
+      "id": "carro_substituicao",
+      "label": "Carro de substituição"
+    },
+    {
+      "id": "faz_diagnostico",
+      "label": "Diagnóstico electrónico"
+    },
+    {
+      "id": "estacionamento",
+      "label": "Estacionamento"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Auto Silva",
+    "cidade": "Santa Maria da Feira",
+    "titulo": "A oficina da rua",
+    "subtitulo": "Revisão, diagnóstico e reparação — com orçamento antes de mexer.",
+    "sobre": "{nome} trata do carro como se fosse o nosso. Explicamos o que está avariado, o que pode esperar, e só avançamos com o seu sim.",
+    "rodape": "Ligue ou mande WhatsApp. Dizemos quando pode trazer o carro.",
+    "problemas": [
+      "A luz do motor acendeu",
+      "Precisa de revisão antes da viagem",
+      "Quer ir à IPO descansado"
+    ],
+    "avaliacoes": [
+      {
+        "autor": "Carlos",
+        "texto": "Orçamento claro e o carro ficou pronto no dia."
+      },
+      {
+        "autor": "Sónia",
+        "texto": "Não inventam serviços. Confio neles."
+      }
+    ]
+  }
 }

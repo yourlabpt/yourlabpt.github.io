@@ -34,10 +34,12 @@
   "seccoes_landing": [
     "hero",
     "servicos",
+    "ocasioes",
     "galeria",
     "sobre",
     "avaliacoes",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -82,13 +84,19 @@
     },
     {
       "id": "faz_entregas",
-      "label": "Faz entregas?",
+      "label": "Faz entregas na zona?",
       "tipo": "sim_nao"
     },
     {
       "id": "ocasioes",
-      "label": "Trabalha casamentos, funerais ou outras ocasiões?",
-      "tipo": "texto"
+      "label": "Que ocasiões trabalha?",
+      "tipo": "texto",
+      "hint": "Aniversários, funerais, casamentos, o ramo do sábado…"
+    },
+    {
+      "id": "plantas_interior",
+      "label": "Vende plantas de interior?",
+      "tipo": "sim_nao"
     }
   ],
   "archetype": "retail",
@@ -135,5 +143,53 @@
     "titulo": "Peça o seu ramo ou venha à loja",
     "botao": "WhatsApp",
     "target": "whatsapp"
+  },
+  "gate_mais": "Quer falar de ramos, ocasiões e entregas?",
+  "destaques_campo": "ocasioes",
+  "rotulos": {
+    "servicos": "Flores e casa",
+    "destaques": "Ocasiões",
+    "ocasioes": "Para que momentos",
+    "sobre": "A loja",
+    "galeria": "Ramos e plantas",
+    "contactos": "Encomendar"
+  },
+  "nav": [
+    {
+      "label": "Ramos",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Encomendar",
+      "target": "whatsapp"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_ramos",
+      "label": "Arranjos à medida"
+    },
+    {
+      "id": "faz_entregas",
+      "label": "Entregas na zona"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Flores da Praça",
+    "cidade": "Aveiro",
+    "titulo": "Um ramo para hoje",
+    "subtitulo": "Flores frescas, plantas e um conselho na loja.",
+    "sobre": "{nome} fica na praça. Ramos do dia, plantas para casa e entregas quando o recado é para alguém.",
+    "rodape": "Peça pelo WhatsApp ou entre na loja.",
+    "avaliacoes": [
+      {
+        "autor": "Teresa",
+        "texto": "O ramo chegou a horas e estava bonito de verdade."
+      },
+      {
+        "autor": "Nuno",
+        "texto": "Ajudaram-me a escolher plantas que aguentam o apartamento."
+      }
+    ]
   }
 }

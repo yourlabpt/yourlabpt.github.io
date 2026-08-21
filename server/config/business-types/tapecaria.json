@@ -1,6 +1,6 @@
 {
   "id": "tapecaria",
-  "nome": "Tapeçaria",
+  "nome": "Tapeçaria / Estofador",
   "icone": "TA",
   "tom": "artesanal, cuidado, orgulhoso do ofício",
   "prompt_contexto": "Tapeçaria e estofos em Portugal. O texto valoriza o trabalho manual, a durabilidade e a recuperação de peças com valor. Fala de restauro, estofos à medida e cuidado com cada detalhe. Tom de ofício e orgulho artesanal.",
@@ -35,9 +35,11 @@
     "hero",
     "servicos",
     "problemas",
+    "antes_depois",
     "galeria",
     "diferenciais",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -77,8 +79,9 @@
   "perguntas_especificas": [
     {
       "id": "tipos_trabalho",
-      "label": "Tipos de trabalho que faz",
-      "tipo": "texto_longo"
+      "label": "Que trabalhos faz?",
+      "tipo": "texto_longo",
+      "hint": "Sofás, cadeiras, cortinados, barcos, automóvel…"
     },
     {
       "id": "faz_automovel",
@@ -88,6 +91,11 @@
     {
       "id": "recolha_entrega",
       "label": "Faz recolha e entrega?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "faz_cortinados",
+      "label": "Faz cortinados ou estores?",
       "tipo": "sim_nao"
     }
   ],
@@ -136,5 +144,61 @@
     "botao": "Pedir orçamento",
     "target": "whatsapp"
   },
-  "problemas_titulo": "O que resolvemos"
+  "problemas_titulo": "O que resolvemos",
+  "gate_mais": "Quer falar de estofos, restauro e recolha?",
+  "rotulos": {
+    "servicos": "O que fazemos",
+    "problemas": "Peças que recuperamos",
+    "antes_depois": "Antes e depois",
+    "galeria": "Trabalhos",
+    "sobre": "O ofício",
+    "contactos": "Pedir orçamento"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Trabalhos",
+      "target": "dpl-galeria"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_automovel",
+      "label": "Estofos automóvel"
+    },
+    {
+      "id": "recolha_entrega",
+      "label": "Recolha e entrega"
+    },
+    {
+      "id": "faz_cortinados",
+      "label": "Cortinados"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Estofos do Mestre",
+    "cidade": "Famalicão",
+    "titulo": "O sofá volta a ser sofá",
+    "subtitulo": "Estofos, restauro e o tecido certo para a peça.",
+    "sobre": "{nome} recupera o que ainda tem vida: o sofá da sala, a cadeira da avó, o banco do carro. Orçamento antes de cortar.",
+    "rodape": "Envie uma foto pelo WhatsApp. Dizemos se vale a pena.",
+    "problemas": [
+      "O sofá está gasto mas a estrutura está boa",
+      "Quer um tecido que aguente crianças",
+      "Precisa de cortinados à medida"
+    ],
+    "avaliacoes": [
+      {
+        "autor": "Olga",
+        "texto": "O sofá ficou novo. Trouxeram e levaram."
+      },
+      {
+        "autor": "Hugo",
+        "texto": "Mostraram tecidos a sério, não três amostras."
+      }
+    ]
+  }
 }

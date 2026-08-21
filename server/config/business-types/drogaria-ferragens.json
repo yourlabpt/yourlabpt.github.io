@@ -33,10 +33,13 @@
   ],
   "seccoes_landing": [
     "hero",
+    "destaques",
     "servicos",
     "diferenciais",
+    "confianca",
     "galeria",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -76,8 +79,9 @@
   "perguntas_especificas": [
     {
       "id": "categorias_produto",
-      "label": "Principais categorias de produto",
-      "tipo": "texto_longo"
+      "label": "Principais categorias",
+      "tipo": "texto_longo",
+      "hint": "Tintas, parafusos, canalização, electricidade, limpeza…"
     },
     {
       "id": "faz_chaves",
@@ -86,8 +90,14 @@
     },
     {
       "id": "faz_encomendas",
-      "label": "Faz encomendas por pedido?",
+      "label": "Encomenda o que não tem em loja?",
       "tipo": "sim_nao"
+    },
+    {
+      "id": "marcas",
+      "label": "Marcas que trabalha",
+      "tipo": "texto",
+      "hint": "Se quiser mostrar nomes na página."
     }
   ],
   "archetype": "retail",
@@ -134,5 +144,54 @@
     "titulo": "Não encontrou o que procura?",
     "botao": "Ligue-nos",
     "target": "tel"
+  },
+  "gate_mais": "Quer falar de categorias, chaves e encomendas?",
+  "destaques_campo": "categorias_produto",
+  "rotulos": {
+    "servicos": "O que encontra",
+    "destaques": "Categorias",
+    "sobre": "A loja",
+    "galeria": "O espaço",
+    "diferenciais": "Como ajudamos",
+    "contactos": "Ligue ou venha"
+  },
+  "nav": [
+    {
+      "label": "Categorias",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Onde",
+      "target": "dpl-mapa"
+    }
+  ],
+  "marcas_campo": "marcas",
+  "trust_flags": [
+    {
+      "id": "faz_chaves",
+      "label": "Duplicação de chaves"
+    },
+    {
+      "id": "faz_encomendas",
+      "label": "Encomendas por pedido"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Drogaria do Largo",
+    "cidade": "Gondomar",
+    "titulo": "O que falta em casa, aqui",
+    "subtitulo": "Ferragens, tintas e um conselho direito — no Largo.",
+    "sobre": "{nome} resolve o recado do dia: o parafuso certo, a tinta, a chave. Se não estiver na prateleira, encomendamos.",
+    "rodape": "Ligue antes se quiser confirmar stock.",
+    "avaliacoes": [
+      {
+        "autor": "Paulo",
+        "texto": "Ajudaram-me a escolher a tinta certa. Volto sempre."
+      },
+      {
+        "autor": "Helena",
+        "texto": "Têm o que as grandes superfícies não explicam."
+      }
+    ]
   }
 }

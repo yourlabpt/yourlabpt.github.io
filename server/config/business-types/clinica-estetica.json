@@ -35,9 +35,12 @@
     "hero",
     "sobre",
     "servicos",
+    "destaques",
+    "confianca",
     "galeria",
     "avaliacoes",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -78,17 +81,25 @@
     {
       "id": "tratamentos_principais",
       "label": "Tratamentos principais",
-      "tipo": "texto_longo"
+      "tipo": "texto_longo",
+      "hint": "Facial, corporal, laser, peeling, skincare… o que fazem no dia a dia."
     },
     {
       "id": "faz_marcacoes",
       "label": "Faz marcações?",
-      "tipo": "sim_nao"
+      "tipo": "sim_nao",
+      "hint": "WhatsApp, telefone ou à porta."
     },
     {
       "id": "pre_pos_cirurgico",
       "label": "Trabalha pré ou pós-cirúrgico?",
       "tipo": "sim_nao"
+    },
+    {
+      "id": "equipa",
+      "label": "Quem atende?",
+      "tipo": "texto",
+      "hint": "Nomes ou especialidades da equipa, se quiser mostrar."
     }
   ],
   "archetype": "clinica",
@@ -135,5 +146,54 @@
     "titulo": "Venha visitar o nosso espaço",
     "botao": "Marcar consulta",
     "target": "whatsapp"
+  },
+  "gate_mais": "Quer falar de tratamentos, marcações e a equipa?",
+  "destaques_campo": "tratamentos_principais",
+  "rotulos": {
+    "servicos": "Tratamentos",
+    "destaques": "O que fazemos",
+    "sobre": "O espaço",
+    "galeria": "A clínica",
+    "confianca": "Cuidado e confiança",
+    "avaliacoes": "Quem nos visita",
+    "contactos": "Marcar"
+  },
+  "nav": [
+    {
+      "label": "Tratamentos",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Marcar",
+      "target": "dpl-contactos"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_marcacoes",
+      "label": "Marcações"
+    },
+    {
+      "id": "pre_pos_cirurgico",
+      "label": "Pré e pós-cirúrgico"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Atelier da Pele",
+    "cidade": "Matosinhos",
+    "titulo": "Cuidar da pele, com calma",
+    "subtitulo": "Consultas e tratamentos num espaço discreto, em Matosinhos.",
+    "sobre": "{nome} é uma clínica de estética de proximidade. Avaliação primeiro, tratamento a seguir — sem pressa e sem promessas vazias.",
+    "rodape": "Marque a sua visita. Estamos em Matosinhos.",
+    "avaliacoes": [
+      {
+        "autor": "Sofia",
+        "texto": "Explicaram tudo com clareza. Voltei para o acompanhamento."
+      },
+      {
+        "autor": "Marta",
+        "texto": "O espaço é calmo e senti-me bem tratada."
+      }
+    ]
   }
 }

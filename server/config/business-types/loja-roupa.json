@@ -34,9 +34,12 @@
   "seccoes_landing": [
     "hero",
     "servicos",
+    "marcas",
     "galeria",
     "sobre",
     "diferenciais",
+    "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -76,18 +79,27 @@
   "perguntas_especificas": [
     {
       "id": "publico",
-      "label": "Público (senhora, homem, criança…)",
-      "tipo": "texto"
+      "label": "Para quem é a loja?",
+      "tipo": "texto",
+      "hint": "Senhora, homem, criança, os dois…"
     },
     {
       "id": "marcas",
-      "label": "Marcas que vende",
-      "tipo": "texto_longo"
+      "label": "Marcas ou tipo de peças",
+      "tipo": "texto_longo",
+      "hint": "Nomes, ou simplesmente “peças escolhidas, poucas unidades”."
     },
     {
       "id": "vende_online",
       "label": "Vende também online?",
-      "tipo": "sim_nao"
+      "tipo": "sim_nao",
+      "hint": "Se não, a página aponta para a loja física — e está bem."
+    },
+    {
+      "id": "novidades",
+      "label": "Com que frequência chegam novidades?",
+      "tipo": "texto",
+      "hint": "Toda a semana, por estação…"
     }
   ],
   "archetype": "retail",
@@ -134,5 +146,43 @@
     "titulo": "Venha ver as novidades",
     "botao": "Como chegar",
     "target": "dpl-mapa"
+  },
+  "gate_mais": "Quer falar de público, marcas e Instagram?",
+  "destaques_campo": "marcas",
+  "marcas_campo": "marcas",
+  "rotulos": {
+    "servicos": "O que vestimos",
+    "marcas": "Marcas",
+    "sobre": "A loja",
+    "galeria": "Novidades",
+    "contactos": "Venha experimentar"
+  },
+  "nav": [
+    {
+      "label": "Coleção",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Loja",
+      "target": "dpl-mapa"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Atelier da Rua",
+    "cidade": "Coimbra",
+    "titulo": "Peças escolhidas, não uma prateleira a mais",
+    "subtitulo": "Roupa e acessórios com atendimento de loja, em Coimbra.",
+    "sobre": "{nome} é uma loja pequena. Entramos, experimentamos, saímos vestidos — sem filas de centro comercial.",
+    "rodape": "Venha ver as novidades. O Instagram mostra o que chegou.",
+    "avaliacoes": [
+      {
+        "autor": "Ana",
+        "texto": "Ajudaram-me a montar um look para um jantar. Volto."
+      },
+      {
+        "autor": "Joana",
+        "texto": "Peças que não se vêem em todo o lado."
+      }
+    ]
   }
 }

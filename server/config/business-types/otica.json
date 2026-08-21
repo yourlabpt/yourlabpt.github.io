@@ -34,9 +34,12 @@
   "seccoes_landing": [
     "hero",
     "servicos",
+    "marcas",
     "sobre",
+    "confianca",
     "galeria",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -82,12 +85,19 @@
     {
       "id": "marcas",
       "label": "Marcas de armações",
-      "tipo": "texto_longo"
+      "tipo": "texto_longo",
+      "hint": "Se quiser mostrar nomes. Senão, “várias marcas, aconselhamos na loja”."
     },
     {
       "id": "convencoes",
-      "label": "Trabalha com que convenções/seguros?",
-      "tipo": "texto"
+      "label": "Convenções ou seguros",
+      "tipo": "texto",
+      "hint": "ADSE, seguradoras — só se for verdade."
+    },
+    {
+      "id": "lentes_contacto",
+      "label": "Trabalha lentes de contacto?",
+      "tipo": "sim_nao"
     }
   ],
   "archetype": "premium",
@@ -134,5 +144,52 @@
     "titulo": "Marque o seu exame de visão",
     "botao": "Marcar exame",
     "target": "whatsapp"
+  },
+  "gate_mais": "Quer falar de exames, marcas e convenções?",
+  "marcas_campo": "marcas",
+  "rotulos": {
+    "servicos": "Visão e armações",
+    "marcas": "Marcas",
+    "sobre": "A ótica",
+    "galeria": "Coleção",
+    "contactos": "Marcar exame"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Marcar",
+      "target": "dpl-cta-bloco"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_exames",
+      "label": "Exames de visão"
+    },
+    {
+      "id": "lentes_contacto",
+      "label": "Lentes de contacto"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Óptica da Ponte",
+    "cidade": "Vila Nova de Gaia",
+    "titulo": "Ver bem, com tempo para escolher",
+    "subtitulo": "Exame, armações e lentes — com aconselhamento na loja.",
+    "sobre": "{nome} trata da visão sem pressa. Explicamos as lentes, experimentamos armações, marcamos o exame quando lhe der jeito.",
+    "rodape": "Marque o exame ou passe a ver armações.",
+    "avaliacoes": [
+      {
+        "autor": "Pedro",
+        "texto": "O exame foi calmo e as lentes chegaram rápido."
+      },
+      {
+        "autor": "Rita",
+        "texto": "Ajudaram-me a escolher armações que aguentam o dia a dia."
+      }
+    ]
   }
 }

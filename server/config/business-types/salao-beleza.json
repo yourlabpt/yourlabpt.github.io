@@ -35,9 +35,11 @@
     "hero",
     "servicos",
     "galeria",
+    "marcas",
     "sobre",
     "avaliacoes",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -78,16 +80,23 @@
     {
       "id": "servicos_principais",
       "label": "Serviços principais",
-      "tipo": "texto_longo"
+      "tipo": "texto_longo",
+      "hint": "Corte, cor, brushing, manicure, unhas de gel…"
     },
     {
       "id": "marcas_usadas",
-      "label": "Trabalha com marcas específicas?",
-      "tipo": "texto"
+      "label": "Marcas que usa",
+      "tipo": "texto",
+      "hint": "Se quiser mostrar. Senão, avance."
     },
     {
       "id": "faz_marcacoes",
-      "label": "Faz marcações?",
+      "label": "Trabalha com marcação?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "aceita_sem_marcar",
+      "label": "Aceita sem marcar, se houver vaga?",
       "tipo": "sim_nao"
     }
   ],
@@ -135,5 +144,53 @@
     "titulo": "Marque o seu horário",
     "botao": "Marcar no WhatsApp",
     "target": "whatsapp"
+  },
+  "gate_mais": "Quer falar de serviços, marcas e marcações?",
+  "destaques_campo": "servicos_principais",
+  "marcas_campo": "marcas_usadas",
+  "rotulos": {
+    "servicos": "Serviços",
+    "marcas": "Produtos que usamos",
+    "sobre": "O salão",
+    "galeria": "Trabalhos",
+    "contactos": "Marcar"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Marcar",
+      "target": "whatsapp"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_marcacoes",
+      "label": "Marcações"
+    },
+    {
+      "id": "aceita_sem_marcar",
+      "label": "Sem marcar, se houver vaga"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Studio Maria",
+    "cidade": "Guimarães",
+    "titulo": "O seu cabelo, com tempo",
+    "subtitulo": "Corte, cor e unhas — marque e venha descansada.",
+    "sobre": "{nome} é um salão de bairro. Marcamos, fazemos o serviço com calma, e sabe quando volta.",
+    "rodape": "Marque no WhatsApp. Diga o serviço e o dia.",
+    "avaliacoes": [
+      {
+        "autor": "Filipa",
+        "texto": "A cor ficou natural. Já indico às amigas."
+      },
+      {
+        "autor": "Beatriz",
+        "texto": "Pontuais e simpáticas. O brushing dura a semana."
+      }
+    ]
   }
 }

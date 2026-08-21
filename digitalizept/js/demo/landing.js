@@ -1,6 +1,17 @@
 // Renders the live demo landing from state: one engine, archetype + category
 // config drive sections, CTAs, and typography. Looks like a real site, not a template.
 
+import {
+    destaqueItems,
+    instagramHref,
+    isYes,
+    mapsHref,
+    marcaItems,
+    rotulo,
+    splitItems,
+    trustChips
+} from './boilerplate.js';
+
 function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -64,9 +75,7 @@ function mapsIcon() {
 }
 
 function mapsUrl(dados) {
-    const query = [dados.morada, dados.cidade].filter(Boolean).join(', ');
-    if (!query) return '';
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    return mapsHref(dados);
 }
 
 function scrollToId(id) {
@@ -135,15 +144,29 @@ function photoOrPlane(fotos, index, className, mark) {
     return visualPlane(className, mark);
 }
 
-function buildTopbar(dados, identidade) {
+function buildTopbar(dados, identidade, businessType) {
     const bar = el('div', 'dpl-topbar');
+    const brandWrap = el('div', 'dpl-topbar-brand-wrap');
     if (identidade.logo && identidade.logo.tipo === 'upload' && identidade.logo.dataUrl) {
         const img = el('img', 'dpl-topbar-logo');
         img.src = identidade.logo.dataUrl;
         img.alt = dados.nome_negocio || 'Logótipo';
-        bar.appendChild(img);
+        brandWrap.appendChild(img);
     } else {
-        bar.appendChild(el('div', 'dpl-topbar-brand', dados.nome_negocio || 'O seu negócio'));
+        brandWrap.appendChild(el('div', 'dpl-topbar-brand', dados.nome_negocio || 'O seu negócio'));
+    }
+    bar.appendChild(brandWrap);
+
+    const navItems = Array.isArray(businessType.nav) ? businessType.nav.slice(0, 4) : [];
+    if (navItems.length) {
+        const nav = el('nav', 'dpl-nav');
+        nav.setAttribute('aria-label', 'Secções');
+        navItems.forEach((item) => {
+            const a = el('a', 'dpl-nav-link', item.label);
+            bindCta(a, item.target || 'dpl-contactos', dados);
+            nav.appendChild(a);
+        });
+        bar.appendChild(nav);
     }
     return bar;
 }
@@ -161,6 +184,9 @@ function buildHero(dados, identidade, demo, businessType, fotos) {
 
     const inner = el('div', 'dpl-hero-inner');
     inner.appendChild(el('div', 'dpl-hero-name', dados.nome_negocio || 'O seu negócio'));
+    if (dados.cidade) {
+        inner.appendChild(el('p', 'dpl-hero-place', dados.cidade));
+    }
 
     inner.appendChild(el('h1', 'dpl-hero-title', demo.hero.titulo));
     if (demo.hero.subtitulo) inner.appendChild(el('p', 'dpl-hero-sub', demo.hero.subtitulo));
@@ -189,10 +215,10 @@ function buildSobre(demo, fotos) {
     return s;
 }
 
-function buildServicos(demo) {
+function buildServicos(demo, businessType) {
     if (!demo.servicos || !Array.isArray(demo.servicos.itens) || !demo.servicos.itens.length) return null;
     const s = section('dpl-servicos', 'dpl-servicos');
-    s.appendChild(sectionTitle(demo.servicos.titulo));
+    s.appendChild(sectionTitle(demo.servicos.titulo || rotulo(businessType, 'servicos', 'Serviços')));
     const grid = el('div', 'dpl-servicos-grid');
     demo.servicos.itens.forEach((item, i) => {
         const card = el('article', `dpl-servico-card dpl-servico-card-${i % 3}`);
@@ -283,12 +309,16 @@ function buildCtaBloco(businessType, dados) {
     return s;
 }
 
-function buildGaleria(fotos) {
+function buildGaleria(fotos, businessType) {
     const s = section('dpl-galeria', 'dpl-galeria');
     const head = el('div', 'dpl-galeria-head');
-    head.appendChild(sectionTitle('Galeria'));
+    head.appendChild(sectionTitle(rotulo(businessType, 'galeria', 'Galeria')));
     if (!fotos || !fotos.length) {
-        head.appendChild(el('p', 'dpl-galeria-note', 'Fotos do estabelecimento — tire algumas no local para tornar a demo real.'));
+        head.appendChild(el(
+            'p',
+            'dpl-galeria-note',
+            rotulo(businessType, 'galeria_vazia', 'Fotos do estabelecimento — tire algumas no local para tornar a página real.')
+        ));
     }
     s.appendChild(head);
     const grid = el('div', 'dpl-galeria-grid');
@@ -297,6 +327,68 @@ function buildGaleria(fotos) {
         grid.appendChild(photoOrPlane(fotos, i, `dpl-galeria-tile dpl-galeria-tile-${i % 3}`, String(i + 1).padStart(2, '0')));
     }
     s.appendChild(grid);
+    return s;
+}
+
+function chipList(title, items, className) {
+    if (!items.length) return null;
+    const s = section(null, className);
+    s.appendChild(sectionTitle(title));
+    const list = el('ul', 'dpl-chip-list');
+    items.forEach((item) => list.appendChild(el('li', 'dpl-chip', item)));
+    s.appendChild(list);
+    return s;
+}
+
+function buildDestaques(dados, businessType) {
+    const items = destaqueItems(dados, businessType);
+    return chipList(rotulo(businessType, 'destaques', 'Em destaque'), items, 'dpl-destaques');
+}
+
+function buildMarcas(dados, businessType) {
+    const items = marcaItems(dados, businessType);
+    return chipList(rotulo(businessType, 'marcas', 'Marcas'), items, 'dpl-marcas');
+}
+
+function buildOcasioes(dados, businessType) {
+    const items = splitItems(dados.ocasioes);
+    return chipList(rotulo(businessType, 'ocasioes', 'Ocasiões'), items, 'dpl-ocasioes');
+}
+
+function buildConfianca(dados, businessType) {
+    const chips = trustChips(dados, businessType);
+    if (!chips.length) return null;
+    const s = section('dpl-confianca', 'dpl-confianca');
+    s.appendChild(sectionTitle(rotulo(businessType, 'confianca', 'Porquê aqui')));
+    const list = el('ul', 'dpl-chip-list');
+    chips.forEach((item) => list.appendChild(el('li', 'dpl-chip dpl-chip-trust', item)));
+    s.appendChild(list);
+    return s;
+}
+
+function buildHorario(dados, businessType) {
+    if (!dados.horario) return null;
+    const s = section('dpl-horario', 'dpl-horario');
+    s.appendChild(sectionTitle(rotulo(businessType, 'horario', 'Horário')));
+    s.appendChild(el('p', 'dpl-horario-text', dados.horario));
+    if (isYes(dados.estacionamento)) {
+        s.appendChild(el('p', 'dpl-horario-note', 'Tem estacionamento.'));
+    }
+    return s;
+}
+
+function buildAntesDepois(fotos, businessType) {
+    const s = section('dpl-antes-depois', 'dpl-antes-depois');
+    s.appendChild(sectionTitle(rotulo(businessType, 'antes_depois', 'Antes e depois')));
+    const grid = el('div', 'dpl-antes-grid');
+    grid.appendChild(photoOrPlane(fotos, 0, 'dpl-antes-tile', 'Antes'));
+    grid.appendChild(photoOrPlane(fotos, 1, 'dpl-antes-tile', 'Depois'));
+    s.appendChild(grid);
+    s.appendChild(el(
+        'p',
+        'dpl-galeria-note',
+        rotulo(businessType, 'antes_depois_nota', 'Mostre um trabalho recente. O cliente percebe o ofício em dois segundos.')
+    ));
     return s;
 }
 
@@ -310,9 +402,9 @@ function contactButton(label, href, cls, icon) {
     return a;
 }
 
-function buildContactos(dados) {
+function buildContactos(dados, businessType) {
     const s = section('dpl-contactos', 'dpl-contactos');
-    s.appendChild(sectionTitle('Contactos'));
+    s.appendChild(sectionTitle(rotulo(businessType, 'contactos', 'Contactos')));
 
     const info = el('div', 'dpl-contact-info');
     if (dados.morada || dados.cidade) {
@@ -336,13 +428,15 @@ function buildContactos(dados) {
         actions.appendChild(contactButton('WhatsApp', `https://wa.me/${wa}`, 'dpl-btn-wa', whatsappIcon()));
     }
     if (dados.email) actions.appendChild(contactButton('Email', `mailto:${dados.email}`, 'dpl-btn-email'));
+    const ig = instagramHref(dados.instagram);
+    if (ig) actions.appendChild(contactButton('Instagram', ig, 'dpl-btn-ig'));
     s.appendChild(actions);
 
     return s;
 }
 
 function buildMapa(dados) {
-    const query = [dados.morada, dados.cidade].filter(Boolean).join(', ');
+    const query = [dados.morada, dados.cidade, dados.nome_negocio].filter(Boolean).join(', ');
     if (!query) return null;
     const s = section('dpl-mapa', 'dpl-mapa');
     const frame = el('iframe', 'dpl-map-frame');
@@ -371,6 +465,16 @@ function buildRodape(dados, demo) {
     const s = el('footer', 'dpl-rodape');
     s.appendChild(el('div', 'dpl-rodape-name', dados.nome_negocio || ''));
     if (demo.rodape && demo.rodape.texto) s.appendChild(el('p', 'dpl-rodape-text', demo.rodape.texto));
+    const ig = instagramHref(dados.instagram);
+    if (ig) {
+        const social = el('p', 'dpl-rodape-social');
+        const a = el('a', 'dpl-rodape-ig', 'Instagram');
+        a.href = ig;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        social.appendChild(a);
+        s.appendChild(social);
+    }
     s.appendChild(el('p', 'dpl-rodape-meta', `© ${new Date().getFullYear()} ${dados.nome_negocio || ''}`));
     s.appendChild(buildLivroLink());
     return s;
@@ -432,24 +536,31 @@ export function renderLanding(state) {
     const root = el('div', 'dp-landing');
     root.dataset.style = identidade.estilo || identidade.paleta || 'clean';
     root.dataset.archetype = archetype;
+    if (businessType.id) root.dataset.category = businessType.id;
     const cores = identidade.cores || {};
     root.style.setProperty('--l-base', cores.base || '#1b1b1b');
     root.style.setProperty('--l-destaque', cores.destaque || '#e8d5b7');
     root.style.setProperty('--l-secundaria', cores.secundaria || '#7a8a99');
 
-    root.appendChild(buildTopbar(dados, identidade));
+    root.appendChild(buildTopbar(dados, identidade, businessType));
 
     const sections = businessType.seccoes_landing || ['hero', 'sobre', 'servicos', 'diferenciais', 'galeria', 'contactos', 'mapa', 'rodape'];
     const builders = {
         hero: () => buildHero(dados, identidade, demo, businessType, fotos),
         sobre: () => buildSobre(demo, fotos),
-        servicos: () => buildServicos(demo),
+        servicos: () => buildServicos(demo, businessType),
         diferenciais: () => buildDiferenciais(demo),
         problemas: () => buildProblemas(demo, businessType),
         avaliacoes: () => buildAvaliacoes(demo, dados),
         cta_bloco: () => buildCtaBloco(businessType, dados),
-        galeria: () => buildGaleria(fotos),
-        contactos: () => buildContactos(dados),
+        galeria: () => buildGaleria(fotos, businessType),
+        destaques: () => buildDestaques(dados, businessType),
+        marcas: () => buildMarcas(dados, businessType),
+        ocasioes: () => buildOcasioes(dados, businessType),
+        confianca: () => buildConfianca(dados, businessType),
+        horario: () => buildHorario(dados, businessType),
+        antes_depois: () => buildAntesDepois(fotos, businessType),
+        contactos: () => buildContactos(dados, businessType),
         mapa: () => buildMapa(dados),
         rodape: () => buildRodape(dados, demo)
     };

@@ -33,10 +33,13 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
+    "destaques",
     "servicos",
+    "sobre",
     "galeria",
     "avaliacoes",
+    "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -77,12 +80,14 @@
     {
       "id": "tipo_cozinha",
       "label": "Tipo de cozinha",
-      "tipo": "texto"
+      "tipo": "texto",
+      "hint": "Portuguesa, grelhados, marisco, petiscos…"
     },
     {
       "id": "pratos_destaque",
       "label": "Pratos em destaque",
-      "tipo": "texto_longo"
+      "tipo": "texto_longo",
+      "hint": "Dois ou três nomes que alguém pediria ao telefone."
     },
     {
       "id": "faz_reservas",
@@ -92,6 +97,16 @@
     {
       "id": "tem_esplanada",
       "label": "Tem esplanada?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "menu_do_dia",
+      "label": "Tem menu do dia?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "faz_takeaway",
+      "label": "Tem take-away?",
       "tipo": "sim_nao"
     }
   ],
@@ -139,5 +154,62 @@
     "titulo": "Reserve a sua mesa",
     "botao": "Reservar / WhatsApp",
     "target": "whatsapp"
+  },
+  "gate_mais": "Quer falar de cozinha, pratos, reservas e esplanada?",
+  "destaques_campo": "pratos_destaque",
+  "rotulos": {
+    "servicos": "A mesa",
+    "destaques": "Pratos da casa",
+    "sobre": "A casa",
+    "galeria": "A sala",
+    "horario": "Horário da cozinha",
+    "avaliacoes": "Quem já se sentou",
+    "contactos": "Reservar"
+  },
+  "nav": [
+    {
+      "label": "Menu",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Reservar",
+      "target": "dpl-contactos"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_reservas",
+      "label": "Reservas"
+    },
+    {
+      "id": "tem_esplanada",
+      "label": "Esplanada"
+    },
+    {
+      "id": "menu_do_dia",
+      "label": "Menu do dia"
+    },
+    {
+      "id": "faz_takeaway",
+      "label": "Take-away"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Casa da Vila",
+    "cidade": "Póvoa de Varzim",
+    "titulo": "Mesa posta, perto de casa",
+    "subtitulo": "Cozinha portuguesa, almoços e jantares sem pressa.",
+    "sobre": "{nome} é o restaurante da vila. Grelhados, o prato do dia e uma sala onde se ouve a conversa da mesa ao lado.",
+    "rodape": "Reserve mesa ou apareça. Aos domingos o almoço enche.",
+    "avaliacoes": [
+      {
+        "autor": "João",
+        "texto": "O arroz de pato estava como deve ser. Voltámos no fim-de-semana."
+      },
+      {
+        "autor": "Catarina",
+        "texto": "Bom para ir em família. Atendimento simples e correcto."
+      }
+    ]
   }
 }

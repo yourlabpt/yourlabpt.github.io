@@ -33,11 +33,14 @@
   ],
   "seccoes_landing": [
     "hero",
+    "destaques",
     "servicos",
     "diferenciais",
     "galeria",
+    "horario",
     "mapa",
     "contactos",
+    "cta_bloco",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -75,8 +78,9 @@
   "perguntas_especificas": [
     {
       "id": "produtos_destaque",
-      "label": "Produtos em destaque",
-      "tipo": "texto_longo"
+      "label": "O que as pessoas vêm buscar",
+      "tipo": "texto_longo",
+      "hint": "Pão, fruta, talho, o queijo da serra, o leite…"
     },
     {
       "id": "faz_entregas",
@@ -85,8 +89,14 @@
     },
     {
       "id": "produtos_locais",
-      "label": "Vende produtos locais/regionais?",
+      "label": "Vende produtos locais?",
       "tipo": "sim_nao"
+    },
+    {
+      "id": "tem_talho",
+      "label": "Tem talho ou padaria?",
+      "tipo": "texto",
+      "hint": "Se sim, diga o que há."
     }
   ],
   "archetype": "retail",
@@ -133,5 +143,53 @@
     "titulo": "Estamos perto de si",
     "botao": "Ver localização",
     "target": "dpl-mapa"
+  },
+  "gate_mais": "Quer falar de produtos, entregas e o que é fresco?",
+  "destaques_campo": "produtos_destaque",
+  "rotulos": {
+    "servicos": "O que encontra",
+    "destaques": "Destaques",
+    "sobre": "A mercearia",
+    "galeria": "A loja",
+    "horario": "Aberto",
+    "contactos": "Como chegar"
+  },
+  "nav": [
+    {
+      "label": "Produtos",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Onde",
+      "target": "dpl-mapa"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_entregas",
+      "label": "Entregas ao domicílio"
+    },
+    {
+      "id": "produtos_locais",
+      "label": "Produtos da região"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Mercearia do Bairro",
+    "cidade": "Setúbal",
+    "titulo": "O essencial, aqui ao lado",
+    "subtitulo": "Fruta, mercearia e um “bom dia” de quem já o conhece.",
+    "sobre": "{nome} é a loja da rua. O pão da manhã, o que falta para o jantar, a encomenda para a vizinha.",
+    "rodape": "Estamos abertos à semana. Passe ou mande mensagem.",
+    "avaliacoes": [
+      {
+        "autor": "Lurdes",
+        "texto": "A fruta está boa e conhecem-me pelo nome."
+      },
+      {
+        "autor": "Miguel",
+        "texto": "Quando preciso de uma coisa à pressa, estão abertos."
+      }
+    ]
   }
 }

@@ -32,7 +32,9 @@
     "servicos",
     "diferenciais",
     "galeria",
+    "avaliacoes",
     "cta_bloco",
+    "horario",
     "mapa",
     "contactos",
     "rodape"
@@ -72,13 +74,21 @@
   "perguntas_especificas": [
     {
       "id": "setor",
-      "label": "Setor de atividade",
-      "tipo": "texto"
+      "label": "Setor de actividade",
+      "tipo": "texto",
+      "hint": "Em duas palavras: o que vê quem passa na rua."
     },
     {
       "id": "publico",
       "label": "Quem são os seus clientes?",
-      "tipo": "texto_longo"
+      "tipo": "texto_longo",
+      "hint": "Vizinhos, empresas da zona, quem vem de fora…"
+    },
+    {
+      "id": "pedido_tipico",
+      "label": "O pedido mais frequente",
+      "tipo": "texto",
+      "hint": "O que as pessoas pedem ao telefone ou à porta."
     }
   ],
   "archetype": "servico",
@@ -125,5 +135,42 @@
     "titulo": "Fale connosco",
     "botao": "WhatsApp",
     "target": "whatsapp"
+  },
+  "gate_mais": "Quer descrever o que faz e para quem?",
+  "destaques_campo": "principais_servicos",
+  "rotulos": {
+    "servicos": "O que fazemos",
+    "sobre": "Quem somos",
+    "galeria": "O espaço",
+    "diferenciais": "Porquê aqui",
+    "contactos": "Fale connosco"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Contacto",
+      "target": "dpl-contactos"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Casa do Ofício",
+    "cidade": "Braga",
+    "titulo": "Aqui ao lado, a tratar do recado",
+    "subtitulo": "Um negócio local em {cidade}, com atendimento de quem conhece a zona.",
+    "sobre": "{nome} serve quem vive e trabalha perto. Explicamos o que fazemos, o horário e como chegar — sem rodeios.",
+    "rodape": "Fale connosco ou passe na loja.",
+    "avaliacoes": [
+      {
+        "autor": "Cliente",
+        "texto": "Atendimento claro e próximo."
+      },
+      {
+        "autor": "Vizinho",
+        "texto": "É o sítio da rua. Resolvem."
+      }
+    ]
   }
 }

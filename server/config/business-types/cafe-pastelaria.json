@@ -33,11 +33,15 @@
   ],
   "seccoes_landing": [
     "hero",
-    "sobre",
+    "destaques",
     "servicos",
+    "sobre",
     "galeria",
+    "avaliacoes",
+    "horario",
     "mapa",
     "contactos",
+    "cta_bloco",
     "rodape"
   ],
   "cores_sugeridas": [
@@ -76,16 +80,23 @@
     {
       "id": "especialidades",
       "label": "Especialidades da casa",
-      "tipo": "texto_longo"
+      "tipo": "texto_longo",
+      "hint": "Nata, bolo de chocolate, torrada, sandes… o que as pessoas pedem mais."
     },
     {
       "id": "faz_encomendas",
       "label": "Aceita encomendas de bolos?",
-      "tipo": "sim_nao"
+      "tipo": "sim_nao",
+      "hint": "Aniversários, batizados, o bolo do fim-de-semana."
     },
     {
       "id": "tem_esplanada",
       "label": "Tem esplanada?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "faz_pequeno_almoco",
+      "label": "Serve pequeno-almoço?",
       "tipo": "sim_nao"
     }
   ],
@@ -133,5 +144,58 @@
     "titulo": "Passe por cá",
     "botao": "Ver localização",
     "target": "dpl-mapa"
+  },
+  "gate_mais": "Quer falar de especialidades, encomendas e esplanada?",
+  "destaques_campo": "especialidades",
+  "rotulos": {
+    "servicos": "O que encontra",
+    "destaques": "Especialidades da casa",
+    "sobre": "A casa",
+    "galeria": "O espaço",
+    "horario": "Quando estamos abertos",
+    "avaliacoes": "Quem já veio",
+    "contactos": "Passe por cá"
+  },
+  "nav": [
+    {
+      "label": "Especialidades",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Onde",
+      "target": "dpl-mapa"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "faz_encomendas",
+      "label": "Bolos por encomenda"
+    },
+    {
+      "id": "tem_esplanada",
+      "label": "Esplanada"
+    },
+    {
+      "id": "wifi",
+      "label": "Wi-Fi"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Café Central do Bonfim",
+    "cidade": "Porto",
+    "titulo": "O café da manhã, aqui ao lado",
+    "subtitulo": "Pastelaria fresca, café bem tirado e o ritmo do bairro.",
+    "sobre": "{nome} é o ponto de encontro do Bonfim: nata ao pequeno-almoço, um café a meio da manhã, o bolo do fim-de-semana.",
+    "rodape": "Passe quando quiser. Estamos no Bonfim.",
+    "avaliacoes": [
+      {
+        "autor": "Inês",
+        "texto": "A nata ainda quente e o café como deve ser."
+      },
+      {
+        "autor": "Rui",
+        "texto": "Venho todas as manhãs. É o meu sítio."
+      }
+    ]
   }
 }
