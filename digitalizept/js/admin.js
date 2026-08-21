@@ -134,9 +134,21 @@ function openDrawer(title, build, options = {}) {
     el.drawerPanel.innerHTML = '';
     el.drawer.classList.toggle('drawer-dock', dock);
     document.body.classList.toggle('coverage-dock-open', dock);
+
+    const head = document.createElement('div');
+    head.className = 'admin-drawer-head';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'admin-drawer-back';
+    back.setAttribute('aria-label', 'Voltar');
+    back.title = 'Voltar';
+    back.textContent = '←';
+    back.addEventListener('click', () => closeDrawer());
     const h = document.createElement('h2');
     h.textContent = title;
-    el.drawerPanel.appendChild(h);
+    head.append(back, h);
+    el.drawerPanel.appendChild(head);
+
     build(el.drawerPanel);
     el.drawer.classList.remove('hidden');
     el.drawer.setAttribute('aria-hidden', 'false');
@@ -596,6 +608,7 @@ async function openFollowupShare({ leadId, nome, demo_slug }) {
         const resume = data.data || {};
         const stateData = {
             ...resume,
+            leadId,
             demoUrl: resume.demoUrl || (demo_slug ? `/d/${demo_slug}` : ''),
             dados: {
                 ...(resume.dados || {}),
@@ -622,7 +635,20 @@ async function openFollowupShare({ leadId, nome, demo_slug }) {
         openDrawer(`Enviar demonstração — ${stateData.dados.nome_negocio || nome || 'Lead'}`, (panel) => {
             const host = document.createElement('div');
             panel.appendChild(host);
-            renderFollowupShare(host, ctx, config || { provider: {} }, {
+            renderFollowupShare(host, ctx, {
+                ...(config || { provider: {} }),
+                onPinLead: async (id) => {
+                    const { response: geoRes, data: geo } = await api(
+                        `/api/digitalizept/leads/${encodeURIComponent(id)}/geocode`,
+                        { method: 'POST' }
+                    );
+                    if (!geoRes.ok) throw new Error((geo && geo.error) || 'geocode');
+                    if (coverageUi && typeof coverageUi.refresh === 'function') {
+                        await coverageUi.refresh();
+                    }
+                    return true;
+                }
+            }, {
                 hidePublish: Boolean(stateData.demoUrl)
             });
         });
@@ -831,6 +857,7 @@ coverageUi = setupCoverage({
     field,
     inputEl,
     openNotes,
+    openFollowup: openFollowupShare,
     onUnauthorized
 });
 

@@ -67,6 +67,7 @@ const OLD_COBERTURA_REMAP = {
 
 const NOMINATIM_GAP_MS = 1100;
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
+const PHOTON_BASE = 'https://photon.komoot.io/api/';
 
 // Prefer precise place types over admin/city centroids.
 const PRECISE_TYPES = new Set([
@@ -174,6 +175,94 @@ function buildAddressQuery(morada, cidade, nome) {
     return parts.join(', ');
 }
 
+/**
+ * Split a Portuguese free-form address into Nominatim-friendly parts.
+ * Handles blobs like: "Rua de Costa Cabral 2367, 4200-231 Porto"
+ */
+function parsePortugueseAddress(morada, cidade) {
+    const rawMorada = String(morada || '').trim();
+    let city = String(cidade || '').trim();
+    let working = rawMorada
+        .replace(/\bPortugal\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    let postalcode = '';
+    const cpMatch = working.match(/\b(\d{4}-\d{3})\b/);
+    if (cpMatch) {
+        postalcode = cpMatch[1];
+        working = working.replace(cpMatch[0], ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    const parts = working.split(',').map((p) => p.trim()).filter(Boolean);
+    let streetLine = parts[0] || working;
+
+    if (!city && parts.length >= 2) {
+        const last = parts[parts.length - 1];
+        const lastNoDigits = last.replace(/\d+/g, '').replace(/[-–]/g, ' ').trim();
+        if (lastNoDigits && !/\d{3,}/.test(lastNoDigits)) {
+            city = lastNoDigits;
+            streetLine = parts.slice(0, -1).join(', ') || streetLine;
+        } else if (/^[A-Za-zÀ-ú\s'-]+$/.test(last.trim())) {
+            city = last.trim();
+            streetLine = parts.slice(0, -1).join(', ') || streetLine;
+        }
+    }
+
+    // City sometimes stuck at end of street line: "… Cabral 2367 Porto"
+    if (!city) {
+        const cityTail = streetLine.match(/\s+([A-Za-zÀ-ú][A-Za-zÀ-ú\s'-]{2,})$/);
+        if (cityTail && !/\d/.test(cityTail[1]) && cityTail[1].split(/\s+/).length <= 3) {
+            const candidate = cityTail[1].trim();
+            const knownish = /porto|lisboa|braga|coimbra|faro|aveiro|setúbal|setubal|viana|guimarães|guimaraes|funchal|évora|evora|leiria|viseu|beja|portalegre|santaré|santarem/i;
+            if (knownish.test(candidate) || candidate.length >= 4) {
+                city = candidate;
+                streetLine = streetLine.slice(0, cityTail.index).trim();
+            }
+        }
+    }
+
+    let housenumber = '';
+    let street = streetLine;
+    // Prefer explicit "n.º 12" / "nº 12" markers over a bare trailing number.
+    const nMatch = streetLine.match(/\bn\.?\s*[ºo°]\s*(\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?)\b/i)
+        || streetLine.match(/\bn[º°]\s*(\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?)\b/i);
+    if (nMatch) {
+        housenumber = nMatch[1];
+        street = streetLine.replace(nMatch[0], ' ').replace(/[,\s]+$/g, '').replace(/\s+/g, ' ').trim();
+    } else {
+        const endMatch = streetLine.match(/^(.*?)[,\s]+(\d+[A-Za-z]?(?:\/\d+[A-Za-z]?)?)\s*$/);
+        // Reject only plausible years left alone (e.g. "Edifício 2020"), keep door nos like 2367.
+        const hn = endMatch && endMatch[2];
+        const looksLikeYear = hn && /^(19|20)\d{2}$/.test(hn);
+        if (endMatch && hn && !looksLikeYear) {
+            street = endMatch[1].replace(/[,\s]+$/g, '').trim();
+            housenumber = hn;
+        }
+    }
+
+    const nominatimStreet = housenumber
+        ? `${housenumber}, ${street}`.trim()
+        : street;
+
+    const freeTextParts = [
+        street && housenumber ? `${street} ${housenumber}` : (street || streetLine),
+        postalcode,
+        city,
+        'Portugal'
+    ].filter(Boolean);
+
+    return {
+        street,
+        housenumber,
+        city,
+        postalcode,
+        nominatimStreet,
+        freeText: freeTextParts.join(', '),
+        raw: rawMorada
+    };
+}
+
 function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -184,7 +273,7 @@ function enqueueNominatim(task) {
     return run;
 }
 
-function scoreHit(hit, { morada, cidade } = {}) {
+function scoreHit(hit, { morada, cidade, housenumber, postalcode, street } = {}) {
     if (!hit) return -Infinity;
     const type = String(hit.type || '').toLowerCase();
     const cls = String(hit.class || '').toLowerCase();
@@ -192,19 +281,26 @@ function scoreHit(hit, { morada, cidade } = {}) {
     let score = importance * 10;
 
     if (PRECISE_TYPES.has(type) || PRECISE_TYPES.has(cls)) score += 40;
-    if (cls === 'building' || cls === 'place' && type === 'house') score += 20;
+    if (cls === 'building' || (cls === 'place' && type === 'house')) score += 20;
     if (cls === 'amenity' || cls === 'shop' || cls === 'office') score += 25;
     if (COARSE_TYPES.has(type) || (cls === 'place' && COARSE_TYPES.has(type))) score -= 50;
     if (cls === 'boundary' || type === 'administrative') score -= 60;
 
     const display = String(hit.display_name || '').toLowerCase();
-    const street = String(morada || '').trim().toLowerCase();
+    const streetNeedle = String(street || morada || '').trim().toLowerCase();
     const city = String(cidade || '').trim().toLowerCase();
-    if (street && display.includes(street.split(/\s+/)[0])) score += 8;
-    if (city && display.includes(city)) score += 12;
+    const hn = String(housenumber || '').trim().toLowerCase();
+    const cp = String(postalcode || '').trim().toLowerCase();
 
-    // Prefer results with a house number when the address has one.
-    if (/\d/.test(street) && /\d/.test(display)) score += 10;
+    if (streetNeedle) {
+        const tokens = streetNeedle.split(/\s+/).filter((t) => t.length > 2 && !/^\d/.test(t));
+        const matched = tokens.filter((t) => display.includes(t)).length;
+        score += Math.min(24, matched * 6);
+    }
+    if (city && display.includes(city)) score += 14;
+    if (hn && (display.includes(hn) || String(hit.housenumber || '').toLowerCase() === hn)) score += 28;
+    if (cp && display.includes(cp)) score += 18;
+    if (/\d/.test(streetNeedle) && /\d/.test(display)) score += 8;
 
     return score;
 }
@@ -246,7 +342,7 @@ async function nominatimFetch(params) {
         format: 'jsonv2',
         addressdetails: '1',
         countrycodes: 'pt',
-        limit: '5'
+        limit: '8'
     });
     Object.entries(params || {}).forEach(([key, value]) => {
         if (value == null || value === '') return;
@@ -263,7 +359,72 @@ async function nominatimFetch(params) {
         return { ok: false, status: 'http_error', error: `HTTP ${response.status}`, hits: [] };
     }
     const data = await response.json();
-    return { ok: true, hits: Array.isArray(data) ? data : [] };
+    const hits = (Array.isArray(data) ? data : []).map((hit) => ({
+        ...hit,
+        housenumber: hit.address && hit.address.house_number,
+        source: 'nominatim'
+    }));
+    return { ok: true, hits };
+}
+
+function photonToHit(feature) {
+    if (!feature || !feature.geometry || !Array.isArray(feature.geometry.coordinates)) return null;
+    const [lon, lat] = feature.geometry.coordinates;
+    const p = feature.properties || {};
+    const country = String(p.country || '').trim();
+    const parts = [
+        p.name,
+        [p.housenumber, p.street].filter(Boolean).join(' '),
+        p.postcode,
+        p.city || p.town || p.village,
+        country || 'Portugal'
+    ].filter(Boolean);
+    const osmValue = String(p.osm_value || p.type || '').toLowerCase();
+    const osmKey = String(p.osm_key || '').toLowerCase();
+    return {
+        lat: String(lat),
+        lon: String(lon),
+        type: osmValue || 'house',
+        class: osmKey || 'place',
+        importance: Number(p.importance) || 0.4,
+        display_name: parts.join(', '),
+        housenumber: p.housenumber || '',
+        country,
+        source: 'photon'
+    };
+}
+
+async function photonFetch(query) {
+    const q = String(query || '').trim();
+    if (!q) return { ok: true, hits: [] };
+    const qs = new URLSearchParams({
+        q,
+        limit: '8',
+        lang: 'pt',
+        lat: '39.5',
+        lon: '-8.0'
+    });
+    const url = `${PHOTON_BASE}?${qs.toString()}`;
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'YourLab-DigitalizePortugal/1.0 (https://yourlabpt.com)',
+            'Accept-Language': 'pt'
+        }
+    });
+    if (!response.ok) {
+        return { ok: false, status: 'http_error', error: `Photon HTTP ${response.status}`, hits: [] };
+    }
+    const data = await response.json();
+    const feats = Array.isArray(data.features) ? data.features : [];
+    const hits = feats
+        .map(photonToHit)
+        .filter(Boolean)
+        .filter((hit) => {
+            const c = String(hit.country || '').toLowerCase();
+            if (!c) return true;
+            return c === 'portugal' || c === 'pt';
+        });
+    return { ok: true, hits };
 }
 
 /**
@@ -272,51 +433,87 @@ async function nominatimFetch(params) {
  * @param {{ nome?: string }} [opts]
  */
 async function geocodeAddress(morada, cidade, opts = {}) {
-    const street = String(morada || '').trim();
-    const city = String(cidade || '').trim();
+    const parsed = parsePortugueseAddress(morada, cidade);
     const nome = String(opts.nome || '').trim();
-    if (!street && !city) {
+    if (!parsed.street && !parsed.city && !parsed.raw) {
         return { ok: false, status: 'no_address', error: 'Morada em falta.' };
     }
 
-    const context = { morada: street, cidade: city };
-    const freeText = buildAddressQuery(street, city, nome);
+    const context = {
+        morada: parsed.raw || morada,
+        cidade: parsed.city || cidade,
+        street: parsed.street,
+        housenumber: parsed.housenumber,
+        postalcode: parsed.postalcode
+    };
 
     return enqueueNominatim(async () => {
         try {
             let hits = [];
 
-            // 1) Structured search — Nominatim prefers street+city over a free blob.
-            if (street || city) {
+            // 1) Structured Nominatim — housenumber first ("2367, Rua de Costa Cabral")
+            if (parsed.nominatimStreet || parsed.city) {
                 const structured = await nominatimFetch({
-                    street: street || undefined,
-                    city: city || undefined,
+                    street: parsed.nominatimStreet || undefined,
+                    city: parsed.city || undefined,
+                    postalcode: parsed.postalcode || undefined,
                     country: 'Portugal'
                 });
-                if (!structured.ok) return structured;
-                hits = structured.hits;
+                if (!structured.ok && !hits.length) {
+                    // continue to fallbacks; only abort if everything fails later
+                } else if (structured.ok) {
+                    hits = hits.concat(structured.hits);
+                }
             }
 
-            // 2) Free-text fallback (with optional business name) if structured is empty
-            //    or only returned coarse admin/city results.
-            const bestStructured = pickBestHit(hits, context);
-            const structuredIsCoarse = bestStructured && (
-                COARSE_TYPES.has(String(bestStructured.type || '').toLowerCase())
-                || String(bestStructured.class || '') === 'boundary'
-            );
+            const bestSoFar = pickBestHit(hits, context);
+            const needsMore = !hits.length
+                || !bestSoFar
+                || COARSE_TYPES.has(String(bestSoFar.type || '').toLowerCase())
+                || String(bestSoFar.class || '') === 'boundary'
+                || (parsed.housenumber && scoreHit(bestSoFar, context) < 50);
 
-            if (!hits.length || structuredIsCoarse || (nome && street)) {
+            // 2) Free-text without business name (cleaner for door numbers)
+            if (needsMore) {
                 if (hits.length) await wait(NOMINATIM_GAP_MS);
-                const free = await nominatimFetch({ q: freeText });
-                if (free.ok && free.hits.length) {
-                    hits = hits.concat(free.hits);
-                } else if (!hits.length && !free.ok) {
-                    return free;
+                const free = await nominatimFetch({ q: parsed.freeText });
+                if (free.ok) hits = hits.concat(free.hits);
+            }
+
+            // 3) Free-text with business name if still weak
+            if (nome && (needsMore || !hits.length)) {
+                await wait(NOMINATIM_GAP_MS);
+                const withName = await nominatimFetch({
+                    q: buildAddressQuery(parsed.freeText.replace(/, Portugal$/, ''), '', nome)
+                });
+                if (withName.ok) hits = hits.concat(withName.hits);
+            }
+
+            // 4) Photon (Komoot / OSM) fallback — often better at PT door numbers
+            const stillWeak = !pickBestHit(hits, context)
+                || (parsed.housenumber && scoreHit(pickBestHit(hits, context), context) < 50);
+            if (stillWeak || !hits.length) {
+                const photonQueries = [
+                    parsed.freeText,
+                    [parsed.street, parsed.housenumber, parsed.city, 'Portugal'].filter(Boolean).join(' ')
+                ].filter((q, i, arr) => q && arr.indexOf(q) === i);
+                for (const q of photonQueries) {
+                    const photon = await photonFetch(q);
+                    if (photon.ok && photon.hits.length) {
+                        hits = hits.concat(photon.hits);
+                        break;
+                    }
                 }
             }
 
             const hit = pickBestHit(hits, context);
-            return coordsFromHit(hit, freeText);
+            const result = coordsFromHit(hit, parsed.freeText);
+            if (result.ok) {
+                result.parsed = parsed;
+                result.source = hit.source || 'nominatim';
+                result.formatted = hit.display_name || result.formatted;
+            }
+            return result;
         } catch (err) {
             return { ok: false, status: 'network', error: err.message || 'network' };
         }
@@ -339,11 +536,26 @@ async function geocodeLeadRow(db, leadId, { force = false, nowIso } = {}) {
     const result = await geocodeAddress(lead.morada, lead.cidade, { nome: lead.nome });
     const stamp = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
     if (result.ok) {
+        const parsedCity = result.parsed && result.parsed.city;
+        if (parsedCity && !String(lead.cidade || '').trim()) {
+            db.prepare('UPDATE lead SET cidade = ? WHERE id = ?').run(parsedCity, leadId);
+        }
         db.prepare(`
             UPDATE lead SET lat = ?, lng = ?, geocoded_at = ?, geocode_status = 'ok'
             WHERE id = ?
         `).run(result.lat, result.lng, stamp, leadId);
-        return { ok: true, lat: result.lat, lng: result.lng, formatted: result.formatted };
+        // Keep linked street visits on the same pin (unified coverage).
+        db.prepare(`
+            UPDATE visita SET lat = ?, lng = ?, geocode_status = 'ok'
+            WHERE lead_id = ? AND (lat IS NULL OR lng IS NULL OR geocode_status != 'manual')
+        `).run(result.lat, result.lng, leadId);
+        return {
+            ok: true,
+            lat: result.lat,
+            lng: result.lng,
+            formatted: result.formatted,
+            source: result.source || 'nominatim'
+        };
     }
     db.prepare(`
         UPDATE lead SET geocoded_at = ?, geocode_status = ?
@@ -354,7 +566,7 @@ async function geocodeLeadRow(db, leadId, { force = false, nowIso } = {}) {
 
 async function geocodeVisitRow(db, visitId, { force = false, nowIso } = {}) {
     const row = db.prepare(`
-        SELECT id, nome, morada, cidade, lat, lng, geocode_status FROM visita WHERE id = ?
+        SELECT id, nome, morada, cidade, lat, lng, geocode_status, lead_id FROM visita WHERE id = ?
     `).get(visitId);
     if (!row) return null;
     const hasCoords = Number.isFinite(row.lat) && Number.isFinite(row.lng);
@@ -364,10 +576,26 @@ async function geocodeVisitRow(db, visitId, { force = false, nowIso } = {}) {
     const result = await geocodeAddress(row.morada, row.cidade, { nome: row.nome });
     const stamp = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
     if (result.ok) {
+        const parsedCity = result.parsed && result.parsed.city;
+        if (parsedCity && !String(row.cidade || '').trim()) {
+            db.prepare('UPDATE visita SET cidade = ? WHERE id = ?').run(parsedCity, visitId);
+        }
         db.prepare(`
             UPDATE visita SET lat = ?, lng = ?, geocode_status = 'ok' WHERE id = ?
         `).run(result.lat, result.lng, visitId);
-        return { ok: true, lat: result.lat, lng: result.lng, formatted: result.formatted };
+        if (row.lead_id) {
+            db.prepare(`
+                UPDATE lead SET lat = ?, lng = ?, geocoded_at = ?, geocode_status = 'ok'
+                WHERE id = ? AND (lat IS NULL OR lng IS NULL OR geocode_status != 'manual')
+            `).run(result.lat, result.lng, stamp, row.lead_id);
+        }
+        return {
+            ok: true,
+            lat: result.lat,
+            lng: result.lng,
+            formatted: result.formatted,
+            source: result.source || 'nominatim'
+        };
     }
     db.prepare(`UPDATE visita SET geocode_status = ? WHERE id = ?`)
         .run(result.status || 'failed', visitId);
@@ -529,6 +757,7 @@ module.exports = {
     etapaRank,
     remapCoberturaToEtapaResultado,
     buildAddressQuery,
+    parsePortugueseAddress,
     geocodeAddress,
     geocodeLeadRow,
     geocodeVisitRow,

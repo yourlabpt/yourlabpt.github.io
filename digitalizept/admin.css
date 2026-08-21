@@ -538,8 +538,36 @@
     flex: 1 1 140px;
 }
 
-.admin-drawer-panel h2 {
+.admin-drawer-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin: 0 0 16px;
+}
+
+.admin-drawer-back {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--admin-border, #d4cdc0);
+    border-radius: 8px;
+    background: var(--admin-surface, #fff);
+    color: var(--admin-ink);
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.admin-drawer-back:hover {
+    background: var(--admin-muted-bg, #f3efe6);
+}
+
+.admin-drawer-panel .admin-drawer-head h2,
+.admin-drawer-panel h2 {
+    margin: 0;
+    flex: 1 1 auto;
     font-size: 1.2rem;
     color: var(--admin-ink);
     font-weight: 700;

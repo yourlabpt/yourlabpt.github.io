@@ -320,7 +320,19 @@ function renderWebsiteDemo(body, ctx) {
     let followupUi = null;
     fetchConfig(ctx).then((config) => {
         if (!config) return;
-        followupUi = renderFollowupShare(followupHost, ctx, config, {
+        followupUi = renderFollowupShare(followupHost, ctx, {
+            ...config,
+            onPinLead: async (leadId) => {
+                const { getToken } = await import('../auth.js');
+                const { apiRequest } = await import('../api.js');
+                const { response, data } = await apiRequest(
+                    `/api/digitalizept/leads/${encodeURIComponent(leadId)}/geocode`,
+                    { method: 'POST', token: getToken() }
+                );
+                if (!response.ok) throw new Error((data && data.error) || 'geocode');
+                return true;
+            }
+        }, {
             onPublish: () => publishDemo(ctx).then((url) => {
                 if (url && followupUi) followupUi.refresh();
             })

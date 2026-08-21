@@ -2274,12 +2274,27 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
         visits.forEach((r) => {
             if (!r.lead_id) return;
             if (!visitsByLead[r.lead_id]) visitsByLead[r.lead_id] = [];
-            visitsByLead[r.lead_id].push(r.id);
+            visitsByLead[r.lead_id].push(r);
         });
         const leadPins = leads.map((r) => {
-            const visitaIds = visitsByLead[r.id] || [];
+            const linked = visitsByLead[r.id] || [];
+            const visitaIds = linked.map((v) => v.id);
             const dealEstado = dealEstadoForLead(db, r.id);
             const tags = pinTagFields(r.cobertura, r.resultado, 'contacto_remoto');
+            let lat = r.lat;
+            let lng = r.lng;
+            let geocodeStatus = r.geocode_status;
+            if (!(Number.isFinite(lat) && Number.isFinite(lng))) {
+                const withGeo = linked.find((v) => Number.isFinite(v.lat) && Number.isFinite(v.lng));
+                if (withGeo) {
+                    lat = withGeo.lat;
+                    lng = withGeo.lng;
+                    geocodeStatus = withGeo.geocode_status || geocodeStatus;
+                }
+            }
+            const experiencias = linked
+                .map((v) => String(v.experiencia || '').trim())
+                .filter(Boolean);
             return {
                 id: r.id,
                 kind: 'lead',
@@ -2292,20 +2307,28 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 ...tags,
                 cobertura_locked: Boolean(r.cobertura_locked),
                 demo_slug: r.demo_slug,
-                lat: r.lat,
-                lng: r.lng,
-                geocode_status: r.geocode_status,
-                experiencia: '',
+                lat,
+                lng,
+                geocode_status: geocodeStatus,
+                experiencia: experiencias.join('\n---\n'),
                 notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
                 criado_em: r.criado_em,
                 visitaIds,
                 visitaCount: visitaIds.length,
+                visits: linked.map((v) => ({
+                    id: v.id,
+                    experiencia: v.experiencia || '',
+                    etapa: normalizeEtapa(v.cobertura, 'visitado'),
+                    resultado: normalizeResultado(v.resultado || ''),
+                    visitado_em: v.visitado_em,
+                    criado_em: v.criado_em
+                })),
                 hasDeal: Boolean(dealEstado),
                 dealEstado: dealEstado || undefined
             };
         });
-        const visitPins = visits.map((r) => {
-            const dealEstado = r.lead_id ? dealEstadoForLead(db, r.lead_id) : '';
+        // Street visits without a lead stay as their own pin. Linked visits fold into the lead.
+        const orphanVisitPins = visits.filter((r) => !r.lead_id).map((r) => {
             const tags = pinTagFields(r.cobertura, r.resultado, 'visitado');
             return {
                 id: r.id,
@@ -2325,14 +2348,11 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 notas: '',
                 visitado_em: r.visitado_em,
                 criado_em: r.criado_em,
-                leadId: r.lead_id || undefined,
-                leadNome: r.lead_nome || undefined,
-                hasDeal: Boolean(dealEstado),
-                dealEstado: dealEstado || undefined
+                hasDeal: false
             };
         });
         return res.json({
-            pins: visitPins.concat(leadPins),
+            pins: orphanVisitPins.concat(leadPins),
             legend: coverageLegend()
         });
     } catch (err) {
@@ -2350,28 +2370,43 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
             FROM lead ORDER BY criado_em DESC LIMIT 500
         `).all();
         const visits = db.prepare(`
-            SELECT nome, morada, cidade, cobertura, resultado, experiencia, visitado_em, criado_em
+            SELECT id, nome, morada, cidade, cobertura, resultado, experiencia, visitado_em, criado_em, lead_id
             FROM visita ORDER BY criado_em DESC LIMIT 500
         `).all();
-        const exportPins = visits.map((r) => ({
-            kind: 'visita',
-            nome: r.nome,
-            morada: r.morada,
-            cidade: r.cidade,
-            ...pinTagFields(r.cobertura, r.resultado, 'visitado'),
-            experiencia: r.experiencia || '',
-            visitado_em: r.visitado_em,
-            criado_em: r.criado_em
-        })).concat(leads.map((r) => ({
-            kind: 'lead',
-            nome: r.nome,
-            morada: r.morada,
-            cidade: r.cidade,
-            telefone: r.telefone,
-            ...pinTagFields(r.cobertura, r.resultado, 'contacto_remoto'),
-            notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
-            criado_em: r.criado_em
-        })));
+        const linkedByLead = {};
+        visits.forEach((v) => {
+            if (!v.lead_id) return;
+            if (!linkedByLead[v.lead_id]) linkedByLead[v.lead_id] = [];
+            linkedByLead[v.lead_id].push(v);
+        });
+        const exportPins = [];
+        leads.forEach((r) => {
+            const linked = linkedByLead[r.id] || [];
+            const experiencias = linked.map((v) => v.experiencia).filter(Boolean);
+            exportPins.push({
+                kind: 'lead',
+                nome: r.nome,
+                morada: r.morada,
+                cidade: r.cidade,
+                telefone: r.telefone,
+                ...pinTagFields(r.cobertura, r.resultado, 'contacto_remoto'),
+                experiencia: experiencias.join('\n---\n'),
+                notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
+                criado_em: r.criado_em
+            });
+        });
+        visits.filter((v) => !v.lead_id).forEach((r) => {
+            exportPins.push({
+                kind: 'visita',
+                nome: r.nome,
+                morada: r.morada,
+                cidade: r.cidade,
+                ...pinTagFields(r.cobertura, r.resultado, 'visitado'),
+                experiencia: r.experiencia || '',
+                visitado_em: r.visitado_em,
+                criado_em: r.criado_em
+            });
+        });
         const text = formatCoverageExport(exportPins, coverageLegend());
         const stamp = digitalizeptNow().slice(0, 10);
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -2548,7 +2583,7 @@ app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
         let lng = parseCoord(body.lng);
         let geocodeStatus = (lat != null && lng != null) ? 'manual' : '';
         if (lat == null || lng == null) {
-            const geo = await geocodeAddress(morada, cidade);
+            const geo = await geocodeAddress(morada, cidade, { nome });
             if (geo.ok) {
                 lat = geo.lat;
                 lng = geo.lng;
@@ -2625,6 +2660,14 @@ app.patch('/api/digitalizept/visits/:id', requireDigitalizept, async (req, res) 
                 lat = ?, lng = ?, geocode_status = ?, visitado_em = ?, lead_id = ?
             WHERE id = ?
         `).run(nome, morada, cidade, etapa, resultado, experiencia, lat, lng, geocodeStatus, visitadoEm, leadId, id);
+
+        // Unified pin: when a linked visit gets coords, keep the lead pin in sync.
+        if (leadId && Number.isFinite(lat) && Number.isFinite(lng) && (hasManual || body.regeocode === true)) {
+            db.prepare(`
+                UPDATE lead SET lat = ?, lng = ?, geocode_status = ?, geocoded_at = ?
+                WHERE id = ?
+            `).run(lat, lng, geocodeStatus || 'ok', digitalizeptNow(), leadId);
+        }
 
         if (body.regeocode === true) {
             await geocodeVisitRow(db, id, { force: true, nowIso: digitalizeptNow });
@@ -3134,6 +3177,10 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
                 UPDATE lead SET lat = ?, lng = ?, geocode_status = 'manual', geocoded_at = ?
                 WHERE id = ?
             `).run(lat, lng, digitalizeptNow(), leadId);
+            db.prepare(`
+                UPDATE visita SET lat = ?, lng = ?, geocode_status = 'manual'
+                WHERE lead_id = ?
+            `).run(lat, lng, leadId);
         }
         if (body.regeocode === true) {
             scheduleLeadGeocode(leadId, { force: true });

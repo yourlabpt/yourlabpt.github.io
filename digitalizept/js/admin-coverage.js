@@ -65,6 +65,7 @@ export function setupCoverage({
     field,
     inputEl,
     openNotes,
+    openFollowup,
     onUnauthorized
 }) {
     let pins = [];
@@ -390,9 +391,14 @@ export function setupCoverage({
                 registeringNewVisit = false;
                 pendingPoint = null;
                 clearPendingMarker();
+                const linkedLeadId = selectedLeadId || defaults.leadId || (data.visit && data.visit.leadId);
                 closeDrawer();
                 await refresh();
                 paint({ preserveView: true });
+                if (linkedLeadId) {
+                    const leadPin = pins.find((p) => p.kind === 'lead' && p.id === linkedLeadId);
+                    if (leadPin) openLeadPin(leadPin);
+                }
             });
             panel.appendChild(form);
 
@@ -498,27 +504,30 @@ export function setupCoverage({
                 panel.appendChild(deal);
             }
             const visitaIds = Array.isArray(pin.visitaIds) ? pin.visitaIds : [];
-            if (visitaIds.length) {
+            const visits = Array.isArray(pin.visits) ? pin.visits : [];
+            if (visits.length || visitaIds.length) {
                 const linkMeta = document.createElement('p');
                 linkMeta.className = 'meta';
-                linkMeta.textContent = `${visitaIds.length} visita(s) de rua ligada(s)`;
+                linkMeta.textContent = `${visits.length || visitaIds.length} visita(s) de rua neste sítio (mesmo pin)`;
                 panel.appendChild(linkMeta);
-                visitaIds.forEach((vid) => {
-                    const visitPin = pins.find((p) => p.kind === 'visita' && p.id === vid);
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn-secondary';
-                    btn.style.width = '100%';
-                    btn.style.marginBottom = '6px';
-                    btn.textContent = visitPin
-                        ? `Abrir visita: ${visitPin.nome || vid.slice(0, 8)}`
-                        : `Abrir visita ${vid.slice(0, 8)}`;
-                    btn.addEventListener('click', () => {
-                        if (visitPin) openVisitForm(visitPin);
-                        else toast('Visita não encontrada no mapa.', true);
-                    });
-                    panel.appendChild(btn);
+                visits.forEach((v) => {
+                    if (!v.experiencia) return;
+                    const prev = document.createElement('p');
+                    prev.className = 'meta';
+                    const when = v.visitado_em
+                        ? new Date(v.visitado_em).toLocaleDateString('pt-PT')
+                        : '';
+                    prev.textContent = when
+                        ? `${when}: ${v.experiencia}`
+                        : v.experiencia;
+                    panel.appendChild(prev);
                 });
+            }
+            if (pin.experiencia && !visits.length) {
+                const prev = document.createElement('p');
+                prev.className = 'meta';
+                prev.textContent = pin.experiencia;
+                panel.appendChild(prev);
             }
             if (pin.notas) {
                 const prev = document.createElement('p');
@@ -582,7 +591,7 @@ export function setupCoverage({
             const createVisit = document.createElement('button');
             createVisit.type = 'button';
             createVisit.className = 'btn-secondary';
-            createVisit.textContent = 'Registar visita neste sítio';
+            createVisit.textContent = 'Acrescentar visita neste sítio';
             createVisit.addEventListener('click', async () => {
                 createVisit.disabled = true;
                 try {
@@ -594,10 +603,13 @@ export function setupCoverage({
                         toast(data.error || 'Não foi possível criar a visita.', true);
                         return;
                     }
-                    toast('Visita criada e ligada a este lead.');
+                    toast('Visita acrescentada — continua no mesmo pin.');
                     await refresh();
                     paint({ preserveView: true });
-                    openVisitForm(data.visit || { ...pin, kind: 'visita', leadId: pin.id, id: data.visit && data.visit.id });
+                    const updated = pins.find((p) => p.kind === 'lead' && p.id === pin.id) || pin;
+                    openLeadPin(updated);
+                    // Open visit form only to fill experiência; save returns to unified lead.
+                    if (data.visit) openVisitForm({ ...data.visit, kind: 'visita', leadId: pin.id });
                 } catch (_) {
                     toast('Erro de rede.', true);
                 } finally {
@@ -616,10 +628,39 @@ export function setupCoverage({
                     toast(data.error || 'Não encontrei o sítio. Arraste o pin ou use “Marcar no mapa”.', true);
                     return;
                 }
-                toast('Coordenadas actualizadas a partir da morada (OpenStreetMap).');
+                toast('Coordenadas actualizadas a partir da morada.');
                 closeDrawer();
                 await refresh();
                 paint({ preserveView: true });
+            });
+            const emailPin = document.createElement('button');
+            emailPin.type = 'button';
+            emailPin.className = 'btn-secondary';
+            emailPin.textContent = 'Email + pin pela morada';
+            emailPin.addEventListener('click', async () => {
+                emailPin.disabled = true;
+                try {
+                    const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(pin.id)}/geocode`, {
+                        method: 'POST'
+                    });
+                    if (!response.ok) {
+                        toast(data.error || 'Não consegui fixar o pin pela morada.', true);
+                    } else {
+                        toast('Pin actualizado pela morada.');
+                        await refresh();
+                        paint({ preserveView: true });
+                    }
+                    // Open admin follow-up drawer for email if available on parent.
+                    if (typeof openFollowup === 'function') {
+                        openFollowup({ leadId: pin.id, nome: pin.nome, demo_slug: pin.demo_slug });
+                    } else {
+                        toast('Abra “Enviar demonstração” no lead para o email.', false);
+                    }
+                } catch (_) {
+                    toast('Erro de rede.', true);
+                } finally {
+                    emailPin.disabled = false;
+                }
             });
             const notes = document.createElement('button');
             notes.type = 'button';
@@ -630,9 +671,9 @@ export function setupCoverage({
             tip.className = 'meta';
             tip.style.marginTop = '10px';
             tip.textContent = Number.isFinite(pin.lat)
-                ? 'Para corrigir o sítio: arraste o pin no mapa. Pode também registar uma visita de rua ligada.'
-                : 'Sem pin — use “Localizar pela morada” ou “Marcar no mapa”.';
-            actions.append(createVisit, regeo, notes);
+                ? 'Um sítio = um pin. Visitas de rua ficam ligadas aqui, sem duplicar no mapa.'
+                : 'Sem pin — use “Localizar pela morada”, “Email + pin”, ou “Marcar no mapa”.';
+            actions.append(createVisit, regeo, emailPin, notes);
             panel.append(actions, tip);
         });
     }
@@ -659,29 +700,25 @@ export function setupCoverage({
     async function openOrCreateVisitForLead(leadId) {
         await ensure();
         const leadPin = pins.find((p) => p.kind === 'lead' && p.id === leadId);
-        const linked = pins.filter((p) => p.kind === 'visita' && p.leadId === leadId);
-        if (linked.length) {
-            if (Number.isFinite(linked[0].lat) && Number.isFinite(linked[0].lng) && map) {
-                map.setView([linked[0].lat, linked[0].lng], 16);
-            }
-            openVisitForm(linked[0]);
-            return true;
-        }
-        if (leadPin && Number.isFinite(leadPin.lat) && Number.isFinite(leadPin.lng)) {
-            openLeadPin(leadPin);
-            return true;
-        }
-        const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/visits`, {
-            method: 'POST',
-            body: {}
-        });
-        if (!response.ok) {
-            toast((data && data.error) || 'Não foi possível criar a visita.', true);
+        if (!leadPin) {
+            toast('Lead não encontrado no mapa.', true);
             return false;
         }
-        await refresh();
-        paint({ preserveView: true });
-        openVisitForm(data.visit);
+        if (!(Number.isFinite(leadPin.lat) && Number.isFinite(leadPin.lng))
+            && (leadPin.morada || leadPin.cidade)) {
+            const { response } = await api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/geocode`, {
+                method: 'POST'
+            });
+            if (response.ok) {
+                await refresh();
+                paint({ preserveView: true });
+            }
+        }
+        const updated = pins.find((p) => p.kind === 'lead' && p.id === leadId) || leadPin;
+        if (Number.isFinite(updated.lat) && Number.isFinite(updated.lng) && map) {
+            map.setView([updated.lat, updated.lng], 16);
+        }
+        openLeadPin(updated);
         return true;
     }
 
@@ -887,6 +924,7 @@ export function setupCoverage({
 
     return {
         ensure,
+        refresh,
         repaint: (opts) => paint({ preserveView: true, ...(opts || {}) }),
         focusLead,
         openOrCreateVisitForLead,

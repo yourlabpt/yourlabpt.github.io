@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const {
     scoreHit,
     pickBestHit,
-    buildAddressQuery
+    buildAddressQuery,
+    parsePortugueseAddress
 } = require('../../server/lib/digitalizept-geocode.js');
 
 describe('digitalizept geocode ranking', () => {
@@ -16,6 +17,27 @@ describe('digitalizept geocode ranking', () => {
             buildAddressQuery('Rua Augusta 12', 'Lisboa', 'Café Central'),
             'Café Central, Rua Augusta 12, Lisboa, Portugal'
         );
+    });
+
+    it('parses full Portuguese addresses with door number and postal code', () => {
+        const parsed = parsePortugueseAddress(
+            'Rua de Costa Cabral 2367, 4200-231 Porto',
+            ''
+        );
+        assert.equal(parsed.housenumber, '2367');
+        assert.equal(parsed.postalcode, '4200-231');
+        assert.equal(parsed.city, 'Porto');
+        assert.match(parsed.street, /Costa Cabral/i);
+        assert.equal(parsed.nominatimStreet, '2367, Rua de Costa Cabral');
+        assert.ok(parsed.freeText.includes('4200-231'));
+        assert.ok(parsed.freeText.includes('Porto'));
+    });
+
+    it('keeps explicit cidade when morada already has street only', () => {
+        const parsed = parsePortugueseAddress('Rua Augusta 12', 'Lisboa');
+        assert.equal(parsed.housenumber, '12');
+        assert.equal(parsed.city, 'Lisboa');
+        assert.equal(parsed.nominatimStreet, '12, Rua Augusta');
     });
 
     it('prefers a house/building hit over a city centroid', () => {
@@ -33,15 +55,27 @@ describe('digitalizept geocode ranking', () => {
             type: 'house',
             class: 'place',
             importance: 0.4,
-            display_name: 'Rua Augusta 12, Lisboa, Portugal'
+            display_name: 'Rua Augusta 12, Lisboa, Portugal',
+            housenumber: '12'
         };
         const best = pickBestHit([city, house], {
             morada: 'Rua Augusta 12',
-            cidade: 'Lisboa'
+            cidade: 'Lisboa',
+            street: 'Rua Augusta',
+            housenumber: '12'
         });
         assert.equal(best.type, 'house');
-        assert.ok(scoreHit(house, { morada: 'Rua Augusta 12', cidade: 'Lisboa' })
-            > scoreHit(city, { morada: 'Rua Augusta 12', cidade: 'Lisboa' }));
+        assert.ok(scoreHit(house, {
+            morada: 'Rua Augusta 12',
+            cidade: 'Lisboa',
+            street: 'Rua Augusta',
+            housenumber: '12'
+        }) > scoreHit(city, {
+            morada: 'Rua Augusta 12',
+            cidade: 'Lisboa',
+            street: 'Rua Augusta',
+            housenumber: '12'
+        }));
     });
 
     it('prefers shop/amenity over administrative boundary', () => {
@@ -63,7 +97,8 @@ describe('digitalizept geocode ranking', () => {
         };
         const best = pickBestHit([boundary, shop], {
             morada: 'Rua de Santa Catarina',
-            cidade: 'Porto'
+            cidade: 'Porto',
+            street: 'Rua de Santa Catarina'
         });
         assert.equal(best.class, 'amenity');
     });

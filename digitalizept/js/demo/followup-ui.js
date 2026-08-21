@@ -139,14 +139,22 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     const emailBtn = document.createElement('button');
     emailBtn.type = 'button';
     emailBtn.className = 'btn-secondary';
-    emailBtn.textContent = 'Abrir email';
-    emailBtn.addEventListener('click', () => {
+    emailBtn.textContent = 'Abrir email + pin';
+    emailBtn.addEventListener('click', async () => {
         const to = ctx.state.data.dados && ctx.state.data.dados.email;
         if (!to) {
             ctx.showToast('Preencha o email do negócio nos dados.', true);
             return;
         }
         window.location.href = buildMailtoUrl(to, emailSubject.value, emailPreview.value);
+        const leadId = ctx.state.data.leadId || '';
+        if (!leadId || typeof config.onPinLead !== 'function') return;
+        try {
+            const pinned = await config.onPinLead(leadId);
+            if (pinned) ctx.showToast('Pin criado/actualizado pela morada.');
+        } catch (_) {
+            ctx.showToast('Email aberto; o pin pela morada falhou — use Localizar no mapa.', true);
+        }
     });
 
     const copyWa = document.createElement('button');
