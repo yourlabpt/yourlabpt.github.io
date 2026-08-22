@@ -6,7 +6,9 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: #f4f1ea; --on-accent-2: #17171a; --ink-muted: #525249;
     
 }
-.dpl-tile { padding:1.3rem; border-radius:16px; min-height:130px; color: var(--bg); }
-.dpl-tile:nth-child(odd){ background: var(--accent);} .dpl-tile:nth-child(even){ background: var(--accent-2); color: var(--ink);} 
+.dpl-tile { padding:1.3rem; border-radius:16px; min-height:130px; color: var(--on-accent); }
+.dpl-tile:nth-child(odd){ background: var(--accent);} .dpl-tile:nth-child(even){ background: var(--accent-2); color: var(--on-accent-2);}
+.dpl-tile .dpl-icon { color: currentColor; } 

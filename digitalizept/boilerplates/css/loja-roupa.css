@@ -6,6 +6,7 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: #f4f1ea; --on-accent-2: #f4f1ea; --ink-muted: #404040;
     /* --accent is the seasonal token */
 }
 h1, h2, .dpl-nav-link { letter-spacing: 0.16em; text-transform: uppercase; }

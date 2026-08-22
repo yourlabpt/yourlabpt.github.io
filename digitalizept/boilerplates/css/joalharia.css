@@ -6,6 +6,7 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: #17171a; --on-accent-2: #f4f1ea; --ink-muted: #474440;
     
 }
 h1, h2 { letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; }

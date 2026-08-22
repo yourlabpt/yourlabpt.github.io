@@ -6,7 +6,9 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: #17171a; --on-accent-2: #17171a; --ink-muted: #5b574e;
     
 }
-h1 { font-style: italic; } .dpl-season { min-height: 180px; display:flex; flex-direction:column; justify-content:flex-end; padding:1.2rem; border-radius: 28px; color: var(--bg); }
-.dpl-season:nth-child(odd){ background: var(--accent);} .dpl-season:nth-child(even){ background: var(--accent-2);} 
+h1 { font-style: italic; } .dpl-season { min-height: 180px; display:flex; flex-direction:column; justify-content:flex-end; padding:1.2rem; border-radius: 28px; color: var(--on-accent); }
+.dpl-season:nth-child(odd){ background: var(--accent);} .dpl-season:nth-child(even){ background: var(--accent-2); color: var(--on-accent-2);}
+.dpl-season .dpl-icon { color: currentColor; } 

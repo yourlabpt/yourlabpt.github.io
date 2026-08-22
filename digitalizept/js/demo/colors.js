@@ -1,6 +1,10 @@
 const HEX6 = /^#?([0-9a-fA-F]{6})$/;
 const HEX3 = /^#?([0-9a-fA-F]{3})$/;
 
+export const INK_DARK = '#17171a';
+export const INK_LIGHT = '#f4f1ea';
+export const PAPER_LIGHT = '#fafaf8';
+
 export function normalizeHex(value) {
     const text = String(value || '').trim().replace(/\s/g, '');
     const six = HEX6.exec(text);
@@ -11,6 +15,95 @@ export function normalizeHex(value) {
         return `#${r}${r}${g}${g}${b}${b}`;
     }
     return '';
+}
+
+function hexToRgb(hex) {
+    const n = normalizeHex(hex);
+    if (!n) return null;
+    return {
+        r: parseInt(n.slice(1, 3), 16),
+        g: parseInt(n.slice(3, 5), 16),
+        b: parseInt(n.slice(5, 7), 16)
+    };
+}
+
+function channelToLin(c) {
+    const x = c / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+}
+
+export function relativeLuminance(hex) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return 0;
+    return 0.2126 * channelToLin(rgb.r) + 0.7152 * channelToLin(rgb.g) + 0.0722 * channelToLin(rgb.b);
+}
+
+export function contrastRatio(a, b) {
+    const l1 = relativeLuminance(a);
+    const l2 = relativeLuminance(b);
+    const hi = Math.max(l1, l2);
+    const lo = Math.min(l1, l2);
+    return (hi + 0.05) / (lo + 0.05);
+}
+
+function mixHex(a, b, amountA) {
+    const A = hexToRgb(a);
+    const B = hexToRgb(b);
+    if (!A || !B) return normalizeHex(a) || INK_DARK;
+    const t = Math.min(1, Math.max(0, amountA));
+    const ch = (x, y) => Math.round(x * t + y * (1 - t));
+    return `#${[ch(A.r, B.r), ch(A.g, B.g), ch(A.b, B.b)].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Black or cream — whichever reads on `bg` at WCAG AA (4.5:1), or the stronger of the two. */
+export function onColor(bg, { min = 4.5 } = {}) {
+    const paper = normalizeHex(bg) || PAPER_LIGHT;
+    const dark = contrastRatio(INK_DARK, paper);
+    const light = contrastRatio(INK_LIGHT, paper);
+    if (dark >= min && dark >= light) return INK_DARK;
+    if (light >= min && light >= dark) return INK_LIGHT;
+    return dark >= light ? INK_DARK : INK_LIGHT;
+}
+
+/** Prefer the brand colour as text if it still hits AA on `bg`. */
+export function readableInk(preferred, bg, { min = 4.5 } = {}) {
+    const paper = normalizeHex(bg) || PAPER_LIGHT;
+    const ink = normalizeHex(preferred);
+    if (ink && contrastRatio(ink, paper) >= min) return ink;
+    return onColor(paper, { min });
+}
+
+export function mutedInk(ink, bg, { min = 4.5 } = {}) {
+    const paper = normalizeHex(bg) || PAPER_LIGHT;
+    const fg = normalizeHex(ink) || onColor(paper);
+    const mixed = mixHex(fg, paper, 0.78);
+    return contrastRatio(mixed, paper) >= min ? mixed : fg;
+}
+
+/**
+ * Tokens for no-image pages after identity re-skin.
+ * `--bg` stays the page paper; brand colours become ink/accent only when they still read.
+ */
+export function contrastTokens(cores = {}, paperBg) {
+    const bg = normalizeHex(paperBg) || PAPER_LIGHT;
+    const accent = normalizeHex(cores.destaque) || '#2d6a64';
+    const accent2 = normalizeHex(cores.secundaria) || normalizeHex(cores.base) || INK_DARK;
+    const ink = readableInk(cores.base, bg);
+    return {
+        bg,
+        ink,
+        accent,
+        accent2,
+        onAccent: onColor(accent),
+        onAccent2: onColor(accent2),
+        inkMuted: mutedInk(ink, bg)
+    };
+}
+
+export function readCssHexToken(cssText, name) {
+    const src = String(cssText || '');
+    const match = src.match(new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,8})`));
+    return match ? normalizeHex(match[1]) : '';
 }
 
 function stripFences(text) {

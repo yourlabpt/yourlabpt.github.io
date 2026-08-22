@@ -1,4 +1,5 @@
 import { LIVRO_RECLAMACOES_URL, renderLanding } from './landing.js';
+import { contrastTokens, readCssHexToken } from './colors.js';
 
 export const DEMO_HTML_MAX = 900000;
 
@@ -295,6 +296,14 @@ function applyCores(doc, cores) {
         override.setAttribute('data-dp-identity', '');
         (doc.head || doc.documentElement).appendChild(override);
     }
+    const themeCss = [...doc.querySelectorAll('style')]
+        .map((style) => style.textContent || '')
+        .join('\n');
+    const paper = readCssHexToken(themeCss, 'bg');
+    const readable = contrastTokens(cores, paper || '#fafaf8');
+    const inkLines = paper
+        ? `--ink: ${readable.ink};\n  --ink-muted: ${readable.inkMuted};`
+        : '';
     override.textContent = `
 :root, .dp-landing {
   --base: ${cores.base};
@@ -303,9 +312,11 @@ function applyCores(doc, cores) {
   --l-base: ${cores.base};
   --l-destaque: ${cores.destaque};
   --l-secundaria: ${cores.secundaria};
-  --ink: ${cores.base};
-  --accent: ${cores.destaque};
-  --accent-2: ${cores.secundaria};
+  ${inkLines}
+  --accent: ${readable.accent};
+  --accent-2: ${readable.accent2};
+  --on-accent: ${readable.onAccent};
+  --on-accent-2: ${readable.onAccent2};
 }
 [data-dp-photos] {
   display: none !important;

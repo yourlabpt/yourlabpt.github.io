@@ -194,6 +194,23 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.match(visual.stripDemoSwitch('<div class="dpl-demo-switch"><button>x</button></div><p>ok</p>'), />ok</);
     });
 
+    it('picks readable ink and on-accent colours for WCAG AA', async () => {
+        const { contrastRatio, onColor, readableInk, contrastTokens } = await import(
+            pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/colors.js')).href
+        );
+        assert.ok(contrastRatio('#17171a', '#fafaf8') >= 4.5);
+        assert.equal(onColor('#e8d5b7'), '#17171a');
+        assert.equal(onColor('#2d6a64'), '#f4f1ea');
+        assert.equal(readableInk('#2a1a12', '#16130f'), '#f4f1ea');
+        assert.equal(readableInk('#17171a', '#f7f1e8'), '#17171a');
+        const cafe = contrastTokens({ base: '#2b1d14', destaque: '#e8d5b7', secundaria: '#7a8a99' }, '#f7f1e8');
+        assert.ok(contrastRatio(cafe.ink, cafe.bg) >= 4.5);
+        assert.ok(contrastRatio(cafe.onAccent, cafe.accent) >= 4.5);
+        const rest = contrastTokens({ base: '#2a1a12', destaque: '#c9a24b', secundaria: '#2a2419' }, '#16130f');
+        assert.ok(contrastRatio(rest.ink, rest.bg) >= 4.5);
+        assert.ok(contrastRatio(rest.onAccent, rest.accent) >= 4.5);
+    });
+
     it('passes the north-star: hide photos and the page still has type, colour and icons', () => {
         slugs.forEach((slug) => {
             const html = fs.readFileSync(path.join(root, `${slug}-sem-fotos.html`), 'utf8');

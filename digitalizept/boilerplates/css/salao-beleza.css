@@ -6,8 +6,10 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: #17171a; --on-accent-2: #f4f1ea; --ink-muted: #68535b;
     
 }
 .dpl-hero { background-image: radial-gradient(color-mix(in srgb, var(--accent) 35%, transparent) 1.2px, transparent 1.2px); background-size: 16px 16px; }
-.dpl-svc { color: var(--bg); padding: 1.4rem; border-radius: 18px; min-height: 150px; }
-.dpl-svc:nth-child(odd){ background: var(--accent);} .dpl-svc:nth-child(even){ background: var(--accent-2);} 
+.dpl-svc { color: var(--on-accent); padding: 1.4rem; border-radius: 18px; min-height: 150px; }
+.dpl-svc:nth-child(odd){ background: var(--accent);} .dpl-svc:nth-child(even){ background: var(--accent-2); color: var(--on-accent-2);}
+.dpl-svc .dpl-icon { color: currentColor; } 

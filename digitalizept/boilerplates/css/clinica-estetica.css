@@ -6,6 +6,7 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: #17171a; --on-accent-2: #17171a; --ink-muted: #595855;
     
 }
 .dpl-hero { background: radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 42%); }

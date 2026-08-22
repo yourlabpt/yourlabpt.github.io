@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contrastTokens } from '../js/demo/colors.js';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const cssDir = path.join(dir, 'css');
@@ -85,12 +86,18 @@ function navJs() {
 </script>`;
 }
 
-function aliases() {
+function aliases(tokens) {
+    const c = contrastTokens({
+        base: tokens.ink,
+        destaque: tokens.accent,
+        secundaria: tokens.accent2
+    }, tokens.bg);
     return `
     --l-paper: var(--bg); --l-ink: var(--ink);
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
-    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);`;
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --on-accent: ${c.onAccent}; --on-accent-2: ${c.onAccent2}; --ink-muted: ${c.inkMuted};`;
 }
 
 function page(spec, body, extraCss) {
@@ -98,7 +105,7 @@ function page(spec, body, extraCss) {
     const css = `:root {
     --bg: ${tokens.bg}; --ink: ${tokens.ink}; --accent: ${tokens.accent}; --accent-2: ${tokens.accent2};
     --font-display: ${display}; --font-body: ${bodyFont};
-    ${aliases()}
+    ${aliases(tokens)}
     ${extraRoot}
 }
 ${extraCss || ''}
@@ -463,8 +470,9 @@ ${footer('A sua clínica', 'Marcações por telefone ou WhatsApp.')}`;
         display: '"Archivo", system-ui, sans-serif',
         bodyFont: '"Archivo", system-ui, sans-serif',
         tokens: { bg: '#F3F1EA', ink: '#23211D', accent: '#C4491F', accent2: '#2E3A46' },
-        extraCss: `.dpl-hero { background: var(--accent-2); color: #F3F1EA; } .dpl-hero .dpl-btn { background: var(--accent); border-color: var(--accent); }
-.dpl-tile { background: var(--accent-2); color: #F3F1EA; padding: 1.4rem; border-radius: 8px; min-height: 140px; }
+        extraCss: `.dpl-hero { background: var(--accent-2); color: var(--on-accent-2); } .dpl-hero .dpl-btn { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.dpl-tile { background: var(--accent-2); color: var(--on-accent-2); padding: 1.4rem; border-radius: 8px; min-height: 140px; }
+.dpl-hero .dpl-icon, .dpl-tile .dpl-icon { color: currentColor; }
 .dpl-spec { font-family: ui-monospace, monospace; }`,
         build() {
             const tiles = [
@@ -590,8 +598,9 @@ ${footer('A sua joalharia', 'Visitas com marcação.')}`;
         display: '"Fraunces", Georgia, serif',
         bodyFont: '"Karla", system-ui, sans-serif',
         tokens: { bg: '#FBF6EC', ink: '#2E2A22', accent: '#7C8B6F', accent2: '#C98A7D' },
-        extraCss: `h1 { font-style: italic; } .dpl-season { min-height: 180px; display:flex; flex-direction:column; justify-content:flex-end; padding:1.2rem; border-radius: 28px; color: var(--bg); }
-.dpl-season:nth-child(odd){ background: var(--accent);} .dpl-season:nth-child(even){ background: var(--accent-2);} `,
+        extraCss: `h1 { font-style: italic; } .dpl-season { min-height: 180px; display:flex; flex-direction:column; justify-content:flex-end; padding:1.2rem; border-radius: 28px; color: var(--on-accent); }
+.dpl-season:nth-child(odd){ background: var(--accent);} .dpl-season:nth-child(even){ background: var(--accent-2); color: var(--on-accent-2);}
+.dpl-season .dpl-icon { color: currentColor; } `,
         build() {
             const seasons = [
                 ['leaf', 'Primavera'], ['flower', 'Casamentos'], ['ribbon', 'Corporativo'], ['gift', 'Condolências']
@@ -709,7 +718,8 @@ ${footer('A sua loja', 'Horário de rua — confirme feriados.')}`;
         bodyFont: '"Barlow", system-ui, sans-serif',
         tokens: { bg: '#F4F4F2', ink: '#1E1E1E', accent: '#E8542A', accent2: '#4B5257' },
         extraCss: `h1, h2 { text-transform: uppercase; }
-.dpl-hero { background: var(--accent-2); color: #F4F4F2; position: relative; overflow: hidden; }
+.dpl-hero { background: var(--accent-2); color: var(--on-accent-2); position: relative; overflow: hidden; }
+.dpl-hero .dpl-icon { color: currentColor; }
 .dpl-hero::after { content:""; position:absolute; right:-40px; top:10%; width:220px; height:220px; border:18px solid color-mix(in srgb, var(--accent) 70%, transparent); border-radius:50%; }
 .dpl-row { display:grid; grid-template-columns: 2.5rem 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); }`,
         build() {
@@ -778,8 +788,9 @@ ${footer('A sua oficina', 'Marcações de manhã rendem lugar no mesmo dia.')}`;
         display: '"Poppins", system-ui, sans-serif',
         bodyFont: '"Nunito Sans", system-ui, sans-serif',
         tokens: { bg: '#FAF6EA', ink: '#23241C', accent: '#3F5B44', accent2: '#D9A441' },
-        extraCss: `.dpl-tile { padding:1.3rem; border-radius:16px; min-height:130px; color: var(--bg); }
-.dpl-tile:nth-child(odd){ background: var(--accent);} .dpl-tile:nth-child(even){ background: var(--accent-2); color: var(--ink);} `,
+        extraCss: `.dpl-tile { padding:1.3rem; border-radius:16px; min-height:130px; color: var(--on-accent); }
+.dpl-tile:nth-child(odd){ background: var(--accent);} .dpl-tile:nth-child(even){ background: var(--accent-2); color: var(--on-accent-2);}
+.dpl-tile .dpl-icon { color: currentColor; } `,
         build() {
             const tiles = [
                 ['carrot', 'Frescos'], ['basket', 'Mercearia'], ['bottle', 'Bebidas'],
@@ -910,8 +921,9 @@ ${footer('A sua ótica', 'Marcações pelo telefone ou WhatsApp.')}`;
         bodyFont: '"DM Sans", system-ui, sans-serif',
         tokens: { bg: '#FBF4F2', ink: '#3F2530', accent: '#C97A8B', accent2: '#4A2E3B' },
         extraCss: `.dpl-hero { background-image: radial-gradient(color-mix(in srgb, var(--accent) 35%, transparent) 1.2px, transparent 1.2px); background-size: 16px 16px; }
-.dpl-svc { color: var(--bg); padding: 1.4rem; border-radius: 18px; min-height: 150px; }
-.dpl-svc:nth-child(odd){ background: var(--accent);} .dpl-svc:nth-child(even){ background: var(--accent-2);} `,
+.dpl-svc { color: var(--on-accent); padding: 1.4rem; border-radius: 18px; min-height: 150px; }
+.dpl-svc:nth-child(odd){ background: var(--accent);} .dpl-svc:nth-child(even){ background: var(--accent-2); color: var(--on-accent-2);}
+.dpl-svc .dpl-icon { color: currentColor; } `,
         build() {
             const svcs = [
                 ['scissors', 'Cabelo', 'desde 18 €'],
