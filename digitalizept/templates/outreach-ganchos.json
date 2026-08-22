@@ -1,0 +1,32 @@
+{
+  "A": {
+    "nome": "Sem nada",
+    "quando": "Sem site, sem redes, ficha do Google vazia ou inexistente",
+    "ganchoTitulo": "Quando alguém vos recomenda, o que é que a pessoa encontra?",
+    "ganchoTexto": "Hoje a recomendação não acaba no \"vai lá que é bom\" — acaba no Google. Se não houver nada, morre ali. E é pena, porque o trabalho fala por si."
+  },
+  "B": {
+    "nome": "Só redes sociais",
+    "quando": "Instagram ou Facebook ativos, sem site",
+    "ganchoTitulo": "O Instagram é da Meta. A vossa história também devia ser vossa.",
+    "ganchoTexto": "A conta, os seguidores e as fotografias estão em casa alheia — basta um bloqueio para desaparecer tudo. E ninguém escreve \"{{oQueFaz}} em {{zona}}\" no Instagram. Escreve no Google."
+  },
+  "C": {
+    "nome": "Site velho",
+    "quando": "Site existe mas é lento, desatualizado ou ilegível no telemóvel",
+    "ganchoTitulo": "Um site abandonado diz mais sobre um negócio do que site nenhum.",
+    "ganchoTexto": "Lento, com informação de há anos e impossível de ler no telemóvel — quem lá chega conclui que a casa fechou. E vocês estão bem vivos."
+  },
+  "D": {
+    "nome": "Cheio de trabalho",
+    "quando": "≥ 50 avaliações e reviews nos últimos 30 dias. Não quer mais clientes.",
+    "ganchoTitulo": "Não é para ter mais clientes. É para ter menos telefonemas.",
+    "ganchoTexto": "Estão abertos? Fazem isto? Quanto custa? Dá para estacionar? Aceitam MB WAY? São as mesmas cinco perguntas todos os dias, sempre no pior momento. Escritas uma vez, respondem-se sozinhas."
+  },
+  "E": {
+    "nome": "Ficha do Google errada",
+    "quando": "Ficha existe mas com horário, telefone ou categoria errados",
+    "ganchoTitulo": "Há gente a aparecer à vossa porta à hora errada.",
+    "ganchoTexto": "A ficha no Google diz {{problemaFicha}}. Quem procura acredita no que lá está — e quem chega a uma porta fechada raramente volta a tentar."
+  }
+}

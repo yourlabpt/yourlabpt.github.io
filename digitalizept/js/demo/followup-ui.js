@@ -9,6 +9,11 @@ import {
     waStepLabel
 } from './followup-messages.js';
 import {
+    listGanchos,
+    pickGancho,
+    sinaisFromWizardState
+} from './outreach-ganchos.js';
+import {
     askCallNotifyPermission,
     callCopy,
     confirmCallState,
@@ -109,9 +114,109 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     callActions.append(callTel, callDoneBtn);
     callBox.append(callTitle, callCount, callHint, callActions);
 
+    const ganchoBox = document.createElement('div');
+    ganchoBox.className = 'followup-ganchos';
+    const ganchoTitle = document.createElement('p');
+    ganchoTitle.className = 'field-group-title';
+    ganchoTitle.textContent = 'Abertura desta lead';
+    const ganchoList = document.createElement('div');
+    ganchoList.className = 'followup-gancho-list';
+    const ganchoButtons = {};
+    listGanchos().forEach((g) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'followup-gancho';
+        btn.dataset.gancho = g.id;
+        const name = document.createElement('span');
+        name.className = 'followup-gancho-name';
+        const label = document.createElement('span');
+        label.textContent = `${g.id} · ${g.nomeCurto}`;
+        const badge = document.createElement('span');
+        badge.className = 'followup-gancho-suggested hidden';
+        badge.textContent = 'Sugerido';
+        name.append(label, badge);
+        const preview = document.createElement('span');
+        preview.className = 'followup-gancho-title';
+        preview.textContent = g.ganchoTitulo;
+        btn.append(name, preview);
+        ganchoButtons[g.id] = { btn, badge };
+        ganchoList.appendChild(btn);
+    });
+    const problemaWrap = document.createElement('label');
+    problemaWrap.className = 'field followup-gancho-problema hidden';
+    const problemaSpan = document.createElement('span');
+    problemaSpan.className = 'field-label';
+    problemaSpan.textContent = 'O que está errado na ficha';
+    const problemaInput = document.createElement('input');
+    problemaInput.type = 'text';
+    problemaInput.className = 'field-input';
+    problemaInput.placeholder = 'Ex.: que fecham às 18h';
+    problemaWrap.append(problemaSpan, problemaInput);
+    const flagsWrap = document.createElement('div');
+    flagsWrap.className = 'followup-gancho-flags';
+    function flagCheck(id, labelText) {
+        const lab = document.createElement('label');
+        lab.className = 'followup-gancho-flag';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.dataset.flag = id;
+        const span = document.createElement('span');
+        span.textContent = labelText;
+        lab.append(box, span);
+        flagsWrap.appendChild(lab);
+        return box;
+    }
+    const movimentoCheck = flagCheck('sinaisDeMovimento', 'Cheio de trabalho');
+    const siteVelhoCheck = flagCheck('siteVelho', 'Site velho');
+    ganchoBox.append(ganchoTitle, ganchoList, problemaWrap, flagsWrap);
+
     const tabs = document.createElement('div');
     tabs.className = 'followup-tabs';
     let activeStep = nextSendableWaStep(ctx.state.data.followup) || Math.max(1, Number(ctx.state.data.followup.waStep) || 1);
+
+    function followupOf() {
+        return ctx.state.data.followup || { waStep: 0 };
+    }
+
+    function suggestedGanchoId() {
+        return pickGancho({ sinais: sinaisFromWizardState(ctx.state) }).id;
+    }
+
+    function selectedGanchoId() {
+        return followupOf().ganchoId || suggestedGanchoId();
+    }
+
+    function ganchoPayload() {
+        const selected = selectedGanchoId();
+        const f = followupOf();
+        return {
+            ganchoId: selected,
+            sinaisDeMovimento: f.sinaisDeMovimento === true,
+            fichaComErro: selected === 'E' || f.fichaComErro === true,
+            siteVelho: f.siteVelho === true,
+            problemaFicha: String(f.problemaFicha || '').trim()
+        };
+    }
+
+    function rewriteCopyFromGancho() {
+        ctx.update({ followupWa1: '' });
+        emailSubject.dataset.autofill = '1';
+        emailPreview.dataset.autofill = '1';
+        emailSubject.value = '';
+        emailPreview.value = '';
+    }
+
+    function persistGancho(patch) {
+        ctx.update({
+            followup: {
+                ...followupOf(),
+                ...patch
+            }
+        });
+        rewriteCopyFromGancho();
+        paintGanchos();
+        paintMessages();
+    }
 
     const waPreview = document.createElement('textarea');
     waPreview.className = 'field-input demo-paste followup-preview';
@@ -132,9 +237,29 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
             followupDia: diaInput.value.trim() || 'amanhã',
             [`followupWa${activeStep}`]: waPreview.value,
             followupEmailSubject: emailSubject.value,
-            followupEmailBody: emailPreview.value
+            followupEmailBody: emailPreview.value,
+            followup: {
+                ...followupOf(),
+                ...ganchoPayload()
+            }
         };
         ctx.update(patch);
+    }
+
+    function paintGanchos() {
+        const selected = selectedGanchoId();
+        const suggested = suggestedGanchoId();
+        Object.entries(ganchoButtons).forEach(([id, node]) => {
+            node.btn.classList.toggle('active', id === selected);
+            node.badge.classList.toggle('hidden', id !== suggested);
+        });
+        problemaWrap.classList.toggle('hidden', selected !== 'E');
+        const f = followupOf();
+        if (document.activeElement !== problemaInput) {
+            problemaInput.value = f.problemaFicha || '';
+        }
+        movimentoCheck.checked = f.sinaisDeMovimento === true;
+        siteVelhoCheck.checked = f.siteVelho === true;
     }
 
     function paintCall() {
@@ -217,7 +342,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         const followup = ctx.state.data.followup || { waStep: 0 };
         const next = nextSendableWaStep(followup);
         if (followup.unsubscribed || ctx.state.data.resultado === 'sem_interesse') {
-            seqStatus.textContent = 'Sem interesse — pediu para não voltar a ser contactado. Não enviar email nem WhatsApp.';
+            seqStatus.textContent = 'Sem interesse — no fundo da lista.';
         } else if (followup.waStep >= 3) {
             seqStatus.textContent = 'Sequência WhatsApp completa (3/3).';
         } else if (next) {
@@ -227,6 +352,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         }
 
         paintCall();
+        paintGanchos();
         paintTabs();
         waPreview.value = buildWhatsAppMessage(ctx.state, config, activeStep);
         const email = buildEmailContent(ctx.state, config);
@@ -244,6 +370,28 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         });
         waLabel.textContent = waStepLabel(activeStep);
     }
+
+    Object.entries(ganchoButtons).forEach(([id, node]) => {
+        node.btn.addEventListener('click', () => {
+            persistGancho({
+                ganchoId: id,
+                fichaComErro: id === 'E' ? true : followupOf().fichaComErro
+            });
+        });
+    });
+    problemaInput.addEventListener('input', () => {
+        persistGancho({
+            ganchoId: 'E',
+            fichaComErro: true,
+            problemaFicha: problemaInput.value.trim()
+        });
+    });
+    movimentoCheck.addEventListener('change', () => {
+        persistGancho({ sinaisDeMovimento: movimentoCheck.checked });
+    });
+    siteVelhoCheck.addEventListener('change', () => {
+        persistGancho({ siteVelho: siteVelhoCheck.checked });
+    });
 
     visitaSelect.addEventListener('change', paintMessages);
     diaInput.addEventListener('input', paintMessages);
@@ -305,7 +453,8 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
                 step: activeStep,
                 text: msg,
                 followupDia: diaInput.value.trim(),
-                visita: visitaSelect.value
+                visita: visitaSelect.value,
+                ...ganchoPayload()
             });
             if (!response.ok) {
                 ctx.showToast((data && data.error) || 'WhatsApp aberto; o estado da lead não actualizou.', true);
@@ -382,7 +531,10 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         try {
             const { response, data } = await outreach('/email', {
                 subject: emailSubject.value,
-                text: emailPreview.value
+                text: emailPreview.value,
+                followupDia: diaInput.value.trim(),
+                visita: visitaSelect.value,
+                ...ganchoPayload()
             });
             if (!response.ok) {
                 ctx.showToast((data && data.error) || 'Não foi possível enviar o email.', true);
@@ -470,7 +622,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     emailLabel.textContent = 'Email HTML (o cliente recebe o layout YourLab)';
 
     host.append(
-        title, hint, controls, linkStatus, seqStatus, callBox, tabs,
+        title, hint, controls, linkStatus, seqStatus, callBox, ganchoBox, tabs,
         waLabel, waPreview, emailLabel, emailSubject, emailPreview, actions
     );
     paintMessages();

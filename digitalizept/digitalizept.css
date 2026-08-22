@@ -1010,6 +1010,76 @@ body:has(.app) {
     margin: 0 0 10px;
 }
 
+.followup-ganchos {
+    margin: 12px 0 14px;
+}
+
+.followup-gancho-list {
+    display: grid;
+    gap: 6px;
+}
+
+.followup-gancho {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    background: var(--surface-color, #fff);
+    color: var(--text-color);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.followup-gancho.active {
+    border-color: var(--accent-color, #1c1c1c);
+}
+
+.followup-gancho-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.followup-gancho-title {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--muted-color);
+    line-height: 1.35;
+}
+
+.followup-gancho-suggested {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-color);
+}
+
+.followup-gancho-problema {
+    margin: 10px 0 0;
+}
+
+.followup-gancho-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+}
+
+.followup-gancho-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
 .followup-tabs {
     display: flex;
     gap: 6px;

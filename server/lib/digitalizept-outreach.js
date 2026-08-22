@@ -15,6 +15,27 @@ const EMAIL_TEMPLATE_PATH = path.join(
     'demo-outreach-email.html'
 );
 
+const GANCHOS_PATH = path.join(
+    __dirname,
+    '..',
+    '..',
+    'digitalizept',
+    'templates',
+    'outreach-ganchos.json'
+);
+
+const GANCHO_IDS = ['A', 'B', 'C', 'D', 'E'];
+
+const GANCHO_NOME_CURTO = {
+    A: 'Sem nada',
+    B: 'Só redes',
+    C: 'Site velho',
+    D: 'Cheio de trabalho',
+    E: 'Ficha errada'
+};
+
+let ganchosCache = null;
+
 const NOTICE_TEMPLATE_PATH = path.join(
     __dirname,
     '..',
@@ -27,47 +48,46 @@ const NOTICE_TEMPLATE_PATH = path.join(
 const DEFAULT_VENDEDOR_TELEFONE = '+351936732879';
 
 const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}}
+    1: `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+*{{ganchoTitulo}}*{{ganchoTextoWa}}
 
-"É fácil encontrar-nos. É depois do café, ao lado da farmácia."
-Pena é que o Google não conheça o café do Zé.
-
-Preparei isto para a *{{negocioNome}}*, sem lhe pedir nada:
+Fiz duas coisas para a *{{negocioNome}}*, sem lhe pedir nada. São exemplos — não estão publicados.
 
 {{link}}
 
-Não está publicado nem aparece no Google. É só para ver.
+Gostou? Diga só que sim e falamos. Se não for de interesse, uma palavra e não volto a incomodar.`,
 
-Se gostar, digo-lhe como fica a funcionar a sério. Se não for de interesse, diga-me e não volto a incomodar.`,
-
-    2: `Também arrumei a casa da *{{negocioNome}}* no Google. No email vê a ficha como ficaria quando alguém procura "{{oQueFaz}} em {{zona}}". É um demonstrador, ainda não está publicado.
+    2: `No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
 
 {{link}}
 
-Fica tudo em nome da empresa: a morada na internet, o espaço onde a página fica guardada e a conta do Google. Não fica preso a nós.
+Tratamos de tudo. O senhor só conta a história. Fica em nome da empresa — não fica preso a nós.
 
 *490 euros* - tudo tratado e no ar em 3 dias
 *190 euros* - só a página, para pôr no ar por si
 *90 euros* - só a parte do Google
 
-Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.`,
+Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.
+
+Isto é só uma parte do que fazemos. Se precisar de marcações, fichas, stocks — diga e falamos também.`,
 
     3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}}.
 
-Aqui fica a página que lhe mostrei:
+Aqui fica a página que lhe mostrei — a história toda num sítio só vosso:
 
 {{link}}
 
-Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã - são 10 minutos.`
+Gostou? Diga só que sim. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos, sem compromisso.`
 };
 
 const EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
 
 const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-Estamos em 2026 e a vossa história ainda não está escrita em lado nenhum.
+{{ganchoTitulo}}
+
+{{ganchoTexto}}
 
 Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, sem lhe pedir nada. São exemplos — não estão publicados.
 
@@ -190,6 +210,11 @@ function emptyFollowup() {
         callNotifiedAt: '',
         unsubscribed: false,
         unsubToken: '',
+        ganchoId: '',
+        sinaisDeMovimento: false,
+        fichaComErro: false,
+        siteVelho: false,
+        problemaFicha: '',
         edits: {}
     };
 }
@@ -202,8 +227,110 @@ function parseFollowup(raw) {
         ...parsed,
         waStep: Math.min(3, Math.max(0, Number(parsed.waStep) || 0)),
         unsubscribed: parsed.unsubscribed === true,
+        ganchoId: normalizeGanchoId(parsed.ganchoId),
+        sinaisDeMovimento: parsed.sinaisDeMovimento === true,
+        fichaComErro: parsed.fichaComErro === true,
+        siteVelho: parsed.siteVelho === true,
+        problemaFicha: String(parsed.problemaFicha || '').trim(),
         edits: parsed.edits && typeof parsed.edits === 'object' ? parsed.edits : {}
     };
+}
+
+function loadGanchos() {
+    if (!ganchosCache) {
+        ganchosCache = JSON.parse(fs.readFileSync(GANCHOS_PATH, 'utf8'));
+    }
+    return ganchosCache;
+}
+
+function normalizeGanchoId(id) {
+    const letter = String(id || '').trim().toUpperCase();
+    return GANCHO_IDS.includes(letter) ? letter : '';
+}
+
+function filledGanchoField(value) {
+    const v = String(value || '').trim();
+    return Boolean(v) && v !== '-' && v !== '—';
+}
+
+function hasWebsite(sinais) {
+    const tokens = [
+        String((sinais && sinais.website) || '').trim().toLowerCase(),
+        String((sinais && sinais.website_atual) || '').trim().toLowerCase()
+    ].filter(Boolean);
+    if (!tokens.length) return false;
+    return tokens.some((w) => w !== 'nao' && w !== 'não' && w !== 'no');
+}
+
+function siteIsOld(sinais) {
+    if (sinais && sinais.siteVelho === true) return true;
+    const w = String((sinais && sinais.website) || '').trim().toLowerCase();
+    return w === 'sim_fraco';
+}
+
+function hasSocial(sinais) {
+    return filledGanchoField(sinais && sinais.instagram) || filledGanchoField(sinais && sinais.facebook);
+}
+
+function pickGancho({ override, sinais = {} } = {}) {
+    const hooks = loadGanchos();
+    let id = normalizeGanchoId(override);
+    if (!id) {
+        if (sinais.sinaisDeMovimento === true) id = 'D';
+        else if (sinais.fichaComErro === true && filledGanchoField(sinais.problemaFicha)) id = 'E';
+        else if (siteIsOld(sinais)) id = 'C';
+        else if (!hasWebsite(sinais) && hasSocial(sinais)) id = 'B';
+        else id = 'A';
+    }
+    if (id === 'E' && !filledGanchoField(sinais.problemaFicha)) id = 'A';
+    const hook = hooks[id] || hooks.A;
+    return {
+        id,
+        nome: hook.nome,
+        nomeCurto: GANCHO_NOME_CURTO[id] || hook.nome,
+        ganchoTitulo: hook.ganchoTitulo,
+        ganchoTexto: hook.ganchoTexto
+    };
+}
+
+function listGanchos() {
+    const hooks = loadGanchos();
+    return GANCHO_IDS.map((id) => ({
+        id,
+        nome: hooks[id].nome,
+        nomeCurto: GANCHO_NOME_CURTO[id] || hooks[id].nome,
+        ganchoTitulo: hooks[id].ganchoTitulo,
+        ganchoTexto: hooks[id].ganchoTexto
+    }));
+}
+
+function applyGanchoFields(followup, patch = {}) {
+    const f = parseFollowup(followup);
+    if (patch.ganchoId != null) f.ganchoId = normalizeGanchoId(patch.ganchoId);
+    if (patch.sinaisDeMovimento != null) f.sinaisDeMovimento = patch.sinaisDeMovimento === true;
+    if (patch.fichaComErro != null) f.fichaComErro = patch.fichaComErro === true;
+    if (patch.siteVelho != null) f.siteVelho = patch.siteVelho === true;
+    if (patch.problemaFicha != null) f.problemaFicha = String(patch.problemaFicha || '').trim();
+    return f;
+}
+
+function sinaisFromLead({ dados = {}, diag = {}, presence = {}, followup = {} } = {}) {
+    return {
+        website: diag.website || dados.website || '',
+        website_atual: dados.website_atual || presence.website || '',
+        instagram: dados.instagram || presence.instagram || '',
+        facebook: dados.facebook || presence.facebook || '',
+        sinaisDeMovimento: followup.sinaisDeMovimento === true,
+        fichaComErro: followup.fichaComErro === true,
+        siteVelho: followup.siteVelho === true,
+        problemaFicha: String(followup.problemaFicha || dados.problemaFicha || '').trim()
+    };
+}
+
+function shortGanchoTexto(texto) {
+    const t = String(texto || '').trim();
+    if (!t) return '';
+    return t.length <= 220 ? t : '';
 }
 
 function nextSendableWaStep(followup) {
@@ -349,7 +476,9 @@ function buildOutreachContext({
     hour = new Date().getHours(),
     businessTypeNome = '',
     lat = null,
-    lng = null
+    lng = null,
+    ganchoId = '',
+    sinais = {}
 } = {}) {
     const site = stripSite(provider.site);
     const link = absoluteUrl(origin, demoUrl || (demoSlug ? `/d/${demoSlug}` : ''));
@@ -370,8 +499,13 @@ function buildOutreachContext({
     const vendedorTelefoneTel = phone.tel;
     const vendedorEmail = String(provider.email || '').trim() || 'yourlabpt@gmail.com';
     const ctaBody = 'Gostei do que vi. Podemos falar?';
+    const problemaFicha = String(sinais.problemaFicha || dados.problemaFicha || '').trim();
+    const picked = pickGancho({
+        override: ganchoId,
+        sinais: { ...sinais, problemaFicha }
+    });
 
-    return {
+    const ctx = {
         saudacao: greetingForHour(hour),
         clienteNome: String(dados.responsavel || 'Cliente').trim() || 'Cliente',
         negocioNome,
@@ -406,8 +540,19 @@ function buildOutreachContext({
             ? `${String(origin).replace(/\/$/, '')}/api/digitalizept/unsub?t=${encodeURIComponent(unsubToken)}`
             : `${String(origin).replace(/\/$/, '')}/api/digitalizept/unsub`,
         clienteEmail: pickEmail(dados, dados.legalEmail),
-        clienteWhatsApp: String(dados.whatsapp || dados.telefone || '').trim()
+        clienteWhatsApp: String(dados.whatsapp || dados.telefone || '').trim(),
+        problemaFicha,
+        ganchoId: picked.id,
+        ganchoTitulo: '',
+        ganchoTexto: '',
+        ganchoTextoCurto: '',
+        ganchoTextoWa: ''
     };
+    ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
+    ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
+    ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto);
+    ctx.ganchoTextoWa = ctx.ganchoTextoCurto ? `\n\n${ctx.ganchoTextoCurto}` : '';
+    return ctx;
 }
 
 function waTextForStep(step, ctx, edits = {}) {
@@ -481,5 +626,14 @@ module.exports = {
     unsubResultadoFor,
     renderBrandedNoticeHtml,
     newUnsubToken,
-    leadEmailFromRows
+    leadEmailFromRows,
+    GANCHO_IDS,
+    GANCHO_NOME_CURTO,
+    loadGanchos,
+    listGanchos,
+    pickGancho,
+    normalizeGanchoId,
+    applyGanchoFields,
+    sinaisFromLead,
+    shortGanchoTexto
 };

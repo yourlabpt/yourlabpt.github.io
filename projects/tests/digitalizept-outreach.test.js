@@ -9,6 +9,8 @@ const {
     nextSendableWaStep,
     canMarkReply,
     buildOutreachContext,
+    pickGancho,
+    applyGanchoFields,
     waTextForStep,
     renderEmailHtml,
     renderEmailText,
@@ -61,6 +63,16 @@ describe('digitalizept outreach', () => {
         assert.match(wa1, /Sr\. Costa/);
         assert.match(wa1, /Talho da Costa/);
         assert.match(wa1, /aqui de Porto/);
+        assert.match(wa1, /Quando alguém vos recomenda/);
+        assert.doesNotMatch(wa1, /2026/);
+        assert.match(wa1, /São exemplos/);
+        assert.doesNotMatch(wa1, /café do Zé/);
+
+        const wa2 = waTextForStep(2, ctx);
+        assert.match(wa2, /490 euros/);
+        assert.match(wa2, /história toda/);
+        assert.doesNotMatch(wa2, /demonstrador/);
+        assert.doesNotMatch(wa2, /google\.com\/maps/);
 
         const html = fillHtmlTemplate(
             'Olá {{negocioNome}} em {{zona}} <a href="{{link}}">x</a>',
@@ -133,9 +145,11 @@ describe('digitalizept outreach', () => {
         assert.match(html, /Loja X/);
         assert.match(html, /509000000/);
         assert.match(html, /yourlabpt.com\/d\/loja-x/);
+        assert.match(html, /Quando alguém vos recomenda/);
         assert.match(html, /São exemplos/);
         assert.match(html, /sou o/);
         assert.match(html, /Digitalize a sua empresa/);
+        assert.doesNotMatch(html, /\{\{gancho/);
         assert.match(html, /mailto:yourlabpt@gmail.com\?subject=Gostei%20-%20Loja%20X/);
         assert.match(html, /body=Gostei%20do%20que%20vi\.%20Podemos%20falar%3F/);
         assert.match(html, /Sim, vamos falar/);
@@ -190,5 +204,84 @@ describe('digitalizept outreach', () => {
         assert.match(html, /509000000/);
         assert.match(html, /Já não enviamos emails para este contacto/);
         assert.doesNotMatch(html, /\{\{\w+\}\}/);
+    });
+
+    it('picks outreach hooks by rule order, override, and E fallback', () => {
+        assert.equal(pickGancho({ sinais: { sinaisDeMovimento: true } }).id, 'D');
+        assert.equal(pickGancho({
+            sinais: {
+                sinaisDeMovimento: true,
+                fichaComErro: true,
+                problemaFicha: 'que fecham às 18h',
+                website: 'sim_fraco',
+                instagram: '@loja'
+            }
+        }).id, 'D');
+        assert.equal(pickGancho({
+            sinais: { fichaComErro: true, problemaFicha: 'que fecham às 18h' }
+        }).id, 'E');
+        assert.equal(pickGancho({
+            sinais: { website: 'sim_fraco' }
+        }).id, 'C');
+        assert.equal(pickGancho({
+            sinais: { siteVelho: true, website: 'sim_ok' }
+        }).id, 'C');
+        assert.equal(pickGancho({
+            sinais: { website: 'nao', instagram: '@talho' }
+        }).id, 'B');
+        assert.equal(pickGancho({ sinais: {} }).id, 'A');
+        assert.equal(pickGancho({
+            override: 'B',
+            sinais: { sinaisDeMovimento: true }
+        }).id, 'B');
+        assert.equal(pickGancho({
+            override: 'E',
+            sinais: { fichaComErro: true }
+        }).id, 'A');
+        assert.equal(pickGancho({
+            sinais: { fichaComErro: true }
+        }).id, 'A');
+        const stored = applyGanchoFields(parseFollowup({}), {
+            ganchoId: 'C',
+            siteVelho: true
+        });
+        assert.equal(stored.ganchoId, 'C');
+        assert.equal(stored.siteVelho, true);
+    });
+
+    it('fills the chosen hook into HTML and WhatsApp 1', () => {
+        const ctx = buildOutreachContext({
+            dados: { nome_negocio: 'Farmácia Sol', cidade: 'Braga', o_que_faz: 'farmácia' },
+            provider: { nome: 'YourLab', nif: '509000000', morada: 'Rua A 1, 4700-000 Braga' },
+            origin: 'https://yourlabpt.com',
+            demoSlug: 'farmacia-sol',
+            ganchoId: 'B',
+            sinais: { website: 'nao', instagram: '@farmaciasol' }
+        });
+        assert.equal(ctx.ganchoId, 'B');
+        assert.match(ctx.ganchoTitulo, /Instagram é da Meta/);
+        assert.match(ctx.ganchoTexto, /farmácia em Braga/);
+        assert.doesNotMatch(ctx.ganchoTexto, /não estão na internet/);
+        const html = renderEmailHtml(ctx);
+        assert.match(html, /Instagram é da Meta/);
+        assert.match(html, /farmácia em Braga/);
+        assert.doesNotMatch(html, /\{\{gancho/);
+        assert.doesNotMatch(html, /2026 e a vossa história/);
+        const wa1 = waTextForStep(1, ctx);
+        assert.match(wa1, /Instagram é da Meta/);
+        assert.doesNotMatch(wa1, /2026/);
+        const text = renderEmailText(ctx);
+        assert.match(text, /Instagram é da Meta/);
+        assert.doesNotMatch(text, /2026 e a vossa história/);
+
+        const eCtx = buildOutreachContext({
+            dados: { nome_negocio: 'Talho da Costa', cidade: 'Porto' },
+            provider: { nome: 'YourLab' },
+            ganchoId: 'E',
+            sinais: { problemaFicha: 'que fecham às 18h' }
+        });
+        assert.equal(eCtx.ganchoId, 'E');
+        assert.match(eCtx.ganchoTexto, /que fecham às 18h/);
+        assert.doesNotMatch(renderEmailHtml(eCtx), /\{\{problemaFicha\}\}/);
     });
 });

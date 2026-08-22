@@ -694,7 +694,8 @@ describe('digitalizept followup messages', () => {
 
         const wa2 = buildWhatsAppMessage(state, config, 2);
         assert.match(wa2, /490 euros/);
-        assert.match(wa2, /demonstrador/);
+        assert.match(wa2, /história toda/);
+        assert.doesNotMatch(wa2, /demonstrador/);
         assert.doesNotMatch(wa2, /google\.com\/maps/);
 
         const wa3 = buildWhatsAppMessage(state, config, 3);

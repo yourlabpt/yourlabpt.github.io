@@ -1,38 +1,41 @@
+import {
+    pickGancho,
+    shortGanchoTexto,
+    sinaisFromWizardState
+} from './outreach-ganchos.js';
+
 export const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}}
+    1: `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-Sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+*{{ganchoTitulo}}*{{ganchoTextoWa}}
 
-"É fácil encontrar-nos. É depois do café, ao lado da farmácia."
-Pena é que o Google não conheça o café do Zé.
-
-Preparei isto para a *{{negocioNome}}*, sem lhe pedir nada:
+Fiz duas coisas para a *{{negocioNome}}*, sem lhe pedir nada. São exemplos — não estão publicados.
 
 {{link}}
 
-Não está publicado nem aparece no Google. É só para ver.
+Gostou? Diga só que sim e falamos. Se não for de interesse, uma palavra e não volto a incomodar.`,
 
-Se gostar, digo-lhe como fica a funcionar a sério. Se não for de interesse, diga-me e não volto a incomodar.`,
-
-    2: `Também arrumei a casa da *{{negocioNome}}* no Google. No email vê a ficha como ficaria quando alguém procura "{{oQueFaz}} em {{zona}}". É um demonstrador, ainda não está publicado.
+    2: `No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
 
 {{link}}
 
-Fica tudo em nome da empresa: a morada na internet, o espaço onde a página fica guardada e a conta do Google. Não fica preso a nós.
+Tratamos de tudo. O senhor só conta a história. Fica em nome da empresa — não fica preso a nós.
 
 *490 euros* - tudo tratado e no ar em 3 dias
 *190 euros* - só a página, para pôr no ar por si
 *90 euros* - só a parte do Google
 
-Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.`,
+Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.
+
+Isto é só uma parte do que fazemos. Se precisar de marcações, fichas, stocks — diga e falamos também.`,
 
     3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}}.
 
-Aqui fica a página que lhe mostrei:
+Aqui fica a página que lhe mostrei — a história toda num sítio só vosso:
 
 {{link}}
 
-Fique à vontade para mostrar a quem quiser. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã - são 10 minutos.`
+Gostou? Diga só que sim. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos, sem compromisso.`
 };
 
 export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
@@ -41,7 +44,9 @@ export const DEFAULT_EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{neg
 
 export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
-Estamos em 2026 e a vossa história ainda não está escrita em lado nenhum.
+{{ganchoTitulo}}
+
+{{ganchoTexto}}
 
 Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, sem lhe pedir nada. São exemplos — não estão publicados.
 
@@ -124,7 +129,7 @@ export function buildFollowupContext(state, config) {
     const oQueFaz = String(dados.o_que_faz || dados.principais_servicos || tipo || 'negócio local').trim();
     const morada = String(dados.morada || '').trim();
 
-    return {
+    const ctx = {
         saudacao: greetingForHour(hour),
         clienteNome,
         negocioNome,
@@ -144,8 +149,26 @@ export function buildFollowupContext(state, config) {
         inicial: (negocioNome.replace(/^o seu /i, '').charAt(0) || 'G').toUpperCase(),
         linkGoogle: '',
         clienteEmail: String(dados.email || '').trim(),
-        clienteWhatsApp: normalizePhoneForWa(dados.whatsapp || dados.telefone)
+        clienteWhatsApp: normalizePhoneForWa(dados.whatsapp || dados.telefone),
+        problemaFicha: '',
+        ganchoId: '',
+        ganchoTitulo: '',
+        ganchoTexto: '',
+        ganchoTextoCurto: '',
+        ganchoTextoWa: ''
     };
+    const sinais = sinaisFromWizardState(state);
+    ctx.problemaFicha = sinais.problemaFicha;
+    const picked = pickGancho({
+        override: state.data && state.data.followup && state.data.followup.ganchoId,
+        sinais
+    });
+    ctx.ganchoId = picked.id;
+    ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
+    ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
+    ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto);
+    ctx.ganchoTextoWa = ctx.ganchoTextoCurto ? `\n\n${ctx.ganchoTextoCurto}` : '';
+    return ctx;
 }
 
 export function fillTemplate(template, ctx) {

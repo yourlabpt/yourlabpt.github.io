@@ -596,6 +596,10 @@
     border-top: none;
 }
 
+.admin-drawer-panel .followup-gancho.active {
+    border-color: var(--admin-ink, #1c1c1c);
+}
+
 .admin-drawer-panel .followup-wa {
     background: #25d366;
     border-color: #1da851;

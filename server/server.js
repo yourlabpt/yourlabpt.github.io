@@ -2024,6 +2024,7 @@ function loadLeadOutreachRow(db, leadId) {
     return db.prepare(`
         SELECT l.id, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.business_type,
                l.demo_slug, l.lat, l.lng, l.followup_json, l.estado, l.cobertura, l.resultado,
+               l.wizard_json, l.google_presence_json,
                d.obrigatorios_json, d.opcionais_json,
                cl.email AS legal_email, cl.nome AS legal_nome
         FROM lead l
@@ -2031,6 +2032,16 @@ function loadLeadOutreachRow(db, leadId) {
         LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
         WHERE l.id = ?
     `).get(leadId);
+}
+
+function ganchoExtrasFromBody(body = {}) {
+    const extras = {};
+    if (body.ganchoId != null) extras.ganchoId = cleanText(body.ganchoId, 4);
+    if (body.sinaisDeMovimento != null) extras.sinaisDeMovimento = body.sinaisDeMovimento === true;
+    if (body.fichaComErro != null) extras.fichaComErro = body.fichaComErro === true;
+    if (body.siteVelho != null) extras.siteVelho = body.siteVelho === true;
+    if (body.problemaFicha != null) extras.problemaFicha = cleanText(body.problemaFicha, 200);
+    return extras;
 }
 
 function buildLeadOutreach(db, leadId, req, extras = {}) {
@@ -2050,8 +2061,18 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
     };
     if (!dados.responsavel && row.legal_nome) dados.responsavel = row.legal_nome;
     if (!dados.email && row.legal_email) dados.email = row.legal_email;
-    const followup = outreach.parseFollowup(row.followup_json);
+    let followup = outreach.parseFollowup(row.followup_json);
+    followup = outreach.applyGanchoFields(followup, extras);
     if (!followup.unsubToken) followup.unsubToken = outreach.newUnsubToken();
+    const wizard = parseJsonSafe(row.wizard_json, {});
+    const presence = {
+        ...parseJsonSafe(row.google_presence_json, {}),
+        ...(wizard.googlePresence && typeof wizard.googlePresence === 'object' ? wizard.googlePresence : {})
+    };
+    const diag = wizard.googleDiagnostico && typeof wizard.googleDiagnostico === 'object'
+        ? wizard.googleDiagnostico
+        : {};
+    const sinais = outreach.sinaisFromLead({ dados, diag, presence, followup });
     const origin = digitalizeptPublicOrigin(req);
     const ctx = outreach.buildOutreachContext({
         dados,
@@ -2064,9 +2085,11 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         unsubToken: followup.unsubToken,
         businessTypeNome: businessType.nome || '',
         lat: row.lat,
-        lng: row.lng
+        lng: row.lng,
+        ganchoId: followup.ganchoId,
+        sinais
     });
-    return { row, dados, followup, ctx, origin };
+    return { row, dados, followup, ctx, origin, sinais };
 }
 
 function parseJsonSafe(raw, fallback) {
@@ -4053,6 +4076,9 @@ app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, r
             email: packed.dados.email || '',
             whatsapp: packed.dados.whatsapp || packed.dados.telefone || '',
             hasDemo: Boolean(packed.row.demo_slug),
+            ganchoId: ctx.ganchoId,
+            ganchoSugerido: outreach.pickGancho({ sinais: packed.sinais }).id,
+            ganchos: outreach.listGanchos(),
             messages: {
                 1: outreach.waTextForStep(1, ctx, followup.edits),
                 2: outreach.waTextForStep(2, ctx, followup.edits),
@@ -4075,7 +4101,8 @@ app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizep
         const db = getDigitalizeptDb();
         const packed = buildLeadOutreach(db, leadId, req, {
             followupDia: cleanText(body.followupDia, 80),
-            visita: cleanText(body.visita, 20)
+            visita: cleanText(body.visita, 20),
+            ...ganchoExtrasFromBody(body)
         });
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
         const step = Number(body.step);
@@ -4165,7 +4192,8 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         const db = getDigitalizeptDb();
         const packed = buildLeadOutreach(db, leadId, req, {
             followupDia: cleanText(body.followupDia, 80),
-            visita: cleanText(body.visita, 20)
+            visita: cleanText(body.visita, 20),
+            ...ganchoExtrasFromBody(body)
         });
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
         if (packed.followup.unsubscribed || packed.row.resultado === 'sem_interesse') {
