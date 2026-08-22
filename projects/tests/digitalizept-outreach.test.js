@@ -147,6 +147,7 @@ describe('digitalizept outreach', () => {
         assert.match(html, /yourlabpt.com\/d\/loja-x/);
         assert.match(html, /Quando alguém vos recomenda/);
         assert.match(html, /São exemplos/);
+        assert.match(html, /Feito à medida/);
         assert.match(html, /sou o/);
         assert.match(html, /Digitalize a sua empresa/);
         assert.doesNotMatch(html, /\{\{gancho/);

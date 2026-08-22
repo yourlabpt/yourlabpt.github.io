@@ -62,7 +62,7 @@ Gostou? Diga só que sim e falamos. Se não for de interesse, uma palavra e não
 
 {{link}}
 
-Tratamos de tudo. O senhor só conta a história. Fica em nome da empresa — não fica preso a nós.
+Feito à medida. E o site fica vosso, não nosso. Cada página é construída de raiz para a casa — fica em nome da empresa.
 
 *490 euros* - tudo tratado e no ar em 3 dias
 *190 euros* - só a página, para pôr no ar por si
