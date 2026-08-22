@@ -303,6 +303,9 @@ function applyCores(doc, cores) {
   --l-base: ${cores.base};
   --l-destaque: ${cores.destaque};
   --l-secundaria: ${cores.secundaria};
+  --ink: ${cores.base};
+  --accent: ${cores.destaque};
+  --accent-2: ${cores.secundaria};
 }
 [data-dp-photos] {
   display: none !important;

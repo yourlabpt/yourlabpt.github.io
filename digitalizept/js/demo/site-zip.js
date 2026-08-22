@@ -1,4 +1,5 @@
 import { applyIdentityToHtml, currentDemoHtml } from './html.js';
+import { stripDemoSwitch } from './demo-visual.js';
 
 export const SITE_CSS_START = '/* dp-site-export-start */';
 export const SITE_CSS_END = '/* dp-site-export-end */';
@@ -427,6 +428,7 @@ export function buildStandaloneWebsiteFiles(state, { landingCss = '' } = {}) {
     };
 
     let html = applyIdentityToHtml(compact, fileIdentidade, dados);
+    html = stripDemoSwitch(html);
     html = rewriteHtmlToAssetPaths(html, { logoHref, photoHrefs, stylesheetHref: STYLESHEET_HREF });
     if (/data:image\/|base64,/i.test(html)) {
         html = rewriteHtmlToAssetPaths(

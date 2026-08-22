@@ -1,0 +1,12 @@
+:root {
+    --bg: #FBF6EC; --ink: #2E2A22; --accent: #7C8B6F; --accent-2: #C98A7D;
+    --font-display: "Fraunces", Georgia, serif; --font-body: "Karla", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+h1 { font-style: italic; } .dpl-season { min-height: 180px; display:flex; flex-direction:column; justify-content:flex-end; padding:1.2rem; border-radius: 28px; color: var(--bg); }
+.dpl-season:nth-child(odd){ background: var(--accent);} .dpl-season:nth-child(even){ background: var(--accent-2);} 

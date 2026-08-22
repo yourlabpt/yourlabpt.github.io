@@ -1,0 +1,13 @@
+:root {
+    --bg: #FBF4F2; --ink: #3F2530; --accent: #C97A8B; --accent-2: #4A2E3B;
+    --font-display: "DM Serif Display", Georgia, serif; --font-body: "DM Sans", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-hero { background-image: radial-gradient(color-mix(in srgb, var(--accent) 35%, transparent) 1.2px, transparent 1.2px); background-size: 16px 16px; }
+.dpl-svc { color: var(--bg); padding: 1.4rem; border-radius: 18px; min-height: 150px; }
+.dpl-svc:nth-child(odd){ background: var(--accent);} .dpl-svc:nth-child(even){ background: var(--accent-2);} 

@@ -1,0 +1,11 @@
+:root {
+    --bg: #FAFAF8; --ink: #17171A; --accent: #2D6A64; --accent-2: #17171A;
+    --font-display: "Inter", system-ui, sans-serif; --font-body: "Inter", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    /* --accent is the token to swap per client */
+}
+

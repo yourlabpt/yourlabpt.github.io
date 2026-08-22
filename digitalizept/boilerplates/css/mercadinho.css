@@ -1,0 +1,12 @@
+:root {
+    --bg: #FAF6EA; --ink: #23241C; --accent: #3F5B44; --accent-2: #D9A441;
+    --font-display: "Poppins", system-ui, sans-serif; --font-body: "Nunito Sans", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-tile { padding:1.3rem; border-radius:16px; min-height:130px; color: var(--bg); }
+.dpl-tile:nth-child(odd){ background: var(--accent);} .dpl-tile:nth-child(even){ background: var(--accent-2); color: var(--ink);} 

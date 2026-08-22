@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="generico">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O seu negócio — perto de si</title>
+<meta name="description" content="Serviços locais, horário claro e contacto directo. Sem rodeios.">
+<meta property="og:title" content="O seu negócio — perto de si">
+<meta property="og:description" content="Serviços locais, horário claro e contacto directo. Sem rodeios.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/generico.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">O seu negócio</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Serviços</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
+            <a class="dpl-btn" href="#dpl-contactos">Contactar</a>
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <p class="dpl-badge">Negócio local</p>
+        <h1>Aqui ao lado, a tratar do recado.</h1>
+        <p class="dpl-hero-sub">Um negócio em {{cidade}}, com atendimento de quem conhece a zona.</p>
+        <div class="dpl-hero-ctas">
+            <a class="dpl-btn" href="#dpl-contactos">Contactar</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-servicos">Ver serviços</a>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">Quem somos</h2>
+            <p class="dpl-lede">{{sobre}}</p>
+            <p>Explicamos o que fazemos, o horário e como chegar — sem rodeios.</p>
+        </div>
+        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 4 / 3" data-fallback-icon="GE"></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Serviços</h2>
+        <div class="dpl-grid dpl-grid-3" style="margin-top:2rem">
+            <article class="dpl-card"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span><h3>Serviço principal</h3><p>O pedido mais frequente, tratado com clareza.</p></article>
+            <article class="dpl-card"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon points="12 3 14.8 9.2 21.5 9.8 16.4 14.2 18 21 12 17.5 6 21 7.6 14.2 2.5 9.8 9.2 9.2"/></svg></span><h3>Serviço secundário</h3><p>O extra que as pessoas pedem a seguir.</p></article>
+            <article class="dpl-card"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span><h3>Atendimento</h3><p>Resposta rápida ao telefone ou à porta.</p></article>
+        </div>
+    </div>
+</section>
+<section class="dpl-section">
+    <div class="dpl-wrap dpl-grid dpl-grid-3">
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span><p>Atendimento próximo</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><polygon points="12 3 14.8 9.2 21.5 9.8 16.4 14.2 18 21 12 17.5 6 21 7.6 14.2 2.5 9.8 9.2 9.2"/></svg></span><p>Qualidade sem surpresas</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.2"/></svg></span><p>Perto de si, em {{cidade}}</p></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <blockquote class="dpl-quote"><p>Atendimento claro e próximo.</p><footer>Cliente</footer></blockquote>
+        <blockquote class="dpl-quote"><p>É o sítio da rua. Resolvem.</p><footer>Vizinho</footer></blockquote>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Fale connosco</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Fale connosco</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">WhatsApp</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">O seu negócio</strong>
+        <p>Fale connosco ou passe na loja.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

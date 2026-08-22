@@ -21,6 +21,16 @@ import {
 } from '../demo/html.js';
 import { createWebsiteZipButton } from '../demo/site-zip.js';
 import {
+    applyVisualToState,
+    htmlForVisual,
+    mountDemoSwitch,
+    prefetchBoilerplate,
+    rememberVisual,
+    resolveDemoVisual,
+    typeSlug,
+    VISUAL_SEM_FOTOS
+} from '../demo/demo-visual.js';
+import {
     buildGbpSobrePrompt,
     plainAiText,
     renderOptionalAi
@@ -47,6 +57,7 @@ function isGbpSubstepValid(state) {
 
 function isWebsiteSubstepValid(state) {
     if (state.data.demoHtml) return true;
+    if (state.data.demoVisual === VISUAL_SEM_FOTOS) return true;
     ensureSeededDemo(state);
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
 }
@@ -85,7 +96,9 @@ async function publishDemo(ctx) {
                 identidade: ctx.state.data.identidade,
                 demo,
                 demoHtml,
-                demoRaw: ctx.state.data.demoRaw || ''
+                demoRaw: ctx.state.data.demoRaw || '',
+                demoVisual: ctx.state.data.demoVisual || '',
+                demoHtmlSource: ctx.state.data.demoHtmlSource || ''
             }
         });
         if (response.ok && data.url) {
@@ -95,6 +108,35 @@ async function publishDemo(ctx) {
         }
     } catch (_) { /* publishing is best-effort during the visit */ }
     return '';
+}
+
+function paintWebsitePreview(host, state) {
+    host.innerHTML = '';
+    if (state.data.demoHtml) {
+        mountHtmlPreview(host, state.data.demoHtml, {
+            identidade: state.data.identidade,
+            dados: state.data.dados
+        });
+        return;
+    }
+    host.appendChild(renderLanding(state));
+}
+
+async function switchDemoVisual(ctx, visual, { persist = true, onPaint } = {}) {
+    const html = await htmlForVisual(ctx.state, visual);
+    applyVisualToState(ctx.state, visual, html);
+    if (persist) rememberVisual(ctx.state, visual);
+    ctx.update({
+        demoVisual: persist ? visual : (ctx.state.data.demoVisual || ''),
+        demoHtml: ctx.state.data.demoHtml || '',
+        demoHtmlSource: ctx.state.data.demoHtmlSource || ''
+    });
+    if (typeof onPaint === 'function') onPaint();
+    if (persist) {
+        scheduleSaveDraftLead(ctx.state, ctx);
+        publishDemo(ctx);
+    }
+    prefetchBoilerplate(typeSlug(ctx.state));
 }
 
 function openPreview(state, ctx, { mode } = {}) {
@@ -117,6 +159,7 @@ function openPreview(state, ctx, { mode } = {}) {
         overlay.remove();
         document.body.style.overflow = previousOverflow;
         document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('dpl-has-switch');
     };
     const onKey = (event) => {
         if (event.key === 'Escape') closeOverlay();
@@ -136,13 +179,8 @@ function openPreview(state, ctx, { mode } = {}) {
                 showPitch: true
             });
             scroll.appendChild(wrap);
-        } else if (state.data.demoHtml) {
-            mountHtmlPreview(scroll, state.data.demoHtml, {
-                identidade: state.data.identidade,
-                dados: state.data.dados
-            });
         } else {
-            scroll.appendChild(renderLanding(state));
+            paintWebsitePreview(scroll, state);
         }
     } catch (_) {
         ctx.showToast('Não foi possível gerar a pré-visualização.', true);
@@ -154,6 +192,19 @@ function openPreview(state, ctx, { mode } = {}) {
     overlay.append(bar, scroll);
     document.body.appendChild(overlay);
     scroll.scrollTop = 0;
+    if (!showGbp) {
+        const visual = resolveDemoVisual(state);
+        const onSwitch = (next) => {
+            switchDemoVisual(ctx, next, {
+                persist: true,
+                onPaint: () => {
+                    paintWebsitePreview(scroll, ctx.state);
+                    mountDemoSwitch(overlay, { visual: next, onChange: onSwitch });
+                }
+            }).catch(() => ctx.showToast('Não foi possível mudar a versão.', true));
+        };
+        mountDemoSwitch(overlay, { visual, onChange: onSwitch });
+    }
 }
 
 function refreshDemoFromIdentity(ctx, { force = false } = {}) {
@@ -174,8 +225,16 @@ function applyHtml(ctx, raw, showStatus, afterApply) {
         ctx.showToast('HTML demasiado grande — a usar os primeiros 900 KB.', true);
     }
     ctx.state.data.demoHtml = html;
+    ctx.state.data.demoHtmlSource = 'ai';
+    ctx.state.data.demoHtmlCustom = html;
     ctx.state.data.demoSeeded = false;
-    ctx.update({ demoHtml: html, demoIdentityStamp: identityFingerprint(identidade), demoSeeded: false });
+    ctx.update({
+        demoHtml: html,
+        demoHtmlSource: 'ai',
+        demoHtmlCustom: html,
+        demoIdentityStamp: identityFingerprint(identidade),
+        demoSeeded: false
+    });
     ctx.setValid(true);
     showStatus('HTML aplicado. Pode mostrar ao cliente ou pedir alterações.', 'ok');
     if (typeof afterApply === 'function') afterApply();
@@ -261,6 +320,7 @@ function renderGbpDemo(container, ctx) {
 function renderWebsiteDemo(body, ctx) {
     ensureSeededDemo(ctx.state);
     ctx.update({ demo: ctx.state.data.demo, demoSeeded: ctx.state.data.demoSeeded === true });
+    prefetchBoilerplate(typeSlug(ctx.state));
 
     const beforeHtml = ctx.state.data.demoHtml || '';
     const beforePrompt = ctx.state.data.demoPrompt || '';
@@ -292,6 +352,9 @@ function renderWebsiteDemo(body, ctx) {
 
     const identityChanged = refreshDemoFromIdentity(ctx);
 
+    const stack = document.createElement('div');
+    stack.className = 'demo-live-stack';
+    let previewBtn;
     const live = document.createElement('div');
     live.className = 'demo-live';
     live.setAttribute('role', 'button');
@@ -300,15 +363,21 @@ function renderWebsiteDemo(body, ctx) {
     function paintLive() {
         live.innerHTML = '';
         try {
-            if (ctx.state.data.demoHtml) {
-                mountHtmlPreview(live, ctx.state.data.demoHtml, {
-                    identidade: ctx.state.data.identidade,
-                    dados: ctx.state.data.dados
-                });
-            } else {
-                live.appendChild(renderLanding(ctx.state));
-            }
+            paintWebsitePreview(live, ctx.state);
         } catch (_) { /* keep the rest of the step usable */ }
+        const visual = resolveDemoVisual(ctx.state);
+        mountDemoSwitch(stack, {
+            visual,
+            onChange: (next) => {
+                switchDemoVisual(ctx, next, {
+                    persist: true,
+                    onPaint: () => {
+                        paintLive();
+                        if (previewBtn) previewBtn.disabled = !isValid(ctx.state);
+                    }
+                }).catch(() => ctx.showToast('Não foi possível mudar a versão.', true));
+            }
+        });
     }
     function openLive() {
         if (!isValid(ctx.state)) return;
@@ -321,11 +390,16 @@ function renderWebsiteDemo(body, ctx) {
             openLive();
         }
     });
-    paintLive();
+    stack.appendChild(live);
+    const initialVisual = resolveDemoVisual(ctx.state);
+    switchDemoVisual(ctx, initialVisual, {
+        persist: false,
+        onPaint: paintLive
+    }).catch(() => paintLive());
 
     const previewBtnWrap = document.createElement('div');
     previewBtnWrap.className = 'demo-actions';
-    const previewBtn = document.createElement('button');
+    previewBtn = document.createElement('button');
     previewBtn.type = 'button';
     previewBtn.className = 'btn-primary demo-preview-btn';
     previewBtn.textContent = 'Ver demonstração';
@@ -357,7 +431,7 @@ function renderWebsiteDemo(body, ctx) {
     const zipHint = document.createElement('p');
     zipHint.className = 'id-disclaimer';
     zipHint.textContent = 'Se o cliente quiser o site a sério: descarregue o ZIP. HTML, fotos, CSS e servidor local — nada fica guardado na app.';
-    previewGroup.append(previewTitle, previewHint, live, previewBtnWrap, zipHint, status);
+    previewGroup.append(previewTitle, previewHint, stack, previewBtnWrap, zipHint, status);
     body.appendChild(previewGroup);
 
     const followupHost = document.createElement('div');

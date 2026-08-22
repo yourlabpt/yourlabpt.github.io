@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="mercadinho">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O mercado de bairro, todos os dias</title>
+<meta name="description" content="Frescos, mercearia e o horário da rua — perto de casa.">
+<meta property="og:title" content="O mercado de bairro, todos os dias">
+<meta property="og:description" content="Frescos, mercearia e o horário da rua — perto de casa.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/mercadinho.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">O seu mercadinho</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Produtos</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
+            
+    </nav>
+    <span class="dpl-badge" data-dp-copy="horario">{{horario}}</span>
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <h1>O seu mercado de bairro, todos os dias.</h1>
+        <p class="dpl-hero-sub">{{morada}}, {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">O que temos</h2>
+        <div class="dpl-grid dpl-grid-3" style="margin-top:2rem">
+            <article class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22c4-6 4-12 0-18-4 6-4 12 0 18z"/><path d="M10 5c2-3 6-3 8-1"/></svg></span><h3>Frescos</h3></article>
+            <article class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h16l-1.5 11h-13z"/><path d="M8 8V6a4 4 0 018 0v2"/></svg></span><h3>Mercearia</h3></article>
+            <article class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7V4h6v3l2 3v10H7V10z"/></svg></span><h3>Bebidas</h3></article>
+            <article class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14c0-5 16-5 16 0v4H4z"/><path d="M7 12v-1M12 11v-1M17 12v-1"/></svg></span><h3>Padaria</h3></article>
+            <article class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v13"/><path d="M8 21h8"/><path d="M7 8h10l-1-5H8z"/></svg></span><h3>Limpeza</h3></article>
+            <article class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 7l14 10M19 7L5 17M4 12h16"/></svg></span><h3>Congelados</h3></article>
+        </div>
+    </div>
+</section>
+<section class="dpl-section">
+    <div class="dpl-wrap" style="display:flex;flex-wrap:wrap;gap:12px">
+        <span class="dpl-price-tag">Fruta da época</span>
+        <span class="dpl-price-tag">Pão de manhã</span>
+        <span class="dpl-price-tag">Encomenda ao balcão</span>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">Somos da vizinhança</h2>
+            <p>{{sobre}}</p>
+        </div>
+        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 4 / 3" data-fallback-icon="MC"></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Como chegar</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Venha visitar-nos</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Ver horário</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">O seu mercadinho</strong>
+        <p>Aberto os dias da rua. Domingos, confirme.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

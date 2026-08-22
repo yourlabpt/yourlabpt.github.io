@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="mecanico-automovel">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECÂNICA DE CONFIANÇA, SEM RODEIOS</title>
+<meta name="description" content="Revisões, travões, diagnóstico — oficina clara no preço e no prazo.">
+<meta property="og:title" content="MECÂNICA DE CONFIANÇA, SEM RODEIOS">
+<meta property="og:description" content="Revisões, travões, diagnóstico — oficina clara no preço e no prazo.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/mecanico-automovel.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">A sua oficina</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Serviços</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Marcações</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
+            <a class="dpl-btn" href="#dpl-contactos">Marcar revisão</a>
+    </nav>
+    <a class="dpl-nav-link" data-dp-copy="telefone" href="#dpl-contactos">{{telefone}}</a>
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <h1>Mecânica de confiança, sem rodeios.</h1>
+        <p class="dpl-hero-sub">Oficina em {{cidade}}. Dizemos o que é preciso — e o que não é.</p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos">Marcar revisão</a></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Serviços</h2>
+        <div class="dpl-row"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 015 5L15 16l-4-4 4.7-4.7z"/><path d="M8 13l-5 5 3 3 5-5"/></svg></span><div><strong>Revisão geral</strong><p>Óleos, filtros e a lista do construtor.</p></div></div>
+        <div class="dpl-row"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M7 12h10M12 7v10"/></svg></span><div><strong>Travões</strong><p>Discos, pastilhas, o que se ouve no pedal.</p></div></div>
+        <div class="dpl-row"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></span><div><strong>Pneus</strong><p>Troca, alinhamento, pressão certa.</p></div></div>
+        <div class="dpl-row"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span><div><strong>Diagnóstico</strong><p>Electrónica lida, sem adivinhas.</p></div></div>
+        <div class="dpl-row"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h16M4 12h16M4 16h16"/></svg></span><div><strong>Ar condicionado</strong><p>Carga e limpeza do circuito.</p></div></div>
+        <div class="dpl-row"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3s6 7 6 11a6 6 0 11-12 0c0-4 6-11 6-11z"/></svg></span><div><strong>Distribuição</strong><p>Quando o prazo chega, avisamos.</p></div></div>
+    </div>
+</section>
+<section class="dpl-cta-band">
+    <div class="dpl-wrap dpl-grid dpl-grid-3">
+        <div><p class="dpl-stat">18</p><p class="dpl-stat-label">anos de bancada</p></div>
+        <div><p class="dpl-stat">900</p><p class="dpl-stat-label">viaturas / ano</p></div>
+        <div><p class="dpl-stat">4,8</p><p class="dpl-stat-label">avaliação média</p></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">A oficina</h2>
+            <p>{{sobre}}</p>
+        </div>
+        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 16 / 9" data-fallback-icon="ME"></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <blockquote class="dpl-quote"><p>Orçamento por escrito. Sem sustos no fim.</p><footer>Cliente</footer></blockquote>
+        <blockquote class="dpl-quote"><p>Entregaram no dia que disseram.</p><footer>Cliente</footer></blockquote>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Marcar / WhatsApp</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Marque a revisão</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Ligar ou WhatsApp</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">A sua oficina</strong>
+        <p>Marcações de manhã rendem lugar no mesmo dia.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

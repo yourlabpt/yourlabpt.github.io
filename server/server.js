@@ -1706,6 +1706,7 @@ app.post('/api/admin/logout', (req, res) => {
 // Digitalize Portugal — master key login
 const digitalizeptLoginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
 const digitalizeptDomainLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 20 });
+const digitalizeptVisualLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
 
 app.post('/api/digitalizept/login', (req, res) => {
     const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
@@ -3128,6 +3129,8 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             demoPrompt: mergedDemo.demoPrompt || '',
             demoRaw: mergedDemo.demoRaw || '',
             demoHtml: mergedDemo.demoHtml ? sanitizeDemoHtml(mergedDemo.demoHtml) : undefined,
+            demoVisual: mergedDemo.demoVisual || wizardExtra.demoVisual || undefined,
+            demoHtmlSource: mergedDemo.demoHtmlSource || wizardExtra.demoHtmlSource || undefined,
             demoSeeded: mergedDemo.demoSeeded === true ? true : undefined,
             demoIdentityStamp: mergedDemo.demoIdentityStamp || undefined,
             htmlChangeNote: mergedDemo.htmlChangeNote || undefined,
@@ -3968,7 +3971,13 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
                 clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
                 const wizardMerged = mergeDemoIntoWizardJson(
                     parseJsonSafe(existing.wizard_json, {}),
-                    { demo, demoHtml, demoRaw }
+                    {
+                        demo,
+                        demoHtml,
+                        demoRaw,
+                        demoVisual: body.demoVisual,
+                        demoHtmlSource: body.demoHtmlSource
+                    }
                 );
                 db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?,
                     morada = ?, cidade = ?, telefone = ?, whatsapp = ?, demo_html = ?, wizard_json = ?,
@@ -4302,7 +4311,7 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
         const slug = cleanText(req.params.slug, 80);
         const db = getDigitalizeptDb();
         const row = db.prepare(`
-            SELECT l.nome, l.business_type, l.demo_json, l.identidade_json, l.demo_html,
+            SELECT l.nome, l.business_type, l.demo_json, l.identidade_json, l.demo_html, l.wizard_json,
                    d.obrigatorios_json, d.opcionais_json
             FROM lead l
             LEFT JOIN dados_negocio d ON d.lead_id = l.id
@@ -4318,17 +4327,42 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
             ...parseJsonSafe(row.obrigatorios_json, {}),
             ...parseJsonSafe(row.opcionais_json, {})
         };
+        const wizard = parseJsonSafe(row.wizard_json, {});
         return res.json({
             nome: row.nome,
             businessType,
             demo: parseJsonSafe(row.demo_json, null),
             demoHtml: sanitizeDemoHtml(row.demo_html || ''),
+            demoVisual: wizard.demoVisual || '',
             identidade: parseJsonSafe(row.identidade_json, {}),
             dados
         });
     } catch (err) {
         console.error('digitalizept public demo error:', err.message);
         return res.status(500).json({ error: 'Failed to load demo.' });
+    }
+});
+
+app.post('/api/digitalizept/public/:slug/visual', (req, res) => {
+    try {
+        const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
+        if (digitalizeptVisualLimiter.isLimited(ip)) {
+            return res.status(429).json({ error: 'Demasiados pedidos.' });
+        }
+        const slug = cleanText(req.params.slug, 80);
+        const raw = String((req.body && req.body.visual) || '').trim().toLowerCase();
+        const visual = raw === 'sem-fotos' ? 'sem-fotos' : raw === 'fotos' ? 'fotos' : '';
+        if (!visual) return res.status(400).json({ error: 'Versão inválida.' });
+        const db = getDigitalizeptDb();
+        const row = db.prepare('SELECT id, wizard_json FROM lead WHERE demo_slug = ?').get(slug);
+        if (!row) return res.status(404).json({ error: 'Demonstração não encontrada.' });
+        const wizard = parseJsonSafe(row.wizard_json, {});
+        wizard.demoVisual = visual;
+        db.prepare('UPDATE lead SET wizard_json = ? WHERE id = ?').run(JSON.stringify(wizard), row.id);
+        return res.json({ ok: true, visual });
+    } catch (err) {
+        console.error('digitalizept public visual error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar a versão.' });
     }
 });
 

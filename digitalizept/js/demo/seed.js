@@ -62,7 +62,7 @@ function seedReviews(businessType, dados) {
 
 export function isCustomDemo(state) {
     const d = (state && state.data) || {};
-    if (String(d.demoHtml || '').trim()) return true;
+    if (String(d.demoHtml || '').trim() && d.demoHtmlSource !== 'boilerplate') return true;
     if (d.demoSeeded === true) return false;
     if (d.demo && d.demo.hero && d.demo.hero.titulo) return true;
     if (String(d.demoRaw || '').trim()) return true;

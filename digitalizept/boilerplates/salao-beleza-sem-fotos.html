@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="salao-beleza">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O seu momento, à sua medida</title>
+<meta name="description" content="Cabelo, unhas e maquilhagem — marcação directa, sem lista de espera escondida.">
+<meta property="og:title" content="O seu momento, à sua medida">
+<meta property="og:description" content="Cabelo, unhas e maquilhagem — marcação directa, sem lista de espera escondida.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/salao-beleza.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">O seu salão</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Serviços</a>
+            <a class="dpl-nav-link" href="#dpl-equipa">Equipa</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Marcações</a>
+            <a class="dpl-btn" href="#dpl-contactos">Marcar</a>
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <h1>O seu momento, à sua medida.</h1>
+        <p class="dpl-hero-sub">Salão em {{cidade}}. Cabelo, unhas e o tempo que pediu.</p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos">Marcar</a></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Serviços</h2>
+        <div class="dpl-grid dpl-grid-3" style="margin-top:2rem">
+            <article class="dpl-svc"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 7.5L20 18M8.5 16.5L20 6"/></svg></span><h3>Cabelo</h3><p>desde 18 €</p></article>
+            <article class="dpl-svc"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 3h4v4l2 2v12H8V9l2-2z"/></svg></span><h3>Unhas</h3><p>desde 14 €</p></article>
+            <article class="dpl-svc"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 8h4l1 3v10h-6V11z"/><path d="M10 8V5l2-2 2 2v3"/></svg></span><h3>Maquilhagem</h3><p>desde 25 €</p></article>
+            <article class="dpl-svc"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8.5 10h.01M15.5 10h.01M8.5 15c1.2 1.4 5.8 1.4 7 0"/></svg></span><h3>Estética facial</h3><p>desde 30 €</p></article>
+            <article class="dpl-svc"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 14h12v6H6z"/><path d="M8 14V8l4-3 4 3v6"/></svg></span><h3>Depilação</h3><p>desde 8 €</p></article>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-equipa">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Equipa</h2>
+        <div class="dpl-grid dpl-grid-3" style="margin-top:2rem">
+            <article style="text-align:center"><div class="dpl-visual dpl-visual-round" data-dp-photo="0" style="--dp-ratio: 1 / 1" data-fallback-icon="AN"></div><h3>Ana</h3><p>Cabelo</p></article>
+            <article style="text-align:center"><div class="dpl-visual dpl-visual-round" data-dp-photo="1" style="--dp-ratio: 1 / 1" data-fallback-icon="RI"></div><h3>Rita</h3><p>Unhas</p></article>
+            <article style="text-align:center"><div class="dpl-visual dpl-visual-round" data-dp-photo="2" style="--dp-ratio: 1 / 1" data-fallback-icon="MA"></div><h3>Marta</h3><p>Maquilhagem</p></article>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <blockquote class="dpl-quote"><p>Saí a reconhecer-me, só mais arranjada.</p><footer>Cliente</footer></blockquote>
+        <blockquote class="dpl-quote"><p>Marcaram-me sem me fazer esperar uma hora.</p><footer>Cliente</footer></blockquote>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Marcar</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Reserve o seu momento.</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Marcar</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">O seu salão</strong>
+        <p>Marcações pelo telefone ou Instagram.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

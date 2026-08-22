@@ -1,0 +1,13 @@
+:root {
+    --bg: #F3F1EA; --ink: #23211D; --accent: #C4491F; --accent-2: #2E3A46;
+    --font-display: "Archivo", system-ui, sans-serif; --font-body: "Archivo", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-hero { background: var(--accent-2); color: #F3F1EA; } .dpl-hero .dpl-btn { background: var(--accent); border-color: var(--accent); }
+.dpl-tile { background: var(--accent-2); color: #F3F1EA; padding: 1.4rem; border-radius: 8px; min-height: 140px; }
+.dpl-spec { font-family: ui-monospace, monospace; }

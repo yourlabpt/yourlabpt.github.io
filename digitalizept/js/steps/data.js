@@ -165,6 +165,7 @@ function clearDemoState(state) {
     delete state.data.demo;
     state.data.demoRaw = '';
     state.data.demoHtml = '';
+    state.data.demoHtmlSource = '';
     state.data.demoSeeded = false;
     state.data.demoUrl = '';
     state.data.demoIdentityStamp = '';

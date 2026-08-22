@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="joalharia">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peças que se usam todos os dias</title>
+<meta name="description" content="Anéis, colares e o ouro que se herda — atelier de visita marcada.">
+<meta property="og:title" content="Peças que se usam todos os dias">
+<meta property="og:description" content="Anéis, colares e o ouro que se herda — atelier de visita marcada.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/joalharia.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">A sua joalharia</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Coleções</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Ofício</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Visita</a>
+            
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <div class="dpl-hero-inner">
+            <h1>Peças quietas, para a vida inteira.</h1>
+            <p class="dpl-hero-sub">Atelier em {{cidade}}. Ouro, prata e o ajuste que falta.</p>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Coleções</h2>
+        <div class="dpl-grid dpl-grid-4" style="margin-top:2rem">
+            <article class="dpl-case"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="6"/><path d="M9 8l1.5-4h3L15 8"/></svg></span><h3>Anéis</h3></article>
+            <article class="dpl-case"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4c0 4 4 6 4 10"/><path d="M16 4c0 4-4 6-4 10"/><circle cx="12" cy="16" r="2"/></svg></span><h3>Colares</h3></article>
+            <article class="dpl-case"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="2"/><path d="M12 8v4"/><circle cx="12" cy="16" r="3"/></svg></span><h3>Brincos</h3></article>
+            <article class="dpl-case"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="5"/></svg></span><h3>Pulseiras</h3></article>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">Ofício</h2>
+            <p>Trabalhamos metais com tempo. Uma peça de cada vez, no tamanho certo.</p>
+            <p>{{sobre}}</p>
+        </div>
+        <div class="dpl-hairline" style="padding:1rem"><div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 1 / 1" data-fallback-icon="JO"></div></div>
+    </div>
+</section>
+<section class="dpl-section" style="text-align:center">
+    <blockquote class="dpl-quote"><p>Voltei para o ajuste. Ficou a parecer feito para mim.</p><footer>Cliente</footer></blockquote>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Marcar visita</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Marque uma visita ao nosso atelier.</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Pedir horário</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">A sua joalharia</strong>
+        <p>Visitas com marcação.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

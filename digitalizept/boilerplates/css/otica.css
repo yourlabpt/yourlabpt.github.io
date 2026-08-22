@@ -1,0 +1,12 @@
+:root {
+    --bg: #FFFFFF; --ink: #17233A; --accent: #1B3A5C; --accent-2: #F2643B;
+    --font-display: "Poppins", system-ui, sans-serif; --font-body: "Inter", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-swatch-wrap { text-align:center; } .dpl-swatch { margin: 0 auto 0.6rem; width: 72px; border-radius: 50%; }
+.dpl-hero-art { font-size: 0; }

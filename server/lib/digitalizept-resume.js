@@ -39,7 +39,9 @@ function mergeDemoForResume({ leadDemo, leadDemoHtml, wizard }) {
         demoPrompt: w.demoPrompt || '',
         demoSeeded: w.demoSeeded === true,
         demoIdentityStamp: w.demoIdentityStamp || '',
-        htmlChangeNote: w.htmlChangeNote || undefined
+        htmlChangeNote: w.htmlChangeNote || undefined,
+        demoVisual: w.demoVisual || '',
+        demoHtmlSource: w.demoHtmlSource || ''
     };
 }
 
@@ -56,11 +58,13 @@ function resumeWizardPosition(wizard) {
 /**
  * Merge published demo fields into an existing wizard_json object.
  */
-function mergeDemoIntoWizardJson(existingWizard, { demo, demoHtml, demoRaw }) {
+function mergeDemoIntoWizardJson(existingWizard, { demo, demoHtml, demoRaw, demoVisual, demoHtmlSource }) {
     const base = existingWizard && typeof existingWizard === 'object' ? { ...existingWizard } : {};
     if (demo && typeof demo === 'object') base.demo = demo;
     if (demoHtml != null) base.demoHtml = String(demoHtml);
     if (demoRaw != null && String(demoRaw).trim()) base.demoRaw = String(demoRaw);
+    if (demoVisual) base.demoVisual = String(demoVisual);
+    if (demoHtmlSource != null) base.demoHtmlSource = String(demoHtmlSource);
     return base;
 }
 

@@ -1,0 +1,11 @@
+:root {
+    --bg: #EDE6D8; --ink: #2B241C; --accent: #A6522E; --accent-2: #2C4A4A;
+    --font-display: "Lora", Georgia, serif; --font-body: "Karla", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-hero { position: relative; }

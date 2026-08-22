@@ -12,9 +12,53 @@
     <script type="module">
         import { renderLanding } from '/digitalizept/js/demo/landing.js';
         import { mountHtmlPreview } from '/digitalizept/js/demo/html.js';
+        import {
+            applyVisualToState,
+            htmlForVisual,
+            mountDemoSwitch,
+            normalizeVisual,
+            prefetchBoilerplate,
+            resolveDemoVisual,
+            typeSlug,
+            VISUAL_SEM_FOTOS
+        } from '/digitalizept/js/demo/demo-visual.js';
 
         const slug = window.location.pathname.split('/').filter(Boolean).pop();
         const root = document.getElementById('root');
+        const params = new URLSearchParams(window.location.search);
+
+        function paint(host, state) {
+            host.innerHTML = '';
+            if (state.data.demoHtml) {
+                document.body.className = 'dp-public dp-public-html dpl-has-switch';
+                const frameHost = document.createElement('div');
+                frameHost.className = 'dp-public-frame-host';
+                mountHtmlPreview(frameHost, state.data.demoHtml, {
+                    identidade: state.data.identidade,
+                    dados: state.data.dados
+                });
+                host.replaceWith(frameHost);
+                return frameHost;
+            }
+            document.body.className = 'dp-public dpl-has-switch';
+            const landing = renderLanding(state);
+            host.replaceWith(landing);
+            return landing;
+        }
+
+        function setQuery(visual) {
+            const next = new URL(window.location.href);
+            next.searchParams.set('v', visual);
+            history.replaceState({}, '', next);
+        }
+
+        function persistVisual(visual) {
+            fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}/visual`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ visual })
+            }).catch(() => { /* best-effort */ });
+        }
 
         try {
             const response = await fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}`);
@@ -23,26 +67,49 @@
                 root.textContent = data.error || 'Demonstração não encontrada.';
             } else {
                 document.title = `${data.nome || 'Demonstração'} — Digitalize Portugal`;
-                if (data.demoHtml && String(data.demoHtml).trim()) {
-                    document.body.className = 'dp-public dp-public-html';
-                    root.replaceWith((() => {
-                        const host = document.createElement('div');
-                        host.className = 'dp-public-frame-host';
-                        mountHtmlPreview(host, data.demoHtml, {
-                            identidade: data.identidade,
-                            dados: data.dados
-                        });
-                        return host;
-                    })());
-                } else {
-                    root.replaceWith(renderLanding({
-                        data: {
-                            businessType: data.businessType,
-                            dados: data.dados,
-                            identidade: data.identidade,
-                            demo: data.demo
-                        }
-                    }));
+                const state = {
+                    data: {
+                        businessType: data.businessType,
+                        dados: data.dados,
+                        identidade: data.identidade,
+                        demo: data.demo,
+                        demoHtml: data.demoHtml || '',
+                        demoVisual: data.demoVisual || ''
+                    }
+                };
+                const visual = resolveDemoVisual(state, params.get('v') || data.demoVisual, {
+                    preferPublishedLanding: true
+                });
+                let html = '';
+                try {
+                    html = await htmlForVisual(state, visual);
+                } catch (_) {
+                    /* keep the published landing / HTML if a boilerplate fetch fails */
+                }
+                applyVisualToState(state, visual, html);
+                let host = paint(root, state);
+                prefetchBoilerplate(typeSlug(state));
+
+                const onSwitch = async (next) => {
+                    let nextHtml = '';
+                    try {
+                        nextHtml = await htmlForVisual(state, next);
+                    } catch (_) {
+                        return;
+                    }
+                    applyVisualToState(state, next, nextHtml);
+                    state.data.demoVisual = next;
+                    setQuery(next);
+                    persistVisual(next);
+                    const nextHost = document.createElement('div');
+                    nextHost.id = 'root';
+                    host.replaceWith(nextHost);
+                    host = paint(nextHost, state);
+                    mountDemoSwitch(document.body, { visual: next, onChange: onSwitch });
+                };
+                mountDemoSwitch(document.body, { visual, onChange: onSwitch });
+                if (visual === VISUAL_SEM_FOTOS || normalizeVisual(params.get('v'))) {
+                    setQuery(visual);
                 }
             }
         } catch (_) {

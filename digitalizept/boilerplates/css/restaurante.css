@@ -1,0 +1,15 @@
+:root {
+    --bg: #16130F; --ink: #F3ECE2; --accent: #C9A24B; --accent-2: #2A2419;
+    --font-display: "Playfair Display", Georgia, serif; --font-body: "Lora", Georgia, serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+/* Light variant (unused default): --bg:#FAF6EF; --ink:#1C1712; --accent:#C9A24B; --accent-2:#EFE7D8; */
+.dpl-hero { min-height: 88vh; display: flex; align-items: center; text-align: center;
+  background: radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%); }
+.dpl-hero h1 { font-style: italic; font-weight: 500; }
+.dpl-topbar { justify-content: center; flex-wrap: wrap; }

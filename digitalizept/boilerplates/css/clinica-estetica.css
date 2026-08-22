@@ -1,0 +1,11 @@
+:root {
+    --bg: #FAF8F4; --ink: #2B2B28; --accent: #9CAA8C; --accent-2: #D8CDBF;
+    --font-display: "Cormorant", Georgia, serif; --font-body: "Karla", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-hero { background: radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 42%); }

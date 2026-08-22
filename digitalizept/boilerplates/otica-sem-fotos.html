@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="otica">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ver bem, escolher com calma</title>
+<meta name="description" content="Exames, lentes e armações. Marcação directa, sem pressa na loja.">
+<meta property="og:title" content="Ver bem, escolher com calma">
+<meta property="og:description" content="Exames, lentes e armações. Marcação directa, sem pressa na loja.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/otica.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">A sua ótica</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Coleção</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Serviços</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Marcações</a>
+            <a class="dpl-btn" href="#dpl-contactos">Marcar consulta</a>
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <div class="dpl-hero-art"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="7" cy="13" r="4"/><circle cx="17" cy="13" r="4"/><path d="M11 13h2"/><path d="M3 12h0M21 12h0"/></svg></span></div>
+        <h1>Ver bem, escolher com calma.</h1>
+        <p class="dpl-hero-sub">Ótica em {{cidade}}. Exame, lentes e a armação certa.</p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos">Marcar consulta</a></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Coleção</h2>
+        <div class="dpl-grid dpl-grid-4" style="margin-top:2rem">
+            <div class="dpl-swatch-wrap"><div class="dpl-swatch" style="background:#171717"></div><p>Preto</p></div>
+            <div class="dpl-swatch-wrap"><div class="dpl-swatch" style="background:linear-gradient(135deg,#6b3a1f,#c48a4a)"></div><p>Tartaruga</p></div>
+            <div class="dpl-swatch-wrap"><div class="dpl-swatch" style="background:#d9d4cc"></div><p>Transparente</p></div>
+            <div class="dpl-swatch-wrap"><div class="dpl-swatch" style="background:linear-gradient(135deg,#b08d57,#f1e3b8)"></div><p>Dourado</p></div>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" style="background: color-mix(in srgb, var(--accent) 8%, var(--bg))">
+    <div class="dpl-wrap dpl-grid dpl-grid-3">
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><h3>Exame de vista</h3><p>Tempo para medir, não para vender.</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="7" cy="13" r="4"/><circle cx="17" cy="13" r="4"/><path d="M11 13h2"/><path d="M3 12h0M21 12h0"/></svg></span><h3>Lentes graduadas</h3><p>Do dia-a-dia ao progresso.</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/></svg></span><h3>Lentes de contacto</h3><p>Adaptação acompanhada.</p></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">A loja</h2>
+            <p>{{sobre}}</p>
+        </div>
+        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 4 / 3" data-fallback-icon="OT"></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <blockquote class="dpl-quote"><p>Acharam a armação sem me pressionar.</p><footer>Cliente</footer></blockquote>
+        <blockquote class="dpl-quote"><p>O exame foi explicado passo a passo.</p><footer>Cliente</footer></blockquote>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Marcar consulta</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Reserve o exame</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Marcar</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">A sua ótica</strong>
+        <p>Marcações pelo telefone ou WhatsApp.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

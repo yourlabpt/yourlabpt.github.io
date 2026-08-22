@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="loja-flores-decoracao">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ramos para o dia e para a festa</title>
+<meta name="description" content="Flores da estação, eventos e o ramo que se leva de mão.">
+<meta property="og:title" content="Ramos para o dia e para a festa">
+<meta property="og:description" content="Flores da estação, eventos e o ramo que se leva de mão.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,400;1,600&family=Karla:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/loja-flores-decoracao.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">A sua florista</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Coleções</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Eventos</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
+            <a class="dpl-btn" href="#dpl-contactos">Encomendar</a>
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20c0-6 4-8 4-12a4 4 0 10-8 0c0 4 4 6 4 12z"/><path d="M8 9c-2-1-4 0-4 2"/><path d="M16 9c2-1 4 0 4 2"/></svg></span>
+        <h1>Um ramo que parece ter sido pensado para a mesa.</h1>
+        <p class="dpl-hero-sub">Flores da estação em {{cidade}}. Do dia-a-dia ao evento.</p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos">Encomendar</a></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Coleções</h2>
+        <div class="dpl-grid dpl-grid-4" style="margin-top:2rem">
+            <article class="dpl-season"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19c8-1 13-8 14-16-8 1-13 8-14 16z"/><path d="M8 12c3 0 6-3 7-7"/></svg></span><h3>Primavera</h3></article>
+            <article class="dpl-season"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20c0-6 4-8 4-12a4 4 0 10-8 0c0 4 4 6 4 12z"/><path d="M8 9c-2-1-4 0-4 2"/><path d="M16 9c2-1 4 0 4 2"/></svg></span><h3>Casamentos</h3></article>
+            <article class="dpl-season"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21V10"/><path d="M12 10C8 4 4 6 6 10c2 0 5 0 6 3 1-3 4-3 6-3 2-4-2-6-6 0z"/></svg></span><h3>Corporativo</h3></article>
+            <article class="dpl-season"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1"/><path d="M4 14h16M12 10v10"/><path d="M12 10c-2-3-5-3-5 0h5"/><path d="M12 10c2-3 5-3 5 0h-5"/></svg></span><h3>Condolências</h3></article>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">O atelier</h2>
+            <p>Compramos de manhã, atamos à tarde. O resto é escuta: cores, orçamento, a ocasião.</p>
+            <p>{{sobre}}</p>
+        </div>
+        <div class="dpl-visual dpl-visual-blob" data-dp-photo="0" style="--dp-ratio: 4 / 3" data-fallback-icon="FL"></div>
+    </div>
+</section>
+<section class="dpl-section">
+    <div class="dpl-wrap dpl-grid dpl-grid-4">
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21V10"/><path d="M12 10C8 4 4 6 6 10c2 0 5 0 6 3 1-3 4-3 6-3 2-4-2-6-6 0z"/></svg></span><p>Casamentos</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1"/><path d="M4 14h16M12 10v10"/><path d="M12 10c-2-3-5-3-5 0h5"/><path d="M12 10c2-3 5-3 5 0h-5"/></svg></span><p>Aniversários</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span><p>Eventos</p></div>
+        <div><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19c8-1 13-8 14-16-8 1-13 8-14 16z"/><path d="M8 12c3 0 6-3 7-7"/></svg></span><p>Funerais</p></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <blockquote class="dpl-quote"><p>O ramo chegou fresco e no tom que pedi.</p><footer>Cliente</footer></blockquote>
+        <blockquote class="dpl-quote"><p>Trataram o casamento como se fosse o único.</p><footer>Noiva</footer></blockquote>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Encomendar</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Peça o ramo desta semana</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">WhatsApp</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">A sua florista</strong>
+        <p>Encomendas até à véspera, quando o mercado deixar.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

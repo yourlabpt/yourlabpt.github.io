@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="cafe-pastelaria">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Café de bairro, feito com tempo</title>
+<meta name="description" content="Pastelaria fresca, café bem tirado e o ritmo do bairro.">
+<meta property="og:title" content="Café de bairro, feito com tempo">
+<meta property="og:description" content="Pastelaria fresca, café bem tirado e o ritmo do bairro.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/cafe-pastelaria.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">O seu café</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Menu</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
+            <a class="dpl-btn" href="#dpl-servicos">Ver menu</a>
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <h1>Café de bairro, feito com tempo.</h1>
+        <p class="dpl-hero-sub">Pastelaria fresca, café bem tirado e o ritmo do bairro em {{cidade}}.</p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-servicos">Ver o menu</a></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2">A casa</h2>
+            <p>O café da manhã e o bolo do fim-de-semana. Grão escolhido com calma, massa feita no dia.</p>
+            <p>{{sobre}}</p>
+        </div>
+        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 4 / 3" data-fallback-icon="CA"></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">O nosso menu</h2>
+        <p class="dpl-lede"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h12v5a5 5 0 01-5 5H9a5 5 0 01-5-5V8z"/><path d="M16 10h2.2A2.8 2.8 0 0119 15.5"/><path d="M8 3v3M12 3v3"/></svg></span> Cafés · <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16c4-1 7-6 8-12 4 3 7 8 8 12-6 3-12 3-16 0z"/><path d="M8 16l2-6"/></svg></span> Pastelaria · <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19c8-1 13-8 14-16-8 1-13 8-14 16z"/><path d="M8 12c3 0 6-3 7-7"/></svg></span> Origem · <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span> Horário</p>
+        <ol class="dpl-menu-list">
+            <li class="dpl-menu-item"><span class="dpl-menu-num">01</span><div><strong>Café</strong><p>Expresso, meia de leite e galão como deve ser.</p></div><span class="dpl-menu-price">1,10 €</span></li>
+            <li class="dpl-menu-item"><span class="dpl-menu-num">02</span><div><strong>Nata</strong><p>Folha estaladiça, ainda quente de manhã.</p></div><span class="dpl-menu-price">1,30 €</span></li>
+            <li class="dpl-menu-item"><span class="dpl-menu-num">03</span><div><strong>Torrada</strong><p>Manteiga e o primeiro café do dia.</p></div><span class="dpl-menu-price">1,80 €</span></li>
+            <li class="dpl-menu-item"><span class="dpl-menu-num">04</span><div><strong>Rissol</strong><p>O lanche da tarde, feito cá.</p></div><span class="dpl-menu-price">1,40 €</span></li>
+        </ol>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-galeria">
+    <div class="dpl-wrap dpl-grid dpl-grid-4">
+        <figure><div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div><figcaption>Nata</figcaption></figure>
+        <figure><div class="dpl-visual " data-dp-photo="1" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div><figcaption>Galão</figcaption></figure>
+        <figure><div class="dpl-visual " data-dp-photo="2" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div><figcaption>Bolo do dia</figcaption></figure>
+        <figure><div class="dpl-visual " data-dp-photo="3" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div><figcaption>A esplanada</figcaption></figure>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <blockquote class="dpl-quote"><p>A nata ainda quente e o café como deve ser.</p><footer>Cliente da manhã</footer></blockquote>
+        <blockquote class="dpl-quote"><p>Venho todas as manhãs. É o meu sítio.</p><footer>Vizinho</footer></blockquote>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Como chegar</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Venha tomar um café connosco.</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Ver localização</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">O seu café</strong>
+        <p>Passe quando quiser.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

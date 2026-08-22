@@ -46,6 +46,7 @@ describe('digitalizept standalone website zip', async () => {
         assert.match(extracted, /\.dpl-topbar/);
         assert.equal(extracted.includes('.svc-list'), false);
         assert.equal(extracted.includes('.app-header'), false);
+        assert.equal(extracted.includes('.dpl-demo-switch'), false);
         assert.equal(extracted.includes(zipMod.SITE_CSS_START), false);
     });
 

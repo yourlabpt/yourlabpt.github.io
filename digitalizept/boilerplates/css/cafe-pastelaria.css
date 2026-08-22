@@ -1,0 +1,11 @@
+:root {
+    --bg: #F7F1E8; --ink: #2B211B; --accent: #C1622D; --accent-2: #8A5A34;
+    --font-display: "Fraunces", Georgia, serif; --font-body: "Work Sans", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+.dpl-hero h1 { font-weight: 400; }

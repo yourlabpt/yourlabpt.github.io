@@ -1,0 +1,15 @@
+:root {
+    --bg: #FBF8F3; --ink: #14110D; --accent: #B08D57; --accent-2: #000000;
+    --font-display: "Cormorant Garamond", Georgia, serif; --font-body: "Jost", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    
+}
+h1, h2 { letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; }
+.dpl-topbar { justify-content: center; flex-direction: column; }
+.dpl-case { border: 1px solid var(--accent); padding: 2rem 1rem; text-align: center; background: var(--bg); }
+.dpl-hero { text-align: center; }
+.dpl-hero-inner { border: 1px solid var(--accent); padding: 4rem 2rem; }

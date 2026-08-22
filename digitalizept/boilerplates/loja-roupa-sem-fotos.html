@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="loja-roupa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OUTONO / INVERNO</title>
+<meta name="description" content="Peças escolhidas com calma. Feminino, masculino e o essencial de cada estação.">
+<meta property="og:title" content="OUTONO / INVERNO">
+<meta property="og:description" content="Peças escolhidas com calma. Feminino, masculino e o essencial de cada estação.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/loja-roupa.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">A sua loja</a>
+    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Coleção</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Loja</a>
+            
+    </nav>
+    
+</header>
+<main id="topo">
+<section class="dpl-hero">
+    <div class="dpl-wrap">
+        <h1>OUTONO / INVERNO</h1>
+        <p class="dpl-hero-sub">A estação, sem ruído. Em {{cidade}}.</p>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Coleção</h2>
+        <div class="dpl-grid dpl-grid-4" style="margin-top:2rem; gap: 2rem;">
+            <figure><div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 3 / 4" data-fallback-icon="RO"></div><figcaption>Feminino</figcaption></figure>
+            <figure><div class="dpl-visual " data-dp-photo="1" style="--dp-ratio: 3 / 4" data-fallback-icon="RO"></div><figcaption>Masculino</figcaption></figure>
+            <figure><div class="dpl-visual " data-dp-photo="2" style="--dp-ratio: 3 / 4" data-fallback-icon="RO"></div><figcaption>Acessórios</figcaption></figure>
+            <figure><div class="dpl-visual " data-dp-photo="3" style="--dp-ratio: 3 / 4" data-fallback-icon="RO"></div><figcaption>Novidades</figcaption></figure>
+        </div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap">
+        <p class="dpl-lede">{{sobre}}</p>
+        <p><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5a2 2 0 110-4 2 2 0 010 4z"/><path d="M12 5l10 8H2z"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><path d="M8 16l2 2M12 12l2 2M16 8l2 2"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 13H7z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg></span> Peças para vestir, não para fotografar.</p>
+    </div>
+</section>
+<section class="dpl-look">
+    <p class="dpl-h2">Menos peças. Melhor corte.</p>
+</section>
+<section class="dpl-section" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <p><a class="dpl-btn" href="#dpl-contactos">Visitar a loja</a></p>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Passe pela loja</h2>
+        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Como chegar</a></p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">A sua loja</strong>
+        <p>Horário de rua — confirme feriados.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+    </div>
+</footer>
+<script>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    var open = nav.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>

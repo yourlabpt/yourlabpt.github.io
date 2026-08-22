@@ -102,3 +102,108 @@ describe('digitalizept landing boilerplate', async () => {
         assert.equal(demo.servicos.itens.some((item) => item.nome === 'Cafetaria'), false);
     });
 });
+
+describe('digitalizept no-image boilerplates', async () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const { pathToFileURL } = require('node:url');
+    const root = path.join(__dirname, '../../digitalizept/boilerplates');
+    const slugs = [
+        'cafe-pastelaria', 'clinica-estetica', 'drogaria-ferragens', 'generico',
+        'joalharia', 'loja-flores-decoracao', 'loja-roupa', 'mecanico-automovel',
+        'mercadinho', 'otica', 'restaurante', 'salao-beleza', 'tapecaria'
+    ];
+    const visual = await import(pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/demo-visual.js')).href);
+
+    it('ships all 13 sem-fotos HTML files with pt-PT and photo hooks', () => {
+        slugs.forEach((slug) => {
+            const file = path.join(root, `${slug}-sem-fotos.html`);
+            assert.equal(fs.existsSync(file), true, file);
+            const html = fs.readFileSync(file, 'utf8');
+            assert.match(html, /lang="pt-PT"/);
+            assert.match(html, /data-dp-boilerplate="/);
+            assert.match(html, /data-dp-photo|dpl-topbar-brand/);
+            assert.doesNotMatch(html, /lorem/i);
+            assert.match(html, /<h1[\s>]/);
+            assert.match(html, /<meta name="description"/);
+        });
+    });
+
+    it('lists 13×2 gallery links', () => {
+        const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+        slugs.forEach((slug) => {
+            assert.match(index, new RegExp(`${slug}-sem-fotos\\.html`));
+            assert.match(index, new RegExp(`preview-com-fotos\\.html\\?type=${slug}`));
+        });
+        assert.equal((index.match(/preview-com-fotos\.html\?type=/g) || []).length, 13);
+        assert.equal((index.match(/-sem-fotos\.html/g) || []).length, 13);
+    });
+
+    it('fills shop name into boilerplate tokens', () => {
+        const raw = '<html><body><h1>{{nome}}</h1><p>{{cidade}}</p></body></html>';
+        const out = visual.fillBoilerplateCopy(raw, { nome_negocio: 'Casa da Vila', cidade: 'Póvoa' }, {});
+        assert.match(out, /Casa da Vila/);
+        assert.match(out, /Póvoa/);
+        assert.doesNotMatch(out, /\{\{nome\}\}/);
+    });
+
+    it('defaults Sem fotos when there are no photos, Com fotos when there are', () => {
+        assert.equal(visual.defaultDemoVisual({ data: { identidade: { fotos: [] } } }), 'sem-fotos');
+        assert.equal(visual.defaultDemoVisual({ data: { identidade: { fotos: ['data:image/jpeg;base64,xx'] } } }), 'fotos');
+        assert.equal(visual.resolveDemoVisual({ data: { demoVisual: 'sem-fotos', identidade: { fotos: ['x'] } } }), 'sem-fotos');
+        assert.equal(visual.normalizeVisual('fotos'), 'fotos');
+    });
+
+    it('does not hide existing custom HTML or a published landing behind Sem fotos', () => {
+        assert.equal(visual.resolveDemoVisual({
+            data: {
+                demoHtml: '<html><body>AI café</body></html>',
+                identidade: { fotos: [] }
+            }
+        }), 'fotos');
+        assert.equal(visual.resolveDemoVisual({
+            data: {
+                demo: { hero: { titulo: 'Landing publicada' } },
+                identidade: { fotos: [] }
+            }
+        }, '', { preferPublishedLanding: true }), 'fotos');
+        assert.equal(visual.resolveDemoVisual({
+            data: {
+                demoHtml: '<html data-dp-boilerplate="cafe-pastelaria"></html>',
+                identidade: { fotos: [] }
+            }
+        }), 'sem-fotos');
+    });
+
+    it('applyIdentityToHtml fills a dp-photo placeholder', async () => {
+        const htmlMod = await import(pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/html.js')).href);
+        const slotted = '<div class="dpl-visual" data-dp-photo="0" style="background-image:url(dp-photo://0)"></div>';
+        const out = htmlMod.applyIdentityToHtml(slotted, {
+            fotos: ['https://cdn.example/loja.jpg'],
+            cores: { base: '#111', destaque: '#c00', secundaria: '#999' }
+        }, { nome_negocio: 'Casa da Vila' });
+        assert.match(out, /https:\/\/cdn\.example\/loja\.jpg/);
+    });
+
+    it('keeps identity photo hooks that applyIdentityToHtml can fill', () => {
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        assert.match(html, /data-dp-photo="0"/);
+        assert.match(html, /data-dp-logo/);
+        assert.match(html, /class="dpl-visual/);
+        assert.equal(visual.isBoilerplateHtml(html), true);
+        assert.match(visual.stripDemoSwitch('<div class="dpl-demo-switch"><button>x</button></div><p>ok</p>'), />ok</);
+    });
+
+    it('passes the north-star: hide photos and the page still has type, colour and icons', () => {
+        slugs.forEach((slug) => {
+            const html = fs.readFileSync(path.join(root, `${slug}-sem-fotos.html`), 'utf8');
+            const stripped = html
+                .replace(/<div\b[^>]*data-dp-photo[\s\S]*?<\/div>/gi, '')
+                .replace(/<img\b[^>]*>/gi, '');
+            assert.match(stripped, /<h1[\s>]/);
+            assert.match(stripped, /dpl-btn|dpl-card|dpl-stat|dpl-quote|dpl-menu/);
+            assert.match(stripped, /<svg[\s>]/);
+            assert.doesNotMatch(stripped, /background-image:\s*url\(\s*\)/);
+        });
+    });
+});
