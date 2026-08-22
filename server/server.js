@@ -2539,7 +2539,9 @@ function pinTagFields(etapaRaw, resultadoRaw, etapaFallback) {
         resultado: resultado || undefined,
         color: colors.color,
         strokeColor: colors.strokeColor,
-        strokeWidth: colors.strokeWidth
+        strokeWidth: colors.strokeWidth,
+        faded: Boolean(colors.faded),
+        zIndexOffset: colors.zIndexOffset || 0
     };
 }
 
@@ -3513,7 +3515,7 @@ app.get('/api/digitalizept/deals', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const rows = db.prepare(`
             SELECT pr.id AS projectId, pr.estado, pr.estado_google, pr.estado_dominio, pr.criado_em,
-                   l.id AS leadId, l.nome, l.business_type, l.demo_slug, l.work_path, l.notas_admin,
+                   l.id AS leadId, l.nome, l.business_type, l.demo_slug, l.work_path, l.notas_admin, l.resultado,
                    p.id AS propostaId, p.total_centimos, p.iva_centimos, p.total_com_iva_centimos, p.iva_rate, p.itens_json,
                    c.id AS contratoId, c.template_versao, c.pdf_path, c.html_path, c.hash_sha256,
                    cl.nome AS cliente_nome, cl.email AS cliente_email, cl.nif
@@ -3629,6 +3631,13 @@ app.patch('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res) 
         const db = getDigitalizeptDb();
         const row = db.prepare('SELECT id, estado, estado_google, estado_dominio FROM projeto WHERE id = ?').get(projectId);
         if (!row) return res.status(404).json({ error: 'Projeto não encontrado.' });
+        const linked = db.prepare(`
+            SELECT p.lead_id AS leadId
+            FROM projeto pr
+            JOIN contrato c ON c.id = pr.contrato_id
+            JOIN proposta p ON p.id = c.proposta_id
+            WHERE pr.id = ?
+        `).get(projectId);
 
         const estado = body.estado != null ? cleanText(body.estado, 60) : row.estado;
         let estadoGoogle = body.estado_google != null ? cleanText(body.estado_google, 60) : row.estado_google;
@@ -3653,6 +3662,14 @@ app.patch('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res) 
         }
         db.prepare(`UPDATE projeto SET estado = ?, estado_google = ?, estado_dominio = ? WHERE id = ?`)
             .run(estado, estadoGoogle, estadoDominio, projectId);
+        if (body.resultado != null && linked && linked.leadId) {
+            const resultado = normalizeResultado(body.resultado);
+            if (!isValidResultado(resultado)) {
+                return res.status(400).json({ error: 'Resultado inválido.' });
+            }
+            db.prepare('UPDATE lead SET resultado = ?, cobertura_locked = 1 WHERE id = ?')
+                .run(resultado, linked.leadId);
+        }
         return res.json({
             ok: true,
             project: db.prepare('SELECT id AS projectId, estado, estado_google, estado_dominio FROM projeto WHERE id = ?').get(projectId)

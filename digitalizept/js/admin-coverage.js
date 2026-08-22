@@ -30,20 +30,24 @@ function loadLeaflet() {
     return loadScript(LEAFLET_JS);
 }
 
-function pinIcon(fill, stroke, strokeWidth) {
+function pinIcon(fill, stroke, strokeWidth, opts = {}) {
+    const faded = opts.faded === true;
     const color = fill || '#8e8a84';
     const outline = stroke || '#1b1b1b';
     const width = strokeWidth || 1.2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    const w = faded ? 18 : 28;
+    const h = faded ? 23 : 36;
+    const r = faded ? 2.6 : 4.2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 28 36">
       <path fill="${color}" stroke="${outline}" stroke-width="${width}" d="M14 1C7.4 1 2 6.4 2 13c0 9.2 12 21.5 12 21.5S26 22.2 26 13C26 6.4 20.6 1 14 1z"/>
-      <circle cx="14" cy="13" r="4.2" fill="#faf8f4"/>
+      <circle cx="14" cy="13" r="${r}" fill="#faf8f4"/>
     </svg>`;
     return window.L.divIcon({
-        className: 'coverage-divicon',
+        className: faded ? 'coverage-divicon is-parked' : 'coverage-divicon',
         html: svg,
-        iconSize: [28, 36],
-        iconAnchor: [14, 34],
-        popupAnchor: [0, -28]
+        iconSize: [w, h],
+        iconAnchor: [Math.round(w / 2), h - 2],
+        popupAnchor: [0, faded ? -18 : -28]
     });
 }
 
@@ -836,15 +840,22 @@ export function setupCoverage({
         markers.forEach((m) => map.removeLayer(m));
         markers = [];
         const shown = filtered();
-        const mapped = shown.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-        const unmapped = shown.filter((p) => !(Number.isFinite(p.lat) && Number.isFinite(p.lng)));
+        const mapped = shown
+            .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+            .sort((a, b) => Number(Boolean(b.faded)) - Number(Boolean(a.faded)));
+        const unmapped = shown
+            .filter((p) => !(Number.isFinite(p.lat) && Number.isFinite(p.lng)))
+            .sort((a, b) => Number(Boolean(a.faded || a.resultado === 'sem_interesse'))
+                - Number(Boolean(b.faded || b.resultado === 'sem_interesse')));
         const bounds = window.L.latLngBounds([]);
         mapped.forEach((pin) => {
             const marker = window.L.marker([pin.lat, pin.lng], {
-                icon: pinIcon(pin.color, pin.strokeColor, pin.strokeWidth),
+                icon: pinIcon(pin.color, pin.strokeColor, pin.strokeWidth, { faded: pin.faded }),
                 title: `${pin.nome || ''} — ${tagLabel(pin, legend)}`,
                 draggable: !placing && !registeringNewVisit,
-                autoPan: true
+                autoPan: true,
+                zIndexOffset: pin.faded ? (pin.zIndexOffset || -400) : 0,
+                opacity: pin.faded ? 0.42 : 1
             }).addTo(map);
             marker.on('click', () => {
                 if (placing || registeringNewVisit) return;
@@ -888,7 +899,8 @@ export function setupCoverage({
             el.coverageUnmapped.innerHTML = '';
             unmapped.slice(0, 40).forEach((pin) => {
                 const card = document.createElement('article');
-                card.className = 'admin-card';
+                const parked = pin.faded || pin.resultado === 'sem_interesse';
+                card.className = parked ? 'admin-card parked' : 'admin-card';
                 card.innerHTML = `
                     <h3>${pin.nome || 'Sem nome'}</h3>
                     <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${tagLabel(pin, legend)} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>

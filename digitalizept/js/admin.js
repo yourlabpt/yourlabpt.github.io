@@ -221,6 +221,46 @@ function estadoLabel(estado) {
     return estado || '—';
 }
 
+function isParked(item) {
+    return Boolean(item && (item.resultado === 'sem_interesse' || item.followupUnsubscribed));
+}
+
+function activeFirst(items) {
+    return [...items].sort((a, b) => Number(isParked(a)) - Number(isParked(b)));
+}
+
+async function setLeadParked(leadId, parked) {
+    const { response, data } = await api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}`, {
+        method: 'PATCH',
+        body: { resultado: parked ? 'sem_interesse' : '' }
+    });
+    if (!response.ok) {
+        toast((data && data.error) || 'Não foi possível actualizar.', true);
+        return false;
+    }
+    return true;
+}
+
+function parkButton(item, { leadId, onDone, className = 'btn-secondary' }) {
+    const id = leadId || item.leadId || item.id;
+    const parked = isParked(item);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className;
+    btn.textContent = parked ? 'Repor' : 'Sem interesse';
+    btn.addEventListener('click', async () => {
+        if (!id) return;
+        btn.disabled = true;
+        const ok = await setLeadParked(id, !parked);
+        btn.disabled = false;
+        if (ok) {
+            toast(parked ? 'Voltou à lista activa.' : 'Passou para o fundo da lista.');
+            if (typeof onDone === 'function') await onDone();
+        }
+    });
+    return btn;
+}
+
 function renderCatalog() {
     const q = (el.catalogFilter.value || '').trim().toLowerCase();
     const items = catalog.filter((s) => {
@@ -407,7 +447,7 @@ async function markCallDone(leadId) {
 function renderCallQueue() {
     const box = el.callQueue;
     if (!box) return;
-    const open = leads.filter((l) => l.estado !== 'fechado');
+    const open = leads.filter((l) => l.estado !== 'fechado' && !isParked(l));
     const due = open.filter((l) => confirmCallState(l).status === 'due');
     const waiting = open.filter((l) => confirmCallState(l).status === 'waiting');
     due.forEach((l) => maybeNotifyDueCall(l));
@@ -449,22 +489,22 @@ function tickCallCountdowns() {
         node.classList.toggle('call-meta-due', state.status === 'due');
         node.classList.toggle('call-queue-row-due', state.status === 'due' && node.classList.contains('call-queue-row'));
     });
-    const crossed = leads.some((l) => l.estado !== 'fechado' && confirmCallState(l).status === 'due');
+    const crossed = leads.some((l) => l.estado !== 'fechado' && !isParked(l) && confirmCallState(l).status === 'due');
     if (crossed && el.callQueue && !el.callQueue.classList.contains('call-queue-due')) {
         renderCallQueue();
     } else {
-        leads.filter((l) => confirmCallState(l).status === 'due').forEach((l) => maybeNotifyDueCall(l));
+        leads.filter((l) => !isParked(l) && confirmCallState(l).status === 'due').forEach((l) => maybeNotifyDueCall(l));
     }
 }
 
 function renderDemos() {
     const q = (el.demosFilter.value || '').trim().toLowerCase();
-    const items = leads.filter((l) => l.estado !== 'fechado').filter((l) => {
+    const items = activeFirst(leads.filter((l) => l.estado !== 'fechado').filter((l) => {
         if (!q) return true;
         return `${l.nome} ${l.business_type} ${l.demo_slug || ''} ${l.morada || ''} ${l.estado || ''}`
             .toLowerCase()
             .includes(q);
-    });
+    }));
     el.demosList.innerHTML = '';
     if (!items.length) {
         el.demosList.innerHTML = '<p class="admin-empty">Sem leads em aberto.</p>';
@@ -473,14 +513,15 @@ function renderDemos() {
     }
     items.forEach((l) => {
         const card = document.createElement('article');
-        card.className = 'admin-card';
+        const parked = isParked(l);
+        card.className = parked ? 'admin-card parked' : 'admin-card';
         card.innerHTML = `
             <h3>${l.nome || 'Sem nome'}</h3>
             <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
             ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
             ${l.followupWaStep || l.followupEmailSent ? `<p class="meta">Envio: WA ${l.followupWaStep || 0}/3${l.followupEmailSent ? ' · email enviado' : ''}</p>` : ''}
-            ${l.resultado === 'sem_interesse' || l.followupUnsubscribed ? '<p class="meta">Sem interesse — não voltar a contactar.</p>' : ''}
+            ${parked ? '<p class="meta">Sem interesse</p>' : ''}
             ${Number(l.fichaMissing) > 0 ? `<p class="meta">Ficha: ${l.fichaMissing} campo(s) em falta</p>` : '<p class="meta">Ficha: mínimo de contacto ok</p>'}
             ${callMetaHtml(l)}
         `;
@@ -563,6 +604,18 @@ function renderDemos() {
         notes.addEventListener('click', () => openNotes(l));
         actions.appendChild(notes);
 
+        if (l.resultado !== 'digitalizado') {
+            actions.appendChild(parkButton(l, {
+                leadId: l.id,
+                onDone: async () => {
+                    await Promise.all([loadLeads(), loadDeals()]);
+                    if (coverageUi && typeof coverageUi.refresh === 'function') {
+                        coverageUi.refresh().catch(() => {});
+                    }
+                }
+            }));
+        }
+
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'btn-danger';
@@ -602,10 +655,10 @@ function packageLabel(itensJson) {
 
 function renderDeals() {
     const q = (el.dealsFilter.value || '').trim().toLowerCase();
-    const items = deals.filter((d) => {
+    const items = activeFirst(deals.filter((d) => {
         if (!q) return true;
         return `${d.nome} ${d.cliente_nome} ${d.estado} ${d.business_type}`.toLowerCase().includes(q);
-    });
+    }));
     el.dealsList.innerHTML = '';
     if (!items.length) {
         el.dealsList.innerHTML = '<p class="admin-empty">Sem propostas fechadas.</p>';
@@ -613,7 +666,8 @@ function renderDeals() {
     }
     items.forEach((d) => {
         const card = document.createElement('article');
-        card.className = 'admin-card';
+        const parked = isParked(d);
+        card.className = parked ? 'admin-card parked' : 'admin-card';
         const fase = FASES.find((f) => f.id === d.estado)?.label || d.estado;
         const googleLabel = d.estado_google_label
             || GOOGLE_STATES.find((f) => f.id === d.estado_google)?.label
@@ -623,6 +677,7 @@ function renderDeals() {
             <h3>${d.nome || d.cliente_nome || 'Negócio'}</h3>
             <p class="meta">${d.cliente_nome || ''} · ${packageLabel(d.itens_json)} · ${eurosFromCents(d.total_com_iva_centimos)} · ${d.template_versao || 'v1'}</p>
             <p class="meta">Fase: ${fase} · Google: ${googleLabel} · ${new Date(d.criado_em).toLocaleDateString('pt-PT')}</p>
+            ${parked ? '<p class="meta">Sem interesse</p>' : ''}
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';
@@ -725,6 +780,17 @@ function renderDeals() {
             mapBtn.textContent = 'Mapa / visita';
             mapBtn.addEventListener('click', () => jumpToLeadMap(d.leadId));
             actions.appendChild(mapBtn);
+            if (d.resultado !== 'digitalizado') {
+                actions.appendChild(parkButton(d, {
+                    leadId: d.leadId,
+                    onDone: async () => {
+                        await Promise.all([loadLeads(), loadDeals()]);
+                        if (coverageUi && typeof coverageUi.refresh === 'function') {
+                            coverageUi.refresh().catch(() => {});
+                        }
+                    }
+                }));
+            }
         }
 
         actions.append(contract, edit, del);
@@ -1043,6 +1109,21 @@ function openDealEditor(deal) {
             google.appendChild(opt);
         });
         form.append(field('Fase do projeto', fase), field('Estado Google', google));
+        const resultado = document.createElement('select');
+        resultado.className = 'field-input';
+        [
+            { id: '', label: '— (em jogo)' },
+            { id: 'futuro', label: 'Futuro' },
+            { id: 'sem_interesse', label: 'Sem interesse' },
+            { id: 'digitalizado', label: 'Digitalizado' }
+        ].forEach((item) => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.label;
+            if ((deal.resultado || '') === item.id) opt.selected = true;
+            resultado.appendChild(opt);
+        });
+        form.append(field('Resultado', resultado));
         const save = document.createElement('button');
         save.type = 'submit';
         save.className = 'btn-primary';
@@ -1053,7 +1134,7 @@ function openDealEditor(deal) {
             event.preventDefault();
             const { response, data } = await api(`/api/digitalizept/deals/${deal.projectId}`, {
                 method: 'PATCH',
-                body: { estado: fase.value, estado_google: google.value }
+                body: { estado: fase.value, estado_google: google.value, resultado: resultado.value }
             });
             if (!response.ok) {
                 toast(data.error || 'Falha.', true);
@@ -1061,7 +1142,7 @@ function openDealEditor(deal) {
             }
             toast('Fase atualizada.');
             closeDrawer();
-            await loadDeals();
+            await Promise.all([loadDeals(), loadLeads()]);
         });
 
         const notesBtn = document.createElement('button');

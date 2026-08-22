@@ -75,9 +75,11 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.ok(plain.strokeWidth < 2);
 
         const lost = pinColors('demo_apresentada', 'sem_interesse');
-        assert.equal(lost.color, ETAPA_COLORS.demo_apresentada);
+        assert.equal(lost.color, '#d5d1c9');
         assert.equal(lost.strokeColor, RESULTADO_COLORS.sem_interesse);
-        assert.ok(lost.strokeWidth > 2);
+        assert.equal(lost.faded, true);
+        assert.ok(lost.strokeWidth < 2);
+        assert.ok(lost.zIndexOffset < 0);
 
         const won = pinColors('contacto_remoto', 'digitalizado');
         assert.equal(won.strokeColor, RESULTADO_COLORS.digitalizado);
@@ -90,5 +92,6 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.equal(normalizeResultado(''), '');
         assert.ok(ETAPA_VALUES.includes('demo_apresentada'));
         assert.ok(RESULTADO_VALUES.includes('futuro'));
+        assert.equal(RESULTADO_COLORS.sem_interesse, '#b8b4ac');
     });
 });

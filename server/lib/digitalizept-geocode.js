@@ -41,14 +41,22 @@ const RESULTADO_VALUES = [
 
 const RESULTADO_LABELS = {
     futuro: 'Futuro',
-    sem_interesse: 'Sem Interesse',
+    sem_interesse: 'Sem interesse',
     digitalizado: 'Digitalizado'
 };
 
 const RESULTADO_COLORS = {
     futuro: '#5b7c99',
-    sem_interesse: '#e05a5a',
+    sem_interesse: '#b8b4ac',
     digitalizado: '#3d9a6a'
+};
+
+const PARKED_PIN = {
+    color: '#d5d1c9',
+    strokeColor: '#b8b4ac',
+    strokeWidth: 0.9,
+    faded: true,
+    zIndexOffset: -400
 };
 
 /** @deprecated use ETAPA_*; kept as aliases for older imports */
@@ -120,20 +128,31 @@ function normalizeResultado(value) {
     return '';
 }
 
+function isParkedResultado(value) {
+    return normalizeResultado(value) === 'sem_interesse';
+}
+
 function pinColors(etapa, resultado) {
-    const fill = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
     const res = normalizeResultado(resultado);
+    if (isParkedResultado(res)) {
+        return { ...PARKED_PIN };
+    }
+    const fill = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
     if (res) {
         return {
             color: fill,
             strokeColor: RESULTADO_COLORS[res] || '#1b1b1b',
-            strokeWidth: 2.8
+            strokeWidth: 2.8,
+            faded: false,
+            zIndexOffset: 0
         };
     }
     return {
         color: fill,
         strokeColor: '#1b1b1b',
-        strokeWidth: 1.2
+        strokeWidth: 1.2,
+        faded: false,
+        zIndexOffset: 0
     };
 }
 
@@ -846,6 +865,7 @@ module.exports = {
     isValidEtapa,
     isValidResultado,
     isValidCobertura,
+    isParkedResultado,
     normalizeEtapa,
     normalizeResultado,
     pinColors,

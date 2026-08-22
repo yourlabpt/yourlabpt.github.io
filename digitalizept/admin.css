@@ -324,6 +324,22 @@
     color: var(--admin-muted);
 }
 
+.admin-card.parked {
+    opacity: 0.55;
+    background: #f3f1ec;
+    border-color: #ddd8d0;
+}
+
+.admin-card.parked h3,
+.admin-card.parked .admin-price {
+    color: #8e8b85;
+    font-weight: 500;
+}
+
+.admin-card.parked .meta {
+    color: #a8a49c;
+}
+
 .admin-empty {
     color: var(--admin-muted);
     padding: 32px 12px;
@@ -370,6 +386,11 @@
 .coverage-divicon {
     background: none;
     border: 0;
+}
+
+.coverage-divicon.is-parked {
+    opacity: 0.4;
+    filter: grayscale(0.35);
 }
 
 .coverage-legend {
