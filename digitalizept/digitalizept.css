@@ -1107,6 +1107,16 @@ body:has(.app) {
     gap: 8px;
 }
 
+.followup-call-actions .btn-primary,
+.followup-call-actions .btn-secondary,
+.followup-call-actions a.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 120px;
+    height: 44px;
+}
+
 .followup-preview {
     width: 100%;
     min-height: 120px;
@@ -2807,6 +2817,16 @@ html:has(body > .dp-landing) {
     cursor: pointer;
     font-weight: 600;
     font-size: 0.98rem;
+}
+
+a.btn-primary,
+a.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    box-sizing: border-box;
+    text-decoration: none;
 }
 
 .btn-primary {

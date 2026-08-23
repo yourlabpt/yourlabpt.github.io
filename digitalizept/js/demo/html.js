@@ -1,5 +1,5 @@
 import { LIVRO_RECLAMACOES_URL, renderLanding } from './landing.js';
-import { contrastTokens, readCssHexToken } from './colors.js';
+import { contrastTokens } from './colors.js';
 
 export const DEMO_HTML_MAX = 900000;
 
@@ -267,6 +267,45 @@ function rewriteNamedVars(css, cores) {
     return out;
 }
 
+function rewriteToken(css, name, value) {
+    if (!value) return css;
+    return String(css || '').replace(
+        new RegExp(`(--${name})\\s*:\\s*[^;\\n}]+`, 'gi'),
+        `$1: ${value}`
+    );
+}
+
+function rewritePaperTokens(css, tokens) {
+    let out = String(css || '');
+    [
+        ['accent-solid', tokens.accentSolid],
+        ['accent-ink', tokens.accentInk],
+        ['accent2-ink', tokens.accent2Ink],
+        ['on-accent-2', tokens.onAccent2],
+        ['ink-muted', tokens.inkMuted],
+        ['on-accent', tokens.onAccent],
+        ['accent-2', tokens.accent2],
+        ['accent', tokens.accent],
+        ['ink', tokens.ink],
+        ['bg', tokens.bg]
+    ].forEach(([name, value]) => {
+        out = rewriteToken(out, name, value);
+    });
+    return out;
+}
+
+export function reskinBoilerplateCss(css, cores) {
+    return rewritePaperTokens(rewriteNamedVars(css, cores), contrastTokens(cores));
+}
+
+function isBoilerplateDoc(doc) {
+    const root = doc.documentElement;
+    return Boolean(
+        (root && root.getAttribute('data-dp-boilerplate'))
+        || (doc.querySelector && doc.querySelector('[data-dp-boilerplate]'))
+    );
+}
+
 function fillVisual(el, url) {
     if (!el || !url) return;
     el.classList.add('dpl-visual-photo');
@@ -282,9 +321,13 @@ function fillVisual(el, url) {
 }
 
 function applyCores(doc, cores) {
+    const readable = contrastTokens(cores);
+    const boilerplate = isBoilerplateDoc(doc);
     doc.querySelectorAll('style').forEach((style) => {
         if (style.hasAttribute('data-dp-fix') || style.hasAttribute('data-dp-identity')) return;
-        style.textContent = rewriteNamedVars(style.textContent, cores);
+        let css = rewriteNamedVars(style.textContent, cores);
+        if (boilerplate) css = rewritePaperTokens(css, readable);
+        style.textContent = css;
     });
     doc.querySelectorAll('[style]').forEach((node) => {
         const next = rewriteNamedVars(node.getAttribute('style') || '', cores);
@@ -296,13 +339,8 @@ function applyCores(doc, cores) {
         override.setAttribute('data-dp-identity', '');
         (doc.head || doc.documentElement).appendChild(override);
     }
-    const themeCss = [...doc.querySelectorAll('style')]
-        .map((style) => style.textContent || '')
-        .join('\n');
-    const paper = readCssHexToken(themeCss, 'bg');
-    const readable = contrastTokens(cores, paper || '#fafaf8');
-    const inkLines = paper
-        ? `--ink: ${readable.ink};\n  --ink-muted: ${readable.inkMuted};`
+    const paperLines = boilerplate
+        ? `--bg: ${readable.bg};\n  --ink: ${readable.ink};\n  --ink-muted: ${readable.inkMuted};`
         : '';
     override.textContent = `
 :root, .dp-landing {
@@ -312,7 +350,7 @@ function applyCores(doc, cores) {
   --l-base: ${cores.base};
   --l-destaque: ${cores.destaque};
   --l-secundaria: ${cores.secundaria};
-  ${inkLines}
+  ${paperLines}
   --accent: ${readable.accent};
   --accent-2: ${readable.accent2};
   --accent-ink: ${readable.accentInk};

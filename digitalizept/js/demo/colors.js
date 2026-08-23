@@ -109,11 +109,29 @@ export function accentSolid(fill, onFill, { min = 4.5 } = {}) {
 }
 
 /**
+ * Page paper after the operator picks colours. Category templates (restaurant)
+ * may ship a dark editorial --bg; that must not win over a light brand colour.
+ * Prefer secundaria when it can serve as paper, otherwise cream.
+ */
+export function paperFromCores(cores, fallback = PAPER_LIGHT) {
+    const secondary = normalizeHex(cores && cores.secundaria);
+    if (
+        secondary
+        && relativeLuminance(secondary) >= 0.45
+        && contrastRatio(INK_DARK, secondary) >= 4.5
+    ) {
+        return secondary;
+    }
+    return normalizeHex(fallback) || PAPER_LIGHT;
+}
+
+/**
  * Tokens for no-image pages after identity re-skin.
- * `--bg` stays the page paper; brand colours become ink/accent only when they still read.
+ * Pass `paperBg` only to score a known surface. Identity apply omits it so a
+ * dark category template cannot keep its editorial paper over the brand palette.
  */
 export function contrastTokens(cores = {}, paperBg) {
-    const bg = normalizeHex(paperBg) || PAPER_LIGHT;
+    const bg = normalizeHex(paperBg) || paperFromCores(cores);
     const accent = normalizeHex(cores.destaque) || '#2d6a64';
     const accent2 = normalizeHex(cores.secundaria) || normalizeHex(cores.base) || INK_DARK;
     const ink = readableInk(cores.base, bg);
@@ -135,8 +153,12 @@ export function contrastTokens(cores = {}, paperBg) {
 
 export function readCssHexToken(cssText, name) {
     const src = String(cssText || '');
-    const match = src.match(new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,8})`));
-    return match ? normalizeHex(match[1]) : '';
+    const re = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,8})`, 'g');
+    let last = '';
+    for (const match of src.matchAll(re)) {
+        last = normalizeHex(match[1]);
+    }
+    return last;
 }
 
 function stripFences(text) {

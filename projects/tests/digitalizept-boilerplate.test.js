@@ -258,6 +258,35 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.ok(contrastRatio(rest.onAccent, rest.accent) >= 4.5);
     });
 
+    it('uses a light identity paper instead of the restaurant dark room', async () => {
+        const { paperFromCores, contrastTokens, contrastRatio, PAPER_LIGHT } = await import(
+            pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/colors.js')).href
+        );
+        const olive = { base: '#24301f', destaque: '#8a9a6a', secundaria: '#d4c4a8' };
+        assert.equal(paperFromCores(olive), '#d4c4a8');
+        const olivePage = contrastTokens(olive);
+        assert.equal(olivePage.bg, '#d4c4a8');
+        assert.ok(contrastRatio(olivePage.ink, olivePage.bg) >= 4.5, `${olivePage.ink} on ${olivePage.bg}`);
+
+        const taberna = { base: '#2a1a12', destaque: '#e0a458', secundaria: '#a63d40' };
+        assert.equal(paperFromCores(taberna), PAPER_LIGHT);
+        const tabernaPage = contrastTokens(taberna);
+        assert.equal(tabernaPage.bg, PAPER_LIGHT);
+        assert.ok(contrastRatio(tabernaPage.ink, tabernaPage.bg) >= 4.5);
+        assert.notEqual(tabernaPage.bg, '#16130f');
+    });
+
+    it('rewrites --bg in the restaurant CSS so Copiar HTML is not stuck dark', async () => {
+        const htmlMod = await import(pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/html.js')).href);
+        const restCss = fs.readFileSync(path.join(root, 'css/restaurante.css'), 'utf8');
+        const out = htmlMod.reskinBoilerplateCss(restCss, {
+            base: '#24301f', destaque: '#8a9a6a', secundaria: '#d4c4a8'
+        });
+        assert.match(out, /--bg:\s*#d4c4a8/i);
+        assert.doesNotMatch(out, /--bg:\s*#16130[Ff]/);
+        assert.match(out, /--ink:\s*#24301f/i);
+    });
+
     it('passes the north-star: hide photos and the page still has type, colour and icons', () => {
         slugs.forEach((slug) => {
             const html = fs.readFileSync(path.join(root, `${slug}-sem-fotos.html`), 'utf8');
@@ -427,6 +456,12 @@ describe('digitalizept wizard chrome', () => {
     it('never paints follow-up chrome with a hardcoded white fallback', () => {
         const followup = appCss.slice(appCss.indexOf('.followup-share'), appCss.indexOf('.demo-live-stack'));
         assert.doesNotMatch(followup, /#fff\b|#ffffff\b/i);
+    });
+
+    it('lays out the Ligar tel: link as a button, not a stretched underline', () => {
+        assert.match(appCss, /a\.btn-primary,\s*\n?a\.btn-secondary \{[^}]*display:\s*inline-flex/s);
+        assert.match(appCss, /a\.btn-primary,\s*\n?a\.btn-secondary \{[^}]*text-decoration:\s*none/s);
+        assert.match(appCss, /\.followup-call-actions[\s\S]{0,280}flex:\s*1 1 120px/);
     });
 
     it('revalidates boilerplate fetches so a regenerated template is not served stale', () => {
