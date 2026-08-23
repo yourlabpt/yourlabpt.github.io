@@ -6,6 +6,8 @@ import { applyCustomCores, buildColorPrompt, parseCores } from '../demo/colors.j
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
 const MAX_FOTOS = 6;
 const IMAGE_ACCEPT = 'image/*,image/heic,image/heif,.heic,.heif';
+const IMAGE_NAME_RE = /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i;
+const DATA_IMAGE_RE = /src=["'](data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+)["']/gi;
 
 // iOS home-screen PWAs open the camera and skip the library if `capture` is set.
 export function imagePickerConfig(source, { multiple = false } = {}) {
@@ -32,6 +34,141 @@ function bindFileInput(input, onFiles) {
         if (!files.length) return;
         await onFiles(files);
     });
+}
+
+export function isImageFile(file) {
+    if (!file) return false;
+    if (file.type && /^image\//i.test(file.type)) return true;
+    return IMAGE_NAME_RE.test(file.name || '');
+}
+
+function dataUrlToFile(dataUrl, index = 0) {
+    const match = /^data:([^;]+);base64,(.+)$/.exec(String(dataUrl || '').replace(/\s/g, ''));
+    if (!match) return null;
+    try {
+        const binary = atob(match[2]);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        const ext = (match[1].split('/')[1] || 'png').replace('+xml', '');
+        return new File([bytes], `colar-${index + 1}.${ext}`, { type: match[1] });
+    } catch (_) {
+        return null;
+    }
+}
+
+function filesFromHtml(html) {
+    const files = [];
+    const seen = new Set();
+    String(html || '').replace(DATA_IMAGE_RE, (_, url) => {
+        if (seen.has(url)) return _;
+        seen.add(url);
+        const file = dataUrlToFile(url, files.length);
+        if (file) files.push(file);
+        return _;
+    });
+    return files;
+}
+
+export function filesFromClipboardData(data) {
+    if (!data) return [];
+    const out = [];
+    const seen = new Set();
+    const add = (file) => {
+        if (!isImageFile(file)) return;
+        const key = `${file.type}:${file.size}:${file.name}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(file);
+    };
+    Array.from(data.files || []).forEach(add);
+    Array.from(data.items || []).forEach((item) => {
+        if (item && item.kind === 'file' && typeof item.getAsFile === 'function') {
+            add(item.getAsFile());
+        }
+    });
+    if (!out.length && typeof data.getData === 'function') {
+        filesFromHtml(data.getData('text/html') || '').forEach(add);
+    }
+    return out;
+}
+
+export async function filesFromClipboardRead() {
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') return [];
+    const items = await navigator.clipboard.read();
+    const files = [];
+    for (const item of items) {
+        const type = (item.types || []).find((name) => /^image\//i.test(name));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        const ext = type.split('/')[1] || 'png';
+        files.push(new File([blob], `colar.${ext}`, { type }));
+    }
+    return files;
+}
+
+function bindImageIntake(host, onFiles) {
+    const take = (event, files) => {
+        if (!files.length) return;
+        event.preventDefault();
+        onFiles(files);
+    };
+    host.addEventListener('paste', (event) => {
+        take(event, filesFromClipboardData(event.clipboardData));
+    });
+    host.addEventListener('dragover', (event) => {
+        if (!event.dataTransfer) return;
+        event.preventDefault();
+        host.classList.add('is-drop');
+    });
+    host.addEventListener('dragleave', () => host.classList.remove('is-drop'));
+    host.addEventListener('drop', (event) => {
+        host.classList.remove('is-drop');
+        const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []).filter(isImageFile);
+        take(event, files);
+    });
+}
+
+function makePasteZone() {
+    const zone = document.createElement('div');
+    zone.className = 'image-paste';
+    zone.setAttribute('contenteditable', 'true');
+    zone.setAttribute('role', 'textbox');
+    zone.setAttribute('spellcheck', 'false');
+    zone.setAttribute('aria-label', 'Cole a imagem aqui');
+    const hint = document.createElement('span');
+    hint.className = 'image-paste-hint';
+    hint.textContent = 'Cole a imagem aqui — sem gravar no telemóvel';
+    zone.appendChild(hint);
+    zone.addEventListener('beforeinput', (event) => {
+        if (event.inputType && event.inputType.startsWith('insert') && event.inputType !== 'insertFromPaste') {
+            event.preventDefault();
+        }
+    });
+    zone.addEventListener('input', () => {
+        zone.replaceChildren(hint);
+    });
+    return zone;
+}
+
+function pasteButton(onFiles, showToast, zone) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-secondary logo-actions-wide';
+    btn.textContent = 'Colar imagem';
+    btn.addEventListener('click', async () => {
+        try {
+            const files = await filesFromClipboardRead();
+            if (files.length) {
+                await onFiles(files);
+                return;
+            }
+        } catch (_) { /* Safari / permission — fall through to paste hint */ }
+        if (zone && typeof zone.focus === 'function') zone.focus();
+        if (typeof showToast === 'function') {
+            showToast('Copie a imagem e cole aqui (Ctrl+V ou toque longo).');
+        }
+    });
+    return btn;
 }
 
 function createImageSourceInputs({ multiple = false, onFiles }) {
@@ -149,7 +286,7 @@ function renderLogo(body, ctx, identidade, persist) {
     const dados = getDados(ctx.state);
     const { control } = renderAsk(body, {
         title: 'Tem logótipo?',
-        hint: 'Câmara ou fotos já no telemóvel. Se não tiver, usamos o nome do negócio.',
+        hint: 'Câmara, álbum, ou cole a imagem — não precisa de gravar no telemóvel. Se não tiver, usamos o nome.',
         index: 0,
         total: 3
     });
@@ -195,6 +332,9 @@ function renderLogo(body, ctx, identidade, persist) {
         cameraLabel: 'Tirar foto',
         libraryLabel: 'Das fotos'
     });
+    const pasteZone = makePasteZone();
+    bindImageIntake(control, onFiles);
+    actions.appendChild(pasteButton(onFiles, ctx.showToast, pasteZone));
     const noneBtn = document.createElement('button');
     noneBtn.type = 'button';
     noneBtn.className = 'btn-secondary logo-actions-wide';
@@ -206,7 +346,7 @@ function renderLogo(body, ctx, identidade, persist) {
         scheduleGoNext(ctx.goNext);
     });
     actions.appendChild(noneBtn);
-    control.append(preview, actions, camera, library);
+    control.append(preview, pasteZone, actions, camera, library);
     renderPreview();
 }
 
@@ -395,7 +535,7 @@ function renderPalette(body, ctx, identidade, persist) {
 function renderFotos(body, ctx, identidade, persist) {
     const { control } = renderAsk(body, {
         title: 'Tirar fotos agora?',
-        hint: 'Câmara ou fotos já no telemóvel. Fotos reais tornam a demo mais convincente. Pode saltar.',
+        hint: 'Câmara, álbum, ou cole as imagens — sem gravar no telemóvel. Pode saltar.',
         index: 2,
         total: 3
     });
@@ -457,6 +597,9 @@ function renderFotos(body, ctx, identidade, persist) {
         cameraLabel: 'Tirar foto',
         libraryLabel: 'Das fotos'
     });
+    const pasteZone = makePasteZone();
+    bindImageIntake(control, onFiles);
+    actions.appendChild(pasteButton(onFiles, ctx.showToast, pasteZone));
     const skipBtn = document.createElement('button');
     skipBtn.type = 'button';
     skipBtn.className = 'btn-secondary logo-actions-wide';
@@ -466,7 +609,7 @@ function renderFotos(body, ctx, identidade, persist) {
         scheduleGoNext(ctx.goNext);
     });
     actions.appendChild(skipBtn);
-    control.append(preview, actions, camera, library);
+    control.append(preview, pasteZone, actions, camera, library);
     paint();
 }
 
@@ -498,7 +641,7 @@ function render(body, ctx) {
 export const identityStep = {
     name: 'Identidade visual',
     title: 'Identidade visual',
-    subtitle: 'Logótipo, paleta e fotos. Um toque avança; cores à medida são opcionais.',
+    subtitle: 'Logótipo, paleta e fotos. Cole a imagem, use a câmara ou o álbum.',
     isValid,
     isSubstepValid,
     substepCount,

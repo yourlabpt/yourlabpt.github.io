@@ -831,6 +831,47 @@
     gap: 10px 14px;
 }
 
+.dossier-form .field-hours {
+    grid-column: 1 / -1;
+}
+
+.admin-body .hours-preset,
+.admin-body .hours-day,
+.admin-body .hours-add,
+.admin-body .hours-remove {
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface);
+    color: var(--admin-muted);
+}
+
+.admin-body .hours-preset.on,
+.admin-body .hours-day.on {
+    border-color: #1b1b1b;
+    background: #1b1b1b;
+    color: #faf8f4;
+}
+
+.admin-body .hours-label,
+.admin-body .hours-pause-hint,
+.admin-body .hours-range-title,
+.admin-body .hours-preview,
+.admin-body .hours-unknown {
+    color: var(--admin-muted);
+}
+
+.admin-body .hours-range-title,
+.admin-body .hours-preview {
+    color: var(--admin-ink);
+}
+
+.admin-body .hours-preview.is-empty {
+    color: var(--admin-muted);
+}
+
+.admin-body .hours-time {
+    color-scheme: light;
+}
+
 .dossier-form .field-missing .field-label {
     color: #8a3b2a;
 }

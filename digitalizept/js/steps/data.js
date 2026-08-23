@@ -1,6 +1,7 @@
 import { fetchSettings } from '../settings.js';
 import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
 import { currentSubstep, renderAsk, askText, askToggle, askChoices } from '../substep.js';
+import { renderHoursPicker } from '../horario.js';
 import { buildDadosCopyPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
 import { isCustomDemo } from '../demo/seed.js';
 
@@ -77,8 +78,8 @@ const CORE_PAGES = [
     },
     {
         id: 'horario',
-        title: 'Qual é o horário?',
-        hint: 'Como está na montra. Ex.: seg–sáb 9h–19h.',
+        title: 'Quando está aberto?',
+        hint: 'Toque nos dias, a hora de abrir e de fechar. Se fecha ao almoço, preencha a pausa.',
         required: false
     },
     {
@@ -126,7 +127,10 @@ function extraPages(state, standardFields) {
 function pagesFor(state, standardFields) {
     const core = CORE_PAGES.map((p) => ({
         ...p,
-        def: (standardFields && standardFields[p.id]) || { label: p.id, tipo: p.id === 'telefone' || p.id === 'whatsapp' ? 'telefone' : 'texto' }
+        def: (standardFields && standardFields[p.id]) || {
+            label: p.id,
+            tipo: p.id === 'telefone' || p.id === 'whatsapp' ? 'telefone' : p.id === 'horario' ? 'horario' : 'texto'
+        }
     }));
     const gate = {
         id: '_more',
@@ -260,6 +264,22 @@ async function render(body, ctx) {
             }
         });
         ctx.setValid(true);
+        return;
+    }
+
+    if (page.id === 'horario') {
+        renderHoursPicker(control, {
+            text: dados.horario || '',
+            onChange: (val) => {
+                dados.horario = val;
+                persist();
+            },
+            showNext: true,
+            onNext: () => {
+                if (ctx.goNext) ctx.goNext();
+            }
+        });
+        ctx.setValid(isSubstepValid(ctx.state));
         return;
     }
 

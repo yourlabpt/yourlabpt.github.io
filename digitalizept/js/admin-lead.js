@@ -1,3 +1,5 @@
+import { renderHoursPicker } from './horario.js';
+
 const SECTION_ORDER = ['identificacao', 'funcionamento', 'descricao', 'especifico', 'opcional', 'extra'];
 const CONTACT_IDS = ['nome_negocio', 'telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'];
 
@@ -169,6 +171,27 @@ function collectForm(root) {
 }
 
 function appendField(grid, field, value, missing, attr, attrValue) {
+    if (field.id === 'horario' || field.tipo === 'horario') {
+        const box = el('div', 'hours-field-box');
+        const hidden = el('input');
+        hidden.type = 'hidden';
+        hidden.setAttribute(attr, attrValue);
+        hidden.value = value || '';
+        box.appendChild(hidden);
+        const picker = renderHoursPicker(box, {
+            text: value || '',
+            onChange: (text) => {
+                hidden.value = text;
+            }
+        });
+        hidden.addEventListener('input', () => {
+            picker.setText(hidden.value);
+        });
+        const wrap = el('div', `field field-hours${missing ? ' field-missing' : ''}`);
+        wrap.append(el('span', 'field-label', field.required ? `${field.label} *` : field.label), box);
+        grid.appendChild(wrap);
+        return hidden;
+    }
     const control = field.tipo === 'select'
         ? selectFor(field.options, value)
         : inputFor(field, value);
@@ -268,6 +291,7 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMa
                 const next = dados[key];
                 if (!next || String(node.value || '').trim()) return;
                 node.value = next;
+                node.dispatchEvent(new Event('input', { bubbles: true }));
             });
             if (data.businessTypeId) {
                 const exists = Array.from(typeSelect.options).some((o) => o.value === data.businessTypeId);

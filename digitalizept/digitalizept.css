@@ -578,6 +578,115 @@ body:has(.app) {
     font-weight: 600;
 }
 
+.hours-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hours-presets,
+.hours-days {
+    display: grid;
+    gap: 6px;
+}
+
+.hours-presets {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.hours-days {
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.hours-preset,
+.hours-day,
+.hours-add,
+.hours-remove {
+    min-height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--accent-soft);
+    background: var(--secondary-dark);
+    color: var(--text-muted);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.hours-preset,
+.hours-add,
+.hours-remove {
+    font-size: 0.82rem;
+}
+
+.hours-day {
+    padding: 8px 0;
+    font-size: 0.78rem;
+}
+
+.hours-preset.on,
+.hours-day.on {
+    border-color: var(--accent-color);
+    background: var(--accent-dark);
+    color: var(--text-light);
+}
+
+.hours-times {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.hours-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.hours-label,
+.hours-pause-hint,
+.hours-range-title,
+.hours-preview,
+.hours-unknown {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.hours-range-title {
+    font-weight: 700;
+    color: var(--text-light);
+    margin-bottom: 4px;
+}
+
+.hours-time {
+    color-scheme: dark;
+    min-height: 44px;
+}
+
+.hours-preview {
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.hours-preview.is-empty {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.hours-add,
+.hours-remove {
+    width: 100%;
+}
+
+.hours-remove {
+    min-height: 38px;
+    font-weight: 600;
+}
+
+.hours-ranges {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
 .field-optional {
     border: 1px solid var(--accent-soft);
     border-radius: 12px;
@@ -724,6 +833,37 @@ body:has(.app) {
 .palette-name {
     font-weight: 600;
     font-size: 1rem;
+}
+
+.image-paste {
+    min-height: 72px;
+    padding: 16px 14px;
+    margin-bottom: 12px;
+    border: 1px dashed var(--accent-soft);
+    border-radius: 12px;
+    background: var(--secondary-dark);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    text-align: center;
+    outline: none;
+}
+
+.image-paste-hint {
+    pointer-events: none;
+}
+
+.image-paste.is-drop,
+.ask-control.is-drop {
+    border-color: var(--accent-color);
+    background: var(--accent-dark);
+    color: var(--text-light);
+}
+
+.ask-control.is-drop {
+    border-radius: 12px;
+    outline: 2px dashed var(--accent-color);
+    outline-offset: 4px;
 }
 
 .foto-grid {
