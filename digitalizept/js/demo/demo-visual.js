@@ -11,6 +11,10 @@ export const VISUAL_SEM_FOTOS = 'sem-fotos';
 
 const cache = new Map();
 
+export function clearBoilerplateCache() {
+    cache.clear();
+}
+
 export function typeSlug(stateOrType) {
     if (!stateOrType) return 'generico';
     if (typeof stateOrType === 'string') return stateOrType;
@@ -68,8 +72,10 @@ export function isCustomHtml(state) {
     return true;
 }
 
+// Revalidate instead of force-cache: a regenerated boilerplate or dpl-base.css must
+// reach the operator, and the server answers 304 when nothing changed.
 async function fetchText(url) {
-    const response = await fetch(url, { cache: 'force-cache' });
+    const response = await fetch(url, { cache: 'no-cache' });
     if (!response.ok) throw new Error(`Falha a carregar ${url}`);
     return response.text();
 }

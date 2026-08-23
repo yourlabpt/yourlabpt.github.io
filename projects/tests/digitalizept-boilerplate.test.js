@@ -387,3 +387,58 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.ok(contrastRatio(cafe.onAccent, cafe.accentSolid) >= 4.5);
     });
 });
+
+describe('digitalizept wizard chrome', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const appCss = fs.readFileSync(
+        path.join(__dirname, '../../digitalizept/digitalizept.css'), 'utf8'
+    );
+    const adminCss = fs.readFileSync(
+        path.join(__dirname, '../../digitalizept/admin.css'), 'utf8'
+    );
+
+    // An undefined custom property silently falls back to its second argument, which is
+    // how the follow-up buttons ended up white inside the dark wizard. The wizard may also
+    // read boilerplate tokens, which the demo's own stylesheet declares.
+    it('defines every custom property the wizard stylesheet consumes', () => {
+        const baseCss = fs.readFileSync(
+            path.join(__dirname, '../../digitalizept/boilerplates/css/dpl-base.css'), 'utf8'
+        );
+        const used = new Set(
+            [...appCss.matchAll(/var\((--[a-z0-9-]+)/gi)].map((m) => m[1])
+        );
+        const declared = new Set(
+            [...`${appCss}\n${adminCss}\n${baseCss}`.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gim)]
+                .map((m) => m[1])
+        );
+        const missing = [...used].filter((name) => !declared.has(name));
+        assert.deepEqual(missing, [], `undefined tokens: ${missing.join(', ')}`);
+    });
+
+    it('re-points the shared surface tokens for the light admin theme', () => {
+        ['--surface-color', '--surface-muted', '--border-color', '--text-color', '--muted-color', '--accent-strong']
+            .forEach((token) => {
+                assert.match(appCss, new RegExp(`${token}:`), `${token} missing from the wizard`);
+                assert.match(adminCss, new RegExp(`${token}:`), `${token} missing from admin`);
+            });
+    });
+
+    it('never paints follow-up chrome with a hardcoded white fallback', () => {
+        const followup = appCss.slice(appCss.indexOf('.followup-share'), appCss.indexOf('.demo-live-stack'));
+        assert.doesNotMatch(followup, /#fff\b|#ffffff\b/i);
+    });
+
+    it('revalidates boilerplate fetches so a regenerated template is not served stale', () => {
+        const visualJs = fs.readFileSync(
+            path.join(__dirname, '../../digitalizept/js/demo/demo-visual.js'), 'utf8'
+        );
+        assert.doesNotMatch(visualJs, /force-cache'/);
+        assert.match(visualJs, /cache: 'no-cache'/);
+        assert.match(visualJs, /export function clearBoilerplateCache/);
+        const demoStep = fs.readFileSync(
+            path.join(__dirname, '../../digitalizept/js/steps/demo.js'), 'utf8'
+        );
+        assert.match(demoStep, /clearBoilerplateCache\(\)/, 'Atualizar demo must drop the cache');
+    });
+});

@@ -22,6 +22,7 @@ import {
 import { createWebsiteZipButton } from '../demo/site-zip.js';
 import {
     applyVisualToState,
+    clearBoilerplateCache,
     htmlForVisual,
     mountDemoSwitch,
     prefetchBoilerplate,
@@ -416,11 +417,20 @@ function renderWebsiteDemo(body, ctx) {
     refreshBtn.textContent = 'Atualizar demo';
     refreshBtn.addEventListener('click', () => {
         refreshDemoFromIdentity(ctx, { force: true });
-        previewBtn.disabled = !isValid(ctx.state);
-        paintLive();
-        publishDemo(ctx);
-        ctx.showToast('Demo actualizada com cores, logo e fotos.');
-        showStatus('Demo actualizada com a identidade actual.', 'ok');
+        // Refetch the template too, so a regenerated boilerplate reaches this session.
+        clearBoilerplateCache();
+        refreshBtn.disabled = true;
+        showStatus('A actualizar a demo…', 'ok');
+        switchDemoVisual(ctx, resolveDemoVisual(ctx.state), {
+            persist: false,
+            onPaint: paintLive
+        }).catch(() => paintLive()).finally(() => {
+            refreshBtn.disabled = false;
+            previewBtn.disabled = !isValid(ctx.state);
+            publishDemo(ctx);
+            ctx.showToast('Demo actualizada com cores, logo e fotos.');
+            showStatus('Demo actualizada com a identidade actual.', 'ok');
+        });
     });
     const zipBtn = createWebsiteZipButton(ctx, {
         className: 'btn-secondary',

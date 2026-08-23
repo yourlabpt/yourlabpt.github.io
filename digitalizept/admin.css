@@ -8,6 +8,13 @@
     --admin-bg: #f4f1ea;
     --admin-accent: #1b1b1b;
 
+    --surface-color: var(--admin-surface);
+    --surface-muted: var(--admin-bg);
+    --border-color: var(--admin-border);
+    --text-color: var(--admin-ink);
+    --muted-color: var(--admin-muted);
+    --accent-strong: var(--admin-ink);
+
     background: var(--admin-bg);
     color: var(--admin-ink);
     min-height: 100vh;
