@@ -271,7 +271,7 @@ export function createWizard({ onUnauthorized, showToast }) {
             const leaving = STEPS[state.step];
             if (leaving === dataStep || leaving === diagnosticoStep || leaving === identityStep
                 || leaving === demoStep || leaving === servicesStep) {
-                try { await saveDraftLead(state, { update, onUnauthorized, showToast }); }
+                try { await saveDraftLead(state, { update, onUnauthorized, showToast, getDealEpoch }); }
                 catch (_) { /* a missed draft must not block the visit */ }
             }
             state.step += 1;

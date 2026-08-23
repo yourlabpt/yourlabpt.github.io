@@ -2232,8 +2232,9 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     .run(JSON.stringify(body.wizard), leadId);
             }
             digitalizeptLogEvento(db, 'lead', leadId, 'rascunho', { nome });
+            return leadId;
         });
-        persist();
+        leadId = persist();
         scheduleLeadGeocode(leadId);
         return res.json({ ok: true, leadId });
     } catch (err) {
@@ -4016,9 +4017,18 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
                     leadId, cleanText(businessType.id, 80), cleanText(dados.nome_negocio, 200),
                     morada, cidade, cleanText(dados.telefone, 60), cleanText(dados.whatsapp, 60),
                     JSON.stringify(demo), JSON.stringify(body.identidade || {}), slug, demoHtml, now);
+                const { obrigatorios, opcionais } = splitDados(dados, businessType);
+                db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                    VALUES (?, ?, ?, ?, ?)`).run(
+                    crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
             }
+            digitalizeptLogEvento(db, 'lead', leadId, 'rascunho', {
+                nome: cleanText(dados.nome_negocio, 200),
+                origem: 'demo'
+            });
+            return leadId;
         });
-        persist();
+        leadId = persist();
         scheduleLeadGeocode(leadId);
         try {
             writeDemoFolder({

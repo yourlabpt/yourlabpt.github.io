@@ -45,6 +45,7 @@ describe('digitalizept lead isolation', () => {
         assert.equal(reusableLeadId(thai, 'Escondidinho Barreiro', 'Barreiro'), '');
         assert.equal(reusableLeadId(thai, 'Thai Golden', 'Lisboa'), 'lead-thai');
         assert.equal(reusableLeadId(null, 'Escondidinho', 'Barreiro'), '');
+        assert.equal(reusableLeadId({ id: 'lead-stub', nome: '' }, 'Escondidinho Barreiro', 'Barreiro'), 'lead-stub');
     });
 
     it('keeps the existing demo slug only for the same shop', () => {

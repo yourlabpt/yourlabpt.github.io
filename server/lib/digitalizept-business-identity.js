@@ -46,8 +46,12 @@ function sameBusinessName(a, b, { ignore = [] } = {}) {
 
 function reusableLeadId(existing, incomingNome, cidade) {
     if (!existing || !existing.id) return '';
-    if (!sameBusinessName(existing.nome, incomingNome, { ignore: [cidade] })) return '';
-    return existing.id;
+    const stored = String(existing.nome || '').trim();
+    const incoming = String(incomingNome || '').trim();
+    // A stub or a save that still has no name is this lead — fill it, don't fork.
+    if (!stored || !incoming) return existing.id;
+    if (sameBusinessName(stored, incoming, { ignore: [cidade] })) return existing.id;
+    return '';
 }
 
 function slugOwnedByOtherLead(db, slug, leadId) {

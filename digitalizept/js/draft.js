@@ -1,6 +1,6 @@
 import { apiRequest } from './api.js';
 import { getToken } from './auth.js';
-import { bindLeadToNome, detachLeadIfBusinessChanged } from './demo/business-identity.js';
+import { bindLeadToNome } from './demo/business-identity.js';
 
 function wizardSnapshot(state) {
     const d = state.data || {};
@@ -38,18 +38,15 @@ function wizardSnapshot(state) {
 }
 
 export async function saveDraftLead(state, ctx) {
-    const dados = state.data.dados || {};
+    const dados = (state && state.data && state.data.dados) || {};
     if (!dados.nome_negocio) return null;
-    const detached = detachLeadIfBusinessChanged(state);
-    if (detached && ctx && typeof ctx.showToast === 'function') {
-        ctx.showToast('Nome diferente — a gravar como negócio novo. O lead anterior não foi mexido.');
-    }
     const epoch = ctx && typeof ctx.getDealEpoch === 'function' ? ctx.getDealEpoch() : null;
+    const sentId = (state.data && state.data.leadId) || '';
     const { response, data } = await apiRequest('/api/digitalizept/leads', {
         method: 'POST',
         token: getToken(),
         body: {
-            leadId: state.data.leadId || '',
+            leadId: sentId,
             businessType: {
                 id: state.data.businessType && state.data.businessType.id,
                 nome: state.data.businessType && state.data.businessType.nome
@@ -62,10 +59,18 @@ export async function saveDraftLead(state, ctx) {
         if (ctx && ctx.onUnauthorized) ctx.onUnauthorized();
         return null;
     }
-    if (!response.ok || !data.leadId) return null;
-    if (epoch != null && ctx.getDealEpoch() !== epoch) return data.leadId;
+    if (!response.ok || !data.leadId) {
+        if (ctx && typeof ctx.showToast === 'function') {
+            ctx.showToast((data && data.error) || 'Não foi possível guardar o lead.', true);
+        }
+        return null;
+    }
+    if (epoch != null && ctx.getDealEpoch && ctx.getDealEpoch() !== epoch) return data.leadId;
     if (ctx && typeof ctx.update === 'function') {
         ctx.update(bindLeadToNome({ leadId: data.leadId }, dados.nome_negocio), epoch);
+    }
+    if (sentId && data.leadId !== sentId && ctx && typeof ctx.showToast === 'function') {
+        ctx.showToast('Nome diferente — gravado como negócio novo. O lead anterior não foi mexido.');
     }
     return data.leadId;
 }

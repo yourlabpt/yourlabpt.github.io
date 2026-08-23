@@ -40,7 +40,7 @@ import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
 import { fetchConfig } from '../settings.js';
 import { renderFollowupShare } from '../demo/followup-ui.js';
-import { bindLeadToNome, detachLeadIfBusinessChanged } from '../demo/business-identity.js';
+import { bindLeadToNome } from '../demo/business-identity.js';
 import { currentSubstep, renderAsk } from '../substep.js';
 import { scheduleSaveDraftLead } from '../draft.js';
 
@@ -86,16 +86,16 @@ function copyText(ctx, text, okMessage) {
 async function publishDemo(ctx) {
     const epoch = ctx.getDealEpoch ? ctx.getDealEpoch() : null;
     try {
-        detachLeadIfBusinessChanged(ctx.state);
         const demo = ctx.state.data.demo;
         const demoHtml = ctx.state.data.demoHtml || '';
         if ((!demo || !demo.hero || !demo.hero.titulo) && !demoHtml) return '';
         const nome = (ctx.state.data.dados && ctx.state.data.dados.nome_negocio) || '';
+        const sentId = ctx.state.data.leadId || '';
         const { response, data } = await apiRequest('/api/digitalizept/demos', {
             method: 'POST',
             token: getToken(),
             body: {
-                leadId: ctx.state.data.leadId || '',
+                leadId: sentId,
                 businessType: ctx.state.data.businessType,
                 dados: ctx.state.data.dados,
                 identidade: ctx.state.data.identidade,
@@ -112,10 +112,20 @@ async function publishDemo(ctx) {
                 leadId: data.leadId || ctx.state.data.leadId,
                 demoUrl: data.url
             }, nome), epoch);
+            if (sentId && data.leadId && data.leadId !== sentId) {
+                ctx.showToast('Nome diferente — gravado como negócio novo. O lead anterior não foi mexido.');
+            }
             scheduleSaveDraftLead(ctx.state, ctx);
             return data.url;
         }
-    } catch (_) { /* publishing is best-effort during the visit */ }
+        if (ctx && typeof ctx.showToast === 'function') {
+            ctx.showToast((data && data.error) || 'Não foi possível guardar a demonstração.', true);
+        }
+    } catch (_) {
+        if (ctx && typeof ctx.showToast === 'function') {
+            ctx.showToast('Não foi possível guardar a demonstração.', true);
+        }
+    }
     return '';
 }
 
