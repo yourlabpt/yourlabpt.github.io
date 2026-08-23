@@ -104,9 +104,7 @@ const requireAdmin = adminAuth.requireAdmin;
 
 // Digitalize Portugal — sales app master key. Separate from ADMIN_PASSWORD on purpose:
 // this key gets shared with whoever is out selling, admin access does not.
-const DIGITALIZEPT_KEY = process.env.DIGITALIZEPT_KEY
-    || process.env.ADMIN_PASSWORD
-    || 'digitalizept-key';
+const DIGITALIZEPT_KEY = process.env.DIGITALIZEPT_KEY || 'digitalizept-key';
 if (process.env.NODE_ENV === 'production' && DIGITALIZEPT_KEY === 'digitalizept-key') {
     throw new Error('DIGITALIZEPT_KEY must be set to a non-default value in production.');
 }
@@ -118,6 +116,19 @@ const digitalizeptAuth = createAdminAuth({
     tokenTtlMs: 12 * 60 * 60 * 1000
 });
 const requireDigitalizept = digitalizeptAuth.requireAdmin;
+
+function isDigitalizeptPassword(input) {
+    if (!input) return false;
+    if (digitalizeptAuth.validatePassword(input)) return true;
+    const adminKey = process.env.ADMIN_PASSWORD || '';
+    return Boolean(adminKey) && input === adminKey;
+}
+
+function clientIp(req) {
+    const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+    if (cf) return cf;
+    return String(req.ip || req.socket.remoteAddress || 'unknown');
+}
 
 // IVA regime for Digitalize Portugal. A fraction, not a percentage. Set to 0 for
 // the art. 53.o isencao regime: no IVA is charged and the contract says so.
@@ -1715,13 +1726,13 @@ const digitalizeptDomainLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 
 const digitalizeptVisualLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
 
 app.post('/api/digitalizept/login', (req, res) => {
-    const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
-    if (digitalizeptLoginLimiter.isLimited(ip)) {
-        res.setHeader('retry-after', '900');
-        return res.status(429).json({ error: 'Demasiadas tentativas. Espere alguns minutos.' });
-    }
+    const ip = clientIp(req);
     const key = cleanText(req.body && req.body.password, 300);
-    if (!digitalizeptAuth.validatePassword(key)) {
+    if (!isDigitalizeptPassword(key)) {
+        if (digitalizeptLoginLimiter.isLimited(ip)) {
+            res.setHeader('retry-after', '900');
+            return res.status(429).json({ error: 'Demasiadas tentativas. Espere alguns minutos.' });
+        }
         return res.status(401).json({ error: 'Invalid key.' });
     }
     const token = digitalizeptAuth.issueToken();
