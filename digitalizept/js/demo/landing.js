@@ -13,6 +13,7 @@ import {
     trustChips,
     whatsappHref
 } from './boilerplate.js';
+import { applyLogoMatStyle, sampleLogoMat } from './logo-mat.js';
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -183,6 +184,23 @@ function buildTopbar(dados, identidade, businessType) {
         bar.appendChild(nav);
     }
     return bar;
+}
+
+function paintLandingLogoMat(root, identidade) {
+    const logo = identidade && identidade.logo;
+    const url = logo && logo.tipo === 'upload' && logo.dataUrl;
+    const topbar = root.querySelector('.dpl-topbar');
+    if (!topbar || !url) return;
+    const paint = (mat) => {
+        applyLogoMatStyle(topbar, mat);
+        applyLogoMatStyle(root, mat);
+        if (mat && logo) logo.mat = mat;
+    };
+    if (logo.mat) {
+        paint(logo.mat);
+        return;
+    }
+    sampleLogoMat(url).then(paint);
 }
 
 function heroCtas(businessType, demo, dados) {
@@ -559,6 +577,7 @@ export function renderLanding(state) {
     root.style.setProperty('--l-secundaria', cores.secundaria || '#7a8a99');
 
     root.appendChild(buildTopbar(dados, identidade, businessType));
+    paintLandingLogoMat(root, identidade);
     root.addEventListener('click', (event) => {
         const a = event.target.closest && event.target.closest('a[href^="#"]');
         if (!a || !root.contains(a)) return;

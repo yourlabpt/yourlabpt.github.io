@@ -420,7 +420,7 @@ export function buildStandaloneWebsiteFiles(state, { landingCss = '' } = {}) {
     const fileIdentidade = {
         ...identidade,
         logo: logoHref
-            ? { tipo: 'upload', dataUrl: logoHref }
+            ? { tipo: 'upload', dataUrl: logoHref, mat: identidade.logo && identidade.logo.mat }
             : (identidade.logo && identidade.logo.tipo !== 'upload'
                 ? identidade.logo
                 : { tipo: 'nenhum' }),

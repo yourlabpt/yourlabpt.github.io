@@ -170,6 +170,7 @@ describe('digitalizept no-image boilerplates', async () => {
             assert.match(html, /lang="pt-PT"/);
             assert.match(html, /data-dp-boilerplate="/);
             assert.match(html, /data-dp-photo|dpl-topbar-brand/);
+            assert.doesNotMatch(html, /dpl-topbar-logo|data-dp-logo/);
             assert.doesNotMatch(html, /lorem/i);
             assert.match(html, /<h1[\s>]/);
             assert.match(html, /<meta name="description"/);
@@ -232,13 +233,34 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.match(out, /https:\/\/cdn\.example\/loja\.jpg/);
     });
 
+    it('does not put the uploaded logo on Sem fotos boilerplates', async () => {
+        const htmlMod = await import(pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/html.js')).href);
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        const out = htmlMod.applyIdentityToHtml(html, {
+            logo: { tipo: 'upload', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' },
+            cores: { base: '#111111', destaque: '#cc0000', secundaria: '#f5f0e6' }
+        }, { nome_negocio: 'Casa da Vila' });
+        assert.doesNotMatch(out, /dpl-topbar-logo/);
+        assert.doesNotMatch(out, /data-dp-logo/);
+        assert.match(out, /dpl-topbar-brand/);
+    });
+
     it('keeps identity photo hooks that applyIdentityToHtml can fill', () => {
         const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
         assert.match(html, /data-dp-photo="0"/);
-        assert.match(html, /data-dp-logo/);
+        assert.doesNotMatch(html, /dpl-topbar-logo|data-dp-logo/);
         assert.match(html, /class="dpl-visual/);
         assert.equal(visual.isBoilerplateHtml(html), true);
         assert.match(visual.stripDemoSwitch('<div class="dpl-demo-switch"><button>x</button></div><p>ok</p>'), />ok</);
+    });
+
+    it('labels the client switch as Demonstração / Opção 1 / Opção 2', () => {
+        const src = fs.readFileSync(path.join(__dirname, '../../digitalizept/js/demo/demo-visual.js'), 'utf8');
+        assert.match(src, /caption\.textContent = 'Demonstração'/);
+        assert.match(src, /\[VISUAL_FOTOS, 'Opção 1'\]/);
+        assert.match(src, /\[VISUAL_SEM_FOTOS, 'Opção 2'\]/);
+        assert.doesNotMatch(src, /\[VISUAL_FOTOS, 'Com fotos'\]/);
+        assert.doesNotMatch(src, /\[VISUAL_SEM_FOTOS, 'Sem fotos'\]/);
     });
 
     it('picks readable ink and on-accent colours for WCAG AA', async () => {

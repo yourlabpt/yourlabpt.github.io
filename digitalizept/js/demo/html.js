@@ -1,5 +1,6 @@
 import { LIVRO_RECLAMACOES_URL, renderLanding } from './landing.js';
 import { contrastTokens } from './colors.js';
+import { applyLogoMatStyle, injectLogoMatRuntime } from './logo-mat.js';
 import { INPAGE_NAV_SCRIPT } from './inpage-nav.js';
 
 export const DEMO_HTML_MAX = 900000;
@@ -372,37 +373,64 @@ img[data-dp-injected-logo] {
 }`.trim();
 }
 
+function stripBoilerplateLogos(doc) {
+    doc.querySelectorAll('.dpl-topbar-logo, img[data-dp-logo], .dpl-hero-logo, img[data-dp-injected-logo]')
+        .forEach((img) => img.remove());
+}
+
+function paintStoredLogoMat(doc, logo) {
+    const mat = logo && logo.mat;
+    const topbar = doc.querySelector('.dpl-topbar');
+    const landing = doc.querySelector('.dp-landing');
+    if (mat) {
+        applyLogoMatStyle(topbar, mat);
+        applyLogoMatStyle(landing || doc.documentElement, mat);
+        return;
+    }
+    injectLogoMatRuntime(doc);
+}
+
 function applyLogo(doc, identidade, dados) {
+    if (isBoilerplateDoc(doc)) {
+        stripBoilerplateLogos(doc);
+        return;
+    }
     const logo = (identidade && identidade.logo) || {};
     const url = logo.tipo === 'upload' && logo.dataUrl ? logo.dataUrl : '';
     const alt = (dados && dados.nome_negocio) || 'Logótipo';
 
-    if (url) {
+    if (!url) {
         doc.querySelectorAll('.dpl-topbar-logo, img[data-dp-logo]').forEach((img) => {
-            img.src = url;
-            img.alt = alt;
+            if (!img.getAttribute('src')) img.remove();
         });
-        const topbar = doc.querySelector('.dpl-topbar');
-        if (topbar && !topbar.querySelector('.dpl-topbar-logo')) {
-            const img = doc.createElement('img');
-            img.className = 'dpl-topbar-logo';
-            img.src = url;
-            img.alt = alt;
-            const brand = topbar.querySelector('.dpl-topbar-brand');
-            if (brand) brand.replaceWith(img);
-            else topbar.insertBefore(img, topbar.firstChild);
-        }
-        doc.querySelectorAll('.dpl-hero-logo').forEach((img) => {
-            const inner = img.closest('.dpl-hero-inner');
-            img.remove();
-            if (inner && !inner.querySelector('.dpl-hero-name')) {
-                const name = doc.createElement('div');
-                name.className = 'dpl-hero-name';
-                name.textContent = alt;
-                inner.insertBefore(name, inner.querySelector('.dpl-hero-title') || inner.firstChild);
-            }
-        });
+        return;
     }
+
+    doc.querySelectorAll('.dpl-topbar-logo, img[data-dp-logo]').forEach((img) => {
+        img.src = url;
+        img.alt = alt;
+    });
+    const topbar = doc.querySelector('.dpl-topbar');
+    if (topbar && !topbar.querySelector('.dpl-topbar-logo')) {
+        const img = doc.createElement('img');
+        img.className = 'dpl-topbar-logo';
+        img.src = url;
+        img.alt = alt;
+        const brand = topbar.querySelector('.dpl-topbar-brand');
+        if (brand) brand.replaceWith(img);
+        else topbar.insertBefore(img, topbar.firstChild);
+    }
+    doc.querySelectorAll('.dpl-hero-logo').forEach((img) => {
+        const inner = img.closest('.dpl-hero-inner');
+        img.remove();
+        if (inner && !inner.querySelector('.dpl-hero-name')) {
+            const name = doc.createElement('div');
+            name.className = 'dpl-hero-name';
+            name.textContent = alt;
+            inner.insertBefore(name, inner.querySelector('.dpl-hero-title') || inner.firstChild);
+        }
+    });
+    paintStoredLogoMat(doc, logo);
 
     const brand = doc.querySelector('.brand, header .logo, .topbar .brand');
     if (!brand) return;

@@ -174,7 +174,6 @@ function header({ brand, links, cta, extra = '', centered = false }) {
     const topbarClass = centered ? 'dpl-topbar dpl-hero--centered' : 'dpl-topbar';
     return `<header class="${topbarClass}">
     <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">${brand}</a>
-    <img class="dpl-topbar-logo" data-dp-logo="" alt="">
     <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
     <nav id="menu" class="dpl-nav" aria-label="Secções">
             ${nav}

@@ -112,9 +112,13 @@ h3,
     gap: 12px;
     min-height: 64px;
     padding: 10px clamp(1.25rem, 5vw, 4rem);
-    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    background: var(--bg);
     border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-    backdrop-filter: blur(10px);
+}
+
+[data-dp-boilerplate] .dpl-topbar-logo,
+[data-dp-boilerplate] img[data-dp-logo] {
+    display: none !important;
 }
 
 .dpl-topbar-brand {
@@ -400,6 +404,7 @@ h3,
     transform: translateX(-50%);
     z-index: 40;
     display: flex;
+    align-items: center;
     min-height: 48px;
     padding: 4px;
     border-radius: 999px;
@@ -407,10 +412,18 @@ h3,
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
+.dpl-demo-switch-label {
+    padding: 0 6px 0 14px;
+    color: color-mix(in srgb, #f4f1ea 70%, transparent);
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
 .dpl-demo-switch button {
     min-height: 44px;
-    min-width: 118px;
-    padding: 0 16px;
+    min-width: 92px;
+    padding: 0 14px;
     border: 0;
     border-radius: 999px;
     background: transparent;
@@ -418,6 +431,18 @@ h3,
     font: inherit;
     font-size: 0.92rem;
     cursor: pointer;
+}
+
+@media (max-width: 360px) {
+    .dpl-demo-switch-label {
+        padding: 0 4px 0 10px;
+        font-size: 0.7rem;
+    }
+
+    .dpl-demo-switch button {
+        min-width: 78px;
+        padding: 0 10px;
+    }
 }
 
 .dpl-demo-switch button[aria-pressed="true"] {

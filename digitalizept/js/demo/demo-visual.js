@@ -205,15 +205,20 @@ export function mountDemoSwitch(host, { visual, onChange } = {}) {
         bar = document.createElement('div');
         bar.className = 'dpl-demo-switch';
         bar.setAttribute('role', 'group');
-        bar.setAttribute('aria-label', 'Versão da demonstração');
+        bar.setAttribute('aria-label', 'Demonstração');
+        const caption = document.createElement('span');
+        caption.className = 'dpl-demo-switch-label';
+        caption.textContent = 'Demonstração';
+        bar.appendChild(caption);
         [
-            [VISUAL_FOTOS, 'Com fotos'],
-            [VISUAL_SEM_FOTOS, 'Sem fotos']
+            [VISUAL_FOTOS, 'Opção 1'],
+            [VISUAL_SEM_FOTOS, 'Opção 2']
         ].forEach(([value, label]) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.dataset.visual = value;
             btn.textContent = label;
+            btn.setAttribute('aria-label', `Demonstração, ${label.toLowerCase()}`);
             btn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();

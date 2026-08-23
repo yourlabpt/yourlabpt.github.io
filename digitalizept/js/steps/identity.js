@@ -2,6 +2,7 @@
 
 import { currentSubstep, renderAsk, scheduleGoNext } from '../substep.js';
 import { applyCustomCores, buildColorPrompt, parseCores } from '../demo/colors.js';
+import { sampleLogoMat } from '../demo/logo-mat.js';
 
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
 const MAX_FOTOS = 6;
@@ -296,7 +297,16 @@ function renderLogo(body, ctx, identidade, persist) {
 
     function renderPreview() {
         preview.innerHTML = '';
+        preview.style.removeProperty('--logo-mat');
         if (identidade.logo.tipo === 'upload' && identidade.logo.dataUrl) {
+            if (identidade.logo.mat) preview.style.setProperty('--logo-mat', identidade.logo.mat);
+            else {
+                sampleLogoMat(identidade.logo.dataUrl).then((mat) => {
+                    if (!mat) return;
+                    identidade.logo.mat = mat;
+                    preview.style.setProperty('--logo-mat', mat);
+                });
+            }
             const img = document.createElement('img');
             img.src = identidade.logo.dataUrl;
             img.alt = 'Logótipo';
@@ -317,7 +327,8 @@ function renderLogo(body, ctx, identidade, persist) {
         if (!file) return;
         try {
             const dataUrl = await fileToDataUrl(file, 512);
-            identidade.logo = { tipo: 'upload', dataUrl, nome: file.name };
+            const mat = await sampleLogoMat(dataUrl);
+            identidade.logo = { tipo: 'upload', dataUrl, nome: file.name, mat };
             persist();
             renderPreview();
         } catch (_) {
