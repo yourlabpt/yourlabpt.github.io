@@ -6,7 +6,9 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #2d6a64; --accent2-ink: #17171a;
+    --accent-solid: #2d6a64;
     --on-accent: #f4f1ea; --on-accent-2: #f4f1ea; --ink-muted: #49494b;
-    /* --accent is the token to swap per client */
+    
 }
 

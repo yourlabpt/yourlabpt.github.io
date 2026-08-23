@@ -159,7 +159,7 @@ function openPreview(state, ctx, { mode } = {}) {
         overlay.remove();
         document.body.style.overflow = previousOverflow;
         document.removeEventListener('keydown', onKey);
-        document.body.classList.remove('dpl-has-switch');
+        overlay.classList.remove('dpl-has-switch');
     };
     const onKey = (event) => {
         if (event.key === 'Escape') closeOverlay();

@@ -24,27 +24,30 @@
             <a class="dpl-nav-link" href="#dpl-servicos">Serviços</a>
             <a class="dpl-nav-link" href="#dpl-tecidos">Tecidos</a>
             <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
-            <a class="dpl-btn" href="#dpl-contactos">Pedir orçamento</a>
+            <a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Pedir orçamento</a>
     </nav>
     
 </header>
 <main id="topo">
 <section class="dpl-hero dpl-weave">
     <div class="dpl-wrap">
-        <h1>Tecidos que aguentam a casa.</h1>
-        <p class="dpl-hero-sub">Oficina em {{cidade}}. Estofos, cortinas e o conserto que adia a compra nova.</p>
-        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos">Pedir orçamento</a></div>
+        <h1 data-dp-copy="hero.titulo"></h1>
+        <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp"></a></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
-        <h2 class="dpl-h2">Serviços</h2>
-        <ol class="dpl-menu-list">
-            <li class="dpl-menu-item"><span class="dpl-menu-num">01</span><div><strong>Estofo de sofás</strong><p>Estrutura revista, tecido novo.</p></div></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">02</span><div><strong>Cadeiras</strong><p>O conjunto da sala, cadeira a cadeira.</p></div></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">03</span><div><strong>Cortinados</strong><p>Medida da janela, queda certa.</p></div></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">04</span><div><strong>Reparações</strong><p>Uma costura, um molas, um braço.</p></div></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">05</span><div><strong>Tecidos à medida</strong><p>Escolha na parede de amostras.</p></div></li>
+        <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
+        <ol class="dpl-menu-list" data-dp-list="servicos">
+            <li class="dpl-menu-item" data-dp-item hidden>
+                <span class="dpl-menu-num" data-dp-copy="servico.n"></span>
+                <div>
+                    <strong data-dp-copy="servico.nome"></strong>
+                    <p data-dp-copy="servico.descricao"></p>
+                </div>
+                <span class="dpl-menu-price" data-dp-copy="servico.preco"></span>
+            </li>
         </ol>
     </div>
 </section>
@@ -57,38 +60,37 @@
             <div><div class="dpl-swatch" style="background:#4a6a4a"></div><p>Verdes</p></div>
             <div><div class="dpl-swatch" style="background:#2C4A4A"></div><p>Azuis</p></div>
         </div>
-        <p class="dpl-lede" style="margin-top:1rem"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 8a4 4 0 010 8"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20l8-8"/><path d="M14 8l2-2 4 4-2 2z"/><path d="M9 15c2 2 4 2 6 0"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12v6h16v-6"/><path d="M3 12h4v-2a3 3 0 016 0h2a3 3 0 016 0v2h0"/><path d="M6 18v2M18 18v2"/></svg></span> Amostras na oficina — leve o almofadão se quiser comparar.</p>
+        <p class="dpl-lede" style="margin-top:1rem"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 8a4 4 0 010 8"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20l8-8"/><path d="M14 8l2-2 4 4-2 2z"/><path d="M9 15c2 2 4 2 6 0"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12v6h16v-6"/><path d="M3 12h4v-2a3 3 0 016 0h2a3 3 0 016 0v2h0"/><path d="M6 18v2M18 18v2"/></svg></span></p>
     </div>
 </section>
 <section class="dpl-section" id="dpl-sobre">
     <div class="dpl-wrap dpl-grid dpl-grid-2">
         <div>
-            <h2 class="dpl-h2">O ofício</h2>
-            <p>Desmanchar, reforçar, voltar a vestir. O trabalho demora o tempo da costura, não o do catálogo.</p>
+            <h2 class="dpl-h2" data-dp-label="sobre">O ofício</h2>
             <p>{{sobre}}</p>
+            
         </div>
         <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 4 / 3" data-fallback-icon="TA"></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-avaliacoes">
-    <div class="dpl-wrap dpl-grid dpl-grid-2">
-        <blockquote class="dpl-quote"><p>O sofá parece outro e ficou o mesmo.</p><footer>Cliente</footer></blockquote>
-        <blockquote class="dpl-quote"><p>Orçamento claro, prazo cumprido.</p><footer>Cliente</footer></blockquote>
+    <div class="dpl-wrap dpl-grid dpl-grid-2" data-dp-list="avaliacoes">
+        <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
     </div>
 </section>
 <section class="dpl-section" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
-            <h2 class="dpl-h2">Onde estamos</h2>
+            <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
             <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
         </div>
-        <p><a class="dpl-btn" href="#dpl-contactos">Pedir orçamento</a></p>
+        <p><a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Pedir orçamento</a></p>
     </div>
 </section>
 <section class="dpl-cta-band" id="dpl-cta">
     <div class="dpl-wrap">
         <h2 class="dpl-h2">Peça o orçamento</h2>
-        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">WhatsApp</a></p>
+        <p class="dpl-cta-band-action"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">WhatsApp</a></p>
     </div>
 </section>
 </main>

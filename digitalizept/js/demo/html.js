@@ -315,6 +315,9 @@ function applyCores(doc, cores) {
   ${inkLines}
   --accent: ${readable.accent};
   --accent-2: ${readable.accent2};
+  --accent-ink: ${readable.accentInk};
+  --accent2-ink: ${readable.accent2Ink};
+  --accent-solid: ${readable.accentSolid};
   --on-accent: ${readable.onAccent};
   --on-accent-2: ${readable.onAccent2};
 }

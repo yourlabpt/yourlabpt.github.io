@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tudo para a casa e a obra</title>
-<meta name="description" content="Ferramentas, tintas, canalização e o conselho de quem conhece o material.">
-<meta property="og:title" content="Tudo para a casa e a obra">
-<meta property="og:description" content="Ferramentas, tintas, canalização e o conselho de quem conhece o material.">
+<title>Tudo para a sua casa e obra</title>
+<meta name="description" content="Ferramentas, tintas e o conselho de quem conhece a peça.">
+<meta property="og:title" content="Tudo para a sua casa e obra">
+<meta property="og:description" content="Ferramentas, tintas e o conselho de quem conhece a peça.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/dpl-base.css">
 <link rel="stylesheet" href="css/drogaria-ferragens.css">
 </head>
@@ -26,60 +26,58 @@
             <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
             
     </nav>
-    <a class="dpl-nav-link" href="#dpl-contactos" data-dp-copy="telefone">{{telefone}}</a>
+    <a class="dpl-nav-link" href="#dpl-contactos" data-dp-copy="telefone" data-dp-href="tel">{{telefone}}</a>
 </header>
 <main id="topo">
 <section class="dpl-hero">
     <div class="dpl-wrap">
-        <h1>Tudo para a sua casa e obra, num só lugar.</h1>
-        <p class="dpl-hero-sub">Em {{cidade}}. Pergunte — sabemos o que encaixa.</p>
-        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-servicos">Ver categorias</a></div>
+        
+        <h1 data-dp-copy="hero.titulo"></h1>
+        <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp"></a></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
-        <h2 class="dpl-h2">Categorias</h2>
-        <div class="dpl-grid dpl-grid-4" style="margin-top:2rem">
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 015 5L15 16l-4-4 4.7-4.7z"/><path d="M8 13l-5 5 3 3 5-5"/></svg></span><strong>Ferramentas</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h10v4H4z"/><path d="M14 8h3v8H8v-3"/><path d="M8 16v3"/></svg></span><strong>Tintas</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 10h8v4H4z"/><path d="M12 12h8"/><path d="M18 9v6"/></svg></span><strong>Canalização</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7v4M15 7v4"/><path d="M7 11h10v3a5 5 0 01-10 0v-3z"/><path d="M12 19v3"/></svg></span><strong>Eletricidade</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21V10"/><path d="M12 14c-4 0-6-3-6-6 4 0 6 3 6 6z"/><path d="M12 12c4 0 6-3 6-6-4 0-6 3-6 6z"/></svg></span><strong>Jardim</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v13"/><path d="M8 21h8"/><path d="M7 8h10l-1-5H8z"/></svg></span><strong>Limpeza</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg></span><strong>Segurança</strong></div>
-            <div class="dpl-tile"><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span><strong>Diversos</strong></div>
-        </div>
+        <h2 class="dpl-h2" data-dp-label="servicos">Categorias</h2>
+        <ul class="dpl-grid dpl-grid-4" data-dp-list="servicos" style="margin-top:2rem">
+            <li class="dpl-tile" data-dp-item hidden>
+                <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span>
+                <h3 data-dp-copy="servico.nome"></h3>
+                <p data-dp-copy="servico.descricao"></p>
+            </li>
+        </ul>
     </div>
 </section>
 <section class="dpl-section" id="dpl-sobre">
     <div class="dpl-wrap">
-        <h2 class="dpl-h2">Serviços de balcão</h2>
-        <dl class="dpl-spec dpl-card">
-            <dt>Corte de chaves</dt><dd>Enquanto espera</dd>
-            <dt>Mistura de tinta</dt><dd>À medida</dd>
-            <dt>Aluguer de ferramentas</dt><dd>Ao dia</dd>
-        </dl>
+        <h2 class="dpl-h2" data-dp-label="sobre">Serviços de balcão</h2>
+        <p>{{sobre}}</p>
+        <div style="margin-top:1.5rem"><ul class="dpl-chips" data-dp-list="trust">
+            <li class="dpl-badge" data-dp-item hidden data-dp-copy="trust.texto"></li>
+        </ul><ul class="dpl-chips" data-dp-list="destaques">
+            <li class="dpl-price-tag" data-dp-item hidden data-dp-copy="destaque.texto"></li>
+        </ul></div>
     </div>
 </section>
-<section class="dpl-cta-band">
-    <div class="dpl-wrap dpl-grid dpl-grid-2">
-        <div><p class="dpl-stat">30</p><p class="dpl-stat-label">anos ao serviço da rua</p></div>
-        <div><p class="dpl-stat">80+</p><p class="dpl-stat-label">marcas na prateleira</p></div>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2" data-dp-list="avaliacoes">
+        <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
     </div>
 </section>
 <section class="dpl-section" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
-            <h2 class="dpl-h2">Onde estamos</h2>
+            <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
             <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
         </div>
-        <p><a class="dpl-btn" href="#dpl-contactos">Telefonar</a></p>
+        <p><a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Telefonar</a></p>
     </div>
 </section>
 <section class="dpl-cta-band" id="dpl-cta">
     <div class="dpl-wrap">
         <h2 class="dpl-h2">Precisa de uma peça hoje?</h2>
-        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Ligar agora</a></p>
+        <p class="dpl-cta-band-action"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="tel">Ligar agora</a></p>
     </div>
 </section>
 </main>

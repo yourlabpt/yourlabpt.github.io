@@ -24,12 +24,32 @@ export function interpolate(template, dados = {}, businessType = {}) {
         .replace(/\{tipo\}/g, businessType.nome || 'negócio');
 }
 
+export function digitsOnly(value) {
+    return String(value || '').replace(/\D/g, '');
+}
+
+export function waNumber(whatsapp) {
+    const d = digitsOnly(whatsapp);
+    if (!d) return '';
+    return d.length === 9 ? `351${d}` : d;
+}
+
 export function mapsHref(dados) {
     const direct = String((dados && dados.maps_url) || '').trim();
     if (/^https?:\/\//i.test(direct)) return direct;
     const query = [dados && dados.morada, dados && dados.cidade].filter(Boolean).join(', ');
     if (!query) return '';
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+export function whatsappHref(dados) {
+    const wa = waNumber((dados && (dados.whatsapp || dados.telefone)) || '');
+    return wa ? `https://wa.me/${wa}` : '';
+}
+
+export function telHref(dados) {
+    const d = digitsOnly(dados && dados.telefone);
+    return d ? `tel:${d}` : '';
 }
 
 export function instagramHref(value) {

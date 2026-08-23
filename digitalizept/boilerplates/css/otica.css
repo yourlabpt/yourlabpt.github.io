@@ -6,8 +6,10 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #1b3a5c; --accent2-ink: #D73B0E;
+    --accent-solid: #1b3a5c;
     --on-accent: #f4f1ea; --on-accent-2: #17171a; --ink-muted: #4a5365;
     
 }
-.dpl-swatch-wrap { text-align:center; } .dpl-swatch { margin: 0 auto 0.6rem; width: 72px; border-radius: 50%; }
+.dpl-swatch { margin: 0 auto 0.6rem; width: 72px; border-radius: 50%; }
 .dpl-hero-art { font-size: 0; }

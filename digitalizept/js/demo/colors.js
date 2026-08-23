@@ -80,6 +80,34 @@ export function mutedInk(ink, bg, { min = 4.5 } = {}) {
     return contrastRatio(mixed, paper) >= min ? mixed : fg;
 }
 
+/** Darken (or lighten on dark paper) until the colour reads as text at WCAG AA. */
+export function accentInk(preferred, bg, { min = 4.5 } = {}) {
+    const paper = normalizeHex(bg) || PAPER_LIGHT;
+    const color = normalizeHex(preferred);
+    if (!color) return INK_DARK;
+    if (contrastRatio(color, paper) >= min) return color;
+    const toward = relativeLuminance(paper) > 0.5 ? INK_DARK : INK_LIGHT;
+    for (let t = 0.05; t <= 1.001; t += 0.05) {
+        const mixed = mixHex(toward, color, t);
+        if (contrastRatio(mixed, paper) >= min) return mixed;
+    }
+    return toward;
+}
+
+/** Darken/lighten a fill until `onFill` text hits AA on it. */
+export function accentSolid(fill, onFill, { min = 4.5 } = {}) {
+    const accent = normalizeHex(fill);
+    const ink = normalizeHex(onFill) || onColor(accent);
+    if (!accent) return INK_DARK;
+    if (contrastRatio(ink, accent) >= min) return accent;
+    const toward = relativeLuminance(ink) > 0.5 ? INK_DARK : INK_LIGHT;
+    for (let t = 0.05; t <= 1.001; t += 0.05) {
+        const mixed = mixHex(toward, accent, t);
+        if (contrastRatio(ink, mixed) >= min) return mixed;
+    }
+    return toward;
+}
+
 /**
  * Tokens for no-image pages after identity re-skin.
  * `--bg` stays the page paper; brand colours become ink/accent only when they still read.
@@ -89,13 +117,18 @@ export function contrastTokens(cores = {}, paperBg) {
     const accent = normalizeHex(cores.destaque) || '#2d6a64';
     const accent2 = normalizeHex(cores.secundaria) || normalizeHex(cores.base) || INK_DARK;
     const ink = readableInk(cores.base, bg);
+    const onAccent = onColor(accent);
+    const onAccent2 = onColor(accent2);
     return {
         bg,
         ink,
         accent,
         accent2,
-        onAccent: onColor(accent),
-        onAccent2: onColor(accent2),
+        accentInk: accentInk(accent, bg),
+        accent2Ink: accentInk(accent2, bg),
+        accentSolid: accentSolid(accent, onAccent),
+        onAccent,
+        onAccent2,
         inkMuted: mutedInk(ink, bg)
     };
 }

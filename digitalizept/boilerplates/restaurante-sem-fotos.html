@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="css/restaurante.css">
 </head>
 <body>
-<header class="dpl-topbar">
+<header class="dpl-topbar dpl-hero--centered">
     <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">O seu restaurante</a>
     <img class="dpl-topbar-logo" data-dp-logo="" alt="">
     <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
@@ -24,57 +24,65 @@
             <a class="dpl-nav-link" href="#dpl-servicos">Menu</a>
             <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
             <a class="dpl-nav-link" href="#dpl-contactos">Reservas</a>
-            <a class="dpl-btn" href="#dpl-contactos">Reservar</a>
+            <a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Reservar</a>
     </nav>
     
 </header>
 <main id="topo">
-<section class="dpl-hero">
+<section class="dpl-hero dpl-hero--centered">
     <div class="dpl-wrap">
-        <h1>A mesa, sem pressa.</h1>
-        <p class="dpl-hero-sub">Cozinha de sala em {{cidade}}. Almoços, jantares e o prato que já conhecem.</p>
-        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos">Reservar</a></div>
+        
+        <h1 data-dp-copy="hero.titulo"></h1>
+        <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp"></a></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-sobre">
     <div class="dpl-wrap dpl-grid dpl-grid-2">
         <div>
-            <h2 class="dpl-h2">A casa</h2>
+            <h2 class="dpl-h2" data-dp-label="sobre">A casa</h2>
             <p>{{sobre}}</p>
-            <p><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3v7M12 3v7M16 3v7M6 10h12v2a6 6 0 01-12 0z"/><path d="M12 18v4"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3h8l-1 8a5 5 0 11-6 0z"/><path d="M12 16v5M9 21h6"/></svg></span> Serviço de sala, sem teatro.</p>
+            <p><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3v7M12 3v7M16 3v7M6 10h12v2a6 6 0 01-12 0z"/><path d="M12 18v4"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3h8l-1 8a5 5 0 11-6 0z"/><path d="M12 16v5M9 21h6"/></svg></span></p>
         </div>
         <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 3 / 4" data-fallback-icon="RE"></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
-        <h2 class="dpl-h2">Menu</h2>
-        <ol class="dpl-menu-list">
-            <li class="dpl-menu-item"><span class="dpl-menu-num">01</span><div><strong style="font-family:var(--font-display);font-style:italic">Entrada da casa</strong><p>Pão, azeite e o que o mercado trouxe de manhã.</p></div><span class="dpl-menu-price">6 €</span></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">02</span><div><strong style="font-family:var(--font-display);font-style:italic">Peixe do dia</strong><p>Grelhado, simples, com legumes da época.</p></div><span class="dpl-menu-price">18 €</span></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">03</span><div><strong style="font-family:var(--font-display);font-style:italic">Arroz de pato</strong><p>O prato que volta à mesa sem se pedir.</p></div><span class="dpl-menu-price">16 €</span></li>
-            <li class="dpl-menu-item"><span class="dpl-menu-num">04</span><div><strong style="font-family:var(--font-display);font-style:italic">Sobremesa</strong><p>Doce de colher ou fruta, conforme o dia.</p></div><span class="dpl-menu-price">6 €</span></li>
+        <h2 class="dpl-h2" data-dp-label="servicos">Menu</h2>
+        <ol class="dpl-menu-list" data-dp-list="servicos">
+            <li class="dpl-menu-item" data-dp-item hidden>
+                <span class="dpl-menu-num" data-dp-copy="servico.n"></span>
+                <div>
+                    <strong style="font-family:var(--font-display);font-style:italic" data-dp-copy="servico.nome"></strong>
+                    <p data-dp-copy="servico.descricao"></p>
+                </div>
+                <span class="dpl-menu-price" data-dp-copy="servico.preco"></span>
+            </li>
         </ol>
+        <div style="margin-top:1.5rem"><ul class="dpl-chips" data-dp-list="destaques">
+            <li class="dpl-price-tag" data-dp-item hidden data-dp-copy="destaque.texto"></li>
+        </ul></div>
     </div>
 </section>
-<section class="dpl-section" style="background:var(--accent-2)">
-    <div class="dpl-wrap">
-        <blockquote class="dpl-quote"><p>Comemos como em casa — só que alguém já pôs a mesa.</p><footer>Cliente da sala</footer></blockquote>
+<section class="dpl-section" id="dpl-avaliacoes">
+    <div class="dpl-wrap dpl-grid dpl-grid-2" data-dp-list="avaliacoes">
+        <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
     </div>
 </section>
 <section class="dpl-section" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
-            <h2 class="dpl-h2">Onde estamos</h2>
+            <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
             <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
         </div>
-        <p><a class="dpl-btn" href="#dpl-contactos">Reservar mesa</a></p>
+        <p><a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Reservar mesa</a></p>
     </div>
 </section>
 <section class="dpl-cta-band" id="dpl-cta">
     <div class="dpl-wrap">
         <h2 class="dpl-h2">Reserve a sua mesa</h2>
-        <p style="margin-top:1.5rem"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos">Reservar / WhatsApp</a></p>
+        <p class="dpl-cta-band-action"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Reservar / WhatsApp</a></p>
     </div>
 </section>
 </main>

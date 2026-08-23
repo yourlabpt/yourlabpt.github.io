@@ -1,12 +1,14 @@
 /** Com fotos / Sem fotos: default from photos, load category boilerplates, persist choice. */
 
 import { applyIdentityToHtml } from './html.js';
-import { interpolate } from './boilerplate.js';
+import { fillBoilerplateCopy, fillBoilerplateFromDemo } from './boilerplate-copy.js';
+import { seedDemoFromType } from './seed.js';
+
+export { fillBoilerplateCopy, fillBoilerplateFromDemo };
 
 export const VISUAL_FOTOS = 'fotos';
 export const VISUAL_SEM_FOTOS = 'sem-fotos';
 
-const BOILERPLATE_ATTR = 'data-dp-boilerplate';
 const cache = new Map();
 
 export function typeSlug(stateOrType) {
@@ -66,78 +68,6 @@ export function isCustomHtml(state) {
     return true;
 }
 
-function escapeText(value) {
-    return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function fillMap() {
-    const dados = arguments[0] || {};
-    const type = arguments[1] || {};
-    const seed = type.demo_seed || {};
-    const nome = dados.nome_negocio || seed.nome_negocio || type.nome || 'O seu negócio';
-    const cidade = dados.cidade || seed.cidade || 'a sua cidade';
-    const morada = dados.morada || 'Rua do Comércio';
-    const horario = dados.horario || 'Seg–Sáb, 9h–19h';
-    const telefone = dados.telefone || dados.whatsapp || '';
-    const whatsapp = dados.whatsapp || dados.telefone || '';
-    const sobre = interpolate(
-        dados.o_que_faz || seed.sobre || '',
-        { ...dados, nome_negocio: nome, cidade },
-        type
-    );
-    const initials = String(nome)
-        .split(/[^\p{L}0-9]+/u)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase() || String((type.icone || 'GE')).slice(0, 2).toUpperCase();
-    return { nome, cidade, morada, horario, telefone, whatsapp, sobre, initials };
-}
-
-export function fillBoilerplateCopy(html, dados, businessType) {
-    const values = fillMap(dados, businessType);
-    let out = String(html || '');
-    const tokens = {
-        nome: values.nome,
-        cidade: values.cidade,
-        morada: values.morada,
-        horario: values.horario,
-        telefone: values.telefone,
-        whatsapp: values.whatsapp,
-        sobre: values.sobre,
-        monogram: values.initials,
-        negocioNome: values.nome
-    };
-    Object.keys(tokens).forEach((key) => {
-        const value = escapeText(tokens[key]);
-        out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-    });
-    if (typeof DOMParser === 'undefined') return out;
-    try {
-        const doc = new DOMParser().parseFromString(out, 'text/html');
-        if (!doc || !doc.documentElement) return out;
-        doc.querySelectorAll('[data-dp-copy]').forEach((node) => {
-            const key = node.getAttribute('data-dp-copy');
-            if (key && tokens[key]) node.textContent = tokens[key];
-        });
-        doc.querySelectorAll('[data-fallback-icon]').forEach((node) => {
-            if (!node.getAttribute('data-fallback-icon')) {
-                node.setAttribute('data-fallback-icon', values.initials);
-            }
-        });
-        const brand = doc.querySelector('.dpl-topbar-brand');
-        if (brand && values.nome) brand.textContent = values.nome;
-        return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
-    } catch (_) {
-        return out;
-    }
-}
-
 async function fetchText(url) {
     const response = await fetch(url, { cache: 'force-cache' });
     if (!response.ok) throw new Error(`Falha a carregar ${url}`);
@@ -167,8 +97,18 @@ export function boilerplateUrl(slug) {
     return `/digitalizept/boilerplates/${typeSlug(slug)}-sem-fotos.html`;
 }
 
-export async function loadBoilerplateHtml(slug, dados, businessType, identidade) {
-    const id = typeSlug(slug);
+export async function loadBoilerplateHtml(slugOrState, dados, businessType, identidade) {
+    const state = slugOrState && slugOrState.data
+        ? slugOrState
+        : {
+            data: {
+                businessType: businessType || { id: typeSlug(slugOrState) },
+                dados: dados || {},
+                identidade: identidade || {}
+            }
+        };
+    const data = state.data || {};
+    const id = typeSlug(data.businessType || slugOrState);
     const cacheKey = `raw:${id}`;
     if (!cache.has(cacheKey)) {
         cache.set(cacheKey, fetchText(boilerplateUrl(id))
@@ -179,8 +119,9 @@ export async function loadBoilerplateHtml(slug, dados, businessType, identidade)
             }));
     }
     const raw = await cache.get(cacheKey);
-    const filled = fillBoilerplateCopy(raw, dados, businessType);
-    return applyIdentityToHtml(filled, identidade || {}, dados || {});
+    const filled = fillBoilerplateFromDemo(raw, state);
+    if (state.data && !state.data.demo) state.data.demo = seedDemoFromType(state);
+    return applyIdentityToHtml(filled, data.identidade || identidade || {}, data.dados || dados || {});
 }
 
 export async function prefetchBoilerplate(slug) {
@@ -191,11 +132,10 @@ export async function prefetchBoilerplate(slug) {
 
 export async function htmlForVisual(state, visual) {
     const data = (state && state.data) || {};
-    const type = data.businessType || {};
     const dados = data.dados || {};
     const identidade = data.identidade || {};
     if (visual === VISUAL_SEM_FOTOS) {
-        return loadBoilerplateHtml(typeSlug(type), dados, type, identidade);
+        return loadBoilerplateHtml(state);
     }
     const custom = String(data.demoHtmlCustom || (isCustomHtml(state) ? data.demoHtml : '') || '');
     if (custom && !isBoilerplateHtml(custom)) {
@@ -280,7 +220,10 @@ export function mountDemoSwitch(host, { visual, onChange } = {}) {
     bar.querySelectorAll('button[data-visual]').forEach((btn) => {
         btn.setAttribute('aria-pressed', btn.dataset.visual === visual ? 'true' : 'false');
     });
-    document.body.classList.add('dpl-has-switch');
+    const hostIsOverlay = host.classList && host.classList.contains('dp-preview-overlay');
+    const publicPage = document.body.classList.contains('dp-public');
+    if (hostIsOverlay) host.classList.add('dpl-has-switch');
+    else if (publicPage) document.body.classList.add('dpl-has-switch');
     return bar;
 }
 

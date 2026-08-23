@@ -6,11 +6,11 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #c9a24b; --accent2-ink: #858077;
+    --accent-solid: #c9a24b;
     --on-accent: #17171a; --on-accent-2: #f4f1ea; --ink-muted: #c2bcb4;
     
 }
-/* Light variant (unused default): --bg:#FAF6EF; --ink:#1C1712; --accent:#C9A24B; --accent-2:#EFE7D8; */
-.dpl-hero { min-height: 88vh; display: flex; align-items: center; text-align: center;
+.dpl-hero { min-height: 88vh; display: flex; align-items: center;
   background: radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%); }
 .dpl-hero h1 { font-style: italic; font-weight: 500; }
-.dpl-topbar { justify-content: center; flex-wrap: wrap; }

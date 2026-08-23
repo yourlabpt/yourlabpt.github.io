@@ -9,9 +9,11 @@ describe('digitalizept landing boilerplate', async () => {
         splitItems,
         trustChips,
         destaqueItems,
-        interpolate
+        interpolate,
+        whatsappHref,
+        telHref
     } = await import('../../digitalizept/js/demo/boilerplate.js');
-    const { seedDemoFromType } = await import('../../digitalizept/js/demo/seed.js');
+    const { seedDemoFromType, ensureSeededDemo } = await import('../../digitalizept/js/demo/seed.js');
 
     it('prefers a pasted Maps URL over a search query', () => {
         assert.equal(
@@ -19,6 +21,11 @@ describe('digitalizept landing boilerplate', async () => {
             'https://maps.app.goo.gl/abc'
         );
         assert.match(mapsHref({ morada: 'Rua Augusta 12', cidade: 'Lisboa' }), /google\.com\/maps/);
+    });
+
+    it('builds WhatsApp and tel links from Portuguese numbers', () => {
+        assert.equal(whatsappHref({ whatsapp: '912345678' }), 'https://wa.me/351912345678');
+        assert.equal(telHref({ telefone: '912 345 678' }), 'tel:912345678');
     });
 
     it('builds Instagram links from a handle', () => {
@@ -82,6 +89,46 @@ describe('digitalizept landing boilerplate', async () => {
         assert.ok(demo.servicos.itens.some((item) => item.nome === 'Cafetaria'));
         assert.ok(demo.servicos.itens.some((item) => /nata|galão|café/i.test(item.descricao)));
         assert.equal(demo.servicos.itens.some((item) => item.nome === 'Almoços'), false);
+    });
+
+    it('lets typed principais_servicos replace the category seed list', () => {
+        const type = JSON.parse(require('fs').readFileSync(
+            require('path').join(__dirname, '../../server/config/business-types/cafe-pastelaria.json'),
+            'utf8'
+        ));
+        const demo = seedDemoFromType({
+            data: {
+                businessType: type,
+                dados: {
+                    nome_negocio: 'Pastelaria do Luís',
+                    cidade: 'Porto',
+                    principais_servicos: 'Nata caseira, Bolo da casa'
+                }
+            }
+        });
+        assert.ok(demo.servicos.itens.some((item) => item.nome === 'Nata caseira'));
+        assert.ok(demo.servicos.itens.some((item) => item.nome === 'Bolo da casa'));
+        assert.equal(demo.servicos.itens.some((item) => item.nome === 'Rissol'), false);
+    });
+
+    it('reseeds when demoSeeded so wizard field changes reach both visuals', () => {
+        const type = JSON.parse(require('fs').readFileSync(
+            require('path').join(__dirname, '../../server/config/business-types/cafe-pastelaria.json'),
+            'utf8'
+        ));
+        const state = {
+            data: {
+                businessType: type,
+                dados: { nome_negocio: 'Café Central', cidade: 'Porto' },
+                demoSeeded: true
+            }
+        };
+        const first = seedDemoFromType(state);
+        state.data.demo = first;
+        state.data.dados.principais_servicos = 'Nata caseira, Bolo da casa';
+        const next = ensureSeededDemo(state);
+        assert.ok(next.servicos.itens.some((item) => item.nome === 'Nata caseira'));
+        assert.ok(next.hero.titulo);
     });
 
     it('seeds a florist page around ramos, not café copy', () => {
@@ -222,5 +269,75 @@ describe('digitalizept no-image boilerplates', async () => {
             assert.match(stripped, /<svg[\s>]/);
             assert.doesNotMatch(stripped, /background-image:\s*url\(\s*\)/);
         });
+    });
+
+    it('fills Sem fotos from demo, not baked café prices', () => {
+        const type = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '../../server/config/business-types/cafe-pastelaria.json'),
+            'utf8'
+        ));
+        const html = fs.readFileSync(path.join(root, 'cafe-pastelaria-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, {
+            nome_negocio: 'Pastelaria do Luís',
+            cidade: 'Porto',
+            principais_servicos: 'Nata caseira, Bolo da casa'
+        }, type);
+        assert.match(out, /Nata caseira/);
+        assert.match(out, /Bolo da casa/);
+        assert.match(out, /Pastelaria do Luís/);
+        assert.doesNotMatch(out, /1,10\s*€/);
+        assert.doesNotMatch(out, />Rissol</);
+        assert.match(out, /data-dp-copy="hero.titulo"/);
+        assert.match(out, /O café da manhã|Pastelaria do Luís|café/i);
+    });
+
+    it('fills hero and quotes from demo_seed when dados omit them', () => {
+        const type = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '../../server/config/business-types/cafe-pastelaria.json'),
+            'utf8'
+        ));
+        const html = fs.readFileSync(path.join(root, 'cafe-pastelaria-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, { nome_negocio: 'Casa da Vila', cidade: 'Póvoa' }, type);
+        assert.match(out, /Casa da Vila/);
+        assert.match(out, /O café da manhã, aqui ao lado/);
+        assert.match(out, /Inês|A nata ainda quente/);
+    });
+
+    it('does not keep a fabricated price column when preco is empty', () => {
+        const html = `<ol data-dp-list="servicos"><li data-dp-item hidden><strong data-dp-copy="servico.nome"></strong><span class="dpl-menu-price" data-dp-copy="servico.preco"></span></li></ol>`;
+        const type = {
+            demo_seed: { servicos_itens: [{ nome: 'Café', descricao: 'Galão' }] }
+        };
+        const out = visual.fillBoilerplateCopy(html, { nome_negocio: 'X' }, type);
+        assert.match(out, /Café/);
+        assert.doesNotMatch(out, /dpl-menu-price/);
+        assert.doesNotMatch(out, /€/);
+    });
+
+    it('only allows named text-align classes in boilerplate CSS and HTML', () => {
+        slugs.forEach((slug) => {
+            const css = fs.readFileSync(path.join(root, 'css', `${slug}.css`), 'utf8');
+            const html = fs.readFileSync(path.join(root, `${slug}-sem-fotos.html`), 'utf8');
+            const cssHits = css.match(/text-align\s*:/g) || [];
+            assert.equal(cssHits.length, 0, `${slug}.css has text-align`);
+            assert.doesNotMatch(html, /style="[^"]*text-align/);
+        });
+        const base = fs.readFileSync(path.join(root, 'css/dpl-base.css'), 'utf8');
+        const named = [...base.matchAll(/([^{}]*)\{\s*[^}]*text-align/g)].map((m) => m[1].trim());
+        named.forEach((sel) => {
+            assert.match(sel, /dpl-hero--centered|dpl-tile--centered/, sel);
+        });
+    });
+
+    it('computes accent-ink that reads on paper for failing palettes', async () => {
+        const { contrastRatio, contrastTokens } = await import(
+            pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/colors.js')).href
+        );
+        const clinica = contrastTokens({ base: '#2B2B28', destaque: '#9CAA8C', secundaria: '#D8CDBF' }, '#FAF8F4');
+        assert.ok(contrastRatio(clinica.accentInk, clinica.bg) >= 4.5);
+        assert.ok(contrastRatio(clinica.accent2Ink, clinica.bg) >= 4.5);
+        const cafe = contrastTokens({ base: '#2B211B', destaque: '#C1622D', secundaria: '#8A5A34' }, '#F7F1E8');
+        assert.ok(contrastRatio(cafe.accentInk, cafe.bg) >= 4.5);
+        assert.ok(contrastRatio(cafe.onAccent, cafe.accentSolid) >= 4.5);
     });
 });

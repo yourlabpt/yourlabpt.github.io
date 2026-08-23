@@ -9,7 +9,9 @@ import {
     marcaItems,
     rotulo,
     splitItems,
-    trustChips
+    telHref,
+    trustChips,
+    whatsappHref
 } from './boilerplate.js';
 
 function el(tag, className, text) {
@@ -17,16 +19,6 @@ function el(tag, className, text) {
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
-}
-
-function digitsOnly(value) {
-    return String(value || '').replace(/\D/g, '');
-}
-
-function waNumber(whatsapp) {
-    const d = digitsOnly(whatsapp);
-    if (!d) return '';
-    return d.length === 9 ? `351${d}` : d;
 }
 
 function section(id, className) {
@@ -109,13 +101,12 @@ function scrollToId(id) {
 
 function resolveCtaAction(target, dados) {
     if (target === 'whatsapp') {
-        const wa = waNumber(dados.whatsapp || dados.telefone);
-        return wa ? { href: `https://wa.me/${wa}`, external: true } : { scroll: 'dpl-contactos' };
+        const href = whatsappHref(dados);
+        return href ? { href, external: true } : { scroll: 'dpl-contactos' };
     }
     if (target === 'tel') {
-        return dados.telefone
-            ? { href: `tel:${digitsOnly(dados.telefone)}`, external: false }
-            : { scroll: 'dpl-contactos' };
+        const href = telHref(dados);
+        return href ? { href, external: false } : { scroll: 'dpl-contactos' };
     }
     if (target && target.startsWith('dpl-')) return { scroll: target };
     return { scroll: 'dpl-contactos' };
@@ -447,11 +438,11 @@ function buildContactos(dados, businessType) {
         actions.appendChild(contactButton('Como chegar', maps, 'dpl-btn-maps', mapsIcon()));
     }
     if (dados.telefone) {
-        actions.appendChild(contactButton('Ligar', `tel:${digitsOnly(dados.telefone)}`, 'dpl-btn-call', phoneIcon()));
+        actions.appendChild(contactButton('Ligar', telHref(dados), 'dpl-btn-call', phoneIcon()));
     }
-    const wa = waNumber(dados.whatsapp || dados.telefone);
+    const wa = whatsappHref(dados);
     if (wa) {
-        actions.appendChild(contactButton('WhatsApp', `https://wa.me/${wa}`, 'dpl-btn-wa', whatsappIcon()));
+        actions.appendChild(contactButton('WhatsApp', wa, 'dpl-btn-wa', whatsappIcon()));
     }
     if (dados.email) actions.appendChild(contactButton('Email', `mailto:${dados.email}`, 'dpl-btn-email'));
     const ig = instagramHref(dados.instagram);
@@ -527,17 +518,17 @@ function buildFab(dados) {
     }
     if (dados.telefone) {
         fab.appendChild(fabLink(
-            `tel:${digitsOnly(dados.telefone)}`,
+            telHref(dados),
             'dpl-fab-call',
             'Ligar',
             phoneIcon(),
             false
         ));
     }
-    const wa = waNumber(dados.whatsapp || dados.telefone);
+    const wa = whatsappHref(dados);
     if (wa) {
         fab.appendChild(fabLink(
-            `https://wa.me/${wa}`,
+            wa,
             'dpl-fab-wa',
             'WhatsApp',
             whatsappIcon(),

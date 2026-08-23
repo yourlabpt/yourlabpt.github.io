@@ -6,6 +6,8 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #A2502D; --accent2-ink: #2c4a4a;
+    --accent-solid: #a6522e;
     --on-accent: #f4f1ea; --on-accent-2: #f4f1ea; --ink-muted: #564f45;
     
 }

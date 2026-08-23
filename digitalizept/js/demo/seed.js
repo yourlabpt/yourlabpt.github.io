@@ -1,5 +1,5 @@
 import { SECTION_LIMITS as L } from './prompt.js';
-import { interpolate, rotulo } from './boilerplate.js';
+import { interpolate, rotulo, splitItems } from './boilerplate.js';
 
 function clamp(value, max) {
     const text = String(value == null ? '' : value).trim();
@@ -19,27 +19,61 @@ function padItems(items, min, fallback) {
     return next;
 }
 
+function itemNome(item) {
+    if (item && typeof item === 'object') return String(item.nome || '').trim();
+    return String(item || '').trim();
+}
+
+function mapServico(item, dados, seed) {
+    if (item && typeof item === 'object') {
+        return {
+            nome: clamp(item.nome, L.servicos.nome),
+            descricao: clamp(item.descricao || dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao),
+            preco: String(item.preco || '').trim()
+        };
+    }
+    return {
+        nome: clamp(item, L.servicos.nome),
+        descricao: clamp(dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao),
+        preco: ''
+    };
+}
+
 function seedServicos(businessType, dados, seed) {
     const fromSeed = Array.isArray(seed.servicos_itens) ? seed.servicos_itens : [];
-    const source = (fromSeed.length
-        ? fromSeed
-        : (Array.isArray(businessType.servicos_tipicos) ? businessType.servicos_tipicos : [])
-    ).slice(0, L.servicos.maxItens);
+    const fromType = Array.isArray(businessType.servicos_tipicos) ? businessType.servicos_tipicos : [];
+    const fallback = fromSeed.length ? fromSeed : fromType;
+    const typed = splitItems(dados.principais_servicos);
+    const used = new Set();
+    const source = [];
+
+    typed.forEach((nome) => {
+        if (source.length >= L.servicos.maxItens) return;
+        const key = nome.toLowerCase();
+        if (used.has(key)) return;
+        used.add(key);
+        source.push({ nome, descricao: '', preco: '' });
+    });
+
+    fallback.forEach((item) => {
+        const cap = typed.length ? L.servicos.minItens : L.servicos.maxItens;
+        if (source.length >= cap) return;
+        const nome = itemNome(item);
+        if (!nome) return;
+        const key = nome.toLowerCase();
+        if (used.has(key)) return;
+        used.add(key);
+        source.push(item);
+    });
+
+    const mapped = source.map((item) => mapServico(item, dados, seed)).filter((item) => item.nome);
+    if (mapped.length >= L.servicos.minItens || !fallback.length) {
+        return mapped.slice(0, L.servicos.maxItens);
+    }
     return padItems(
-        source.map((item) => {
-            if (item && typeof item === 'object') {
-                return {
-                    nome: clamp(item.nome, L.servicos.nome),
-                    descricao: clamp(item.descricao || dados.principais_servicos || '', L.servicos.descricao)
-                };
-            }
-            return {
-                nome: clamp(item, L.servicos.nome),
-                descricao: clamp(dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao)
-            };
-        }).filter((item) => item.nome),
+        mapped,
         L.servicos.minItens,
-        (i) => ({ nome: `Serviço ${i + 1}`, descricao: '' })
+        (i) => mapServico(fallback[i % fallback.length], dados, seed)
     );
 }
 
@@ -132,9 +166,6 @@ export function seedDemoFromType(state) {
 export function ensureSeededDemo(state) {
     if (isCustomDemo(state)) {
         return state.data.demo || null;
-    }
-    if (state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo) {
-        return state.data.demo;
     }
     const demo = seedDemoFromType(state);
     state.data.demo = demo;

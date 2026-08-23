@@ -6,11 +6,11 @@
     --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
     --l-base: var(--ink);
     --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #896D41; --accent2-ink: #000000;
+    --accent-solid: #b08d57;
     --on-accent: #17171a; --on-accent-2: #f4f1ea; --ink-muted: #474440;
     
 }
 h1, h2 { letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; }
-.dpl-topbar { justify-content: center; flex-direction: column; }
-.dpl-case { border: 1px solid var(--accent); padding: 2rem 1rem; text-align: center; background: var(--bg); }
-.dpl-hero { text-align: center; }
+.dpl-case { border: 1px solid var(--accent); padding: 2rem 1rem; background: var(--bg); }
 .dpl-hero-inner { border: 1px solid var(--accent); padding: 4rem 2rem; }
