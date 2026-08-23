@@ -9,7 +9,7 @@ import { proposalStep } from './steps/proposal.js';
 import { acceptanceStep } from './steps/acceptance.js';
 import { signatureStep } from './steps/signature.js';
 import { conclusionStep } from './steps/conclusion.js';
-import { saveDraftLead } from './draft.js';
+import { cancelScheduledDraft, saveDraftLead } from './draft.js';
 import { cancelScheduledGoNext, currentSubstep } from './substep.js';
 import { scrubDemoState } from './demo/html.js';
 
@@ -114,12 +114,23 @@ export function createWizard({ onUnauthorized, showToast }) {
     if (state.step < 0 || state.step >= STEPS.length) state.step = 0;
     if (!Number.isFinite(Number(state.substep)) || state.substep < 0) state.substep = 0;
     if (!state.data || typeof state.data !== 'object') state.data = {};
+    state.dealEpoch = Number(state.dealEpoch) > 0 ? Number(state.dealEpoch) : 1;
+    state.abandoned = false;
     advancePastSkips(state, 1);
     let currentValid = false;
     let persistWarned = false;
     let navLock = false;
 
+    function getDealEpoch() {
+        return Number(state.dealEpoch) || 0;
+    }
+
+    function bumpDealEpoch() {
+        state.dealEpoch = getDealEpoch() + 1;
+    }
+
     function persist() {
+        if (state.abandoned) return;
         try {
             scrubDemoState(state);
             if (typeof state.data.demoHtml === 'string' && state.data.demoHtml.length > 900000) {
@@ -134,7 +145,9 @@ export function createWizard({ onUnauthorized, showToast }) {
         }
     }
 
-    function update(patch) {
+    function update(patch, fromEpoch) {
+        if (state.abandoned) return;
+        if (fromEpoch != null && fromEpoch !== getDealEpoch()) return;
         Object.assign(state.data, patch);
         persist();
     }
@@ -201,7 +214,7 @@ export function createWizard({ onUnauthorized, showToast }) {
         }
         syncNav();
 
-        const ctx = { state, update, setValid, onUnauthorized, showToast, reset, goNext };
+        const ctx = { state, update, setValid, onUnauthorized, showToast, reset, goNext, getDealEpoch };
         Promise.resolve(step.render(body, ctx)).catch(() => {
             showToast('Ocorreu um erro neste passo.', true);
         });
@@ -211,6 +224,8 @@ export function createWizard({ onUnauthorized, showToast }) {
     // client's answers, because the stored state outlives the sale.
     function reset() {
         cancelScheduledGoNext();
+        cancelScheduledDraft();
+        bumpDealEpoch();
         navLock = false;
         clearWizardState();
         state.step = 0;
@@ -218,6 +233,15 @@ export function createWizard({ onUnauthorized, showToast }) {
         state.data = {};
         currentValid = false;
         render();
+    }
+
+    function destroy() {
+        cancelScheduledGoNext();
+        cancelScheduledDraft();
+        state.abandoned = true;
+        bumpDealEpoch();
+        els.backBtn.removeEventListener('click', goBack);
+        els.nextBtn.removeEventListener('click', goNext);
     }
 
     async function goNext() {
@@ -295,5 +319,5 @@ export function createWizard({ onUnauthorized, showToast }) {
     els.backBtn.addEventListener('click', goBack);
     els.nextBtn.addEventListener('click', goNext);
 
-    return { render, reset };
+    return { render, reset, destroy, getDealEpoch, bumpDealEpoch };
 }

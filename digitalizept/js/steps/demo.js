@@ -40,6 +40,7 @@ import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
 import { fetchConfig } from '../settings.js';
 import { renderFollowupShare } from '../demo/followup-ui.js';
+import { bindLeadToNome, detachLeadIfBusinessChanged } from '../demo/business-identity.js';
 import { currentSubstep, renderAsk } from '../substep.js';
 import { scheduleSaveDraftLead } from '../draft.js';
 
@@ -83,10 +84,13 @@ function copyText(ctx, text, okMessage) {
 }
 
 async function publishDemo(ctx) {
+    const epoch = ctx.getDealEpoch ? ctx.getDealEpoch() : null;
     try {
+        detachLeadIfBusinessChanged(ctx.state);
         const demo = ctx.state.data.demo;
         const demoHtml = ctx.state.data.demoHtml || '';
         if ((!demo || !demo.hero || !demo.hero.titulo) && !demoHtml) return '';
+        const nome = (ctx.state.data.dados && ctx.state.data.dados.nome_negocio) || '';
         const { response, data } = await apiRequest('/api/digitalizept/demos', {
             method: 'POST',
             token: getToken(),
@@ -103,7 +107,11 @@ async function publishDemo(ctx) {
             }
         });
         if (response.ok && data.url) {
-            ctx.update({ leadId: data.leadId || ctx.state.data.leadId, demoUrl: data.url });
+            if (epoch != null && ctx.getDealEpoch && ctx.getDealEpoch() !== epoch) return '';
+            ctx.update(bindLeadToNome({
+                leadId: data.leadId || ctx.state.data.leadId,
+                demoUrl: data.url
+            }, nome), epoch);
             scheduleSaveDraftLead(ctx.state, ctx);
             return data.url;
         }

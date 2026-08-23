@@ -15,6 +15,15 @@ const EMAIL_TEMPLATE_PATH = path.join(
     'demo-outreach-email.html'
 );
 
+const EMAIL_TEMPLATE_PATH_EN = path.join(
+    __dirname,
+    '..',
+    '..',
+    'digitalizept',
+    'templates',
+    'demo-outreach-email-en.html'
+);
+
 const GANCHOS_PATH = path.join(
     __dirname,
     '..',
@@ -100,8 +109,80 @@ YourLab, {{zona}}
 {{vendedorTelefone}}
 {{site}}`;
 
-function loadEmailTemplate() {
-    return fs.readFileSync(EMAIL_TEMPLATE_PATH, 'utf8');
+const WA_TEMPLATES_EN = {
+    1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+
+*{{ganchoTitulo}}*{{ganchoTextoWa}}
+
+I put two things together for *{{negocioNome}}*, without asking you for anything. They are examples — they are not published.
+
+{{link}}
+
+If you like it, just say yes and we talk. If it is not of interest, one word and I will not bother you again.`,
+
+    2: `In the email you can see how *{{negocioNome}}* would look when someone searches "{{oQueFaz}} in {{zona}}". And the page that holds the whole story.
+
+{{link}}
+
+Built for this house. And the site is yours, not ours. Each page is made from scratch for the business — it stays in the company's name.
+
+*490 euros* - everything handled and live in 3 days
+*190 euros* - just the page, for you to put live
+*90 euros* - just the Google part
+
+VAT not included. If you start with 90 or 190 euros, it comes off the rest.
+
+This is only part of what we do. If you need bookings, client files, stock — say so and we can talk about that too.`,
+
+    3: `{{saudacao}} {{clienteNome}}, it was good to stop by {{visitaQuando}}.
+
+Here is the page I showed you — the whole story in one place that is yours:
+
+{{link}}
+
+If you like it, just say yes. If you want me to walk you through it, I can come by {{followupDia}} in the morning — 10 minutes, no commitment.`
+};
+
+const EMAIL_SUBJECT_EN = '{{clienteNome}}, I made this for {{negocioNome}}';
+
+const EMAIL_TEXT_EN = `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+
+{{ganchoTitulo}}
+
+{{ganchoTexto}}
+
+To show you what I mean, I put two things together for {{negocioNome}}, without asking you for anything. They are examples — they are not published.
+
+{{link}}
+
+If you like it, reply to this email and we talk. 490 euros everything / 190 just the page / 90 just Google, VAT not included. If it is not of interest, reply REMOVE.
+
+{{vendedorNome}}
+YourLab, {{zona}}
+{{vendedorTelefone}}
+{{site}}`;
+
+function normalizeOutreachLang(value) {
+    return String(value || '').trim().toLowerCase() === 'en' ? 'en' : 'pt';
+}
+
+function localizeFollowupDia(value, lang) {
+    const raw = String(value || '').trim();
+    const en = normalizeOutreachLang(lang) === 'en';
+    if (en && (!raw || raw === 'amanhã')) return 'tomorrow';
+    if (!en && (!raw || raw === 'tomorrow')) return 'amanhã';
+    return raw;
+}
+
+function visitaQuandoFor(key, lang) {
+    const tarde = String(key || '') === 'tarde';
+    if (normalizeOutreachLang(lang) === 'en') return tarde ? 'this afternoon' : 'this morning';
+    return tarde ? 'esta tarde' : 'hoje de manhã';
+}
+
+function loadEmailTemplate(lang) {
+    const file = normalizeOutreachLang(lang) === 'en' ? EMAIL_TEMPLATE_PATH_EN : EMAIL_TEMPLATE_PATH;
+    return fs.readFileSync(file, 'utf8');
 }
 
 function loadNoticeTemplate() {
@@ -129,12 +210,14 @@ function renderBrandedNoticeHtml(ctx, templateHtml) {
     return fillHtmlTemplate(templateHtml || loadNoticeTemplate(), ctx);
 }
 
-function greetingForHour(hour) {
-    return Number(hour) < 13 ? 'Bom dia' : 'Boa tarde';
+function greetingForHour(hour, lang) {
+    const en = normalizeOutreachLang(lang) === 'en';
+    if (Number(hour) < 13) return en ? 'Good morning' : 'Bom dia';
+    return en ? 'Good afternoon' : 'Boa tarde';
 }
 
-function defaultVisitaQuando(hour) {
-    return Number(hour) < 14 ? 'hoje de manhã' : 'esta tarde';
+function defaultVisitaQuando(hour, lang) {
+    return visitaQuandoFor(Number(hour) < 14 ? 'manha' : 'tarde', lang);
 }
 
 function escapeHtml(value) {
@@ -215,6 +298,7 @@ function emptyFollowup() {
         fichaComErro: false,
         siteVelho: false,
         problemaFicha: '',
+        lang: 'pt',
         edits: {}
     };
 }
@@ -232,6 +316,7 @@ function parseFollowup(raw) {
         fichaComErro: parsed.fichaComErro === true,
         siteVelho: parsed.siteVelho === true,
         problemaFicha: String(parsed.problemaFicha || '').trim(),
+        lang: normalizeOutreachLang(parsed.lang),
         edits: parsed.edits && typeof parsed.edits === 'object' ? parsed.edits : {}
     };
 }
@@ -272,7 +357,7 @@ function hasSocial(sinais) {
     return filledGanchoField(sinais && sinais.instagram) || filledGanchoField(sinais && sinais.facebook);
 }
 
-function pickGancho({ override, sinais = {} } = {}) {
+function pickGancho({ override, sinais = {}, lang = 'pt' } = {}) {
     const hooks = loadGanchos();
     let id = normalizeGanchoId(override);
     if (!id) {
@@ -284,12 +369,15 @@ function pickGancho({ override, sinais = {} } = {}) {
     }
     if (id === 'E' && !filledGanchoField(sinais.problemaFicha)) id = 'A';
     const hook = hooks[id] || hooks.A;
+    const localized = normalizeOutreachLang(lang) === 'en' && hook.en
+        ? hook.en
+        : hook;
     return {
         id,
         nome: hook.nome,
         nomeCurto: GANCHO_NOME_CURTO[id] || hook.nome,
-        ganchoTitulo: hook.ganchoTitulo,
-        ganchoTexto: hook.ganchoTexto
+        ganchoTitulo: localized.ganchoTitulo,
+        ganchoTexto: localized.ganchoTexto
     };
 }
 
@@ -306,6 +394,7 @@ function listGanchos() {
 
 function applyGanchoFields(followup, patch = {}) {
     const f = parseFollowup(followup);
+    if (patch.lang != null) f.lang = normalizeOutreachLang(patch.lang);
     if (patch.ganchoId != null) f.ganchoId = normalizeGanchoId(patch.ganchoId);
     if (patch.sinaisDeMovimento != null) f.sinaisDeMovimento = patch.sinaisDeMovimento === true;
     if (patch.fichaComErro != null) f.fichaComErro = patch.fichaComErro === true;
@@ -456,11 +545,12 @@ function pickEmail(dados, legalEmail) {
     ).trim();
 }
 
-function pickOQueFaz(dados, businessTypeNome) {
+function pickOQueFaz(dados, businessTypeNome, lang) {
+    const fallback = normalizeOutreachLang(lang) === 'en' ? 'local business' : 'negócio local';
     return String(
         (dados && (dados.o_que_faz || dados.principais_servicos || dados.categoria))
         || businessTypeNome
-        || 'negócio local'
+        || fallback
     ).trim();
 }
 
@@ -472,22 +562,27 @@ function buildOutreachContext({
     demoSlug = '',
     followupDia = 'amanhã',
     visitaQuando = '',
+    visita = '',
     unsubToken = '',
     hour = new Date().getHours(),
     businessTypeNome = '',
     lat = null,
     lng = null,
     ganchoId = '',
-    sinais = {}
+    sinais = {},
+    lang = 'pt'
 } = {}) {
+    const outreachLang = normalizeOutreachLang(lang);
+    const en = outreachLang === 'en';
     const site = stripSite(provider.site);
     const link = absoluteUrl(origin, demoUrl || (demoSlug ? `/d/${demoSlug}` : ''));
     const demoPath = demoSlug
         ? `${site}/d/${demoSlug}`
         : (link.replace(/^https?:\/\//i, '') || `${site}/d/…`);
     const zona = String(dados.cidade || dados.zona || '').trim() || 'Portugal';
-    const negocioNome = String(dados.nome_negocio || 'o seu negócio').trim() || 'o seu negócio';
-    const oQueFaz = pickOQueFaz(dados, businessTypeNome);
+    const negocioNome = String(dados.nome_negocio || (en ? 'your business' : 'o seu negócio')).trim()
+        || (en ? 'your business' : 'o seu negócio');
+    const oQueFaz = pickOQueFaz(dados, businessTypeNome, outreachLang);
     const morada = String(dados.morada || '').trim();
     const parsedProvider = splitProviderMorada(provider.morada || '');
     const empresaCp = String(provider.cp || parsedProvider.cp || '').trim();
@@ -498,16 +593,22 @@ function buildOutreachContext({
     const vendedorTelefone = phone.display;
     const vendedorTelefoneTel = phone.tel;
     const vendedorEmail = String(provider.email || '').trim() || 'yourlabpt@gmail.com';
-    const ctaBody = 'Gostei do que vi. Podemos falar?';
+    const ctaBody = en ? 'I liked what I saw. Can we talk?' : 'Gostei do que vi. Podemos falar?';
     const problemaFicha = String(sinais.problemaFicha || dados.problemaFicha || '').trim();
     const picked = pickGancho({
         override: ganchoId,
-        sinais: { ...sinais, problemaFicha }
+        sinais: { ...sinais, problemaFicha },
+        lang: outreachLang
     });
+    let visitaKey = Number(hour) < 14 ? 'manha' : 'tarde';
+    if (visita === 'tarde' || visita === 'manha') visitaKey = visita;
+    else if (visitaQuando) visitaKey = /tarde|afternoon/i.test(String(visitaQuando)) ? 'tarde' : 'manha';
 
     const ctx = {
-        saudacao: greetingForHour(hour),
-        clienteNome: String(dados.responsavel || 'Cliente').trim() || 'Cliente',
+        lang: outreachLang,
+        saudacao: greetingForHour(hour, outreachLang),
+        clienteNome: String(dados.responsavel || (en ? 'there' : 'Cliente')).trim()
+            || (en ? 'there' : 'Cliente'),
         negocioNome,
         negocioNomeMailto: encodeURIComponent(negocioNome),
         ctaBodyMailto: encodeURIComponent(ctaBody),
@@ -516,15 +617,17 @@ function buildOutreachContext({
         vendedorTelefone,
         vendedorTelefoneTel,
         site,
-        visitaQuando: visitaQuando || defaultVisitaQuando(hour),
-        followupDia: String(followupDia || 'amanhã').trim() || 'amanhã',
+        visitaQuando: visitaQuandoFor(visitaKey, outreachLang),
+        followupDia: localizeFollowupDia(followupDia || (en ? 'tomorrow' : 'amanhã'), outreachLang),
         link,
         demoPath,
         zona,
         oQueFaz,
-        horario: String(dados.horario || 'Horário a confirmar').trim() || 'Horário a confirmar',
+        horario: String(dados.horario || (en ? 'Hours to confirm' : 'Horário a confirmar')).trim()
+            || (en ? 'Hours to confirm' : 'Horário a confirmar'),
         telefone: String(dados.telefone || dados.whatsapp || '').trim(),
-        moradaLinha: [morada, zona].filter(Boolean).join(', ') || 'Morada a confirmar',
+        moradaLinha: [morada, zona].filter(Boolean).join(', ')
+            || (en ? 'Address to confirm' : 'Morada a confirmar'),
         categoriaFicha: zona ? `${oQueFaz} · ${zona}` : oQueFaz,
         inicial: (negocioNome.replace(/^o seu /i, '').charAt(0) || 'G').toUpperCase(),
         linkGoogle: '',
@@ -558,9 +661,10 @@ function buildOutreachContext({
 function waTextForStep(step, ctx, edits = {}) {
     const n = Number(step);
     const key = `wa${n}`;
+    const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? WA_TEMPLATES_EN : WA_TEMPLATES;
     const tpl = (edits[key] && String(edits[key]).includes('{{'))
         ? edits[key]
-        : (WA_TEMPLATES[n] || WA_TEMPLATES[1]);
+        : (pack[n] || pack[1]);
     if (edits[key] && !String(edits[key]).includes('{{')) return String(edits[key]);
     return fillTemplate(tpl, ctx);
 }
@@ -569,16 +673,19 @@ function emailSubjectFor(ctx, edits = {}) {
     if (edits.emailSubject && !String(edits.emailSubject).includes('{{')) {
         return String(edits.emailSubject);
     }
-    const tpl = edits.emailSubject || EMAIL_SUBJECT;
+    const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL_SUBJECT_EN : EMAIL_SUBJECT;
+    const tpl = edits.emailSubject || pack;
     return fillTemplate(tpl, ctx);
 }
 
 function renderEmailHtml(ctx, templateHtml) {
-    return fillHtmlTemplate(templateHtml || loadEmailTemplate(), ctx);
+    const lang = ctx && ctx.lang;
+    return fillHtmlTemplate(templateHtml || loadEmailTemplate(lang), ctx);
 }
 
 function renderEmailText(ctx) {
-    return fillTemplate(EMAIL_TEXT, ctx);
+    const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL_TEXT_EN : EMAIL_TEXT;
+    return fillTemplate(pack, ctx);
 }
 
 function newUnsubToken() {
@@ -595,6 +702,8 @@ module.exports = {
     WA_TEMPLATES,
     EMAIL_SUBJECT,
     EMAIL_TEMPLATE_PATH,
+    EMAIL_TEMPLATE_PATH_EN,
+    normalizeOutreachLang,
     greetingForHour,
     defaultVisitaQuando,
     fillTemplate,

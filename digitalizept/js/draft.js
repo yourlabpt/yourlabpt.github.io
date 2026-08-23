@@ -1,5 +1,6 @@
 import { apiRequest } from './api.js';
 import { getToken } from './auth.js';
+import { bindLeadToNome, detachLeadIfBusinessChanged } from './demo/business-identity.js';
 
 function wizardSnapshot(state) {
     const d = state.data || {};
@@ -39,6 +40,11 @@ function wizardSnapshot(state) {
 export async function saveDraftLead(state, ctx) {
     const dados = state.data.dados || {};
     if (!dados.nome_negocio) return null;
+    const detached = detachLeadIfBusinessChanged(state);
+    if (detached && ctx && typeof ctx.showToast === 'function') {
+        ctx.showToast('Nome diferente — a gravar como negócio novo. O lead anterior não foi mexido.');
+    }
+    const epoch = ctx && typeof ctx.getDealEpoch === 'function' ? ctx.getDealEpoch() : null;
     const { response, data } = await apiRequest('/api/digitalizept/leads', {
         method: 'POST',
         token: getToken(),
@@ -57,17 +63,29 @@ export async function saveDraftLead(state, ctx) {
         return null;
     }
     if (!response.ok || !data.leadId) return null;
-    if (ctx && typeof ctx.update === 'function') ctx.update({ leadId: data.leadId });
+    if (epoch != null && ctx.getDealEpoch() !== epoch) return data.leadId;
+    if (ctx && typeof ctx.update === 'function') {
+        ctx.update(bindLeadToNome({ leadId: data.leadId }, dados.nome_negocio), epoch);
+    }
     return data.leadId;
 }
 
 let draftTimer = null;
 
+export function cancelScheduledDraft() {
+    if (draftTimer) {
+        clearTimeout(draftTimer);
+        draftTimer = null;
+    }
+}
+
 /** Debounced draft save — used after AI/HTML edits so we don't spam the API. */
 export function scheduleSaveDraftLead(state, ctx, delayMs = 500) {
     if (draftTimer) clearTimeout(draftTimer);
+    const epoch = ctx && typeof ctx.getDealEpoch === 'function' ? ctx.getDealEpoch() : null;
     draftTimer = setTimeout(() => {
         draftTimer = null;
+        if (epoch != null && ctx.getDealEpoch && ctx.getDealEpoch() !== epoch) return;
         saveDraftLead(state, ctx).catch(() => { /* best-effort */ });
     }, delayMs);
 }

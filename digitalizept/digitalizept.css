@@ -1138,6 +1138,31 @@ body:has(.app) {
     }
 }
 
+.followup-lang {
+    grid-column: 1 / -1;
+}
+
+.followup-lang-row {
+    display: flex;
+    gap: 8px;
+}
+
+.followup-lang-btn {
+    flex: 1;
+    min-height: 44px;
+    border: 1px solid var(--border-color);
+    background: var(--surface-color);
+    color: var(--text-color);
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.followup-lang-btn.active {
+    border-color: var(--accent-strong);
+    box-shadow: inset 0 0 0 1px var(--accent-strong);
+}
+
 .followup-link-status {
     font-size: 0.85rem;
     color: var(--muted-color);

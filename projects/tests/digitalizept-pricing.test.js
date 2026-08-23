@@ -707,6 +707,37 @@ describe('digitalizept followup messages', () => {
         assert.match(email.body, /Túlio Soares/);
     });
 
+    it('fills English WhatsApp and email when followup.lang is en', () => {
+        const state = {
+            data: {
+                demoUrl: '/d/cafe-exemplo',
+                followupVisita: 'manha',
+                followupDia: 'amanhã',
+                followup: { lang: 'en', ganchoId: 'A' },
+                dados: {
+                    responsavel: 'Silva',
+                    nome_negocio: 'Café do Zé',
+                    email: 'cafe@example.com',
+                    telefone: '965601954'
+                }
+            }
+        };
+        const config = { provider: { responsavel: 'Túlio Soares', telefone: '912345678', site: 'yourlabpt.com' } };
+        const wa = buildWhatsAppMessage(state, config);
+        assert.doesNotMatch(wa, /Sr\./);
+        assert.match(wa, /I'm Túlio Soares/);
+        assert.match(wa, /Good morning|Good afternoon/);
+        assert.match(wa, /When someone recommends you/);
+        assert.match(wa, /Café do Zé/);
+        const wa3 = buildWhatsAppMessage(state, config, 3);
+        assert.match(wa3, /tomorrow/);
+        assert.doesNotMatch(wa3, /amanhã/);
+        const email = buildEmailContent(state, config);
+        assert.match(email.subject, /I made this for Café do Zé/);
+        assert.doesNotMatch(email.body, /Sr\./);
+        assert.match(email.body, /VAT not included/);
+    });
+
     it('builds absolute demo url and whatsapp phone', () => {
         assert.equal(normalizePhoneForWa('965 601 954'), '351965601954');
         const url = buildWhatsAppUrl('351965601954', 'Olá');

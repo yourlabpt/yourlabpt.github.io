@@ -13,6 +13,10 @@ const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalize
 const { renderContractPdf, renderContractPdfBuffer } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
+const {
+    reusableLeadId,
+    allocateDemoSlug
+} = require('./lib/digitalizept-business-identity');
 const { sanitizeDemoHtml } = require('./lib/sanitize-demo-html');
 const {
     isValidEtapa,
@@ -2037,6 +2041,7 @@ function loadLeadOutreachRow(db, leadId) {
 
 function ganchoExtrasFromBody(body = {}) {
     const extras = {};
+    if (body.lang != null) extras.lang = cleanText(body.lang, 8);
     if (body.ganchoId != null) extras.ganchoId = cleanText(body.ganchoId, 4);
     if (body.sinaisDeMovimento != null) extras.sinaisDeMovimento = body.sinaisDeMovimento === true;
     if (body.fichaComErro != null) extras.fichaComErro = body.fichaComErro === true;
@@ -2064,6 +2069,9 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
     if (!dados.email && row.legal_email) dados.email = row.legal_email;
     let followup = outreach.parseFollowup(row.followup_json);
     followup = outreach.applyGanchoFields(followup, extras);
+    followup.lang = extras.lang != null
+        ? outreach.normalizeOutreachLang(extras.lang)
+        : followup.lang;
     if (!followup.unsubToken) followup.unsubToken = outreach.newUnsubToken();
     const wizard = parseJsonSafe(row.wizard_json, {});
     const presence = {
@@ -2081,14 +2089,16 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         origin,
         demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : '',
         demoSlug: row.demo_slug || '',
-        followupDia: extras.followupDia || 'amanhã',
-        visitaQuando: extras.visita === 'tarde' ? 'esta tarde' : extras.visitaQuando,
+        followupDia: extras.followupDia || (followup.lang === 'en' ? 'tomorrow' : 'amanhã'),
+        visita: extras.visita,
+        visitaQuando: extras.visitaQuando,
         unsubToken: followup.unsubToken,
         businessTypeNome: businessType.nome || '',
         lat: row.lat,
         lng: row.lng,
         ganchoId: followup.ganchoId,
-        sinais
+        sinais,
+        lang: followup.lang
     });
     return { row, dados, followup, ctx, origin, sinais };
 }
@@ -2190,8 +2200,8 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
 
         const persist = db.transaction(() => {
             if (leadId) {
-                const existing = db.prepare('SELECT id FROM lead WHERE id = ?').get(leadId);
-                if (!existing) leadId = '';
+                const existing = db.prepare('SELECT id, nome FROM lead WHERE id = ?').get(leadId);
+                leadId = reusableLeadId(existing, nome, cidade);
             }
             if (!leadId) {
                 leadId = crypto.randomUUID();
@@ -3119,6 +3129,7 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
 
         const data = {
             leadId: row.id,
+            leadBoundNome: row.nome || dados.nome_negocio || '',
             businessType,
             dados,
             identidade: Object.keys(identidade || {}).length
@@ -3958,11 +3969,22 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
         let leadId = cleanText(body.leadId, 80);
-        const existing = leadId
-            ? db.prepare('SELECT id, demo_slug, wizard_json FROM lead WHERE id = ?').get(leadId)
+        const foundLead = leadId
+            ? db.prepare('SELECT id, nome, demo_slug, wizard_json FROM lead WHERE id = ?').get(leadId)
+            : null;
+        const existing = reusableLeadId(foundLead, cleanText(dados.nome_negocio, 200), cleanText(dados.cidade, 120))
+            ? foundLead
             : null;
         if (!existing) leadId = crypto.randomUUID();
-        const slug = (existing && existing.demo_slug) || digitalizeptSlug(dados.nome_negocio);
+        else leadId = existing.id;
+        const slug = allocateDemoSlug(db, {
+            nome: dados.nome_negocio,
+            existingSlug: existing ? existing.demo_slug : '',
+            leadId,
+            existingNome: existing ? existing.nome : '',
+            cidade: dados.cidade,
+            makeSlug: digitalizeptSlug
+        });
         const morada = cleanText(dados.morada, 300);
         const cidade = cleanText(dados.cidade, 120);
         const demoRaw = typeof body.demoRaw === 'string' ? body.demoRaw : '';
@@ -4094,7 +4116,8 @@ app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, r
         const db = getDigitalizeptDb();
         const packed = buildLeadOutreach(db, leadId, req);
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
-        saveLeadFollowup(db, leadId, packed.followup);
+        const hadToken = Boolean(outreach.parseFollowup(packed.row.followup_json).unsubToken);
+        if (!hadToken) saveLeadFollowup(db, leadId, packed.followup);
         const { ctx, followup } = packed;
         return res.json({
             ok: true,
@@ -4117,6 +4140,20 @@ app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, r
     } catch (err) {
         console.error('digitalizept outreach get error:', err.message);
         return res.status(500).json({ error: 'Não foi possível carregar o envio.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/outreach/lang', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req, ganchoExtrasFromBody(req.body || {}));
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        saveLeadFollowup(db, leadId, packed.followup);
+        return res.json({ ok: true, followup: packed.followup });
+    } catch (err) {
+        console.error('digitalizept outreach lang error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar o idioma.' });
     }
 });
 
@@ -4434,13 +4471,15 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const now = digitalizeptNow();
         const incomingLeadId = cleanText(body.leadId, 80);
         const existingLead = incomingLeadId
-            ? db.prepare('SELECT id, demo_slug, estado FROM lead WHERE id = ?').get(incomingLeadId)
+            ? db.prepare('SELECT id, nome, demo_slug, estado FROM lead WHERE id = ?').get(incomingLeadId)
             : null;
-        const leadId = existingLead ? existingLead.id : crypto.randomUUID();
+        const leadId = reusableLeadId(existingLead, dados.nome_negocio, dados.cidade)
+            || crypto.randomUUID();
+        const existingLeadForWrite = existingLead && existingLead.id === leadId ? existingLead : null;
 
         // Prefer explicit IDs from a resumed closed deal; else look up the latest chain.
         let existingDeal = null;
-        if (existingLead) {
+        if (existingLeadForWrite) {
             const byIds = (body.propostaId && body.contratoId && body.projectId)
                 ? db.prepare(`
                     SELECT p.id AS propostaId, c.id AS contratoId, c.template_versao, pr.id AS projectId,
@@ -4472,8 +4511,11 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
                 LIMIT 1
             `).get(leadId);
         }
-        const revising = Boolean(existingDeal && (body.revisingDeal === true || existingLead.estado === 'fechado'));
-        if ((body.revisingDeal === true || (existingLead && existingLead.estado === 'fechado')) && !existingDeal) {
+        const revising = Boolean(existingDeal && existingLeadForWrite
+            && (body.revisingDeal === true || existingLeadForWrite.estado === 'fechado'));
+        if (existingLeadForWrite
+            && (body.revisingDeal === true || existingLeadForWrite.estado === 'fechado')
+            && !existingDeal) {
             return res.status(409).json({
                 error: 'Esta proposta fechada não tem contrato associado para atualizar. Contacte o suporte.'
             });
@@ -4493,8 +4535,16 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
             ? nextContractVersion(existingDeal.template_versao)
             : 'v1';
         const { obrigatorios, opcionais } = splitDados(dados, btConfig);
-        const demoSlug = (existingLead && existingLead.demo_slug)
-            || (body.demo ? digitalizeptSlug(dados.nome_negocio) : '');
+        const demoSlug = existingLeadForWrite
+            ? allocateDemoSlug(db, {
+                nome: dados.nome_negocio,
+                existingSlug: existingLeadForWrite.demo_slug,
+                leadId,
+                existingNome: existingLeadForWrite.nome,
+                cidade: dados.cidade,
+                makeSlug: digitalizeptSlug
+            })
+            : (body.demo ? digitalizeptSlug(dados.nome_negocio) : '');
 
         const htmlPath = path.join(digitalizeptContractsDir, `${contratoId}.html`);
         fs.writeFileSync(htmlPath, String(contrato.html));
@@ -4558,7 +4608,7 @@ app.post('/api/digitalizept/deals', requireDigitalizept, async (req, res) => {
         const persist = db.transaction(() => {
             const morada = cleanText(dados.morada, 300);
             const cidade = cleanText(dados.cidade, 120);
-            if (existingLead) {
+            if (existingLeadForWrite) {
                 clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
                 db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?,
                     estado = 'fechado', resultado = 'digitalizado', demo_json = ?, identidade_json = ?, demo_slug = ?, work_path = ?,

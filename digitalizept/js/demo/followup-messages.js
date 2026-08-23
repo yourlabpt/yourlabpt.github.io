@@ -3,6 +3,15 @@ import {
     shortGanchoTexto,
     sinaisFromWizardState
 } from './outreach-ganchos.js';
+import {
+    defaultFollowupDia,
+    greetingForHour,
+    localizeFollowupDia,
+    normalizeOutreachLang,
+    visitaQuandoFor
+} from './outreach-lang.js';
+
+export { normalizeOutreachLang };
 
 export const WA_TEMPLATES = {
     1: `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
@@ -38,9 +47,44 @@ Aqui fica a página que lhe mostrei — a história toda num sítio só vosso:
 Gostou? Diga só que sim. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos, sem compromisso.`
 };
 
+export const WA_TEMPLATES_EN = {
+    1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+
+*{{ganchoTitulo}}*{{ganchoTextoWa}}
+
+I put two things together for *{{negocioNome}}*, without asking you for anything. They are examples — they are not published.
+
+{{link}}
+
+If you like it, just say yes and we talk. If it is not of interest, one word and I will not bother you again.`,
+
+    2: `In the email you can see how *{{negocioNome}}* would look when someone searches "{{oQueFaz}} in {{zona}}". And the page that holds the whole story.
+
+{{link}}
+
+Built for this house. And the site is yours, not ours. Each page is made from scratch for the business — it stays in the company's name.
+
+*490 euros* - everything handled and live in 3 days
+*190 euros* - just the page, for you to put live
+*90 euros* - just the Google part
+
+VAT not included. If you start with 90 or 190 euros, it comes off the rest.
+
+This is only part of what we do. If you need bookings, client files, stock — say so and we can talk about that too.`,
+
+    3: `{{saudacao}} {{clienteNome}}, it was good to stop by {{visitaQuando}}.
+
+Here is the page I showed you — the whole story in one place that is yours:
+
+{{link}}
+
+If you like it, just say yes. If you want me to walk you through it, I can come by {{followupDia}} in the morning — 10 minutes, no commitment.`
+};
+
 export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
 
 export const DEFAULT_EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
+export const DEFAULT_EMAIL_SUBJECT_EN = '{{clienteNome}}, I made this for {{negocioNome}}';
 
 export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
@@ -59,6 +103,29 @@ YourLab, {{zona}}
 {{vendedorTelefone}}
 {{site}}`;
 
+export const DEFAULT_EMAIL_BODY_EN = `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+
+{{ganchoTitulo}}
+
+{{ganchoTexto}}
+
+To show you what I mean, I put two things together for {{negocioNome}}, without asking you for anything. They are examples — they are not published.
+
+{{link}}
+
+If you like it, reply to this email and we talk. 490 euros everything / 190 just the page / 90 just Google, VAT not included.
+
+{{vendedorNome}}
+YourLab, {{zona}}
+{{vendedorTelefone}}
+{{site}}`;
+
+function templatesFor(lang) {
+    return normalizeOutreachLang(lang) === 'en'
+        ? { wa: WA_TEMPLATES_EN, emailSubject: DEFAULT_EMAIL_SUBJECT_EN, emailBody: DEFAULT_EMAIL_BODY_EN }
+        : { wa: WA_TEMPLATES, emailSubject: DEFAULT_EMAIL_SUBJECT, emailBody: DEFAULT_EMAIL_BODY };
+}
+
 const WA_LABELS = {
     1: '1 · Mensagem principal',
     2: '2 · Depois da resposta (Google e preços)',
@@ -69,12 +136,8 @@ export function waStepLabel(step) {
     return WA_LABELS[Number(step)] || WA_LABELS[1];
 }
 
-function greetingForHour(hour) {
-    return hour < 13 ? 'Bom dia' : 'Boa tarde';
-}
-
-export function defaultVisitaQuando(hour = new Date().getHours()) {
-    return hour < 14 ? 'hoje de manhã' : 'esta tarde';
+export function defaultVisitaQuando(hour = new Date().getHours(), lang = 'pt') {
+    return visitaQuandoFor(hour < 14 ? 'manha' : 'tarde', lang);
 }
 
 export function absoluteDemoUrl(demoUrl) {
@@ -110,27 +173,38 @@ export function formatSellerPhone(raw) {
     return { display: fallback, tel: fallback.replace(/\s/g, '') };
 }
 
+export function outreachLangOf(state) {
+    return normalizeOutreachLang(state && state.data && state.data.followup && state.data.followup.lang);
+}
+
 export function buildFollowupContext(state, config) {
     const dados = (state && state.data && state.data.dados) || {};
     const provider = (config && config.provider) || {};
+    const lang = outreachLangOf(state);
+    const en = lang === 'en';
     const hour = new Date().getHours();
     const visitaKey = state.data.followupVisita === 'tarde' ? 'tarde' : 'manha';
-    const visitaQuando = visitaKey === 'tarde' ? 'esta tarde' : 'hoje de manhã';
-    const clienteNome = String(dados.responsavel || 'Cliente').trim() || 'Cliente';
-    const negocioNome = String(dados.nome_negocio || 'o seu negócio').trim() || 'o seu negócio';
+    const visitaQuando = visitaQuandoFor(visitaKey, lang);
+    const clienteNome = String(dados.responsavel || (en ? 'there' : 'Cliente')).trim()
+        || (en ? 'there' : 'Cliente');
+    const negocioNome = String(dados.nome_negocio || (en ? 'your business' : 'o seu negócio')).trim()
+        || (en ? 'your business' : 'o seu negócio');
     const vendedorNome = String(provider.responsavel || provider.nome || 'YourLab').trim();
     const phone = formatSellerPhone(provider.telefone || provider.mbway);
     const vendedorTelefone = phone.display;
     const site = String(provider.site || 'yourlabpt.com').trim().replace(/^https?:\/\//, '');
-    const followupDia = String(state.data.followupDia || 'amanhã').trim() || 'amanhã';
+    const followupDia = localizeFollowupDia(state.data.followupDia || defaultFollowupDia(lang), lang);
     const link = absoluteDemoUrl(state.data.demoUrl);
     const zona = String(dados.cidade || dados.zona || '').trim() || 'Portugal';
     const tipo = (state.data.businessType && state.data.businessType.nome) || '';
-    const oQueFaz = String(dados.o_que_faz || dados.principais_servicos || tipo || 'negócio local').trim();
+    const oQueFaz = String(
+        dados.o_que_faz || dados.principais_servicos || tipo || (en ? 'local business' : 'negócio local')
+    ).trim();
     const morada = String(dados.morada || '').trim();
 
     const ctx = {
-        saudacao: greetingForHour(hour),
+        lang,
+        saudacao: greetingForHour(hour, lang),
         clienteNome,
         negocioNome,
         vendedorNome,
@@ -142,9 +216,11 @@ export function buildFollowupContext(state, config) {
         link,
         zona,
         oQueFaz,
-        horario: String(dados.horario || 'Horário a confirmar').trim() || 'Horário a confirmar',
+        horario: String(dados.horario || (en ? 'Hours to confirm' : 'Horário a confirmar')).trim()
+            || (en ? 'Hours to confirm' : 'Horário a confirmar'),
         telefone: String(dados.telefone || dados.whatsapp || '').trim(),
-        moradaLinha: [morada, zona].filter(Boolean).join(', ') || 'Morada a confirmar',
+        moradaLinha: [morada, zona].filter(Boolean).join(', ')
+            || (en ? 'Address to confirm' : 'Morada a confirmar'),
         categoriaFicha: zona ? `${oQueFaz} · ${zona}` : oQueFaz,
         inicial: (negocioNome.replace(/^o seu /i, '').charAt(0) || 'G').toUpperCase(),
         linkGoogle: '',
@@ -161,7 +237,8 @@ export function buildFollowupContext(state, config) {
     ctx.problemaFicha = sinais.problemaFicha;
     const picked = pickGancho({
         override: state.data && state.data.followup && state.data.followup.ganchoId,
-        sinais
+        sinais,
+        lang
     });
     ctx.ganchoId = picked.id;
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
@@ -183,16 +260,18 @@ export function buildWhatsAppMessage(state, config, step = 1) {
     const editKey = `followupWa${n}`;
     const edited = state.data && state.data[editKey];
     if (edited && !String(edited).includes('{{')) return String(edited);
+    const pack = templatesFor(ctx.lang);
     const tpl = (edited && String(edited).includes('{{'))
         ? edited
-        : (WA_TEMPLATES[n] || WA_TEMPLATES[1]);
+        : (pack.wa[n] || pack.wa[1]);
     return fillTemplate(tpl, ctx);
 }
 
 export function buildEmailContent(state, config) {
     const ctx = buildFollowupContext(state, config);
-    const subjectTpl = state.data.followupEmailSubject || DEFAULT_EMAIL_SUBJECT;
-    const bodyTpl = state.data.followupEmailBody || DEFAULT_EMAIL_BODY;
+    const pack = templatesFor(ctx.lang);
+    const subjectTpl = state.data.followupEmailSubject || pack.emailSubject;
+    const bodyTpl = state.data.followupEmailBody || pack.emailBody;
     return {
         subject: fillTemplate(subjectTpl, ctx),
         body: fillTemplate(bodyTpl, ctx)

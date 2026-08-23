@@ -285,4 +285,55 @@ describe('digitalizept outreach', () => {
         assert.match(eCtx.ganchoTexto, /que fecham às 18h/);
         assert.doesNotMatch(renderEmailHtml(eCtx), /\{\{problemaFicha\}\}/);
     });
+
+    it('renders English WhatsApp and HTML email when lang is en', () => {
+        const stored = applyGanchoFields(parseFollowup({}), { lang: 'en' });
+        assert.equal(stored.lang, 'en');
+        assert.equal(parseFollowup({}).lang, 'pt');
+
+        const ctx = buildOutreachContext({
+            dados: {
+                nome_negocio: 'Talho da Costa',
+                responsavel: 'Costa',
+                cidade: 'Porto',
+                o_que_faz: 'butcher'
+            },
+            provider: {
+                nome: 'YourLab',
+                responsavel: 'Túlio Soares',
+                nif: '509000000',
+                morada: 'Rua A 1, 4700-000 Braga'
+            },
+            origin: 'https://yourlabpt.com',
+            demoSlug: 'talho-da-costa',
+            followupDia: 'amanhã',
+            visita: 'tarde',
+            hour: 10,
+            lang: 'en'
+        });
+        assert.equal(ctx.lang, 'en');
+        assert.equal(ctx.saudacao, 'Good morning');
+        assert.equal(ctx.visitaQuando, 'this afternoon');
+        assert.equal(ctx.followupDia, 'tomorrow');
+        assert.doesNotMatch(ctx.clienteNome, /Sr\./);
+
+        const wa1 = waTextForStep(1, ctx);
+        assert.doesNotMatch(wa1, /Sr\./);
+        assert.match(wa1, /I'm Túlio Soares/);
+        assert.match(wa1, /When someone recommends you/);
+
+        const html = renderEmailHtml(ctx);
+        assert.match(html, /lang="en"/);
+        assert.match(html, /I made an example/);
+        assert.match(html, /Open the example/);
+        assert.match(html, /Yes, let's talk/);
+        assert.match(html, /Digitize your business/);
+        assert.doesNotMatch(html, /Sr\./);
+        assert.doesNotMatch(html, /Digitalize a sua empresa/);
+        assert.doesNotMatch(html, /Abrir o exemplo/);
+        assert.doesNotMatch(html, /\{\{\w+\}\}/);
+        const text = renderEmailText(ctx);
+        assert.match(text, /VAT not included/);
+        assert.match(text, /REMOVE/);
+    });
 });

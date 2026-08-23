@@ -4,7 +4,7 @@ import { createWizard, clearWizardState, hasWizardProgress, seedWizardState, get
 import { clearSettingsCache, fetchSettings } from './settings.js';
 import { clearCatalogCache, fetchCatalog } from './catalog.js';
 import { flushDealQueue, queuedDealCount } from './offline-queue.js';
-import { saveDraftLead } from './draft.js';
+import { cancelScheduledDraft, saveDraftLead } from './draft.js';
 import { confirmAndRefreshApp, registerDigitalizeptSw } from './pwa.js';
 
 registerDigitalizeptSw();
@@ -90,8 +90,13 @@ async function applyResumeLead(leadId) {
         return false;
     }
 
+    cancelScheduledDraft();
+    if (wizard && typeof wizard.destroy === 'function') wizard.destroy();
     clearWizardState();
     const seed = { ...data.data };
+    seed.leadBoundNome = seed.leadBoundNome
+        || (seed.dados && seed.dados.nome_negocio)
+        || '';
     // Re-open always needs a fresh signature (new or revised contract).
     delete seed.assinatura;
     delete seed.assinaturaPrestador;
@@ -170,6 +175,8 @@ async function logout() {
     clearToken();
     // Without this the wizard singleton and the stored state survive the logout
     // and the next login resumes the previous client's deal.
+    cancelScheduledDraft();
+    if (wizard && typeof wizard.destroy === 'function') wizard.destroy();
     clearWizardState();
     clearSettingsCache();
     clearCatalogCache();
@@ -196,6 +203,7 @@ async function startNewDeal() {
         }
     }
     clearResumeParam();
+    cancelScheduledDraft();
     clearWizardState();
     if (!wizard) wizard = createWizard({ onUnauthorized: handleUnauthorized, showToast });
     wizard.reset();

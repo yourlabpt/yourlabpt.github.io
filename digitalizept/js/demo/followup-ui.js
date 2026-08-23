@@ -6,8 +6,14 @@ import {
     defaultVisitaQuando,
     nextSendableWaStep,
     normalizePhoneForWa,
+    outreachLangOf,
     waStepLabel
 } from './followup-messages.js';
+import {
+    defaultFollowupDia,
+    localizeFollowupDia,
+    normalizeOutreachLang
+} from './outreach-lang.js';
 import {
     listGanchos,
     pickGancho,
@@ -47,10 +53,11 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     if (!ctx.state.data.followupVisita) {
         ctx.state.data.followupVisita = defaultVisitaQuando().includes('manhã') ? 'manha' : 'tarde';
     }
+    if (!ctx.state.data.followup) ctx.state.data.followup = { waStep: 0, lang: 'pt' };
+    if (!ctx.state.data.followup.lang) ctx.state.data.followup.lang = 'pt';
     if (!ctx.state.data.followupDia) {
-        ctx.state.data.followupDia = 'amanhã';
+        ctx.state.data.followupDia = defaultFollowupDia(ctx.state.data.followup.lang);
     }
-    if (!ctx.state.data.followup) ctx.state.data.followup = { waStep: 0 };
 
     const controls = document.createElement('div');
     controls.className = 'followup-controls';
@@ -83,10 +90,31 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     diaInput.type = 'text';
     diaInput.className = 'field-input';
     diaInput.placeholder = 'Ex.: amanhã, sexta-feira';
-    diaInput.value = ctx.state.data.followupDia || 'amanhã';
+    diaInput.value = ctx.state.data.followupDia || defaultFollowupDia(ctx.state.data.followup.lang);
     diaLabel.append(diaSpan, diaInput);
 
-    controls.append(visitaLabel, diaLabel);
+    const langWrap = document.createElement('div');
+    langWrap.className = 'field followup-lang';
+    const langSpan = document.createElement('span');
+    langSpan.className = 'field-label';
+    langSpan.textContent = 'Idioma';
+    const langRow = document.createElement('div');
+    langRow.className = 'followup-lang-row';
+    const langButtons = {};
+    [
+        { id: 'pt', label: 'PT' },
+        { id: 'en', label: 'EN' }
+    ].forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'followup-lang-btn';
+        btn.textContent = opt.label;
+        langButtons[opt.id] = btn;
+        langRow.appendChild(btn);
+    });
+    langWrap.append(langSpan, langRow);
+
+    controls.append(langWrap, visitaLabel, diaLabel);
 
     const linkStatus = document.createElement('p');
     linkStatus.className = 'followup-link-status';
@@ -139,7 +167,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         preview.className = 'followup-gancho-title';
         preview.textContent = g.ganchoTitulo;
         btn.append(name, preview);
-        ganchoButtons[g.id] = { btn, badge };
+        ganchoButtons[g.id] = { btn, badge, preview };
         ganchoList.appendChild(btn);
     });
     const problemaWrap = document.createElement('label');
@@ -173,6 +201,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     const tabs = document.createElement('div');
     tabs.className = 'followup-tabs';
     let activeStep = nextSendableWaStep(ctx.state.data.followup) || Math.max(1, Number(ctx.state.data.followup.waStep) || 1);
+    let langTouched = false;
 
     function followupOf() {
         return ctx.state.data.followup || { waStep: 0 };
@@ -186,10 +215,15 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         return followupOf().ganchoId || suggestedGanchoId();
     }
 
+    function currentLang() {
+        return normalizeOutreachLang(followupOf().lang || outreachLangOf(ctx.state));
+    }
+
     function ganchoPayload() {
         const selected = selectedGanchoId();
         const f = followupOf();
         return {
+            lang: currentLang(),
             ganchoId: selected,
             sinaisDeMovimento: f.sinaisDeMovimento === true,
             fichaComErro: selected === 'E' || f.fichaComErro === true,
@@ -234,7 +268,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     function persistEdits() {
         const patch = {
             followupVisita: visitaSelect.value,
-            followupDia: diaInput.value.trim() || 'amanhã',
+            followupDia: diaInput.value.trim() || defaultFollowupDia(currentLang()),
             [`followupWa${activeStep}`]: waPreview.value,
             followupEmailSubject: emailSubject.value,
             followupEmailBody: emailPreview.value,
@@ -249,9 +283,12 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     function paintGanchos() {
         const selected = selectedGanchoId();
         const suggested = suggestedGanchoId();
+        const lang = currentLang();
+        const sinais = sinaisFromWizardState(ctx.state);
         Object.entries(ganchoButtons).forEach(([id, node]) => {
             node.btn.classList.toggle('active', id === selected);
             node.badge.classList.toggle('hidden', id !== suggested);
+            node.preview.textContent = pickGancho({ override: id, sinais, lang }).ganchoTitulo;
         });
         problemaWrap.classList.toggle('hidden', selected !== 'E');
         const f = followupOf();
@@ -366,9 +403,52 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         }
         ctx.update({
             followupVisita: visitaSelect.value,
-            followupDia: diaInput.value.trim() || 'amanhã'
+            followupDia: diaInput.value.trim() || defaultFollowupDia(currentLang())
         });
         waLabel.textContent = waStepLabel(activeStep);
+        paintLang();
+    }
+
+    function paintLang() {
+        const lang = currentLang();
+        Object.entries(langButtons).forEach(([id, btn]) => {
+            btn.classList.toggle('active', id === lang);
+            btn.setAttribute('aria-pressed', id === lang ? 'true' : 'false');
+        });
+    }
+
+    function applyLang(next) {
+        const lang = normalizeOutreachLang(next);
+        if (lang === currentLang()) return;
+        langTouched = true;
+        const nextDia = localizeFollowupDia(diaInput.value.trim() || defaultFollowupDia(lang), lang);
+        diaInput.value = nextDia;
+        emailSubject.dataset.autofill = '1';
+        emailPreview.dataset.autofill = '1';
+        emailSubject.value = '';
+        emailPreview.value = '';
+        ctx.update({
+            followupDia: nextDia,
+            followupWa1: '',
+            followupWa2: '',
+            followupWa3: '',
+            followupEmailSubject: '',
+            followupEmailBody: '',
+            followup: { ...followupOf(), lang }
+        });
+        paintMessages();
+        persistLangRemote(lang);
+    }
+
+    async function persistLangRemote(lang) {
+        const id = leadIdOf(ctx);
+        if (!id || typeof config.api !== 'function') return;
+        try {
+            const { response, data } = await outreach('/lang', { lang });
+            if (response.ok && data.followup) {
+                ctx.update({ followup: { ...followupOf(), ...data.followup, lang } });
+            }
+        } catch (_) { /* local preview still works */ }
     }
 
     Object.entries(ganchoButtons).forEach(([id, node]) => {
@@ -393,6 +473,9 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         persistGancho({ siteVelho: siteVelhoCheck.checked });
     });
 
+    Object.entries(langButtons).forEach(([id, btn]) => {
+        btn.addEventListener('click', () => applyLang(id));
+    });
     visitaSelect.addEventListener('change', paintMessages);
     diaInput.addEventListener('input', paintMessages);
     waPreview.addEventListener('input', persistEdits);
@@ -637,7 +720,18 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
                 `/api/digitalizept/leads/${encodeURIComponent(id)}/outreach`
             );
             if (!response.ok || !data.followup) return;
-            ctx.update({ followup: data.followup });
+            const lang = langTouched
+                ? currentLang()
+                : normalizeOutreachLang(data.followup.lang);
+            const nextDia = localizeFollowupDia(
+                ctx.state.data.followupDia || defaultFollowupDia(lang),
+                lang
+            );
+            diaInput.value = nextDia;
+            ctx.update({
+                followup: { ...data.followup, lang },
+                followupDia: nextDia
+            });
             const next = nextSendableWaStep(data.followup);
             if (next) activeStep = next;
             else if (data.followup.waStep) activeStep = data.followup.waStep;
