@@ -578,31 +578,41 @@ body:has(.app) {
     font-weight: 600;
 }
 
-.hours-picker {
+.hours-picker,
+.hours-range,
+.hours-ranges,
+.hours-extra {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
+}
+
+.hours-picker p,
+.hours-range p {
+    margin: 0;
 }
 
 .hours-presets,
 .hours-days {
     display: grid;
-    gap: 6px;
+    gap: 8px;
 }
 
 .hours-presets {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .hours-days {
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .hours-preset,
 .hours-day,
 .hours-add,
 .hours-remove {
+    min-width: 0;
     min-height: 44px;
+    padding: 8px 6px;
     border-radius: 10px;
     border: 1px solid var(--accent-soft);
     background: var(--secondary-dark);
@@ -618,8 +628,9 @@ body:has(.app) {
 }
 
 .hours-day {
-    padding: 8px 0;
-    font-size: 0.78rem;
+    padding: 8px 2px;
+    font-size: 0.72rem;
+    letter-spacing: -0.02em;
 }
 
 .hours-preset.on,
@@ -631,14 +642,15 @@ body:has(.app) {
 
 .hours-times {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
 }
 
 .hours-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    min-width: 0;
 }
 
 .hours-label,
@@ -653,12 +665,17 @@ body:has(.app) {
 .hours-range-title {
     font-weight: 700;
     color: var(--text-light);
-    margin-bottom: 4px;
 }
 
 .hours-time {
-    color-scheme: dark;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 44px;
+    padding: 10px 8px;
+    font-size: 16px;
+    color-scheme: dark;
 }
 
 .hours-preview {
@@ -681,10 +698,28 @@ body:has(.app) {
     font-weight: 600;
 }
 
-.hours-ranges {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+@media (max-width: 420px) {
+    .hours-picker,
+    .hours-range,
+    .hours-ranges,
+    .hours-extra {
+        gap: 16px;
+    }
+
+    .hours-presets,
+    .hours-days {
+        gap: 8px;
+    }
+
+    .hours-times {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .hours-day {
+        min-height: 42px;
+        font-size: 0.68rem;
+    }
 }
 
 .field-optional {
