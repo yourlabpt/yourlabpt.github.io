@@ -30,7 +30,6 @@ function section(id, className) {
 function sectionTitle(text) {
     const wrap = el('div', 'dpl-section-head');
     wrap.appendChild(el('h2', 'dpl-h2', text));
-    wrap.appendChild(el('span', 'dpl-underline'));
     return wrap;
 }
 
@@ -219,7 +218,7 @@ function buildHero(dados, identidade, demo, businessType, fotos) {
 
 function buildSobre(demo, fotos) {
     if (!demo.sobre || !demo.sobre.texto) return null;
-    const s = section(null, 'dpl-sobre');
+    const s = section('dpl-sobre', 'dpl-sobre');
     const grid = el('div', 'dpl-sobre-grid');
     const copy = el('div', 'dpl-sobre-copy');
     copy.appendChild(sectionTitle(demo.sobre.titulo));
@@ -560,6 +559,16 @@ export function renderLanding(state) {
     root.style.setProperty('--l-secundaria', cores.secundaria || '#7a8a99');
 
     root.appendChild(buildTopbar(dados, identidade, businessType));
+    root.addEventListener('click', (event) => {
+        const a = event.target.closest && event.target.closest('a[href^="#"]');
+        if (!a || !root.contains(a)) return;
+        const href = a.getAttribute('href') || '';
+        if (href.length < 2) return;
+        const id = decodeURIComponent(href.slice(1));
+        if (!root.querySelector(`#${CSS.escape(id)}`)) return;
+        event.preventDefault();
+        scrollToId(id);
+    });
 
     const sections = businessType.seccoes_landing || ['hero', 'sobre', 'servicos', 'diferenciais', 'galeria', 'contactos', 'mapa', 'rodape'];
     const builders = {

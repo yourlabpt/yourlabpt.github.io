@@ -63,7 +63,7 @@ h1, h2, .dpl-display {
 
 p { text-wrap: pretty; }
 
-a { color: inherit; }
+a { color: inherit; text-decoration: none; }
 
 .dpl-wrap {
     width: min(var(--container), 100%);
@@ -122,6 +122,8 @@ h3,
     font-weight: 600;
     font-size: 1.15rem;
     letter-spacing: 0.02em;
+    text-decoration: none;
+    color: inherit;
 }
 
 .dpl-topbar-logo {
@@ -146,8 +148,7 @@ h3,
 }
 
 .dpl-nav-link:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: var(--accent-ink);
 }
 
 .dpl-nav-link:focus-visible,
@@ -381,6 +382,15 @@ h3,
     padding-block: var(--space-5);
     border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
     font-size: 0.88rem;
+}
+
+.dpl-rodape-livro {
+    text-decoration: none;
+    opacity: 0.78;
+}
+
+.dpl-rodape-livro:hover {
+    opacity: 1;
 }
 
 .dpl-demo-switch {

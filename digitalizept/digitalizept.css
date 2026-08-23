@@ -1334,6 +1334,10 @@ body.dp-public.dpl-has-switch,
     min-height: 100vh;
 }
 
+.dp-landing a {
+    text-decoration: none;
+}
+
 /* Public demo pages: keep document scroll and paper page chrome */
 body:has(> .dp-landing) {
     background: #faf9f7;
@@ -1396,15 +1400,6 @@ html:has(body > .dp-landing) {
     font-weight: 700;
     color: var(--l-base);
     letter-spacing: -0.01em;
-}
-
-.dpl-underline {
-    display: block;
-    width: 44px;
-    height: 3px;
-    margin-top: 10px;
-    border-radius: 2px;
-    background: var(--l-destaque);
 }
 
 /* Atmospheric photo-slot planes (real photos replace these on delivery) */
@@ -1542,8 +1537,7 @@ html:has(body > .dp-landing) {
 }
 
 .dp-landing .dpl-nav-link:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: var(--l-destaque);
 }
 
 @media (max-width: 640px) {
@@ -2109,8 +2103,8 @@ html:has(body > .dp-landing) {
 .dpl-rodape-livro {
     font-size: 0.78rem;
     letter-spacing: 0.02em;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    text-decoration: none;
+    opacity: 0.78;
 }
 
 .dpl-rodape .dpl-rodape-livro {

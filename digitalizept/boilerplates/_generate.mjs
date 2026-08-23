@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contrastTokens } from '../js/demo/colors.js';
+import { INPAGE_NAV_SCRIPT } from '../js/demo/inpage-nav.js';
 import { checkPalettes } from './check-contrast.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -108,16 +109,8 @@ function visual(n, ratio, mono, extra = '') {
 }
 
 function navJs() {
-    return `<script>
-(function () {
-  var btn = document.querySelector('.dpl-nav-toggle');
-  var nav = document.querySelector('.dpl-nav');
-  if (!btn || !nav) return;
-  btn.addEventListener('click', function () {
-    var open = nav.classList.toggle('is-open');
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-})();
+    return `<script data-dp-inpage-nav>
+${INPAGE_NAV_SCRIPT}
 </script>`;
 }
 

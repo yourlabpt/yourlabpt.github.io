@@ -389,6 +389,28 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.ok(bodies < 3, `typed services invented ${bodies} descriptions`);
     });
 
+    it('does not underline links on the Sem fotos page', () => {
+        const base = fs.readFileSync(path.join(root, 'css/dpl-base.css'), 'utf8');
+        assert.match(base, /a \{[^}]*text-decoration:\s*none/s);
+        assert.doesNotMatch(base, /text-decoration:\s*underline/);
+        const landing = fs.readFileSync(
+            path.join(__dirname, '../../digitalizept/digitalizept.css'), 'utf8'
+        );
+        const demoCss = landing.slice(landing.indexOf('.dp-landing {'));
+        assert.doesNotMatch(demoCss, /text-decoration:\s*underline/);
+        assert.doesNotMatch(demoCss, /\.dpl-underline\s*\{/);
+    });
+
+    it('scrolls hash nav inside the page instead of leaving for Digitalize PT', () => {
+        const html = fs.readFileSync(path.join(root, 'restaurante-sem-fotos.html'), 'utf8');
+        assert.match(html, /data-dp-inpage-nav/);
+        assert.match(html, /scrollIntoView/);
+        assert.match(html, /preventDefault/);
+        assert.match(html, /href="#dpl-servicos"/);
+        assert.match(html, /id="dpl-servicos"/);
+        assert.match(html, /id="topo"/);
+    });
+
     it('only allows named text-align classes in boilerplate CSS and HTML', () => {
         slugs.forEach((slug) => {
             const css = fs.readFileSync(path.join(root, 'css', `${slug}.css`), 'utf8');

@@ -1,5 +1,6 @@
 import { LIVRO_RECLAMACOES_URL, renderLanding } from './landing.js';
 import { contrastTokens } from './colors.js';
+import { INPAGE_NAV_SCRIPT } from './inpage-nav.js';
 
 export const DEMO_HTML_MAX = 900000;
 
@@ -464,6 +465,18 @@ function applyFotos(doc, identidade) {
     });
 }
 
+function injectInPageNav(doc) {
+    if (!doc) return;
+    [...doc.querySelectorAll('script')].forEach((node) => {
+        const body = node.textContent || '';
+        if (node.hasAttribute('data-dp-inpage-nav') || /dpl-nav-toggle/.test(body)) node.remove();
+    });
+    const script = doc.createElement('script');
+    script.setAttribute('data-dp-inpage-nav', '');
+    script.textContent = INPAGE_NAV_SCRIPT;
+    (doc.body || doc.documentElement).appendChild(script);
+}
+
 export function applyIdentityToHtml(html, identidade, dados) {
     const raw = restoreHtmlPlaceholders(extractHtml(html), identidade);
     if (!raw || typeof DOMParser === 'undefined') return raw;
@@ -474,6 +487,7 @@ export function applyIdentityToHtml(html, identidade, dados) {
         applyLogo(doc, identidade, dados);
         applyFotos(doc, identidade);
         injectLivroReclamacoesDom(doc);
+        injectInPageNav(doc);
         return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
     } catch (_) {
         return raw;
