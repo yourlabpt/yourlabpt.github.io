@@ -104,7 +104,9 @@ const requireAdmin = adminAuth.requireAdmin;
 
 // Digitalize Portugal — sales app master key. Separate from ADMIN_PASSWORD on purpose:
 // this key gets shared with whoever is out selling, admin access does not.
-const DIGITALIZEPT_KEY = process.env.DIGITALIZEPT_KEY || 'digitalizept-key';
+const DIGITALIZEPT_KEY = process.env.DIGITALIZEPT_KEY
+    || process.env.ADMIN_PASSWORD
+    || 'digitalizept-key';
 if (process.env.NODE_ENV === 'production' && DIGITALIZEPT_KEY === 'digitalizept-key') {
     throw new Error('DIGITALIZEPT_KEY must be set to a non-default value in production.');
 }

@@ -5,7 +5,8 @@ export function resolveApiBase() {
     const port = window.location.port;
 
     if (host === 'localhost' || host === '127.0.0.1') {
-        if (port === '3000' || port === '') return '';
+        // Same origin when this Node process serves the app (3000, 3399, …).
+        if (port === '' || port === '3000' || port === '3399') return '';
         return 'http://localhost:3000';
     }
 
