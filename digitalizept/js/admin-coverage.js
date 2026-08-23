@@ -167,7 +167,7 @@ export function setupCoverage({
                 btn.className = `coverage-chip${filterIds.has(item.id) ? ' active' : ''}`;
                 const dot = document.createElement('span');
                 dot.className = 'coverage-chip-dot';
-                if (item.axis === 'resultado') {
+                if (item.axis === 'etapa') {
                     dot.style.background = '#faf8f4';
                     dot.style.boxShadow = `inset 0 0 0 2px ${item.color}`;
                 } else {
@@ -185,8 +185,8 @@ export function setupCoverage({
             group.appendChild(row);
             el.coverageLegend.appendChild(group);
         };
-        addGroup('Etapa', legend.etapas || []);
         addGroup('Resultado', legend.resultados || []);
+        addGroup('Etapa', legend.etapas || []);
     }
 
     function etapaSelect(selected) {

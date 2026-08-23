@@ -7,8 +7,8 @@
  * land on the shop, not the town centre.
  *
  * Coverage pins use two tags:
- *   etapa (fill)     — funnel progress
- *   resultado (stroke) — parked / lost / won
+ *   resultado (fill)   — process outcome at a glance (futuro / sem interesse / digitalizado)
+ *   etapa (stroke)     — funnel progress, for analysis
  * The DB column `cobertura` stores etapa; `resultado` is its own column.
  */
 
@@ -51,13 +51,8 @@ const RESULTADO_COLORS = {
     digitalizado: '#3d9a6a'
 };
 
-const PARKED_PIN = {
-    color: '#d5d1c9',
-    strokeColor: '#b8b4ac',
-    strokeWidth: 0.9,
-    faded: true,
-    zIndexOffset: -400
-};
+/** Paper fill when no process outcome is set yet — etapa still reads as the ring. */
+const PIN_FILL_UNSET = '#faf8f4';
 
 /** @deprecated use ETAPA_*; kept as aliases for older imports */
 const COBERTURA_VALUES = ETAPA_VALUES;
@@ -134,25 +129,14 @@ function isParkedResultado(value) {
 
 function pinColors(etapa, resultado) {
     const res = normalizeResultado(resultado);
-    if (isParkedResultado(res)) {
-        return { ...PARKED_PIN };
-    }
-    const fill = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
-    if (res) {
-        return {
-            color: fill,
-            strokeColor: RESULTADO_COLORS[res] || '#1b1b1b',
-            strokeWidth: 2.8,
-            faded: false,
-            zIndexOffset: 0
-        };
-    }
+    const parked = isParkedResultado(res);
+    const stroke = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
     return {
-        color: fill,
-        strokeColor: '#1b1b1b',
-        strokeWidth: 1.2,
-        faded: false,
-        zIndexOffset: 0
+        color: res ? (RESULTADO_COLORS[res] || PIN_FILL_UNSET) : PIN_FILL_UNSET,
+        strokeColor: stroke,
+        strokeWidth: parked ? 2.2 : 2.8,
+        faded: parked,
+        zIndexOffset: parked ? -400 : 0
     };
 }
 

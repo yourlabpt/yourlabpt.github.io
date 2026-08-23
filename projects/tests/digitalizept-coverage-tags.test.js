@@ -68,21 +68,21 @@ describe('digitalizept etapa + resultado tags', () => {
         db.close();
     });
 
-    it('pinColors: fill from etapa, stroke from resultado when set', () => {
+    it('pinColors: fill from resultado, stroke from etapa', () => {
         const plain = pinColors('visitado', '');
-        assert.equal(plain.color, ETAPA_COLORS.visitado);
-        assert.equal(plain.strokeColor, '#1b1b1b');
-        assert.ok(plain.strokeWidth < 2);
+        assert.equal(plain.color, '#faf8f4');
+        assert.equal(plain.strokeColor, ETAPA_COLORS.visitado);
+        assert.ok(plain.strokeWidth >= 2);
 
         const lost = pinColors('demo_apresentada', 'sem_interesse');
-        assert.equal(lost.color, '#d5d1c9');
-        assert.equal(lost.strokeColor, RESULTADO_COLORS.sem_interesse);
+        assert.equal(lost.color, RESULTADO_COLORS.sem_interesse);
+        assert.equal(lost.strokeColor, ETAPA_COLORS.demo_apresentada);
         assert.equal(lost.faded, true);
-        assert.ok(lost.strokeWidth < 2);
         assert.ok(lost.zIndexOffset < 0);
 
         const won = pinColors('contacto_remoto', 'digitalizado');
-        assert.equal(won.strokeColor, RESULTADO_COLORS.digitalizado);
+        assert.equal(won.color, RESULTADO_COLORS.digitalizado);
+        assert.equal(won.strokeColor, ETAPA_COLORS.contacto_remoto);
     });
 
     it('normalizes etapa and resultado inputs', () => {
