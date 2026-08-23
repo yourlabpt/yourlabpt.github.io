@@ -15,4 +15,3 @@ h1, h2 { text-transform: uppercase; }
 .dpl-hero { background: var(--accent-2); color: var(--on-accent-2); position: relative; overflow: hidden; }
 .dpl-hero .dpl-icon { color: currentColor; }
 .dpl-hero::after { content:""; position:absolute; right:-40px; top:10%; width:220px; height:220px; border:18px solid color-mix(in srgb, var(--accent) 70%, transparent); border-radius:50%; }
-.dpl-row { display:grid; grid-template-columns: 2.5rem 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); }

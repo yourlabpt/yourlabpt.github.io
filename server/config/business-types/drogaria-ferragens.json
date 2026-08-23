@@ -192,6 +192,14 @@
         "autor": "Helena",
         "texto": "Têm o que as grandes superfícies não explicam."
       }
+    ],
+    "servicos_itens": [
+      { "nome": "Ferragens e ferramentas", "descricao": "Parafusos, dobradiças e a ferramenta para o trabalho." },
+      { "nome": "Tintas e vernizes", "descricao": "Ajudamos a calcular a quantidade e a escolher o acabamento." },
+      { "nome": "Material elétrico", "descricao": "Tomadas, cabos e lâmpadas para arranjos em casa." },
+      { "nome": "Canalização", "descricao": "Torneiras, tubos e as peças de substituição mais pedidas." },
+      { "nome": "Produtos de limpeza", "descricao": "Do doméstico ao mais forte, com indicação de uso." },
+      { "nome": "Duplicação de chaves", "descricao": "Cópias feitas no balcão, enquanto espera." }
     ]
   }
 }

@@ -199,6 +199,14 @@
         "autor": "Hugo",
         "texto": "Mostraram tecidos a sério, não três amostras."
       }
+    ],
+    "servicos_itens": [
+      { "nome": "Estofos à medida", "descricao": "Feitos para a peça que tem, no tecido que escolher." },
+      { "nome": "Restauro de mobiliário", "descricao": "Recuperamos a estrutura antes de vestir de novo." },
+      { "nome": "Cortinados", "descricao": "Medimos em casa e montamos quando estiver pronto." },
+      { "nome": "Estofos automóvel", "descricao": "Bancos e forras, incluindo clássicos." },
+      { "nome": "Reparação de sofás", "descricao": "Molas, espumas e costuras — sem trocar o sofá." },
+      { "nome": "Tapeçaria decorativa", "descricao": "Almofadas e apontamentos que acompanham a peça." }
     ]
   }
 }

@@ -194,6 +194,14 @@
         "autor": "Marta",
         "texto": "O espaço é calmo e senti-me bem tratada."
       }
+    ],
+    "servicos_itens": [
+      { "nome": "Consulta de estética", "descricao": "Avaliação da pele e um plano com o que faz sentido para si." },
+      { "nome": "Tratamentos faciais", "descricao": "Limpeza, hidratação e cuidado da pele do rosto." },
+      { "nome": "Tratamentos corporais", "descricao": "Sessões de corpo, marcadas com tempo entre clientes." },
+      { "nome": "Laser e peeling", "descricao": "Equipamento próprio, com indicação dada em consulta." },
+      { "nome": "Consultoria skincare", "descricao": "Ajudamos a escolher os produtos para a rotina em casa." },
+      { "nome": "Acompanhamento pré e pós-cirúrgico", "descricao": "Preparação e recuperação, em articulação com o médico." }
     ]
   }
 }

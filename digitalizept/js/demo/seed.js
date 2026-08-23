@@ -24,17 +24,27 @@ function itemNome(item) {
     return String(item || '').trim();
 }
 
+// The typed list describes the whole business, never one service, so it is not a
+// per-item fallback: reuse the category description that matches the name, or none.
+function seedDescricao(nome, seed) {
+    const key = String(nome || '').trim().toLowerCase();
+    if (!key) return '';
+    const itens = Array.isArray(seed.servicos_itens) ? seed.servicos_itens : [];
+    const match = itens.find((item) => itemNome(item).toLowerCase() === key);
+    return match ? String(match.descricao || '').trim() : '';
+}
+
 function mapServico(item, dados, seed) {
     if (item && typeof item === 'object') {
         return {
             nome: clamp(item.nome, L.servicos.nome),
-            descricao: clamp(item.descricao || dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao),
+            descricao: clamp(item.descricao || seedDescricao(item.nome, seed), L.servicos.descricao),
             preco: String(item.preco || '').trim()
         };
     }
     return {
         nome: clamp(item, L.servicos.nome),
-        descricao: clamp(dados.principais_servicos || seed.servico_desc || '', L.servicos.descricao),
+        descricao: clamp(seedDescricao(item, seed), L.servicos.descricao),
         preco: ''
     };
 }

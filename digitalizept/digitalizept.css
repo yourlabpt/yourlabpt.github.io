@@ -1421,7 +1421,7 @@ html:has(body > .dp-landing) {
     font-weight: 700;
     letter-spacing: 0.16em;
     color: #fff;
-    opacity: 0.75;
+    opacity: 0.38;
     z-index: 1;
 }
 
@@ -1448,7 +1448,7 @@ html:has(body > .dp-landing) {
     position: absolute;
     inset: 0;
     background:
-        linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.55) 55%, rgba(0, 0, 0, 0.72) 100%);
+        linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.42) 55%, rgba(0, 0, 0, 0.58) 100%);
     pointer-events: none;
 }
 
@@ -1469,17 +1469,17 @@ html:has(body > .dp-landing) {
 }
 
 .dpl-hero-name {
-    font-size: 0.92rem;
+    font-size: 0.82rem;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    margin-bottom: 18px;
-    opacity: 0.95;
+    margin-bottom: 14px;
+    opacity: 0.88;
 }
 
 .dpl-hero-title {
-    font-size: clamp(1.85rem, 5vw, 2.45rem);
-    line-height: 1.15;
+    font-size: clamp(2.1rem, 5.5vw, 3rem);
+    line-height: 1.12;
     font-weight: 800;
     margin-bottom: 14px;
     text-wrap: balance;
@@ -1543,6 +1543,16 @@ html:has(body > .dp-landing) {
     cursor: pointer;
     border: none;
     text-decoration: none;
+    transition: filter 0.15s, background 0.15s, color 0.15s;
+}
+
+.dp-landing .dpl-btn:hover {
+    filter: brightness(0.94);
+}
+
+.dp-landing .dpl-btn-ghost:hover {
+    filter: none;
+    background: rgba(255, 255, 255, 0.12);
 }
 
 .dp-landing .dpl-btn svg {
@@ -1601,7 +1611,7 @@ html:has(body > .dp-landing) {
 }
 
 .dpl-avaliacoes {
-    background: #f3f0ea;
+    background: #f5f2ec;
 }
 
 .dpl-reviews-grid {
@@ -1796,7 +1806,7 @@ html:has(body > .dp-landing) {
 
 /* Services — text cards. Colour planes sit on the hero/gallery, not on top of each item. */
 .dpl-servicos {
-    background: #f3f0ea;
+    background: #f5f2ec;
 }
 
 .dpl-servicos-grid {
@@ -1986,7 +1996,7 @@ html:has(body > .dp-landing) {
 
 /* Contacts */
 .dpl-contactos {
-    background: #f3f0ea;
+    background: #f5f2ec;
     text-align: center;
 }
 

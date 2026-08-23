@@ -203,6 +203,14 @@
         "autor": "Sónia",
         "texto": "Não inventam serviços. Confio neles."
       }
+    ],
+    "servicos_itens": [
+      { "nome": "Manutenção e revisões", "descricao": "Revisão pelo plano da marca, com o registo no livro." },
+      { "nome": "Diagnóstico eletrónico", "descricao": "Lemos o erro e explicamos o que significa antes de avançar." },
+      { "nome": "Travões e suspensão", "descricao": "Discos, pastilhas e amortecedores — segurança primeiro." },
+      { "nome": "Mudança de óleo", "descricao": "Óleo e filtros à especificação do seu carro." },
+      { "nome": "Pré-inspeção IPO", "descricao": "Vemos o que chumba antes de ir, para não voltar." },
+      { "nome": "Ar condicionado", "descricao": "Carga de gás e limpeza do circuito antes do verão." }
     ]
   }
 }

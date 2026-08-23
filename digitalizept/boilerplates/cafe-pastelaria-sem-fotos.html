@@ -32,9 +32,10 @@
 <section class="dpl-hero">
     <div class="dpl-wrap">
         
+        <p class="dpl-kicker" data-dp-copy="cidade"></p>
         <h1 data-dp-copy="hero.titulo"></h1>
         <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
-        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="maps"></a></div>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="maps"></a><a class="dpl-btn dpl-btn-ghost" href="#dpl-servicos">Ver especialidades</a></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-sobre">
@@ -68,7 +69,7 @@
         </ul></div>
     </div>
 </section>
-<section class="dpl-section" id="dpl-galeria">
+<section class="dpl-section dpl-section--muted" id="dpl-galeria">
     <div class="dpl-wrap dpl-grid dpl-grid-4">
         <figure><div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div></figure>
         <figure><div class="dpl-visual " data-dp-photo="1" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div></figure>
@@ -76,12 +77,15 @@
         <figure><div class="dpl-visual " data-dp-photo="3" style="--dp-ratio: 1 / 1" data-fallback-icon="CA"></div></figure>
     </div>
 </section>
-<section class="dpl-section" id="dpl-avaliacoes">
-    <div class="dpl-wrap dpl-grid dpl-grid-2" data-dp-list="avaliacoes">
-        <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
+<section class="dpl-section dpl-section--muted" id="dpl-avaliacoes">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="avaliacoes">O que dizem</h2>
+        <div class="dpl-grid dpl-grid-2" data-dp-list="avaliacoes" style="margin-top:2rem">
+            <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
+        </div>
     </div>
 </section>
-<section class="dpl-section" id="dpl-contactos">
+<section class="dpl-section dpl-section--muted" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
             <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>

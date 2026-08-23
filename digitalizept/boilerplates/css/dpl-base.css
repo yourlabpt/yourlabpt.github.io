@@ -75,11 +75,25 @@ a { color: inherit; }
     padding-block: var(--space-6);
 }
 
+.dpl-section--muted {
+    background: color-mix(in srgb, var(--ink) 4%, var(--bg));
+}
+
 .dpl-section-head { margin-bottom: var(--space-4); }
 
 .dpl-h2 {
     margin: 0;
     font-size: clamp(1.75rem, 4vw, 2.75rem);
+}
+
+h3,
+.dpl-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    margin: 0.45rem 0 0.35rem;
 }
 
 .dpl-lede {
@@ -131,8 +145,14 @@ a { color: inherit; }
     align-items: center;
 }
 
+.dpl-nav-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
 .dpl-nav-link:focus-visible,
 .dpl-btn:focus-visible,
+.dpl-acc-item summary:focus-visible,
 .dpl-demo-switch button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
@@ -163,11 +183,23 @@ a { color: inherit; }
     font-weight: 600;
     font-size: 1rem;
     cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dpl-btn:hover {
+    background: color-mix(in srgb, var(--accent-solid) 82%, var(--ink));
+    border-color: color-mix(in srgb, var(--accent-solid) 82%, var(--ink));
 }
 
 .dpl-btn-ghost {
     background: transparent;
     color: var(--ink);
+}
+
+.dpl-btn-ghost:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--ink);
+    border-color: var(--accent-solid);
 }
 
 .dpl-card {
@@ -265,8 +297,8 @@ a { color: inherit; }
 .dpl-visual:not(:has(img))::after {
     content: attr(data-fallback-icon);
     font-family: var(--font-display);
-    font-size: clamp(2rem, 6vw, 4rem);
-    color: color-mix(in srgb, var(--ink) 28%, transparent);
+    font-size: clamp(1.6rem, 5vw, 3.2rem);
+    color: color-mix(in srgb, var(--ink) 14%, transparent);
     letter-spacing: 0.04em;
 }
 
@@ -279,6 +311,15 @@ a { color: inherit; }
 
 .dpl-hero {
     padding-block: var(--space-7);
+}
+
+.dpl-kicker {
+    margin: 0 0 var(--space-2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
 }
 
 .dpl-hero h1 {
@@ -315,8 +356,19 @@ a { color: inherit; }
     border-color: var(--on-accent);
 }
 
+.dpl-cta-band .dpl-btn:hover {
+    background: color-mix(in srgb, var(--on-accent) 88%, var(--ink));
+    border-color: color-mix(in srgb, var(--on-accent) 88%, var(--ink));
+}
+
 .dpl-cta-band .dpl-btn-ghost {
     background: transparent;
+    color: var(--on-accent);
+    border-color: var(--on-accent);
+}
+
+.dpl-cta-band .dpl-btn-ghost:hover {
+    background: color-mix(in srgb, var(--on-accent) 14%, transparent);
     color: var(--on-accent);
     border-color: var(--on-accent);
 }
@@ -389,13 +441,71 @@ ul.dpl-grid,
     font-variant-numeric: tabular-nums;
     color: var(--accent-ink);
 }
+
+.dpl-acc {
+    margin-top: var(--space-4);
+    border-top: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.dpl-acc-item {
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.dpl-acc-item summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0;
+    min-height: 44px;
+    cursor: pointer;
+    list-style: none;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+}
+.dpl-acc-item summary::-webkit-details-marker {
+    display: none;
+}
+.dpl-acc-item summary .dpl-icon {
+    flex: none;
+}
+.dpl-acc-title {
+    flex: 1;
+}
+.dpl-acc-item summary::after {
+    content: "";
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid var(--accent-ink);
+    border-bottom: 2px solid var(--accent-ink);
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+}
+.dpl-acc-item details[open] summary::after {
+    transform: rotate(225deg);
+}
+.dpl-acc-body {
+    margin: 0 0 var(--space-3);
+    max-width: 62ch;
+    color: var(--ink-muted);
+}
+.dpl-acc-item details:not(:has(.dpl-acc-body)) summary {
+    cursor: default;
+}
+.dpl-acc-item details:not(:has(.dpl-acc-body)) summary::after {
+    display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .dpl-acc-item summary::after {
+        transition: none;
+    }
+}
 [data-dp-item][hidden],
 [data-dp-list][hidden] {
     display: none !important;
 }
 
 .dpl-hero--centered { text-align: center; }
-.dpl-hero--centered .dpl-hero-sub { margin-inline: auto; }
+.dpl-hero--centered .dpl-hero-sub,
+.dpl-hero--centered .dpl-kicker { margin-inline: auto; }
 .dpl-hero--centered .dpl-hero-ctas { justify-content: center; }
 .dpl-topbar.dpl-hero--centered { justify-content: center; flex-wrap: wrap; }
 .dpl-tile--centered { text-align: center; }

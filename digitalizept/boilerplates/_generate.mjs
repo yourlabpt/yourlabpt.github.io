@@ -8,6 +8,40 @@ import { checkPalettes } from './check-contrast.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const cssDir = path.join(dir, 'css');
+const typesDir = path.join(dir, '../../server/config/business-types');
+const typeCache = new Map();
+
+function loadType(id) {
+    if (!id) return {};
+    if (typeCache.has(id)) return typeCache.get(id);
+    const file = path.join(typesDir, `${id}.json`);
+    const data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+    typeCache.set(id, data);
+    return data;
+}
+
+function mapCtaTarget(target) {
+    const t = String(target || '').trim();
+    if (t === 'whatsapp') return { href: '#dpl-contactos', hrefKind: 'whatsapp' };
+    if (t === 'tel') return { href: '#dpl-contactos', hrefKind: 'tel' };
+    if (t === 'dpl-mapa' || t === 'maps') return { href: '#dpl-contactos', hrefKind: 'maps' };
+    if (t.startsWith('dpl-')) return { href: `#${t}`, hrefKind: '' };
+    return { href: '#dpl-contactos', hrefKind: '' };
+}
+
+function secondHeroCta(id) {
+    const ctas = loadType(id).ctas_hero;
+    if (!Array.isArray(ctas) || !ctas[1]) return '';
+    const label = String(ctas[1].label || '').trim();
+    if (!label) return '';
+    const { href, hrefKind } = mapCtaTarget(ctas[1].target);
+    const dp = hrefKind ? ` data-dp-href="${hrefKind}"` : '';
+    return `<a class="dpl-btn dpl-btn-ghost" href="${href}"${dp}>${label}</a>`;
+}
+
+function heroCtas(id, hrefKind = 'whatsapp') {
+    return `<div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="${hrefKind}"></a>${secondHeroCta(id)}</div>`;
+}
 
 const I = {
     check: '<path d="M5 13l4 4L19 7"/>',
@@ -168,7 +202,7 @@ function footer(brand, note) {
 }
 
 function loc(cta) {
-    return `<section class="dpl-section" id="dpl-contactos">
+    return `<section class="dpl-section dpl-section--muted" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
             <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
@@ -180,9 +214,12 @@ function loc(cta) {
 }
 
 function quotes() {
-    return `<section class="dpl-section" id="dpl-avaliacoes">
-    <div class="dpl-wrap dpl-grid dpl-grid-2" data-dp-list="avaliacoes">
-        <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
+    return `<section class="dpl-section dpl-section--muted" id="dpl-avaliacoes">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="avaliacoes">O que dizem</h2>
+        <div class="dpl-grid dpl-grid-2" data-dp-list="avaliacoes" style="margin-top:2rem">
+            <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
+        </div>
     </div>
 </section>`;
 }
@@ -196,13 +233,15 @@ function ctaBand(title, btn, hrefKind = 'whatsapp') {
 </section>`;
 }
 
-function hero({ centered = false, extra = '', hrefKind = 'whatsapp' } = {}) {
-    return `<section class="dpl-hero${centered ? ' dpl-hero--centered' : ''}">
+function hero({ centered = false, extra = '', hrefKind = 'whatsapp', id = '', className = '' } = {}) {
+    const cls = ['dpl-hero', centered ? 'dpl-hero--centered' : '', className].filter(Boolean).join(' ');
+    return `<section class="${cls}">
     <div class="dpl-wrap">
         ${extra}
+        <p class="dpl-kicker" data-dp-copy="cidade"></p>
         <h1 data-dp-copy="hero.titulo"></h1>
         <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
-        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="${hrefKind}"></a></div>
+        ${heroCtas(id, hrefKind)}
     </div>
 </section>`;
 }
@@ -219,6 +258,17 @@ function menuList(strongStyle = '') {
                 <span class="dpl-menu-price" data-dp-copy="servico.preco"></span>
             </li>
         </ol>`;
+}
+
+function serviceAccordion({ iconHtml = '' } = {}) {
+    return `<ul class="dpl-acc" data-dp-list="servicos">
+            <li class="dpl-acc-item" data-dp-item hidden>
+                <details>
+                    <summary>${iconHtml}<span class="dpl-acc-title" data-dp-copy="servico.nome"></span><span class="dpl-menu-price" data-dp-copy="servico.preco"></span></summary>
+                    <p class="dpl-acc-body" data-dp-copy="servico.descricao"></p>
+                </details>
+            </li>
+        </ul>`;
 }
 
 function serviceCards({ grid = 'dpl-grid-3', itemClass = 'dpl-card', iconHtml = '' } = {}) {
@@ -285,7 +335,7 @@ const CATS = [
                 cta: { href: '#dpl-contactos', label: 'Contactar' }
             })}
 <main id="topo">
-${hero()}
+${hero({ id: this.id })}
 ${sobreBlock('Quem somos', visual(0, '4 / 3', 'GE'))}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
@@ -325,7 +375,7 @@ ${footer('O seu negócio', 'Fale connosco ou passe na loja.')}`;
                 cta: { href: '#dpl-servicos', label: 'Ver menu', hrefKind: 'maps' }
             })}
 <main id="topo">
-${hero({ hrefKind: 'maps' })}
+${hero({ hrefKind: 'maps', id: this.id })}
 ${sobreBlock('A casa', visual(0, '4 / 3', 'CA'))}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
@@ -335,7 +385,7 @@ ${sobreBlock('A casa', visual(0, '4 / 3', 'CA'))}
         <div style="margin-top:1.5rem">${destaques()}${trustChips()}</div>
     </div>
 </section>
-<section class="dpl-section" id="dpl-galeria">
+<section class="dpl-section dpl-section--muted" id="dpl-galeria">
     <div class="dpl-wrap dpl-grid dpl-grid-4">
         ${[0, 1, 2, 3].map((i) => `<figure>${visual(i, '1 / 1', 'CA')}</figure>`).join('\n        ')}
     </div>
@@ -373,7 +423,7 @@ ${footer('O seu café', 'Passe quando quiser.')}`;
                 cta: { href: '#dpl-contactos', label: 'Reservar' }
             })}
 <main id="topo">
-${hero({ centered: true })}
+${hero({ centered: true, id: this.id })}
 ${sobreBlock('A casa', visual(0, '3 / 4', 'RE'), `<p>${icon('fork')} ${icon('wine')}</p>`)}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
@@ -412,7 +462,7 @@ ${footer('O seu restaurante', 'Sala aberta para almoço e jantar.')}`;
                 cta: { href: '#dpl-contactos', label: 'Marcar consulta' }
             })}
 <main id="topo">
-${hero()}
+${hero({ id: this.id })}
 <section class="dpl-section" id="dpl-sobre">
     <div class="dpl-wrap dpl-grid dpl-grid-2">
         ${visual(0, '3 / 4', 'CE')}
@@ -425,7 +475,7 @@ ${hero()}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Tratamentos</h2>
-        ${serviceCards({ iconHtml: icon('drop') })}
+        ${serviceAccordion({ iconHtml: icon('drop') })}
     </div>
 </section>
 <section class="dpl-section">
@@ -448,8 +498,11 @@ ${footer('A sua clínica', 'Marcações com antecedência.')}`;
         bodyFont: '"Archivo", system-ui, sans-serif',
         tokens: { bg: '#F3F1EA', ink: '#23211D', accent: '#C4491F', accent2: '#2E3A46', accentInk: '#BB461E' },
         extraCss: `.dpl-hero { background: var(--accent-2); color: var(--on-accent-2); } .dpl-hero .dpl-btn { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
-.dpl-tile { background: var(--accent-2); color: var(--on-accent-2); padding: 1.4rem; border-radius: 8px; min-height: 140px; }
-.dpl-hero .dpl-icon, .dpl-tile .dpl-icon { color: currentColor; }
+.dpl-acc { border-top: 0; }
+.dpl-acc-item { background: var(--accent-2); color: var(--on-accent-2); padding: 0 1.4rem; border-bottom: 0; border-radius: 8px; margin-bottom: 10px; }
+.dpl-acc-item summary::after, .dpl-acc-item .dpl-menu-price { color: currentColor; border-color: currentColor; }
+.dpl-acc-item .dpl-acc-body { color: currentColor; opacity: 0.82; }
+.dpl-hero .dpl-icon, .dpl-acc-item .dpl-icon { color: currentColor; }
 .dpl-spec { font-family: ui-monospace, monospace; }`,
         build() {
             return `${header({
@@ -463,11 +516,11 @@ ${footer('A sua clínica', 'Marcações com antecedência.')}`;
                 extra: '<a class="dpl-nav-link" href="#dpl-contactos" data-dp-copy="telefone" data-dp-href="tel">{{telefone}}</a>'
             })}
 <main id="topo">
-${hero()}
+${hero({ id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Categorias</h2>
-        ${serviceCards({ grid: 'dpl-grid-4', itemClass: 'dpl-tile', iconHtml: icon('box') })}
+        ${serviceAccordion({ iconHtml: icon('box') })}
     </div>
 </section>
 <section class="dpl-section" id="dpl-sobre">
@@ -511,8 +564,10 @@ ${footer('A sua drogaria', 'Aberto em horário de loja — confirme antes de vir
 <section class="dpl-hero dpl-hero--centered">
     <div class="dpl-wrap">
         <div class="dpl-hero-inner">
+            <p class="dpl-kicker" data-dp-copy="cidade"></p>
             <h1 data-dp-copy="hero.titulo"></h1>
             <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
+            ${heroCtas(this.id, 'maps')}
         </div>
     </div>
 </section>
@@ -554,7 +609,7 @@ ${footer('A sua joalharia', 'Visitas com marcação.')}`;
                 cta: { href: '#dpl-contactos', label: 'Encomendar' }
             })}
 <main id="topo">
-${hero({ extra: icon('flower') })}
+${hero({ extra: icon('flower'), id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Coleções</h2>
@@ -595,7 +650,7 @@ ${footer('A sua florista', 'Encomendas até à véspera, quando o mercado deixar
                 ]
             })}
 <main id="topo">
-${hero()}
+${hero({ id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Coleção</h2>
@@ -633,8 +688,7 @@ ${footer('A sua loja', 'Horário de rua — confirme feriados.')}`;
         extraCss: `h1, h2 { text-transform: uppercase; }
 .dpl-hero { background: var(--accent-2); color: var(--on-accent-2); position: relative; overflow: hidden; }
 .dpl-hero .dpl-icon { color: currentColor; }
-.dpl-hero::after { content:""; position:absolute; right:-40px; top:10%; width:220px; height:220px; border:18px solid color-mix(in srgb, var(--accent) 70%, transparent); border-radius:50%; }
-.dpl-row { display:grid; grid-template-columns: 2.5rem 1fr; gap: 12px; padding: 14px 0; border-bottom: 1px solid color-mix(in srgb, var(--ink) 12%, transparent); }`,
+.dpl-hero::after { content:""; position:absolute; right:-40px; top:10%; width:220px; height:220px; border:18px solid color-mix(in srgb, var(--accent) 70%, transparent); border-radius:50%; }`,
         build() {
             return `${header({
                 brand: 'A sua oficina',
@@ -648,13 +702,11 @@ ${footer('A sua loja', 'Horário de rua — confirme feriados.')}`;
                 extra: '<a class="dpl-nav-link" data-dp-copy="telefone" data-dp-href="tel" href="#dpl-contactos">{{telefone}}</a>'
             })}
 <main id="topo">
-${hero()}
+${hero({ id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
-        <ul data-dp-list="servicos">
-            <li class="dpl-row" data-dp-item hidden>${icon('wrench')}<div><strong data-dp-copy="servico.nome"></strong><p data-dp-copy="servico.descricao"></p></div></li>
-        </ul>
+        ${serviceAccordion({ iconHtml: icon('wrench') })}
     </div>
 </section>
 <section class="dpl-cta-band">
@@ -692,7 +744,7 @@ ${footer('A sua oficina', 'Marcações de manhã rendem lugar no mesmo dia.')}`;
                 extra: '<span class="dpl-badge" data-dp-copy="horario">{{horario}}</span>'
             })}
 <main id="topo">
-${hero({ hrefKind: 'maps' })}
+${hero({ hrefKind: 'maps', id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">O que temos</h2>
@@ -739,7 +791,7 @@ ${footer('O seu mercadinho', 'Aberto os dias da rua. Domingos, confirme.')}`;
                 cta: { href: '#dpl-contactos', label: 'Marcar consulta' }
             })}
 <main id="topo">
-${hero({ extra: `<div class="dpl-hero-art">${icon('glasses')}</div>` })}
+${hero({ extra: `<div class="dpl-hero-art">${icon('glasses')}</div>`, id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Coleção</h2>
@@ -782,7 +834,7 @@ ${footer('A sua ótica', 'Marcações pelo telefone ou WhatsApp.')}`;
                 cta: { href: '#dpl-contactos', label: 'Marcar' }
             })}
 <main id="topo">
-${hero()}
+${hero({ id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
@@ -832,17 +884,11 @@ ${footer('O seu salão', 'Marcações pelo telefone ou Instagram.')}`;
                 cta: { href: '#dpl-contactos', label: 'Pedir orçamento' }
             })}
 <main id="topo">
-<section class="dpl-hero dpl-weave">
-    <div class="dpl-wrap">
-        <h1 data-dp-copy="hero.titulo"></h1>
-        <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
-        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp"></a></div>
-    </div>
-</section>
+${hero({ className: 'dpl-weave', id: this.id })}
 <section class="dpl-section" id="dpl-servicos">
     <div class="dpl-wrap">
         <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
-        ${menuList()}
+        ${serviceAccordion({ iconHtml: icon('needle') })}
     </div>
 </section>
 <section class="dpl-section dpl-weave" id="dpl-tecidos">

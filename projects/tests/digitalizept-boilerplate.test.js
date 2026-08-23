@@ -289,6 +289,10 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.doesNotMatch(out, />Rissol</);
         assert.match(out, /data-dp-copy="hero.titulo"/);
         assert.match(out, /O café da manhã|Pastelaria do Luís|café/i);
+        assert.match(out, /dpl-kicker/);
+        assert.match(out, /Porto/);
+        assert.match(out, /data-dp-label="avaliacoes"/);
+        assert.match(out, /Ver especialidades/);
     });
 
     it('fills hero and quotes from demo_seed when dados omit them', () => {
@@ -312,6 +316,48 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.match(out, /Café/);
         assert.doesNotMatch(out, /dpl-menu-price/);
         assert.doesNotMatch(out, /€/);
+    });
+
+    it('uses a services accordion in the explanation-heavy categories', () => {
+        ['clinica-estetica', 'drogaria-ferragens', 'mecanico-automovel', 'tapecaria'].forEach((slug) => {
+            const html = fs.readFileSync(path.join(root, `${slug}-sem-fotos.html`), 'utf8');
+            assert.match(html, /<ul class="dpl-acc" data-dp-list="servicos">/, slug);
+            assert.match(html, /<li class="dpl-acc-item" data-dp-item hidden>/, slug);
+            assert.match(html, /<details>\s*<summary>/, slug);
+            assert.doesNotMatch(html, /dpl-row|dpl-tile\b|dpl-menu-list/, `${slug} kept old service markup`);
+        });
+    });
+
+    it('fills the accordion with one real description per service', () => {
+        const type = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '../../server/config/business-types/clinica-estetica.json'),
+            'utf8'
+        ));
+        const html = fs.readFileSync(path.join(root, 'clinica-estetica-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, { nome_negocio: 'Atelier Teste', cidade: 'Braga' }, type);
+        assert.match(out, /Consulta de estética/);
+        assert.match(out, /Avaliação da pele/);
+        assert.equal((out.match(/class="dpl-acc-item"/g) || []).length, 6);
+        assert.equal((out.match(/dpl-acc-body/g) || []).length, 6);
+        assert.doesNotMatch(out, /dpl-menu-price/);
+    });
+
+    it('never echoes the typed service list as a per-service description', () => {
+        const type = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '../../server/config/business-types/mecanico-automovel.json'),
+            'utf8'
+        ));
+        const html = fs.readFileSync(path.join(root, 'mecanico-automovel-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(
+            html,
+            { nome_negocio: 'Oficina Teste', principais_servicos: 'Chapa e pintura, Pneus' },
+            type
+        );
+        assert.match(out, /Chapa e pintura/);
+        assert.match(out, /Pneus/);
+        assert.doesNotMatch(out, /Chapa e pintura, Pneus/);
+        const bodies = (out.match(/dpl-acc-body/g) || []).length;
+        assert.ok(bodies < 3, `typed services invented ${bodies} descriptions`);
     });
 
     it('only allows named text-align classes in boilerplate CSS and HTML', () => {
