@@ -262,11 +262,11 @@ describe('digitalizept outreach', () => {
             sinais: { website: 'nao', instagram: '@farmaciasol' }
         });
         assert.equal(ctx.ganchoId, 'B');
-        assert.match(ctx.ganchoTitulo, /Facebook não é nosso/);
+        assert.match(ctx.ganchoTitulo, /Facebook não é nosso, e a vossa história também devia estar em um sítio vosso/);
         assert.match(ctx.ganchoTexto, /farmácia em Braga/);
         assert.doesNotMatch(ctx.ganchoTexto, /não estão na internet/);
         const html = renderEmailHtml(ctx);
-        assert.match(html, /Facebook não é nosso/);
+        assert.match(html, /sítio vosso/);
         assert.match(html, /farmácia em Braga/);
         assert.doesNotMatch(html, /\{\{gancho/);
         assert.doesNotMatch(html, /2026 e a vossa história/);

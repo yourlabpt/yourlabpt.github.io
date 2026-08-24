@@ -22,10 +22,10 @@ export const OUTREACH_GANCHOS = {
     },
     B: {
         nome: 'Só redes sociais',
-        ganchoTitulo: 'Facebook não é nosso, a vossa história também devia ser vossa.',
+        ganchoTitulo: 'Facebook não é nosso, e a vossa história também devia estar em um sítio vosso.',
         ganchoTexto: 'A conta, os seguidores e as fotografias estão em casa alheia — basta um bloqueio para desaparecer tudo. E ninguém escreve "{{oQueFaz}} em {{zona}}" no Facebook. Escreve no Google.',
         en: {
-            ganchoTitulo: 'Facebook is not ours. Your story should be yours too.',
+            ganchoTitulo: 'Facebook is not ours, and your story should also live in a place of your own.',
             ganchoTexto: 'The account, the followers and the photos sit in someone else’s house — one block and it all disappears. And nobody types “{{oQueFaz}} in {{zona}}” on Facebook. They type it on Google.'
         }
     },
