@@ -1,4 +1,5 @@
 import { renderHoursPicker } from './horario.js';
+import { whatsappIfMobile } from './format.js';
 
 const SECTION_ORDER = ['identificacao', 'funcionamento', 'descricao', 'especifico', 'opcional', 'extra'];
 const CONTACT_IDS = ['nome_negocio', 'telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'];
@@ -94,6 +95,17 @@ function digitsPhone(value) {
     return String(value || '').replace(/[^\d+]/g, '');
 }
 
+function copyMobileToWhatsapp(form) {
+    const telEl = form.querySelector('[data-dados="telefone"]');
+    const waEl = form.querySelector('[data-dados="whatsapp"]');
+    if (!telEl || !waEl) return;
+    if (String(waEl.value || '').trim()) return;
+    const copied = whatsappIfMobile(telEl.value);
+    if (!copied) return;
+    waEl.value = copied;
+    waEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function checklist(completeness) {
     const box = el('div', 'dossier-check');
     if (!completeness) return box;
@@ -133,6 +145,10 @@ function collectForm(root) {
     root.querySelectorAll('[data-dados]').forEach((node) => {
         dados[node.getAttribute('data-dados')] = node.value;
     });
+    if (!String(dados.whatsapp || '').trim()) {
+        const copied = whatsappIfMobile(dados.telefone);
+        if (copied) dados.whatsapp = copied;
+    }
     const clienteLegal = {};
     root.querySelectorAll('[data-legal]').forEach((node) => {
         clienteLegal[node.getAttribute('data-legal')] = node.value;
@@ -264,6 +280,11 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMa
         appendField(contactGrid, field, payload.dados[id], miss.has(id), 'data-dados', id);
     });
     contact.appendChild(contactGrid);
+    const telInput = contactGrid.querySelector('[data-dados="telefone"]');
+    if (telInput) {
+        telInput.addEventListener('change', () => copyMobileToWhatsapp(form));
+        telInput.addEventListener('blur', () => copyMobileToWhatsapp(form));
+    }
 
     const mapsRow = el('div', 'dossier-maps-actions');
     const mapsBtn = el('button', 'btn-secondary', 'Preencher pelo Maps');
@@ -303,6 +324,7 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMa
                 form.querySelector('[data-geo-lat]').value = String(data.lat);
                 form.querySelector('[data-geo-lng]').value = String(data.lng);
             }
+            copyMobileToWhatsapp(form);
             if (onToast) onToast('Campos vazios preenchidos. Confirma telefone e email.');
         } catch (err) {
             if (onToast) onToast((err && err.message) || 'Erro de rede.', true);

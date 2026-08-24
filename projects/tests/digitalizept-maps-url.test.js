@@ -1,7 +1,14 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { parseMapsUrl, decodePlace } = require('../../server/lib/digitalizept-maps-url');
-const { nameScore, mapBusinessType } = require('../../server/lib/digitalizept-maps-lookup');
+const {
+    nameScore,
+    mapBusinessType,
+    pickOsmPlace,
+    contactFromOsm,
+    isPortugueseMobile,
+    whatsappIfMobile
+} = require('../../server/lib/digitalizept-maps-lookup');
 
 describe('digitalizept maps url parse', () => {
     it('reads place name and @ coordinates', () => {
@@ -66,5 +73,48 @@ describe('digitalizept maps osm mapping', () => {
         assert.equal(mapBusinessType({ shop: 'hairdresser' }), 'salao-beleza');
         assert.equal(mapBusinessType({ shop: 'convenience' }), 'mercadinho');
         assert.equal(mapBusinessType({ amenity: 'bank' }), 'generico');
+    });
+
+    it('reads the shop pin from a full Google Maps place URL', () => {
+        const parsed = parseMapsUrl(
+            'https://www.google.com/maps/place/Thailander/@41.1494613,-8.6175002,17z/data=!3m2!4b1!4m6!3m5!1s0xd246586f31e5bcf:0xdf4205a594a32e01!8m2!3d41.1494613!4d-8.6149253!16s%2Fg%2F11jchwq4t2'
+        );
+        assert.equal(parsed.ok, true);
+        assert.equal(parsed.nome, 'Thailander');
+        assert.equal(parsed.lat, 41.1494613);
+        assert.equal(parsed.lng, -8.6149253);
+    });
+
+    it('does not copy a neighbour\'s phone onto the named shop', () => {
+        const aduela = { tags: { name: 'Aduela', phone: '+351222084398', amenity: 'bar' } };
+        const thailander = {
+            tags: { name: 'Thailander', phone: '+351 220 995 072', amenity: 'restaurant' }
+        };
+        const neighbours = [
+            aduela,
+            { tags: { name: 'Nicolau', amenity: 'restaurant' } },
+            { tags: { name: 'Café Lusitano', phone: '+351 222 011 067', amenity: 'bar' } }
+        ];
+        assert.equal(nameScore('Thailander', 'Aduela'), 0);
+        assert.equal(pickOsmPlace(neighbours, 'Thailander'), null);
+        assert.equal(pickOsmPlace([...neighbours, thailander], 'Thailander').phone, '+351 220 995 072');
+        assert.equal(pickOsmPlace([aduela], 'Thailander'), null);
+    });
+
+    it('keeps a Porto landline on telefone and off WhatsApp', () => {
+        assert.equal(isPortugueseMobile('+351 220 995 072'), false);
+        assert.equal(whatsappIfMobile('+351222084398'), '');
+        const landline = contactFromOsm({
+            phone: '+351 220 995 072',
+            email: '',
+            website: '',
+            horario: ''
+        });
+        assert.equal(landline.telefone, '+351 220 995 072');
+        assert.equal(landline.whatsapp, '');
+        const mobile = contactFromOsm({ phone: '+351 912 345 678' });
+        assert.equal(mobile.whatsapp, '+351 912 345 678');
+        assert.equal(whatsappIfMobile('912345678'), '912345678');
+        assert.equal(isPortugueseMobile('931112223'), true);
     });
 });

@@ -52,6 +52,7 @@ function osmTags(el) {
     return {
         name: t.name || t.brand || '',
         phone: t.phone || t['contact:phone'] || t['contact:mobile'] || '',
+        whatsapp: t['contact:whatsapp'] || t.whatsapp || '',
         email: t.email || t['contact:email'] || '',
         website: t.website || t['contact:website'] || '',
         horario: t.opening_hours || '',
@@ -61,6 +62,67 @@ function osmTags(el) {
         leisure: t.leisure || '',
         office: t.office || ''
     };
+}
+
+function ptNationalDigits(phone) {
+    let digits = String(phone || '').replace(/\D/g, '');
+    if (digits.startsWith('00351')) digits = digits.slice(5);
+    if (digits.startsWith('351') && digits.length >= 12) digits = digits.slice(3);
+    return digits;
+}
+
+function isPortugueseMobile(phone) {
+    const digits = ptNationalDigits(phone);
+    return digits.length === 9 && digits.startsWith('9');
+}
+
+function whatsappIfMobile(phone) {
+    const text = String(phone || '').trim();
+    return isPortugueseMobile(text) ? text : '';
+}
+
+function contactFromOsm(tags) {
+    if (!tags) {
+        return { telefone: '', whatsapp: '', email: '', website: '', horario: '' };
+    }
+    const telefone = String(tags.phone || '').trim();
+    const taggedWa = String(tags.whatsapp || '').trim();
+    return {
+        telefone,
+        whatsapp: taggedWa || whatsappIfMobile(telefone),
+        email: String(tags.email || '').trim(),
+        website: String(tags.website || '').trim(),
+        horario: String(tags.horario || '').trim()
+    };
+}
+
+const MIN_OSM_NAME_SCORE = 50;
+
+function pickOsmPlace(elements, nome) {
+    const wanted = String(nome || '').trim();
+    let best = null;
+    let bestScore = -1;
+    (elements || []).forEach((el) => {
+        const tags = el && el.tags ? osmTags(el) : osmTags({ tags: el || {} });
+        if (!tags.name && !tags.shop && !tags.amenity) return;
+        const score = wanted ? nameScore(wanted, tags.name) : 0;
+        if (score > bestScore) {
+            bestScore = score;
+            best = tags;
+        }
+    });
+    if (!best) return null;
+    // A neighbour with a phone is not this shop. Dense streets (Baixa, etc.)
+    // return dozens of POIs; never copy Aduela's number onto Thailander.
+    if (wanted && bestScore < MIN_OSM_NAME_SCORE) return null;
+    return best;
+}
+
+function overpassNameNeedle(nome) {
+    const tokens = foldName(nome).split(' ').filter((word) => word.length >= 4);
+    tokens.sort((a, b) => b.length - a.length);
+    const needle = tokens[0] || foldName(nome).replace(/\s+/g, '');
+    return needle.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }
 
 function mapBusinessType(tags) {
@@ -110,13 +172,18 @@ async function osmNearby(lat, lng, nome) {
     const a = Number(lat);
     const b = Number(lng);
     if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    const needle = overpassNameNeedle(nome);
+    const named = needle
+        ? `nwr(around:150,${a},${b})["name"~"${needle}",i];`
+        : '';
     const query = `[out:json][timeout:8];
 (
+  ${named}
   nwr(around:90,${a},${b})[name];
   nwr(around:90,${a},${b})[shop];
   nwr(around:90,${a},${b})[amenity];
 );
-out tags center 24;`;
+out tags center 80;`;
     const wait = withTimeout(9000);
     try {
         const response = await fetch(OVERPASS_URL, {
@@ -131,20 +198,7 @@ out tags center 24;`;
         if (!response.ok) return null;
         const data = await response.json();
         const elements = Array.isArray(data.elements) ? data.elements : [];
-        let best = null;
-        let bestScore = -1;
-        elements.forEach((el) => {
-            const tags = osmTags(el);
-            if (!tags.name && !tags.phone && !tags.shop && !tags.amenity) return;
-            const score = nome ? nameScore(nome, tags.name) : 20;
-            const bonus = tags.phone ? 8 : 0;
-            if (score + bonus > bestScore) {
-                bestScore = score + bonus;
-                best = tags;
-            }
-        });
-        if (!best || (nome && bestScore < 20 && !best.phone)) return null;
-        return best;
+        return pickOsmPlace(elements, nome);
     } catch (_) {
         return null;
     } finally {
@@ -192,21 +246,22 @@ async function lookupFromMaps(input = {}) {
     const osm = (Number.isFinite(lat) && Number.isFinite(lng))
         ? await osmNearby(lat, lng, nomeHint || (geo && geo.nome))
         : null;
+    const contact = contactFromOsm(osm);
 
     const dados = {
         nome_negocio: nomeHint || (osm && osm.name) || (geo && geo.nome) || '',
         morada: (geo && geo.morada) || '',
         cidade: (geo && geo.cidade) || '',
-        telefone: (osm && osm.phone) || '',
-        email: (osm && osm.email) || '',
-        whatsapp: (osm && osm.phone) || '',
-        website_atual: (osm && osm.website) || '',
-        horario: (osm && osm.horario) || '',
+        telefone: contact.telefone,
+        email: contact.email,
+        whatsapp: contact.whatsapp,
+        website_atual: contact.website,
+        horario: contact.horario,
         maps_url: parsed.url || String(input.url || '').trim()
     };
 
     const businessTypeId = osm ? mapBusinessType(osm) : 'generico';
-    if (osm && osm.phone) notes.push('Telefone encontrado no OpenStreetMap.');
+    if (contact.telefone) notes.push('Telefone encontrado no OpenStreetMap para este negócio.');
     if (osm && osm.email) notes.push('Email encontrado no OpenStreetMap.');
     if (!filled(dados.telefone)) notes.push('Sem telefone público no mapa aberto — preenche à mão.');
     if (!filled(dados.email)) notes.push('Email quase nunca vem no Maps. Preenche se o tiveres.');
@@ -231,5 +286,9 @@ module.exports = {
     lookupFromMaps,
     resolveMapsUrl,
     mapBusinessType,
-    nameScore
+    nameScore,
+    pickOsmPlace,
+    contactFromOsm,
+    isPortugueseMobile,
+    whatsappIfMobile
 };

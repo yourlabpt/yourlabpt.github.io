@@ -52,7 +52,7 @@ const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/st
 const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
 const outreach = require('./lib/digitalizept-outreach');
 const dossier = require('./lib/digitalizept-dossier');
-const { lookupFromMaps } = require('./lib/digitalizept-maps-lookup');
+const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -2204,6 +2204,10 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
         }
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
+        if (!cleanText(dados.whatsapp, 60)) {
+            const copied = whatsappIfMobile(cleanText(dados.telefone, 60));
+            if (copied) dados.whatsapp = copied;
+        }
         const { obrigatorios, opcionais } = splitDados(dados, businessType);
         let leadId = cleanText(body.leadId, 80);
         const morada = cleanText(dados.morada, 300);
@@ -2332,7 +2336,7 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
         if (!nome) {
             return res.status(400).json({ error: 'Falta o nome do negócio.' });
         }
-        if (!whatsapp && telefone) whatsapp = telefone;
+        if (!whatsapp) whatsapp = whatsappIfMobile(telefone);
 
         const types = loadBusinessTypes();
         const businessType = types.find((t) => t.id === businessTypeId)
@@ -3397,7 +3401,8 @@ app.put('/api/digitalizept/leads/:leadId/dossier', requireDigitalizept, (req, re
         const morada = cleanText(dados.morada, 300);
         const cidade = cleanText(dados.cidade, 120);
         const telefone = cleanText(dados.telefone, 60);
-        const whatsapp = cleanText(dados.whatsapp, 60);
+        const whatsapp = cleanText(dados.whatsapp, 60) || whatsappIfMobile(telefone);
+        if (whatsapp && !cleanText(dados.whatsapp, 60)) dados.whatsapp = whatsapp;
         const { obrigatorios, opcionais } = splitDados(dados, businessType);
         const wizard = parseJsonSafe(row.wizard_json, {});
 
