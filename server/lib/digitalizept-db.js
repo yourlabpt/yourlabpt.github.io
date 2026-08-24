@@ -230,6 +230,12 @@ function migrate(db) {
     });
     db.exec(`CREATE INDEX IF NOT EXISTS idx_visita_lead ON visita(lead_id)`);
 
+    db.exec(`CREATE TABLE IF NOT EXISTS app_setting (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        actualizado_em TEXT NOT NULL
+    )`);
+
     db.exec(`CREATE TABLE IF NOT EXISTS presenca_mapa (
         id TEXT PRIMARY KEY,
         projeto_id TEXT NOT NULL REFERENCES projeto(id),

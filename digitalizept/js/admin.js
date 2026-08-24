@@ -6,6 +6,7 @@ import { setupCoverage } from './admin-coverage.js';
 import { renderMapsCockpit } from './admin-maps.js';
 import { createLeadWebsiteZipButton, downloadStandaloneWebsiteZipFromLead } from './demo/site-zip.js';
 import { fetchConfig } from './settings.js';
+import { renderProviderEditor } from './provider-editor.js';
 import { renderFollowupShare } from './demo/followup-ui.js';
 import { renderLeadDossier, dossierHash, leadIdFromHash } from './admin-lead.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
@@ -68,6 +69,7 @@ const el = {
     leadsAddBtn: document.getElementById('leads-add-btn'),
     coveragePlaceBtn: document.getElementById('coverage-place-btn'),
     coverageExportBtn: document.getElementById('coverage-export-btn'),
+    providerCard: document.getElementById('provider-card'),
     drawer: document.getElementById('drawer'),
     drawerPanel: document.getElementById('drawer-panel'),
     drawerBackdrop: document.getElementById('drawer-backdrop'),
@@ -953,7 +955,8 @@ async function openFollowupShare({ leadId, nome, demo_slug }) {
             update(patch) {
                 Object.assign(stateData, patch);
             },
-            showToast: toast
+            showToast: toast,
+            onUnauthorized
         };
 
         openDrawer(`Enviar demonstração — ${stateData.dados.nome_negocio || nome || 'Lead'}`, (panel) => {
@@ -1157,6 +1160,24 @@ function openDealEditor(deal) {
     });
 }
 
+async function loadProviderCard() {
+    if (!el.providerCard) return;
+    try {
+        const config = await fetchConfig({ onUnauthorized }, { refresh: true });
+        const paint = (provider) => {
+            renderProviderEditor(el.providerCard, {
+                provider: provider || {},
+                toast,
+                onUnauthorized,
+                onSaved: paint
+            });
+        };
+        paint((config && config.provider) || {});
+    } catch (_) {
+        el.providerCard.innerHTML = '<p class="admin-hint">Não foi possível carregar quem envia.</p>';
+    }
+}
+
 async function loadCatalog() {
     const { response, data } = await api('/api/digitalizept/catalog?all=1');
     if (!response.ok) throw new Error('catalog');
@@ -1180,7 +1201,7 @@ async function loadDeals() {
 
 
 async function bootData() {
-    await Promise.all([loadCatalog(), loadLeads(), loadDeals()]);
+    await Promise.all([loadCatalog(), loadLeads(), loadDeals(), loadProviderCard()]);
     askCallNotifyPermission();
     if (!window.__callTick) {
         window.__callTick = setInterval(tickCallCountdowns, 1000);

@@ -4,9 +4,41 @@ function hasHero(demo) {
     return Boolean(demo && demo.hero && demo.hero.titulo);
 }
 
+function isBoilerplateHtml(html) {
+    return /data-dp-boilerplate\s*=/i.test(String(html || ''));
+}
+
+function pickCustomHtml(columnHtml, wizard) {
+    const w = wizard && typeof wizard === 'object' ? wizard : {};
+    const column = String(columnHtml || '').trim();
+    if (column && !isBoilerplateHtml(column)) return column;
+    const custom = String(w.demoHtmlCustom || '').trim();
+    if (custom && !isBoilerplateHtml(custom)) return custom;
+    const wizardHtml = String(w.demoHtml || '').trim();
+    if (wizardHtml && !isBoilerplateHtml(wizardHtml) && w.demoHtmlSource !== 'boilerplate') {
+        return wizardHtml;
+    }
+    return '';
+}
+
+function persistableCustomHtml({
+    demoHtml = '',
+    demoHtmlCustom = '',
+    demoHtmlSource = '',
+    existingWizard = {}
+} = {}) {
+    const incomingCustom = String(demoHtmlCustom || '').trim();
+    if (incomingCustom && !isBoilerplateHtml(incomingCustom)) return incomingCustom;
+    const incomingHtml = String(demoHtml || '').trim();
+    if (incomingHtml && !isBoilerplateHtml(incomingHtml) && String(demoHtmlSource || '') !== 'boilerplate') {
+        return incomingHtml;
+    }
+    return pickCustomHtml('', existingWizard);
+}
+
 /**
  * Priority:
- * 1. demoHtml: lead.demo_html || wizard.demoHtml (always, even with demo_slug)
+ * 1. custom HTML: published demo_html if it is not a boilerplate, else wizard.demoHtmlCustom
  * 2. demo JSON: if wizard.demoRaw (AI edit) → wizard.demo;
  *              else if lead.demo_json.hero → lead.demo_json;
  *              else wizard.demo
@@ -16,10 +48,12 @@ function mergeDemoForResume({ leadDemo, leadDemoHtml, wizard }) {
     const w = wizard && typeof wizard === 'object' ? wizard : {};
     const wizardDemo = w.demo;
     const wizardRaw = String(w.demoRaw || '').trim();
-    const wizardHtml = String(w.demoHtml || '').trim();
-    const columnHtml = String(leadDemoHtml || '').trim();
+    const customHtml = pickCustomHtml(leadDemoHtml, w);
 
-    const demoHtml = columnHtml || wizardHtml || '';
+    const demoHtml = customHtml
+        || (isBoilerplateHtml(leadDemoHtml) ? '' : String(leadDemoHtml || '').trim())
+        || String(w.demoHtml || '').trim()
+        || '';
 
     let demo;
     if (wizardRaw && hasHero(wizardDemo)) {
@@ -35,12 +69,13 @@ function mergeDemoForResume({ leadDemo, leadDemoHtml, wizard }) {
     return {
         demo,
         demoHtml,
+        demoHtmlCustom: customHtml,
         demoRaw: w.demoRaw || '',
         demoPrompt: w.demoPrompt || '',
         demoSeeded: w.demoSeeded === true,
         demoIdentityStamp: w.demoIdentityStamp || '',
         htmlChangeNote: w.htmlChangeNote || undefined,
-        demoVisual: w.demoVisual || '',
+        demoVisual: customHtml ? 'personalizada' : (w.demoVisual || ''),
         demoHtmlSource: w.demoHtmlSource || ''
     };
 }
@@ -58,13 +93,31 @@ function resumeWizardPosition(wizard) {
 /**
  * Merge published demo fields into an existing wizard_json object.
  */
-function mergeDemoIntoWizardJson(existingWizard, { demo, demoHtml, demoRaw, demoVisual, demoHtmlSource }) {
+function mergeDemoIntoWizardJson(existingWizard, {
+    demo,
+    demoHtml,
+    demoRaw,
+    demoVisual,
+    demoHtmlSource,
+    demoHtmlCustom
+} = {}) {
     const base = existingWizard && typeof existingWizard === 'object' ? { ...existingWizard } : {};
     if (demo && typeof demo === 'object') base.demo = demo;
-    if (demoHtml != null) base.demoHtml = String(demoHtml);
+    const custom = persistableCustomHtml({
+        demoHtml,
+        demoHtmlCustom,
+        demoHtmlSource,
+        existingWizard: base
+    });
+    if (custom) base.demoHtmlCustom = custom;
+    if (demoHtml != null && !isBoilerplateHtml(demoHtml)) base.demoHtml = String(demoHtml);
     if (demoRaw != null && String(demoRaw).trim()) base.demoRaw = String(demoRaw);
     if (demoVisual) base.demoVisual = String(demoVisual);
-    if (demoHtmlSource != null) base.demoHtmlSource = String(demoHtmlSource);
+    if (demoHtmlSource != null && String(demoHtmlSource) !== 'boilerplate') {
+        base.demoHtmlSource = String(demoHtmlSource);
+    } else if (custom) {
+        base.demoHtmlSource = 'ai';
+    }
     return base;
 }
 
@@ -72,5 +125,8 @@ module.exports = {
     mergeDemoForResume,
     resumeWizardPosition,
     mergeDemoIntoWizardJson,
-    hasHero
+    hasHero,
+    isBoilerplateHtml,
+    pickCustomHtml,
+    persistableCustomHtml
 };

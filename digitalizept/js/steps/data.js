@@ -170,6 +170,8 @@ function clearDemoState(state) {
     state.data.demoRaw = '';
     state.data.demoHtml = '';
     state.data.demoHtmlSource = '';
+    state.data.demoHtmlCustom = '';
+    state.data.demoVisual = '';
     state.data.demoSeeded = false;
     state.data.demoUrl = '';
     state.data.demoIdentityStamp = '';

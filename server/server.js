@@ -45,7 +45,9 @@ const { findAvailableDomains } = require('./lib/digitalizept-domains');
 const {
     mergeDemoForResume,
     resumeWizardPosition,
-    mergeDemoIntoWizardJson
+    mergeDemoIntoWizardJson,
+    persistableCustomHtml,
+    pickCustomHtml
 } = require('./lib/digitalizept-resume');
 const mapsPresenca = require('./lib/maps/presenca');
 const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/states');
@@ -53,6 +55,13 @@ const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require
 const outreach = require('./lib/digitalizept-outreach');
 const dossier = require('./lib/digitalizept-dossier');
 const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
+const { ensureLeadFromVisit, findReusableLead, reconcileVisitLeadPair, syncLinkedVisitsIdentity } = require('./lib/digitalizept-visit-lead');
+const {
+    currentProvider,
+    sanitizeSender,
+    saveProviderOverlay,
+    formatSmtpFrom
+} = require('./lib/digitalizept-provider');
 const { registerRequirementsPlatform } = require('../projects/api');
 const { validateAgentConnectionConfig } = require('../projects/lib/agent-connection-mode');
 
@@ -149,6 +158,7 @@ const DIGITALIZEPT_IVA_RATE = (() => {
 const DIGITALIZEPT_PROVIDER = {
     nome: cleanText(process.env.YOURLAB_NOME, 120) || 'YourLab',
     responsavel: cleanText(process.env.YOURLAB_RESPONSAVEL, 120) || 'Túlio Soares',
+    artigo: String(process.env.YOURLAB_ARTIGO || '').trim().toLowerCase() === 'a' ? 'a' : 'o',
     nif: cleanText(process.env.YOURLAB_NIF, 20),
     morada: cleanText(process.env.YOURLAB_MORADA, 300),
     email: cleanText(process.env.YOURLAB_EMAIL, 160) || cleanText(process.env.SMTP_USER, 160),
@@ -1273,15 +1283,24 @@ function getOrCreateTransporter() {
     return mailTransporter;
 }
 
-async function sendProjectNotificationEmail({ to, subject, text, html, attachments }) {
+function activeProvider(db = getDigitalizeptDb()) {
+    return currentProvider(db, DIGITALIZEPT_PROVIDER);
+}
+
+function digitalizeptMailFrom(provider) {
+    const mailbox = cleanText(process.env.SMTP_FROM, 300) || cleanText(process.env.SMTP_USER, 200);
+    return formatSmtpFrom(provider, mailbox);
+}
+
+async function sendProjectNotificationEmail({ to, subject, text, html, attachments, from }) {
     const recipient = cleanText(to, 600);
     if (!recipient) return { sent: false, reason: 'Recipient is missing.' };
     const transporter = getOrCreateTransporter();
     if (!transporter) return { sent: false, reason: 'SMTP settings are not configured.' };
-    const from = cleanText(process.env.SMTP_FROM, 300) || cleanText(process.env.SMTP_USER, 200);
+    const sender = from || cleanText(process.env.SMTP_FROM, 300) || cleanText(process.env.SMTP_USER, 200);
     try {
         await transporter.sendMail({
-            from,
+            from: sender,
             to: recipient,
             subject: cleanText(subject, 240),
             text: String(text || ''),
@@ -1782,12 +1801,30 @@ app.get('/api/digitalizept/business-types', requireDigitalizept, (req, res) => {
             standardFields: loadStandardFields(),
             config: {
                 ivaRate: DIGITALIZEPT_IVA_RATE,
-                provider: DIGITALIZEPT_PROVIDER
+                provider: activeProvider()
             }
         });
     } catch (err) {
         console.error('digitalizept business-types error:', err.message);
         return res.status(500).json({ error: 'Failed to load business types.' });
+    }
+});
+
+app.patch('/api/digitalizept/provider', requireDigitalizept, (req, res) => {
+    try {
+        const parsed = sanitizeSender(req.body || {});
+        if (parsed.error) return res.status(400).json({ error: parsed.error });
+        const db = getDigitalizeptDb();
+        saveProviderOverlay(db, parsed.sender, digitalizeptNow);
+        const provider = activeProvider(db);
+        digitalizeptLogEvento(db, 'app', 'provider', 'quem_envia', {
+            responsavel: provider.responsavel,
+            artigo: provider.artigo
+        });
+        return res.json({ ok: true, provider });
+    } catch (err) {
+        console.error('digitalizept provider patch error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar quem envia.' });
     }
 });
 
@@ -2069,13 +2106,11 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
     const types = loadBusinessTypes();
     const businessType = types.find((t) => t.id === row.business_type) || { nome: row.business_type };
     const dados = {
-        nome_negocio: row.nome || '',
-        morada: row.morada || '',
-        cidade: row.cidade || '',
-        telefone: row.telefone || '',
-        whatsapp: row.whatsapp || '',
-        ...parseJsonSafe(row.obrigatorios_json, {}),
-        ...parseJsonSafe(row.opcionais_json, {}),
+        ...dossier.mergeCanonicalDados(
+            row,
+            parseJsonSafe(row.obrigatorios_json, {}),
+            parseJsonSafe(row.opcionais_json, {})
+        ),
         legalEmail: row.legal_email || ''
     };
     if (!dados.responsavel && row.legal_nome) dados.responsavel = row.legal_nome;
@@ -2098,7 +2133,7 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
     const origin = digitalizeptPublicOrigin(req);
     const ctx = outreach.buildOutreachContext({
         dados,
-        provider: DIGITALIZEPT_PROVIDER,
+        provider: activeProvider(db),
         origin,
         demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : '',
         demoSlug: row.demo_slug || '',
@@ -2372,6 +2407,51 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
         const etapa = hasCoords ? 'visitado' : 'contacto_remoto';
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
+        const match = findReusableLead(db, { nome, cidade, lat, lng });
+        if (match) {
+            const nextNome = match.nome || nome;
+            const nextMorada = match.morada || morada;
+            const nextCidade = match.cidade || cidade;
+            const nextTel = match.telefone || telefone;
+            const nextWa = match.whatsapp || whatsapp;
+            db.transaction(() => {
+                db.prepare(`
+                    UPDATE lead SET nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?
+                    WHERE id = ?
+                `).run(nextNome, nextMorada, nextCidade, nextTel, nextWa, match.id);
+                if (hasCoords && !(Number.isFinite(match.lat) && Number.isFinite(match.lng))) {
+                    applyLeadCoords(db, match.id, lat, lng, mapsUrl ? 'maps' : 'manual');
+                }
+                const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(match.id);
+                if (!dadosRow) {
+                    db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+                        VALUES (?, ?, ?, ?, ?)`).run(
+                        crypto.randomUUID(), match.id, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+                }
+                digitalizeptLogEvento(db, 'lead', match.id, 'rascunho', { nome: nextNome, origem: 'quick', reused: true });
+            })();
+            syncLinkedVisitsIdentity(db, match.id, { nome: nextNome, morada: nextMorada, cidade: nextCidade });
+            if (!hasCoords && !(Number.isFinite(match.lat) && Number.isFinite(match.lng))) {
+                scheduleLeadGeocode(match.id);
+            }
+            return res.json({
+                ok: true,
+                created: false,
+                leadId: match.id,
+                notes: lookupNotes,
+                lead: {
+                    id: match.id,
+                    nome: nextNome,
+                    business_type: match.business_type || businessTypeId,
+                    morada: nextMorada,
+                    cidade: nextCidade,
+                    telefone: nextTel,
+                    email,
+                    lat: hasCoords ? Number(lat) : match.lat,
+                    lng: hasCoords ? Number(lng) : match.lng
+                }
+            });
+        }
         const leadId = crypto.randomUUID();
 
         db.transaction(() => {
@@ -2813,6 +2893,7 @@ app.post('/api/digitalizept/leads/:leadId/visits', requireDigitalizept, (req, re
             leadId
         );
         applyAutoEtapa(db, leadId, 'visitado');
+        reconcileVisitLeadPair(db, id, { identitySource: 'lead', now });
         return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept lead visit create error:', err.message);
@@ -2928,7 +3009,10 @@ app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
             INSERT INTO visita (id, nome, morada, cidade, cobertura, resultado, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(id, nome, morada, cidade, etapa, resultado, experiencia, lat, lng, geocodeStatus, visitadoEm, now, leadId);
-        if (leadId) applyAutoEtapa(db, leadId, 'visitado');
+        if (leadId) {
+            applyAutoEtapa(db, leadId, 'visitado');
+            reconcileVisitLeadPair(db, id, { identitySource: 'lead', now });
+        }
         return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept visit post error:', err.message);
@@ -2986,12 +3070,14 @@ app.patch('/api/digitalizept/visits/:id', requireDigitalizept, async (req, res) 
             WHERE id = ?
         `).run(nome, morada, cidade, etapa, resultado, experiencia, lat, lng, geocodeStatus, visitadoEm, leadId, id);
 
-        // Unified pin: when a linked visit gets coords, keep the lead pin in sync.
-        if (leadId && Number.isFinite(lat) && Number.isFinite(lng) && (hasManual || body.regeocode === true)) {
-            db.prepare(`
-                UPDATE lead SET lat = ?, lng = ?, geocode_status = ?, geocoded_at = ?
-                WHERE id = ?
-            `).run(lat, lng, geocodeStatus || 'ok', digitalizeptNow(), leadId);
+        if (leadId) {
+            reconcileVisitLeadPair(db, id, {
+                identitySource: (body.nome != null || body.morada != null || body.cidade != null)
+                    ? 'visit'
+                    : 'lead',
+                resultadoMode: body.resultado != null ? 'write' : 'fill-empty',
+                now: digitalizeptNow()
+            });
         }
 
         if (body.regeocode === true) {
@@ -3037,13 +3123,34 @@ app.post('/api/digitalizept/visits/:id/geocode', requireDigitalizept, async (req
     }
 });
 
+app.post('/api/digitalizept/visits/:id/lead', requireDigitalizept, (req, res) => {
+    try {
+        const id = cleanText(req.params.id, 80);
+        const db = getDigitalizeptDb();
+        const result = ensureLeadFromVisit(db, id);
+        if (result.error) {
+            return res.status(result.status || 400).json({ error: result.error });
+        }
+        return res.json({
+            ok: true,
+            created: result.created,
+            leadId: result.leadId,
+            lead: result.lead,
+            visit: fetchVisitaEnriched(db, id)
+        });
+    } catch (err) {
+        console.error('digitalizept visit lead error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível criar a ficha a partir da visita.' });
+    }
+});
+
 // Hydrate a lead (open or closed) so the sales wizard can reopen with fields filled.
 app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res) => {
     try {
         const leadId = cleanText(req.params.leadId, 80);
         const db = getDigitalizeptDb();
         const row = db.prepare(`
-            SELECT l.id, l.business_type, l.nome, l.morada, l.telefone, l.whatsapp, l.estado,
+            SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
                    l.demo_slug, l.demo_json, l.identidade_json, l.google_presence_json, l.wizard_json,
                    l.demo_html, l.followup_json,
                    d.obrigatorios_json, d.opcionais_json
@@ -3056,15 +3163,11 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
         const types = loadBusinessTypes();
         const businessType = types.find((t) => t.id === row.business_type)
             || { id: row.business_type, nome: row.business_type || 'Negócio' };
-        const dados = {
-            nome_negocio: row.nome || '',
-            morada: row.morada || '',
-            telefone: row.telefone || '',
-            whatsapp: row.whatsapp || '',
-            ...parseJsonSafe(row.obrigatorios_json, {}),
-            ...parseJsonSafe(row.opcionais_json, {})
-        };
-        if (!dados.nome_negocio) dados.nome_negocio = row.nome || '';
+        const dados = dossier.mergeCanonicalDados(
+            row,
+            parseJsonSafe(row.obrigatorios_json, {}),
+            parseJsonSafe(row.opcionais_json, {})
+        );
 
         const identidade = parseJsonSafe(row.identidade_json, {});
         const leadDemo = parseJsonSafe(row.demo_json, null);
@@ -3158,6 +3261,9 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             demoPrompt: mergedDemo.demoPrompt || '',
             demoRaw: mergedDemo.demoRaw || '',
             demoHtml: mergedDemo.demoHtml ? sanitizeDemoHtml(mergedDemo.demoHtml) : undefined,
+            demoHtmlCustom: mergedDemo.demoHtmlCustom
+                ? sanitizeDemoHtml(mergedDemo.demoHtmlCustom)
+                : undefined,
             demoVisual: mergedDemo.demoVisual || wizardExtra.demoVisual || undefined,
             demoHtmlSource: mergedDemo.demoHtmlSource || wizardExtra.demoHtmlSource || undefined,
             demoSeeded: mergedDemo.demoSeeded === true ? true : undefined,
@@ -3231,16 +3337,11 @@ function loadLeadDossier(db, leadId) {
     const businessType = types.find((t) => t.id === row.business_type)
         || { id: row.business_type, nome: row.business_type || 'Negócio' };
     const wizardExtra = parseJsonSafe(row.wizard_json, {});
-    const dados = {
-        nome_negocio: row.nome || '',
-        morada: row.morada || '',
-        cidade: row.cidade || '',
-        telefone: row.telefone || '',
-        whatsapp: row.whatsapp || '',
-        ...parseJsonSafe(row.obrigatorios_json, {}),
-        ...parseJsonSafe(row.opcionais_json, {})
-    };
-    if (!dados.nome_negocio) dados.nome_negocio = row.nome || '';
+    const dados = dossier.mergeCanonicalDados(
+        row,
+        parseJsonSafe(row.obrigatorios_json, {}),
+        parseJsonSafe(row.opcionais_json, {})
+    );
 
     const legalRow = db.prepare(
         'SELECT nome, nif, morada, email, telefone FROM cliente_legal WHERE lead_id = ?'
@@ -3520,6 +3621,7 @@ app.put('/api/digitalizept/leads/:leadId/dossier', requireDigitalizept, (req, re
             digitalizeptLogEvento(db, 'lead', leadId, 'ficha', { nome });
         });
         persist();
+        syncLinkedVisitsIdentity(db, leadId, { nome, morada, cidade });
         const lat = Number(body.lat);
         const lng = Number(body.lng);
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
@@ -3843,6 +3945,7 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
             const cidade = body.cidade != null ? cleanText(body.cidade, 120) : lead.cidade;
             clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
             db.prepare('UPDATE lead SET morada = ?, cidade = ? WHERE id = ?').run(morada, cidade, leadId);
+            syncLinkedVisitsIdentity(db, leadId, { morada, cidade });
             scheduleLeadGeocode(leadId, { force: true });
         }
         if (body.lat != null && body.lng != null) {
@@ -3965,9 +4068,11 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const body = req.body || {};
         const dados = body.dados || {};
         const businessType = body.businessType || {};
-        const demoHtml = clipDemoHtml(body.demoHtml);
+        const demoHtmlIncoming = clipDemoHtml(body.demoHtml);
+        const demoHtmlCustomIncoming = clipDemoHtml(body.demoHtmlCustom);
         let demo = body.demo;
-        if ((!demo || !demo.hero || !demo.hero.titulo) && demoHtml) {
+        if ((!demo || !demo.hero || !demo.hero.titulo)
+            && (demoHtmlCustomIncoming || demoHtmlIncoming)) {
             demo = {
                 hero: {
                     titulo: cleanText(dados.nome_negocio, 80) || 'Demonstração',
@@ -3989,13 +4094,22 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const now = digitalizeptNow();
         let leadId = cleanText(body.leadId, 80);
         const foundLead = leadId
-            ? db.prepare('SELECT id, nome, demo_slug, wizard_json FROM lead WHERE id = ?').get(leadId)
+            ? db.prepare('SELECT id, nome, demo_slug, wizard_json, demo_html FROM lead WHERE id = ?').get(leadId)
             : null;
         const existing = reusableLeadId(foundLead, cleanText(dados.nome_negocio, 200), cleanText(dados.cidade, 120))
             ? foundLead
             : null;
         if (!existing) leadId = crypto.randomUUID();
         else leadId = existing.id;
+        const persistHtml = persistableCustomHtml({
+            demoHtml: demoHtmlIncoming,
+            demoHtmlCustom: demoHtmlCustomIncoming,
+            demoHtmlSource: body.demoHtmlSource,
+            existingWizard: existing ? parseJsonSafe(existing.wizard_json, {}) : {}
+        });
+        const demoHtml = persistHtml
+            || (existing && existing.demo_html)
+            || (body.demoHtmlSource === 'boilerplate' ? '' : demoHtmlIncoming);
         const slug = allocateDemoSlug(db, {
             nome: dados.nome_negocio,
             existingSlug: existing ? existing.demo_slug : '',
@@ -4015,9 +4129,10 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
                     {
                         demo,
                         demoHtml,
+                        demoHtmlCustom: persistHtml || demoHtmlCustomIncoming,
                         demoRaw,
                         demoVisual: body.demoVisual,
-                        demoHtmlSource: body.demoHtmlSource
+                        demoHtmlSource: persistHtml ? 'ai' : body.demoHtmlSource
                     }
                 );
                 db.prepare(`UPDATE lead SET demo_json = ?, identidade_json = ?, demo_slug = ?, nome = ?,
@@ -4070,7 +4185,7 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
 app.get('/api/digitalizept/unsub', (req, res) => {
     const sendNotice = (status, heading, noticeLine, footerNote, extra = {}) => {
         const ctx = outreach.buildOutreachContext({
-            provider: DIGITALIZEPT_PROVIDER,
+            provider: activeProvider(),
             dados: extra.dados || {}
         });
         const html = outreach.renderBrandedNoticeHtml({
@@ -4298,7 +4413,13 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         const subject = cleanText(body.subject, 240) || outreach.emailSubjectFor(packed.ctx, packed.followup.edits);
         const text = String(body.text || outreach.renderEmailText(packed.ctx));
         const html = outreach.renderEmailHtml(packed.ctx);
-        const result = await sendProjectNotificationEmail({ to, subject, text, html });
+        const result = await sendProjectNotificationEmail({
+            to,
+            subject,
+            text,
+            html,
+            from: digitalizeptMailFrom(packed.ctx)
+        });
         if (!result.sent) {
             return res.status(503).json({ error: result.reason || 'SMTP não configurado.' });
         }
@@ -4351,7 +4472,13 @@ app.post('/api/digitalizept/outreach/email-demos', requireDigitalizept, async (r
             const subject = outreach.emailSubjectFor(packed.ctx, packed.followup.edits);
             const text = outreach.renderEmailText(packed.ctx);
             const html = outreach.renderEmailHtml(packed.ctx);
-            const result = await sendProjectNotificationEmail({ to, subject, text, html });
+            const result = await sendProjectNotificationEmail({
+                to,
+                subject,
+                text,
+                html,
+                from: digitalizeptMailFrom(packed.ctx)
+            });
             if (!result.sent) {
                 results.failed += 1;
                 results.errors.push({ id: row.id, error: result.reason });
@@ -4387,18 +4514,21 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
         }
         const types = loadBusinessTypes();
         const businessType = types.find((t) => t.id === row.business_type) || { id: row.business_type, nome: row.business_type };
-        const dados = {
-            nome_negocio: row.nome,
-            ...parseJsonSafe(row.obrigatorios_json, {}),
-            ...parseJsonSafe(row.opcionais_json, {})
-        };
+        const dados = dossier.mergeCanonicalDados(
+            row,
+            parseJsonSafe(row.obrigatorios_json, {}),
+            parseJsonSafe(row.opcionais_json, {})
+        );
         const wizard = parseJsonSafe(row.wizard_json, {});
+        const customHtml = pickCustomHtml(row.demo_html || '', wizard);
         return res.json({
             nome: row.nome,
             businessType,
             demo: parseJsonSafe(row.demo_json, null),
-            demoHtml: sanitizeDemoHtml(row.demo_html || ''),
-            demoVisual: wizard.demoVisual || '',
+            demoHtml: sanitizeDemoHtml(customHtml || row.demo_html || ''),
+            demoHtmlCustom: sanitizeDemoHtml(customHtml),
+            demoHtmlSource: customHtml ? 'ai' : (wizard.demoHtmlSource || ''),
+            demoVisual: customHtml ? 'personalizada' : (wizard.demoVisual || ''),
             identidade: parseJsonSafe(row.identidade_json, {}),
             dados
         });
@@ -4416,7 +4546,13 @@ app.post('/api/digitalizept/public/:slug/visual', (req, res) => {
         }
         const slug = cleanText(req.params.slug, 80);
         const raw = String((req.body && req.body.visual) || '').trim().toLowerCase();
-        const visual = raw === 'sem-fotos' ? 'sem-fotos' : raw === 'fotos' ? 'fotos' : '';
+        const visual = raw === 'sem-fotos'
+            ? 'sem-fotos'
+            : raw === 'fotos'
+                ? 'fotos'
+                : (raw === 'personalizada' || raw === 'custom' || raw === 'ai')
+                    ? 'personalizada'
+                    : '';
         if (!visual) return res.status(400).json({ error: 'Versão inválida.' });
         const db = getDigitalizeptDb();
         const row = db.prepare('SELECT id, wizard_json FROM lead WHERE demo_slug = ?').get(slug);

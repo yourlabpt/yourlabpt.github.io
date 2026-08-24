@@ -12,6 +12,7 @@ const FALLBACK_CONFIG = {
     provider: {
         nome: 'YourLab',
         responsavel: '',
+        artigo: 'o',
         nif: '',
         morada: '',
         email: '',
@@ -22,8 +23,8 @@ const FALLBACK_CONFIG = {
     }
 };
 
-export async function fetchSettings(ctx) {
-    if (cache) return cache;
+export async function fetchSettings(ctx, { refresh = false } = {}) {
+    if (cache && !refresh) return cache;
 
     const { response, data } = await apiRequest('/api/digitalizept/business-types', {
         token: getToken()
@@ -51,9 +52,33 @@ export async function fetchSettings(ctx) {
 
 // The wizard reads the rate on every money screen; a failed fetch must not
 // silently price a deal at zero IVA, so the fallback matches the server.
-export async function fetchConfig(ctx) {
-    const settings = await fetchSettings(ctx);
+export async function fetchConfig(ctx, opts) {
+    const settings = await fetchSettings(ctx, opts);
     return settings ? settings.config : null;
+}
+
+export function rememberProvider(provider) {
+    if (cache && cache.config) {
+        cache.config.provider = { ...cache.config.provider, ...(provider || {}) };
+    }
+}
+
+export async function saveProvider(fields, ctx) {
+    const { response, data } = await apiRequest('/api/digitalizept/provider', {
+        method: 'PATCH',
+        token: getToken(),
+        body: fields || {}
+    });
+    if (response.status === 401) {
+        if (ctx && typeof ctx.onUnauthorized === 'function') ctx.onUnauthorized();
+        throw new Error((data && data.error) || 'Sessão expirada.');
+    }
+    if (!response.ok) {
+        throw new Error((data && data.error) || 'Não foi possível guardar quem envia.');
+    }
+    if (data && data.provider) rememberProvider(data.provider);
+    else clearSettingsCache();
+    return (data && data.provider) || fields;
 }
 
 export function clearSettingsCache() {

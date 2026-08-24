@@ -19,8 +19,7 @@
             normalizeVisual,
             prefetchBoilerplate,
             resolveDemoVisual,
-            typeSlug,
-            VISUAL_SEM_FOTOS
+            typeSlug
         } from '/digitalizept/js/demo/demo-visual.js';
 
         const slug = window.location.pathname.split('/').filter(Boolean).pop();
@@ -73,12 +72,15 @@
                         dados: data.dados,
                         identidade: data.identidade,
                         demo: data.demo,
-                        demoHtml: data.demoHtml || '',
+                        demoHtml: data.demoHtmlCustom || data.demoHtml || '',
+                        demoHtmlCustom: data.demoHtmlCustom || '',
+                        demoHtmlSource: data.demoHtmlSource || '',
                         demoVisual: data.demoVisual || ''
                     }
                 };
-                const visual = resolveDemoVisual(state, params.get('v') || data.demoVisual, {
-                    preferPublishedLanding: true
+                const visual = resolveDemoVisual(state, params.get('v'), {
+                    preferPublishedLanding: true,
+                    preferCustom: true
                 });
                 let html = '';
                 try {
@@ -105,10 +107,14 @@
                     nextHost.id = 'root';
                     host.replaceWith(nextHost);
                     host = paint(nextHost, state);
-                    mountDemoSwitch(document.body, { visual: next, onChange: onSwitch });
+                    mountDemoSwitch(document.body, {
+                        visual: next,
+                        state,
+                        onChange: onSwitch
+                    });
                 };
-                mountDemoSwitch(document.body, { visual, onChange: onSwitch });
-                if (visual === VISUAL_SEM_FOTOS || normalizeVisual(params.get('v'))) {
+                mountDemoSwitch(document.body, { visual, state, onChange: onSwitch });
+                if (normalizeVisual(params.get('v'))) {
                     setQuery(visual);
                 }
             }

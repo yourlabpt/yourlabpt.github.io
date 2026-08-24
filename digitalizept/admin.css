@@ -235,6 +235,12 @@
     border-color: #333;
 }
 
+.provider-editor {
+    background: var(--admin-surface);
+    border-color: var(--admin-border);
+    margin-bottom: 16px;
+}
+
 /* ---------- Toolbar / list ---------- */
 
 .admin-toolbar {

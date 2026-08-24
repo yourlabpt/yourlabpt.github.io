@@ -208,7 +208,7 @@ describe('digitalizept no-image boilerplates', async () => {
                 demoHtml: '<html><body>AI café</body></html>',
                 identidade: { fotos: [] }
             }
-        }), 'fotos');
+        }), 'personalizada');
         assert.equal(visual.resolveDemoVisual({
             data: {
                 demo: { hero: { titulo: 'Landing publicada' } },
@@ -221,6 +221,26 @@ describe('digitalizept no-image boilerplates', async () => {
                 identidade: { fotos: [] }
             }
         }), 'sem-fotos');
+    });
+
+    it('keeps Personalizada as the public default even if Sem fotos was last on screen', () => {
+        const state = {
+            data: {
+                demoVisual: 'sem-fotos',
+                demoHtmlCustom: '<html><body>AI café</body></html>',
+                demoHtml: '<html data-dp-boilerplate="cafe-pastelaria"></html>',
+                demoHtmlSource: 'boilerplate',
+                identidade: { fotos: [] }
+            }
+        };
+        assert.equal(visual.resolveDemoVisual(state, '', { preferCustom: true }), 'personalizada');
+        assert.equal(visual.resolveDemoVisual(state), 'sem-fotos');
+        assert.equal(visual.publishedCustomHtml(state), '<html><body>AI café</body></html>');
+        visual.applyVisualToState(state, 'sem-fotos', '<html data-dp-boilerplate="x"></html>');
+        assert.match(state.data.demoHtmlCustom, /AI café/);
+        visual.applyVisualToState(state, 'fotos', '');
+        assert.equal(state.data.demoHtml, '');
+        assert.match(state.data.demoHtmlCustom, /AI café/);
     });
 
     it('applyIdentityToHtml fills a dp-photo placeholder', async () => {
@@ -254,13 +274,18 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.match(visual.stripDemoSwitch('<div class="dpl-demo-switch"><button>x</button></div><p>ok</p>'), />ok</);
     });
 
-    it('labels the client switch as Demonstração / Opção 1 / Opção 2', () => {
+    it('labels the client switch as Demonstração / Opção 1 / Opção 2, plus Personalizada when AI HTML exists', () => {
         const src = fs.readFileSync(path.join(__dirname, '../../digitalizept/js/demo/demo-visual.js'), 'utf8');
         assert.match(src, /caption\.textContent = 'Demonstração'/);
         assert.match(src, /\[VISUAL_FOTOS, 'Opção 1'\]/);
         assert.match(src, /\[VISUAL_SEM_FOTOS, 'Opção 2'\]/);
+        assert.match(src, /\[VISUAL_CUSTOM, 'Personalizada'\]/);
         assert.doesNotMatch(src, /\[VISUAL_FOTOS, 'Com fotos'\]/);
         assert.doesNotMatch(src, /\[VISUAL_SEM_FOTOS, 'Sem fotos'\]/);
+        assert.equal(visual.visualChoices({ data: {} }).length, 2);
+        assert.equal(visual.visualChoices({
+            data: { demoHtmlCustom: '<html><body>AI</body></html>' }
+        }).length, 3);
     });
 
     it('picks readable ink and on-accent colours for WCAG AA', async () => {

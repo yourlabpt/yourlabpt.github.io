@@ -14,7 +14,7 @@ import {
 export { normalizeOutreachLang };
 
 export const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+    1: `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
 *{{ganchoTitulo}}*{{ganchoTextoWa}}
 
@@ -86,7 +86,7 @@ export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
 export const DEFAULT_EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
 export const DEFAULT_EMAIL_SUBJECT_EN = '{{clienteNome}}, I made this for {{negocioNome}}';
 
-export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
 {{ganchoTitulo}}
 
@@ -190,6 +190,7 @@ export function buildFollowupContext(state, config) {
     const negocioNome = String(dados.nome_negocio || (en ? 'your business' : 'o seu negócio')).trim()
         || (en ? 'your business' : 'o seu negócio');
     const vendedorNome = String(provider.responsavel || provider.nome || 'YourLab').trim();
+    const vendedorArtigo = String(provider.artigo || '').trim() === 'a' ? 'a' : 'o';
     const phone = formatSellerPhone(provider.telefone || provider.mbway);
     const vendedorTelefone = phone.display;
     const site = String(provider.site || 'yourlabpt.com').trim().replace(/^https?:\/\//, '');
@@ -208,6 +209,7 @@ export function buildFollowupContext(state, config) {
         clienteNome,
         negocioNome,
         vendedorNome,
+        vendedorArtigo,
         vendedorTelefone,
         vendedorTelefoneTel: phone.tel,
         site,

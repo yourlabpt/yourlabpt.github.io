@@ -27,6 +27,7 @@ import {
     formatCountdown,
     maybeNotifyDueCall
 } from './confirm-call.js';
+import { renderProviderEditor } from '../provider-editor.js';
 
 function copyText(text, ctx, okMessage) {
     return navigator.clipboard.writeText(text)
@@ -704,8 +705,19 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     emailLabel.style.marginTop = '12px';
     emailLabel.textContent = 'Email HTML (o cliente recebe o layout YourLab)';
 
-    host.append(
-        title, hint, controls, linkStatus, seqStatus, callBox, ganchoBox, tabs,
+    const senderHost = document.createElement('div');
+    renderProviderEditor(senderHost, {
+        provider: config.provider || {},
+        compact: true,
+        toast: (msg, isErr) => ctx.showToast(msg, isErr),
+        onUnauthorized: ctx.onUnauthorized,
+        onSaved(next) {
+            config.provider = { ...(config.provider || {}), ...next };
+            paintMessages();
+        }
+    });
+
+    host.append(title, hint, senderHost, controls, linkStatus, seqStatus, callBox, ganchoBox, tabs,
         waLabel, waPreview, emailLabel, emailSubject, emailPreview, actions
     );
     paintMessages();

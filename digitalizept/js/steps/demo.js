@@ -26,9 +26,11 @@ import {
     htmlForVisual,
     mountDemoSwitch,
     prefetchBoilerplate,
+    publishedCustomHtml,
     rememberVisual,
     resolveDemoVisual,
     typeSlug,
+    VISUAL_CUSTOM,
     VISUAL_SEM_FOTOS
 } from '../demo/demo-visual.js';
 import {
@@ -60,6 +62,7 @@ function isGbpSubstepValid(state) {
 function isWebsiteSubstepValid(state) {
     if (state.data.demoHtml) return true;
     if (state.data.demoVisual === VISUAL_SEM_FOTOS) return true;
+    if (state.data.demoVisual === VISUAL_CUSTOM && publishedCustomHtml(state)) return true;
     ensureSeededDemo(state);
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
 }
@@ -87,7 +90,9 @@ async function publishDemo(ctx) {
     const epoch = ctx.getDealEpoch ? ctx.getDealEpoch() : null;
     try {
         const demo = ctx.state.data.demo;
-        const demoHtml = ctx.state.data.demoHtml || '';
+        const demoHtml = publishedCustomHtml(ctx.state) || (
+            ctx.state.data.demoHtmlSource === 'boilerplate' ? '' : (ctx.state.data.demoHtml || '')
+        );
         if ((!demo || !demo.hero || !demo.hero.titulo) && !demoHtml) return '';
         const nome = (ctx.state.data.dados && ctx.state.data.dados.nome_negocio) || '';
         const sentId = ctx.state.data.leadId || '';
@@ -101,9 +106,14 @@ async function publishDemo(ctx) {
                 identidade: ctx.state.data.identidade,
                 demo,
                 demoHtml,
+                demoHtmlCustom: publishedCustomHtml(ctx.state),
                 demoRaw: ctx.state.data.demoRaw || '',
-                demoVisual: ctx.state.data.demoVisual || '',
-                demoHtmlSource: ctx.state.data.demoHtmlSource || ''
+                demoVisual: publishedCustomHtml(ctx.state)
+                    ? VISUAL_CUSTOM
+                    : (ctx.state.data.demoVisual || ''),
+                demoHtmlSource: publishedCustomHtml(ctx.state)
+                    ? 'ai'
+                    : (ctx.state.data.demoHtmlSource || '')
             }
         });
         if (response.ok && data.url) {
@@ -148,7 +158,8 @@ async function switchDemoVisual(ctx, visual, { persist = true, onPaint } = {}) {
     ctx.update({
         demoVisual: persist ? visual : (ctx.state.data.demoVisual || ''),
         demoHtml: ctx.state.data.demoHtml || '',
-        demoHtmlSource: ctx.state.data.demoHtmlSource || ''
+        demoHtmlSource: ctx.state.data.demoHtmlSource || '',
+        demoHtmlCustom: ctx.state.data.demoHtmlCustom || ''
     });
     if (typeof onPaint === 'function') onPaint();
     if (persist) {
@@ -218,11 +229,19 @@ function openPreview(state, ctx, { mode } = {}) {
                 persist: true,
                 onPaint: () => {
                     paintWebsitePreview(scroll, ctx.state);
-                    mountDemoSwitch(overlay, { visual: next, onChange: onSwitch });
+                    mountDemoSwitch(overlay, {
+                        visual: next,
+                        state: ctx.state,
+                        onChange: onSwitch
+                    });
                 }
             }).catch(() => ctx.showToast('Não foi possível mudar a versão.', true));
         };
-        mountDemoSwitch(overlay, { visual, onChange: onSwitch });
+        mountDemoSwitch(overlay, {
+            visual,
+            state,
+            onChange: onSwitch
+        });
     }
 }
 
@@ -246,11 +265,13 @@ function applyHtml(ctx, raw, showStatus, afterApply) {
     ctx.state.data.demoHtml = html;
     ctx.state.data.demoHtmlSource = 'ai';
     ctx.state.data.demoHtmlCustom = html;
+    ctx.state.data.demoVisual = VISUAL_CUSTOM;
     ctx.state.data.demoSeeded = false;
     ctx.update({
         demoHtml: html,
         demoHtmlSource: 'ai',
         demoHtmlCustom: html,
+        demoVisual: VISUAL_CUSTOM,
         demoIdentityStamp: identityFingerprint(identidade),
         demoSeeded: false
     });
@@ -387,6 +408,7 @@ function renderWebsiteDemo(body, ctx) {
         const visual = resolveDemoVisual(ctx.state);
         mountDemoSwitch(stack, {
             visual,
+            state: ctx.state,
             onChange: (next) => {
                 switchDemoVisual(ctx, next, {
                     persist: true,

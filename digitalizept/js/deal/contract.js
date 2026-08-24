@@ -13,6 +13,7 @@ export { includesGooglePresence, includesWebsite } from './packages.js';
 const PROVIDER_DEFAULTS = {
     nome: 'YourLab',
     responsavel: 'Túlio Soares',
+    artigo: 'o',
     nif: '',
     morada: '',
     email: 'yourlabpt@gmail.com',

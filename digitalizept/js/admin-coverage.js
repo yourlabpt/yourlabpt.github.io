@@ -354,7 +354,7 @@ export function setupCoverage({
                         ? `Ligado a: ${selectedLeadNome || selectedLeadId} · com proposta${selectedDealEstado ? ` (${selectedDealEstado})` : ''}`
                         : `Ligado a: ${selectedLeadNome || selectedLeadId}`;
                 } else {
-                    linkStatus.textContent = 'Sem ligação — escolha um lead abaixo (opcional).';
+                    linkStatus.textContent = 'Sem ficha — Ficha ou Continuar venda cria e liga este pin.';
                 }
             }
             paintLinkStatus();
@@ -422,14 +422,7 @@ export function setupCoverage({
                 }
                 form.appendChild(coordHintEl);
             }
-            const save = document.createElement('button');
-            save.type = 'submit';
-            save.className = 'btn-primary';
-            save.textContent = defaults.id ? 'Guardar visita' : 'Guardar no mapa';
-            form.appendChild(save);
-            form.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                save.disabled = true;
+            function currentVisitPayload() {
                 const payload = {
                     nome: nome.value.trim(),
                     morada: morada.value.trim(),
@@ -445,13 +438,58 @@ export function setupCoverage({
                     payload.lat = lat;
                     payload.lng = lng;
                 }
+                return payload;
+            }
+
+            async function persistVisit(payload) {
                 const path = defaults.id
                     ? `/api/digitalizept/visits/${defaults.id}`
                     : '/api/digitalizept/visits';
-                const { response, data } = await api(path, {
+                return api(path, {
                     method: defaults.id ? 'PATCH' : 'POST',
                     body: payload
                 });
+            }
+
+            async function connectFicha() {
+                const payload = currentVisitPayload();
+                if (!payload.nome) {
+                    return { error: 'Indique o nome do sítio.' };
+                }
+                const saved = await persistVisit(payload);
+                if (!saved.response.ok) {
+                    return { error: saved.data.error || 'Não foi possível guardar a visita.' };
+                }
+                const visit = saved.data.visit || {};
+                if (visit.id) defaults.id = visit.id;
+                const linked = selectedLeadId || visit.leadId;
+                if (linked) {
+                    return { leadId: linked, created: false };
+                }
+                if (!defaults.id) {
+                    return { error: 'Não foi possível guardar a visita.' };
+                }
+                const created = await api(`/api/digitalizept/visits/${encodeURIComponent(defaults.id)}/lead`, {
+                    method: 'POST'
+                });
+                if (!created.response.ok) {
+                    return { error: created.data.error || 'Não foi possível criar a ficha.' };
+                }
+                return {
+                    leadId: created.data.leadId,
+                    created: created.data.created === true
+                };
+            }
+
+            const save = document.createElement('button');
+            save.type = 'submit';
+            save.className = 'btn-primary';
+            save.textContent = defaults.id ? 'Guardar visita' : 'Guardar no mapa';
+            form.appendChild(save);
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                save.disabled = true;
+                const { response, data } = await persistVisit(currentVisitPayload());
                 save.disabled = false;
                 if (!response.ok) {
                     toast(data.error || 'Falha.', true);
@@ -474,6 +512,53 @@ export function setupCoverage({
 
             const actions = document.createElement('div');
             actions.className = 'coverage-pin-actions';
+            const ficha = document.createElement('button');
+            ficha.type = 'button';
+            ficha.className = 'btn-primary';
+            ficha.textContent = 'Ficha';
+            const resume = document.createElement('button');
+            resume.type = 'button';
+            resume.className = 'btn-secondary';
+            resume.textContent = 'Continuar venda';
+            const connectBusy = [];
+            function setConnectBusy(on) {
+                connectBusy.forEach((btn) => {
+                    btn.disabled = on;
+                });
+            }
+            async function runConnect({ openFicha, resumeSale }) {
+                setConnectBusy(true);
+                try {
+                    const result = await connectFicha();
+                    if (result.error) {
+                        toast(result.error, true);
+                        return;
+                    }
+                    toast(result.created ? 'Ficha criada e ligada a este pin.' : 'Ficha ligada.');
+                    registeringNewVisit = false;
+                    pendingPoint = null;
+                    clearPendingMarker();
+                    closeDrawer();
+                    if (resumeSale) {
+                        window.location.href = `./?resume=${encodeURIComponent(result.leadId)}`;
+                        return;
+                    }
+                    await refresh();
+                    paint({ preserveView: true });
+                    if (openFicha && typeof openDossier === 'function') {
+                        openDossier(result.leadId);
+                        return;
+                    }
+                    const leadPin = pins.find((p) => p.kind === 'lead' && p.id === result.leadId);
+                    if (leadPin) openLeadPin(leadPin);
+                } catch (_) {
+                    toast('Erro de rede.', true);
+                } finally {
+                    setConnectBusy(false);
+                }
+            }
+            ficha.addEventListener('click', () => runConnect({ openFicha: true }));
+            resume.addEventListener('click', () => runConnect({ resumeSale: true }));
             const openLead = document.createElement('button');
             openLead.type = 'button';
             openLead.className = 'btn-secondary';
@@ -485,9 +570,6 @@ export function setupCoverage({
                 if (leadPin) openLeadPin(leadPin);
                 else toast('Lead ainda não está no mapa — guarde a visita e actualize.', true);
             });
-            const resume = document.createElement('a');
-            resume.className = 'btn-secondary';
-            resume.textContent = 'Continuar venda';
             const clearLink = document.createElement('button');
             clearLink.type = 'button';
             clearLink.className = 'btn-secondary';
@@ -504,13 +586,12 @@ export function setupCoverage({
             function paintLinkActions() {
                 const id = selectedLeadId || '';
                 openLead.hidden = !id;
-                resume.hidden = !id;
                 clearLink.hidden = !id;
-                if (id) resume.href = `./?resume=${encodeURIComponent(id)}`;
             }
             paintLinkActions();
             select.addEventListener('change', () => paintLinkActions());
-            actions.append(openLead, resume, clearLink);
+            connectBusy.push(ficha, resume, save);
+            actions.append(ficha, resume, openLead, clearLink);
             if (defaults.id) {
                 const geo = document.createElement('button');
                 geo.type = 'button';

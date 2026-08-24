@@ -1,4 +1,4 @@
-/** Com fotos / Sem fotos: default from photos, load category boilerplates, persist choice. */
+/** Three client demos: Opção 1 (landing), Opção 2 (boilerplate), Personalizada (AI). */
 
 import { applyIdentityToHtml } from './html.js';
 import { fillBoilerplateCopy, fillBoilerplateFromDemo } from './boilerplate-copy.js';
@@ -8,6 +8,7 @@ export { fillBoilerplateCopy, fillBoilerplateFromDemo };
 
 export const VISUAL_FOTOS = 'fotos';
 export const VISUAL_SEM_FOTOS = 'sem-fotos';
+export const VISUAL_CUSTOM = 'personalizada';
 
 const cache = new Map();
 
@@ -36,12 +37,13 @@ export function defaultDemoVisual(state) {
     return hasFotos(identidade) ? VISUAL_FOTOS : VISUAL_SEM_FOTOS;
 }
 
-export function resolveDemoVisual(state, queryVisual, { preferPublishedLanding = false } = {}) {
+export function resolveDemoVisual(state, queryVisual, { preferPublishedLanding = false, preferCustom = false } = {}) {
     const fromQuery = normalizeVisual(queryVisual);
     if (fromQuery) return fromQuery;
+    if (preferCustom && isCustomHtml(state)) return VISUAL_CUSTOM;
     const stored = normalizeVisual(state && state.data && state.data.demoVisual);
     if (stored) return stored;
-    if (isCustomHtml(state)) return VISUAL_FOTOS;
+    if (isCustomHtml(state)) return VISUAL_CUSTOM;
     if (isBoilerplateHtml(state && state.data && state.data.demoHtml)) return VISUAL_SEM_FOTOS;
     // Existing /d/:slug landing JSON was already the published site — do not swap it.
     if (preferPublishedLanding && state && state.data && state.data.demo && state.data.demo.hero) {
@@ -54,6 +56,9 @@ export function normalizeVisual(value) {
     const raw = String(value || '').trim().toLowerCase();
     if (raw === VISUAL_SEM_FOTOS || raw === 'sem' || raw === 'no-photos') return VISUAL_SEM_FOTOS;
     if (raw === VISUAL_FOTOS || raw === 'com-fotos' || raw === 'photos') return VISUAL_FOTOS;
+    if (raw === VISUAL_CUSTOM || raw === 'custom' || raw === 'customized' || raw === 'ai') {
+        return VISUAL_CUSTOM;
+    }
     return '';
 }
 
@@ -136,6 +141,16 @@ export async function prefetchBoilerplate(slug) {
     } catch (_) { /* prefetch is best-effort */ }
 }
 
+export function publishedCustomHtml(state) {
+    const data = (state && state.data) || {};
+    const custom = String(data.demoHtmlCustom || '').trim();
+    if (custom && !isBoilerplateHtml(custom)) return custom;
+    if (data.demoHtmlSource === 'boilerplate') return '';
+    const html = String(data.demoHtml || '').trim();
+    if (html && !isBoilerplateHtml(html)) return html;
+    return '';
+}
+
 export async function htmlForVisual(state, visual) {
     const data = (state && state.data) || {};
     const dados = data.dados || {};
@@ -143,9 +158,10 @@ export async function htmlForVisual(state, visual) {
     if (visual === VISUAL_SEM_FOTOS) {
         return loadBoilerplateHtml(state);
     }
-    const custom = String(data.demoHtmlCustom || (isCustomHtml(state) ? data.demoHtml : '') || '');
-    if (custom && !isBoilerplateHtml(custom)) {
-        return applyIdentityToHtml(custom, identidade, dados);
+    if (visual === VISUAL_CUSTOM) {
+        const custom = publishedCustomHtml(state);
+        if (custom) return applyIdentityToHtml(custom, identidade, dados);
+        return '';
     }
     return '';
 }
@@ -157,14 +173,14 @@ export function applyVisualToState(state, visual, html) {
         state.data.demoHtmlCustom = current;
     }
     if (visual === VISUAL_SEM_FOTOS) {
-        state.data.demoHtml = html || state.data.demoHtml || '';
+        state.data.demoHtml = html || '';
         state.data.demoHtmlSource = 'boilerplate';
         return state;
     }
-    const custom = String(state.data.demoHtmlCustom || '').trim();
-    if (custom && !isBoilerplateHtml(custom)) {
+    if (visual === VISUAL_CUSTOM) {
+        const custom = publishedCustomHtml(state);
         state.data.demoHtml = custom;
-        state.data.demoHtmlSource = 'ai';
+        state.data.demoHtmlSource = custom ? 'ai' : '';
         return state;
     }
     state.data.demoHtml = '';
@@ -198,9 +214,19 @@ export function restoreSection(root, sectionId) {
     root.scrollTop = 0;
 }
 
-export function mountDemoSwitch(host, { visual, onChange } = {}) {
+export function visualChoices(state) {
+    const choices = [
+        [VISUAL_FOTOS, 'Opção 1'],
+        [VISUAL_SEM_FOTOS, 'Opção 2']
+    ];
+    if (isCustomHtml(state)) choices.push([VISUAL_CUSTOM, 'Personalizada']);
+    return choices;
+}
+
+export function mountDemoSwitch(host, { visual, onChange, state } = {}) {
     if (!host) return null;
     let bar = host.querySelector(':scope > .dpl-demo-switch');
+    const choices = visualChoices(state);
     if (!bar) {
         bar = document.createElement('div');
         bar.className = 'dpl-demo-switch';
@@ -210,10 +236,14 @@ export function mountDemoSwitch(host, { visual, onChange } = {}) {
         caption.className = 'dpl-demo-switch-label';
         caption.textContent = 'Demonstração';
         bar.appendChild(caption);
-        [
-            [VISUAL_FOTOS, 'Opção 1'],
-            [VISUAL_SEM_FOTOS, 'Opção 2']
-        ].forEach(([value, label]) => {
+        host.appendChild(bar);
+    }
+    const buttons = [...bar.querySelectorAll('button[data-visual]')];
+    const same = buttons.length === choices.length
+        && buttons.every((btn, i) => btn.dataset.visual === choices[i][0]);
+    if (!same) {
+        buttons.forEach((btn) => btn.remove());
+        choices.forEach(([value, label]) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.dataset.visual = value;
@@ -226,7 +256,6 @@ export function mountDemoSwitch(host, { visual, onChange } = {}) {
             });
             bar.appendChild(btn);
         });
-        host.appendChild(bar);
     }
     bar.querySelectorAll('button[data-visual]').forEach((btn) => {
         btn.setAttribute('aria-pressed', btn.dataset.visual === visual ? 'true' : 'false');

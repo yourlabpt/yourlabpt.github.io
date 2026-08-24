@@ -1,4 +1,4 @@
-const CACHE = 'digitalizept-v71';
+const CACHE = 'digitalizept-v74';
 const SHELL = [
     '/digitalizept/',
     '/digitalizept/index.html',
@@ -19,6 +19,7 @@ const SHELL = [
     '/digitalizept/js/proposal-calc.js',
     '/digitalizept/js/pwa.js',
     '/digitalizept/js/settings.js',
+    '/digitalizept/js/provider-editor.js',
     '/digitalizept/js/wizard.js',
     '/digitalizept/js/steps/google.js'
 ];

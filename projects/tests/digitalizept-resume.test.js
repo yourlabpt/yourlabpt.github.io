@@ -73,6 +73,36 @@ describe('digitalizept resume merge', () => {
         assert.deepEqual(resumeWizardPosition({}), { suggestedStep: 0, suggestedSubstep: 0 });
     });
 
+    it('does not let a boilerplate publish replace AI HTML', () => {
+        const {
+            pickCustomHtml,
+            persistableCustomHtml,
+            mergeDemoForResume,
+            mergeDemoIntoWizardJson
+        } = require('../../server/lib/digitalizept-resume.js');
+        const boiler = '<html lang="pt-PT" data-dp-boilerplate="restaurante"></html>';
+        const custom = '<html><body>AI Thailander</body></html>';
+        assert.equal(pickCustomHtml(boiler, { demoHtmlCustom: custom }), custom);
+        assert.equal(persistableCustomHtml({
+            demoHtml: boiler,
+            demoHtmlSource: 'boilerplate',
+            existingWizard: { demoHtmlCustom: custom }
+        }), custom);
+        const merged = mergeDemoForResume({
+            leadDemo: { hero: { titulo: 'Opção 1' } },
+            leadDemoHtml: boiler,
+            wizard: { demoHtmlCustom: custom, demoVisual: 'sem-fotos' }
+        });
+        assert.match(merged.demoHtmlCustom, /AI Thailander/);
+        assert.match(merged.demoHtml, /AI Thailander/);
+        assert.equal(merged.demoVisual, 'personalizada');
+        const next = mergeDemoIntoWizardJson(
+            { demoHtmlCustom: custom, demoVisual: 'personalizada' },
+            { demoHtml: boiler, demoHtmlSource: 'boilerplate', demoVisual: 'sem-fotos' }
+        );
+        assert.match(next.demoHtmlCustom, /AI Thailander/);
+    });
+
     it('merges demo fields into existing wizard_json on publish', () => {
         const next = mergeDemoIntoWizardJson(
             { proposta: { pacote: 'site_maps' }, demoPrompt: 'keep' },

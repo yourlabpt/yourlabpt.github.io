@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { SCHEMA, migrate } = require('../../server/lib/digitalizept-db.js');
+const { ensureLeadFromVisit, syncLinkedVisitsIdentity } = require('../../server/lib/digitalizept-visit-lead.js');
+const { mergeCanonicalDados } = require('../../server/lib/digitalizept-dossier.js');
 
 function openMemoryDb() {
     const db = new Database(':memory:');
@@ -103,5 +105,196 @@ describe('digitalizept visita.lead_id', () => {
         const cols = db.prepare('PRAGMA table_info(visita)').all().map((c) => c.name);
         assert.ok(cols.includes('lead_id'));
         db.close();
+    });
+});
+
+describe('digitalizept ensureLeadFromVisit', () => {
+    function insertVisit(db, overrides = {}) {
+        const now = new Date().toISOString();
+        const visitId = crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO visita (
+                id, nome, morada, cidade, cobertura, resultado, experiencia,
+                lat, lng, geocode_status, visitado_em, criado_em, lead_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            visitId,
+            overrides.nome != null ? overrides.nome : 'Mercearia do Pin',
+            overrides.morada != null ? overrides.morada : 'Rua das Flores 12',
+            overrides.cidade != null ? overrides.cidade : 'Porto',
+            overrides.cobertura || 'visitado',
+            overrides.resultado || '',
+            overrides.experiencia != null ? overrides.experiencia : 'Dona Maria atendeu.',
+            overrides.lat != null ? overrides.lat : 41.1496,
+            overrides.lng != null ? overrides.lng : -8.611,
+            overrides.geocode_status || 'manual',
+            now,
+            now,
+            overrides.lead_id || null
+        );
+        return visitId;
+    }
+
+    it('creates a lead from an orphan visit and links visita.lead_id', () => {
+        const db = openMemoryDb();
+        const visitId = insertVisit(db, { resultado: 'futuro' });
+        const first = ensureLeadFromVisit(db, visitId);
+        assert.equal(first.ok, true);
+        assert.equal(first.created, true);
+        assert.ok(first.leadId);
+        assert.equal(first.lead.nome, 'Mercearia do Pin');
+        assert.equal(first.lead.morada, 'Rua das Flores 12');
+        assert.equal(first.lead.cidade, 'Porto');
+        assert.equal(first.lead.cobertura, 'visitado');
+        assert.equal(first.lead.resultado, 'futuro');
+        assert.equal(first.lead.lat, 41.1496);
+        assert.equal(first.lead.lng, -8.611);
+
+        const visit = db.prepare('SELECT lead_id FROM visita WHERE id = ?').get(visitId);
+        assert.equal(visit.lead_id, first.leadId);
+
+        const dados = db.prepare('SELECT opcionais_json FROM dados_negocio WHERE lead_id = ?').get(first.leadId);
+        const opcionais = JSON.parse(dados.opcionais_json);
+        assert.equal(opcionais.nome_negocio, 'Mercearia do Pin');
+
+        const notes = db.prepare('SELECT texto FROM nota WHERE lead_id = ?').all(first.leadId);
+        assert.equal(notes.length, 0);
+        const street = db.prepare('SELECT experiencia FROM visita WHERE id = ?').get(visitId);
+        assert.equal(street.experiencia, 'Dona Maria atendeu.');
+
+        const orphans = db.prepare('SELECT id FROM visita WHERE lead_id IS NULL OR lead_id = \'\'').all();
+        assert.equal(orphans.length, 0);
+
+        const second = ensureLeadFromVisit(db, visitId);
+        assert.equal(second.created, false);
+        assert.equal(second.leadId, first.leadId);
+        const noteCount = db.prepare('SELECT COUNT(*) AS n FROM nota WHERE lead_id = ?').get(first.leadId);
+        assert.equal(noteCount.n, 0);
+        db.close();
+    });
+
+    it('returns 404 for a missing visit and 400 when the visit has no name', () => {
+        const db = openMemoryDb();
+        const missing = ensureLeadFromVisit(db, crypto.randomUUID());
+        assert.equal(missing.status, 404);
+
+        const empty = insertVisit(db, { nome: '   ', experiencia: '' });
+        const rejected = ensureLeadFromVisit(db, empty);
+        assert.equal(rejected.status, 400);
+        db.close();
+    });
+
+    it('creates a new ficha when visita.lead_id points at a deleted lead', () => {
+        const db = openMemoryDb();
+        const visitId = insertVisit(db, { lead_id: crypto.randomUUID(), experiencia: '' });
+        const result = ensureLeadFromVisit(db, visitId);
+        assert.equal(result.ok, true);
+        assert.equal(result.created, true);
+        const visit = db.prepare('SELECT lead_id FROM visita WHERE id = ?').get(visitId);
+        assert.equal(visit.lead_id, result.leadId);
+        db.close();
+    });
+
+    it('reuses a nearby lead with the same shop name instead of forking a ficha', () => {
+        const db = openMemoryDb();
+        const now = new Date().toISOString();
+        const leadId = crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em, lat, lng)
+            VALUES (?, 'cafe', 'Mercearia do Pin', 'Rua das Flores 12', 'Porto', '222000000', '', 'rascunho', 'demo_criada', ?, ?, ?)
+        `).run(leadId, now, 41.1496, -8.611);
+        const visitId = insertVisit(db, {
+            nome: 'Mercearia do Pin',
+            lat: 41.14965,
+            lng: -8.61102,
+            experiencia: ''
+        });
+        const result = ensureLeadFromVisit(db, visitId);
+        assert.equal(result.created, false);
+        assert.equal(result.leadId, leadId);
+        const leads = db.prepare('SELECT COUNT(*) AS n FROM lead').get();
+        assert.equal(leads.n, 1);
+        const visit = db.prepare('SELECT lead_id, nome FROM visita WHERE id = ?').get(visitId);
+        assert.equal(visit.lead_id, leadId);
+        const lead = db.prepare('SELECT cobertura, telefone FROM lead WHERE id = ?').get(leadId);
+        assert.equal(lead.telefone, '222000000');
+        assert.equal(lead.cobertura, 'demo_criada');
+        db.close();
+    });
+
+    it('does not attach a visit to the neighbour shop', () => {
+        const db = openMemoryDb();
+        const now = new Date().toISOString();
+        const thaiId = crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em, lat, lng)
+            VALUES (?, 'restaurante', 'Thai Golden', 'Rua das Flores 10', 'Porto', '', '', 'rascunho', 'visitado', ?, ?, ?)
+        `).run(thaiId, now, 41.1496, -8.611);
+        const visitId = insertVisit(db, {
+            nome: 'Escondidinho',
+            lat: 41.14962,
+            lng: -8.61101,
+            experiencia: ''
+        });
+        const result = ensureLeadFromVisit(db, visitId);
+        assert.equal(result.created, true);
+        assert.notEqual(result.leadId, thaiId);
+        db.close();
+    });
+
+    it('does not merge two sites that share a name but are far apart', () => {
+        const db = openMemoryDb();
+        const now = new Date().toISOString();
+        const leadId = crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em, lat, lng)
+            VALUES (?, 'cafe', 'Mercearia do Pin', 'Rua A', 'Porto', '', '', 'rascunho', 'visitado', ?, ?, ?)
+        `).run(leadId, now, 41.1496, -8.611);
+        const visitId = insertVisit(db, {
+            nome: 'Mercearia do Pin',
+            lat: 41.16,
+            lng: -8.63,
+            experiencia: ''
+        });
+        const result = ensureLeadFromVisit(db, visitId);
+        assert.equal(result.created, true);
+        assert.notEqual(result.leadId, leadId);
+        db.close();
+    });
+
+    it('keeps visit identity in sync with the lead after linking', () => {
+        const db = openMemoryDb();
+        const now = new Date().toISOString();
+        const leadId = crypto.randomUUID();
+        const visitId = crypto.randomUUID();
+        db.prepare(`
+            INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em)
+            VALUES (?, 'loja', 'Silva Unipessoal', 'Rua Nova 1', 'Porto', '', '', 'rascunho', 'visitado', ?)
+        `).run(leadId, now);
+        db.prepare(`
+            INSERT INTO visita (id, nome, morada, cidade, cobertura, resultado, experiencia, lat, lng, geocode_status, visitado_em, criado_em, lead_id)
+            VALUES (?, 'silva', 'Rua velha', 'Porto', 'visitado', '', '', NULL, NULL, '', ?, ?, ?)
+        `).run(visitId, now, now, leadId);
+        syncLinkedVisitsIdentity(db, leadId);
+        const visit = db.prepare('SELECT nome, morada FROM visita WHERE id = ?').get(visitId);
+        assert.equal(visit.nome, 'Silva Unipessoal');
+        assert.equal(visit.morada, 'Rua Nova 1');
+        db.close();
+    });
+});
+
+describe('digitalizept canonical dados', () => {
+    it('lets lead columns win over stale dados_negocio JSON', () => {
+        const dados = mergeCanonicalDados(
+            { nome: 'Café Novo', morada: 'Rua B', cidade: 'Porto', telefone: '222', whatsapp: '' },
+            { nome_negocio: 'Nome antigo' },
+            { morada: 'Rua antiga', email: 'a@b.pt', whatsapp: '933' }
+        );
+        assert.equal(dados.nome_negocio, 'Café Novo');
+        assert.equal(dados.morada, 'Rua B');
+        assert.equal(dados.cidade, 'Porto');
+        assert.equal(dados.telefone, '222');
+        assert.equal(dados.whatsapp, '933');
+        assert.equal(dados.email, 'a@b.pt');
     });
 });

@@ -336,4 +336,16 @@ describe('digitalizept outreach', () => {
         assert.match(text, /VAT not included/);
         assert.match(text, /REMOVE/);
     });
+
+    it('uses sou a when the sender is configured that way', () => {
+        const ctx = buildOutreachContext({
+            dados: { nome_negocio: 'Loja X', responsavel: 'Costa', cidade: 'Porto' },
+            provider: { nome: 'YourLab', responsavel: 'Maria Silva', artigo: 'a' },
+            hour: 15
+        });
+        assert.equal(ctx.vendedorNome, 'Maria Silva');
+        assert.equal(ctx.vendedorArtigo, 'a');
+        assert.match(waTextForStep(1, ctx), /sou a Maria Silva, da YourLab/);
+        assert.match(renderEmailHtml(ctx), /sou a Maria Silva/);
+    });
 });

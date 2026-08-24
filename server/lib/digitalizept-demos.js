@@ -14,10 +14,8 @@ function writeDemoFolder({ slug, demo, identidade, dados, businessType, demoHtml
         businessType: businessType || {}
     }, null, 2));
     const customPath = path.join(folder, 'custom.html');
-    if (demoHtml) {
+    if (demoHtml && !/data-dp-boilerplate\s*=/i.test(String(demoHtml))) {
         fs.writeFileSync(customPath, String(demoHtml));
-    } else if (fs.existsSync(customPath)) {
-        fs.unlinkSync(customPath);
     }
     fs.writeFileSync(path.join(folder, 'index-url.txt'), `/d/${safe}\n`);
     return folder;

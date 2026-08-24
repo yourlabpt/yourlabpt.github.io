@@ -237,6 +237,19 @@ function propostaSummary(proposta) {
     };
 }
 
+/** Lead columns win over dados_negocio JSON so the ficha cannot drift from the pin. */
+function mergeCanonicalDados(row, obrigatorios = {}, opcionais = {}) {
+    const json = { ...(obrigatorios || {}), ...(opcionais || {}) };
+    return {
+        ...json,
+        nome_negocio: row.nome || json.nome_negocio || '',
+        morada: row.morada || json.morada || '',
+        cidade: row.cidade || json.cidade || '',
+        telefone: row.telefone || json.telefone || '',
+        whatsapp: row.whatsapp || json.whatsapp || ''
+    };
+}
+
 function sanitizeDados(dados, cleanText) {
     const out = {};
     Object.entries(dados || {}).forEach(([key, value]) => {
@@ -267,5 +280,6 @@ module.exports = {
     identitySummary,
     demoSummary,
     propostaSummary,
+    mergeCanonicalDados,
     sanitizeDados
 };

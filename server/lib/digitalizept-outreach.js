@@ -57,7 +57,7 @@ const NOTICE_TEMPLATE_PATH = path.join(
 const DEFAULT_VENDEDOR_TELEFONE = '+351936732879';
 
 const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+    1: `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
 *{{ganchoTitulo}}*{{ganchoTextoWa}}
 
@@ -92,7 +92,7 @@ Gostou? Diga só que sim. Se quiser que lhe explique melhor, passo aí {{followu
 
 const EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
 
-const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}} — sou o {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
 {{ganchoTitulo}}
 
@@ -613,6 +613,7 @@ function buildOutreachContext({
         negocioNomeMailto: encodeURIComponent(negocioNome),
         ctaBodyMailto: encodeURIComponent(ctaBody),
         vendedorNome: String(provider.responsavel || provider.nome || 'YourLab').trim(),
+        vendedorArtigo: String(provider.artigo || '').trim() === 'a' ? 'a' : 'o',
         vendedorEmail,
         vendedorTelefone,
         vendedorTelefoneTel,
