@@ -42,7 +42,7 @@
 .admin-app {
     max-width: 920px;
     margin: 0 auto;
-    padding: 16px 16px 48px;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 48px;
     color: var(--admin-ink);
     position: relative;
     z-index: 1;
@@ -88,9 +88,14 @@
 .admin-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
     margin-bottom: 18px;
+}
+
+.admin-header-copy {
+    min-width: 0;
+    flex: 1;
 }
 
 .call-queue {
@@ -134,7 +139,8 @@
     font-size: 1.7rem;
     color: var(--admin-ink);
     font-weight: 700;
-    letter-spacing: -0.04em;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
 }
 
 .admin-header p {
@@ -877,15 +883,6 @@
 }
 
 @media (max-width: 520px) {
-    .admin-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .admin-header-actions {
-        justify-content: flex-end;
-    }
-
     .admin-tab {
         padding: 10px 8px;
         font-size: 0.82rem;
@@ -1048,7 +1045,34 @@
 
 @media (max-width: 640px) {
     .admin-app {
-        padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
+        padding: calc(20px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .admin-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .admin-header-copy {
+        padding-top: 2px;
+    }
+
+    .admin-header h1 {
+        font-size: 1.45rem;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+    }
+
+    .admin-header p {
+        margin-top: 3px;
+        font-size: 0.84rem;
+        line-height: 1.35;
+    }
+
+    .admin-header-actions {
+        justify-content: flex-start;
     }
 
     .admin-body .field-input,
