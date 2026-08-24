@@ -2,10 +2,17 @@ export function coverageTypeId(pin) {
     return String((pin && pin.business_type) || '').trim();
 }
 
+export function coverageResultadoId(pin) {
+    const res = String((pin && pin.resultado) || '').trim();
+    if (res) return res;
+    if (pin && (pin.estado === 'fechado' || pin.dealEstado === 'fechado')) return 'digitalizado';
+    return '';
+}
+
 export function pinMatchesCoverageFilters(pin, { filterIds, filterTypes, query, typeLabel } = {}) {
     if (filterIds && filterIds.size) {
         const etapa = pin.etapa || pin.cobertura || 'contacto_remoto';
-        const resultado = pin.resultado || '';
+        const resultado = coverageResultadoId(pin);
         if (!filterIds.has(etapa) && !(resultado && filterIds.has(resultado))) return false;
     }
     if (filterTypes && filterTypes.size) {
@@ -31,7 +38,7 @@ export function coverageCounts(pins) {
     let mapped = 0;
     list.forEach((pin) => {
         bump(byType, coverageTypeId(pin));
-        bump(byResultado, pin && pin.resultado);
+        bump(byResultado, coverageResultadoId(pin));
         bump(byEtapa, (pin && (pin.etapa || pin.cobertura)) || '');
         if (Number.isFinite(pin && pin.lat) && Number.isFinite(pin && pin.lng)) mapped += 1;
     });

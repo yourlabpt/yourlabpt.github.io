@@ -6,9 +6,10 @@
     --admin-ink: #1c1c1c;
     --admin-muted: #5c564c;
     --admin-border: #d8d0c4;
-    --admin-surface: #ffffff;
     --admin-bg: #f4f1ea;
-    --admin-fill: #ebe6dc;
+    --admin-surface: #ebe6dc;
+    --admin-fill: #e0dbd0;
+    --admin-press: #d6cfc2;
     --admin-accent: #1b1b1b;
 
     --surface-color: var(--admin-surface);
@@ -164,7 +165,7 @@
 }
 
 .admin-body select.field-input {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e8e93' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235c564c' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     padding-right: 36px;
@@ -176,7 +177,7 @@
     outline: none;
     border: none;
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
-    background: #e0dbd0;
+    background: var(--admin-press);
 }
 
 .admin-body .field-input::placeholder {
@@ -227,7 +228,7 @@
 }
 
 .admin-body .btn-secondary:hover {
-    background: #e0dbd0;
+    background: var(--admin-press);
 }
 
 .admin-body .btn-logout,
@@ -247,7 +248,7 @@
 .admin-body .btn-logout:hover,
 .admin-body .btn-refresh-app:hover {
     color: var(--admin-ink);
-    background: #e0dbd0;
+    background: var(--admin-press);
 }
 
 /* ---------- Tabs ---------- */
@@ -280,14 +281,14 @@
 }
 
 .admin-tab.active {
-    background: var(--admin-surface);
+    background: var(--admin-bg);
     color: var(--admin-ink);
     border: none;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .admin-tab.active:hover {
-    background: var(--admin-surface);
+    background: var(--admin-bg);
     border: none;
 }
 
@@ -784,7 +785,7 @@
 }
 
 .admin-drawer-back:hover {
-    background: #e0dbd0;
+    background: var(--admin-press);
 }
 
 .admin-drawer-panel .admin-drawer-head h2,

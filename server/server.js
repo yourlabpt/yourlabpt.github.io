@@ -2685,7 +2685,8 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
             const linked = visitsByLead[r.id] || [];
             const visitaIds = linked.map((v) => v.id);
             const dealEstado = dealEstadoForLead(db, r.id);
-            const tags = pinTagFields(r.cobertura, r.resultado, 'contacto_remoto');
+            const resultado = r.resultado || (r.estado === 'fechado' ? 'digitalizado' : '');
+            const tags = pinTagFields(r.cobertura, resultado, 'contacto_remoto');
             let lat = r.lat;
             let lng = r.lng;
             let geocodeStatus = r.geocode_status;

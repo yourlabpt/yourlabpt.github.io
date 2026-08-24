@@ -249,7 +249,7 @@ export function setupCoverage({
                 const selected = item.axis === 'categoria'
                     ? filterTypes.has(item.id)
                     : filterIds.has(item.id);
-                if (!item.count && !selected) return;
+                if (!item.count && !selected && item.axis !== 'resultado') return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = `coverage-chip${selected ? ' active' : ''}`;

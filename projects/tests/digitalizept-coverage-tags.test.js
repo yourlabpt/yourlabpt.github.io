@@ -100,6 +100,7 @@ describe('digitalizept coverage category filter', async () => {
     const {
         coverageTypeId,
         coverageCounts,
+        coverageResultadoId,
         pinMatchesCoverageFilters
     } = await import('../../digitalizept/js/coverage-filters.js');
 
@@ -134,6 +135,18 @@ describe('digitalizept coverage category filter', async () => {
             filterIds: new Set(['sem_interesse']),
             filterTypes: new Set(['loja-roupa'])
         }), false);
+    });
+
+    it('treats a closed shop as digitalizado on the map filter', () => {
+        const won = { nome: 'Loja Fechada', business_type: 'loja-roupa', etapa: 'demo_apresentada', estado: 'fechado', resultado: '' };
+        assert.equal(coverageResultadoId(won), 'digitalizado');
+        assert.equal(pinMatchesCoverageFilters(won, {
+            filterIds: new Set(['digitalizado'])
+        }), true);
+        assert.equal(pinMatchesCoverageFilters(cafe, {
+            filterIds: new Set(['digitalizado'])
+        }), false);
+        assert.equal(coverageCounts([won, cafe]).byResultado.get('digitalizado'), 1);
     });
 
     it('counts sítios, map pins, categories and results', () => {
