@@ -1,4 +1,4 @@
-const CACHE = 'digitalizept-v74';
+const CACHE = 'digitalizept-v76';
 const SHELL = [
     '/digitalizept/',
     '/digitalizept/index.html',
@@ -10,6 +10,7 @@ const SHELL = [
     '/digitalizept/js/admin-lead.js',
     '/digitalizept/js/admin-quick-lead.js',
     '/digitalizept/js/admin-coverage.js',
+    '/digitalizept/js/coverage-filters.js',
     '/digitalizept/js/admin-maps.js',
     '/digitalizept/js/api.js',
     '/digitalizept/js/auth.js',

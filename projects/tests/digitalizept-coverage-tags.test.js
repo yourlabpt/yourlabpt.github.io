@@ -95,3 +95,54 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.equal(RESULTADO_COLORS.sem_interesse, '#b8b4ac');
     });
 });
+
+describe('digitalizept coverage category filter', async () => {
+    const {
+        coverageTypeId,
+        pinMatchesCoverageFilters
+    } = await import('../../digitalizept/js/coverage-filters.js');
+
+    const cafe = { nome: 'Café da Praça', business_type: 'cafe-pastelaria', etapa: 'visitado', resultado: '' };
+    const loja = { nome: 'Loja da Rua', business_type: 'loja-roupa', etapa: 'visitado', resultado: 'futuro' };
+    const orphan = { nome: 'Visita solta', business_type: '', etapa: 'visitado', resultado: '' };
+
+    it('reads the shop category off the pin', () => {
+        assert.equal(coverageTypeId(cafe), 'cafe-pastelaria');
+        assert.equal(coverageTypeId(orphan), '');
+    });
+
+    it('hides other categories when one is selected', () => {
+        const types = new Set(['cafe-pastelaria']);
+        assert.equal(pinMatchesCoverageFilters(cafe, { filterTypes: types }), true);
+        assert.equal(pinMatchesCoverageFilters(loja, { filterTypes: types }), false);
+        assert.equal(pinMatchesCoverageFilters(orphan, { filterTypes: types }), false);
+    });
+
+    it('keeps street visits without a type when Sem categoria is on', () => {
+        const types = new Set(['']);
+        assert.equal(pinMatchesCoverageFilters(orphan, { filterTypes: types }), true);
+        assert.equal(pinMatchesCoverageFilters(cafe, { filterTypes: types }), false);
+    });
+
+    it('still combines with resultado/etapa chips', () => {
+        assert.equal(pinMatchesCoverageFilters(loja, {
+            filterIds: new Set(['futuro']),
+            filterTypes: new Set(['loja-roupa'])
+        }), true);
+        assert.equal(pinMatchesCoverageFilters(loja, {
+            filterIds: new Set(['sem_interesse']),
+            filterTypes: new Set(['loja-roupa'])
+        }), false);
+    });
+
+    it('finds a pin by category name in the search box', () => {
+        assert.equal(pinMatchesCoverageFilters(cafe, {
+            query: 'pastelaria',
+            typeLabel: 'Café / Pastelaria'
+        }), true);
+        assert.equal(pinMatchesCoverageFilters(loja, {
+            query: 'pastelaria',
+            typeLabel: 'Loja de roupa'
+        }), false);
+    });
+});

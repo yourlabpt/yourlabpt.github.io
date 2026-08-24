@@ -1,5 +1,10 @@
 import { getToken } from './auth.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
+import {
+    coverageTypeDot,
+    coverageTypeId,
+    pinMatchesCoverageFilters
+} from './coverage-filters.js';
 
 const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
@@ -77,6 +82,7 @@ export function setupCoverage({
     let pins = [];
     let legend = { etapas: [], resultados: [] };
     let filterIds = new Set();
+    let filterTypes = new Set();
     let map = null;
     let markers = [];
     let placing = false;
@@ -134,19 +140,53 @@ export function setupCoverage({
         setTimeout(() => map.invalidateSize({ animate: false }), 60);
     }
 
-    function filtered() {
-        const q = (el.coverageFilter.value || '').trim().toLowerCase();
-        return pins.filter((p) => {
-            if (filterIds.size) {
-                const etapa = p.etapa || p.cobertura || 'contacto_remoto';
-                const resultado = p.resultado || '';
-                if (!filterIds.has(etapa) && !(resultado && filterIds.has(resultado))) return false;
-            }
-            if (!q) return true;
-            return `${p.nome} ${p.morada || ''} ${p.cidade || ''} ${p.experiencia || ''} ${p.notas || ''} ${p.leadNome || ''} ${p.etapa || ''} ${p.resultado || ''}`
-                .toLowerCase()
-                .includes(q);
+    function typeLabelFor(pin) {
+        const id = coverageTypeId(pin);
+        if (!id) return '';
+        return (businessTypes.find((t) => t.id === id) || {}).nome || id;
+    }
+
+    function categoryLegendItems() {
+        const used = new Set(pins.map(coverageTypeId));
+        const items = [];
+        const seen = new Set();
+        businessTypes.forEach((t) => {
+            seen.add(t.id);
+            items.push({
+                id: t.id,
+                axis: 'categoria',
+                label: t.nome,
+                color: coverageTypeDot(t.id)
+            });
         });
+        used.forEach((id) => {
+            if (!id || seen.has(id)) return;
+            items.push({
+                id,
+                axis: 'categoria',
+                label: id,
+                color: coverageTypeDot(id)
+            });
+        });
+        if (used.has('')) {
+            items.push({
+                id: '',
+                axis: 'categoria',
+                label: 'Sem categoria',
+                color: coverageTypeDot('')
+            });
+        }
+        return items;
+    }
+
+    function filtered() {
+        const q = (el.coverageFilter.value || '').trim();
+        return pins.filter((p) => pinMatchesCoverageFilters(p, {
+            filterIds,
+            filterTypes,
+            query: q,
+            typeLabel: typeLabelFor(p)
+        }));
     }
 
     function renderLegend() {
@@ -162,9 +202,12 @@ export function setupCoverage({
             const row = document.createElement('div');
             row.className = 'coverage-legend-row';
             items.forEach((item) => {
+                const selected = item.axis === 'categoria'
+                    ? filterTypes.has(item.id)
+                    : filterIds.has(item.id);
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = `coverage-chip${filterIds.has(item.id) ? ' active' : ''}`;
+                btn.className = `coverage-chip${selected ? ' active' : ''}`;
                 const dot = document.createElement('span');
                 dot.className = 'coverage-chip-dot';
                 if (item.axis === 'etapa') {
@@ -175,8 +218,9 @@ export function setupCoverage({
                 }
                 btn.append(dot, document.createTextNode(item.label));
                 btn.addEventListener('click', () => {
-                    if (filterIds.has(item.id)) filterIds.delete(item.id);
-                    else filterIds.add(item.id);
+                    const bucket = item.axis === 'categoria' ? filterTypes : filterIds;
+                    if (bucket.has(item.id)) bucket.delete(item.id);
+                    else bucket.add(item.id);
                     renderLegend();
                     paint({ preserveView: true });
                 });
@@ -185,6 +229,7 @@ export function setupCoverage({
             group.appendChild(row);
             el.coverageLegend.appendChild(group);
         };
+        addGroup('Categoria', categoryLegendItems());
         addGroup('Resultado', legend.resultados || []);
         addGroup('Etapa', legend.etapas || []);
     }
@@ -231,6 +276,7 @@ export function setupCoverage({
         } else {
             legend = { etapas: [], resultados: [] };
         }
+        await loadBusinessTypes();
         renderLegend();
     }
 
@@ -646,7 +692,7 @@ export function setupCoverage({
             panel.appendChild(tagsLine);
             const meta = document.createElement('p');
             meta.className = 'meta';
-            meta.textContent = `${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${pin.business_type || '—'}`;
+            meta.textContent = `${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${typeLabelFor(pin) || 'sem categoria'}`;
             panel.appendChild(meta);
             if (pin.hasDeal) {
                 const deal = document.createElement('p');
@@ -984,7 +1030,7 @@ export function setupCoverage({
                 card.className = parked ? 'admin-card parked' : 'admin-card';
                 card.innerHTML = `
                     <h3>${pin.nome || 'Sem nome'}</h3>
-                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${tagLabel(pin, legend)} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
+                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${typeLabelFor(pin) || 'sem categoria'} · ${tagLabel(pin, legend)} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
                 `;
                 const actions = document.createElement('div');
                 actions.className = 'actions';

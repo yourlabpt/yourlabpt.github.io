@@ -2,10 +2,13 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Admin — Digitalize Portugal</title>
     <link rel="stylesheet" href="./digitalizept.css">
     <link rel="stylesheet" href="./admin.css">
+    <meta name="theme-color" content="#f2f2f7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="robots" content="noindex, nofollow">
 </head>
 <body class="admin-body">
@@ -80,9 +83,9 @@
             </section>
 
             <section id="tab-coverage" class="admin-panel hidden">
-                <p class="admin-hint">Mapa OpenStreetMap. “Novo negócio” cria a ficha no sítio (nome, categoria, telefone, email, ou link do Maps). “Registar visita” é o caderno da rua. Lead e visitas ligadas partilham um pin.</p>
+                <p class="admin-hint">Mapa OpenStreetMap. Toque numa categoria para ver só esses pins. “Novo negócio” cria a ficha no sítio (nome, categoria, telefone, email, ou link do Maps). “Registar visita” é o caderno da rua. Lead e visitas ligadas partilham um pin.</p>
                 <div class="coverage-toolbar">
-                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome, morada ou experiência…">
+                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome, categoria, morada…">
                     <div class="coverage-actions">
                         <button id="coverage-add-lead-btn" type="button" class="btn-primary">Novo negócio</button>
                         <button id="coverage-add-btn" type="button" class="btn-secondary">Registar visita</button>

@@ -1,19 +1,24 @@
 /* Light admin theme — overrides dark sales styles from digitalizept.css */
 
+/* Light admin theme — iOS grouped surfaces over the dark sales styles */
+
 .admin-body {
-    --admin-ink: #1c1c1c;
-    --admin-muted: #5c564c;
-    --admin-border: #d8d0c4;
+    --admin-ink: #1c1c1e;
+    --admin-muted: #8e8e93;
+    --admin-border: rgba(60, 60, 67, 0.12);
     --admin-surface: #ffffff;
-    --admin-bg: #f4f1ea;
-    --admin-accent: #1b1b1b;
+    --admin-bg: #f2f2f7;
+    --admin-fill: #e8e8ed;
+    --admin-accent: #1c1c1e;
 
     --surface-color: var(--admin-surface);
-    --surface-muted: var(--admin-bg);
+    --surface-muted: var(--admin-fill);
     --border-color: var(--admin-border);
     --text-color: var(--admin-ink);
     --muted-color: var(--admin-muted);
     --accent-strong: var(--admin-ink);
+    --fill-color: var(--admin-fill);
+    --separator: var(--admin-border);
 
     background: var(--admin-bg);
     color: var(--admin-ink);
@@ -22,6 +27,8 @@
     overflow: auto;
     position: relative;
     z-index: 1;
+    color-scheme: light;
+    letter-spacing: -0.01em;
 }
 
 /* Mute sales-app decorative blobs on the admin page */
@@ -40,6 +47,43 @@
     z-index: 1;
 }
 
+.admin-body .overlay {
+    background: var(--admin-bg);
+}
+
+.admin-body .login-box {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.admin-body .login-box h1 {
+    background: none;
+    -webkit-text-fill-color: var(--admin-ink);
+    color: var(--admin-ink);
+    letter-spacing: -0.03em;
+}
+
+.admin-body .login-box p,
+.admin-body .btn-refresh-login {
+    color: var(--admin-muted);
+}
+
+.admin-body #key-input {
+    background: var(--admin-fill);
+    border: none;
+    color: var(--admin-ink);
+}
+
+.admin-body #key-input:focus {
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+
+.admin-body #login-form button {
+    background: var(--admin-accent);
+    color: #fff;
+}
+
 .admin-header {
     display: flex;
     justify-content: space-between;
@@ -51,8 +95,9 @@
 .call-queue {
     margin: -6px 0 16px;
     padding: 12px 14px;
-    border: 1px solid var(--admin-border, #d8d8d8);
-    background: #fff;
+    border: none;
+    background: var(--admin-surface);
+    border-radius: 12px;
 }
 
 .call-queue-due {
@@ -85,10 +130,10 @@
 
 .admin-header h1 {
     margin: 0;
-    font-size: 1.45rem;
+    font-size: 1.7rem;
     color: var(--admin-ink);
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.04em;
 }
 
 .admin-header p {
@@ -110,24 +155,32 @@
 .admin-body select.field-input,
 .admin-body textarea.field-input {
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--admin-border);
-    background: var(--admin-surface);
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: none;
+    background: var(--admin-fill);
     color: var(--admin-ink);
     box-shadow: none;
+}
+
+.admin-body select.field-input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e8e93' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
 }
 
 .admin-body .field-input:focus,
 .admin-body select.field-input:focus,
 .admin-body textarea.field-input:focus {
     outline: none;
-    border-color: #9a8b74;
-    box-shadow: 0 0 0 3px rgba(27, 27, 27, 0.08);
+    border: none;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+    background: #dedee3;
 }
 
 .admin-body .field-input::placeholder {
-    color: #8a8378;
+    color: #8e8e93;
 }
 
 .admin-body .btn-primary,
@@ -142,7 +195,7 @@
     justify-content: center;
     height: 42px;
     padding: 0 14px;
-    border-radius: 10px;
+    border-radius: 12px;
     font-weight: 600;
     font-size: 0.92rem;
     cursor: pointer;
@@ -155,11 +208,11 @@
 .admin-body .btn-primary {
     border: none;
     background: var(--admin-accent);
-    color: #f7f4ee;
+    color: #fff;
 }
 
 .admin-body .btn-primary:hover {
-    background: #333;
+    background: #3a3a3c;
 }
 
 .admin-body .btn-primary:disabled {
@@ -168,20 +221,19 @@
 }
 
 .admin-body .btn-secondary {
-    border: 1px solid var(--admin-border);
-    background: var(--admin-surface);
+    border: none;
+    background: var(--admin-fill);
     color: var(--admin-ink);
 }
 
 .admin-body .btn-secondary:hover {
-    border-color: #b8ad9a;
-    background: #faf8f4;
+    background: #dedee3;
 }
 
 .admin-body .btn-logout,
 .admin-body .btn-refresh-app {
-    border: 1px solid var(--admin-border);
-    background: var(--admin-surface);
+    border: none;
+    background: var(--admin-fill);
     color: var(--admin-muted);
 }
 
@@ -189,55 +241,59 @@
     width: 36px;
     height: 36px;
     padding: 0;
+    border-radius: 999px;
 }
 
 .admin-body .btn-logout:hover,
 .admin-body .btn-refresh-app:hover {
-    border-color: #b8ad9a;
     color: var(--admin-ink);
-    background: #faf8f4;
+    background: #dedee3;
 }
 
 /* ---------- Tabs ---------- */
 
 .admin-tabs {
     display: flex;
-    gap: 6px;
-    margin-bottom: 14px;
+    gap: 2px;
+    margin-bottom: 16px;
+    padding: 3px;
+    background: var(--admin-fill);
+    border-radius: 12px;
 }
 
 .admin-tab {
     flex: 1;
-    border: 1px solid var(--admin-border);
-    background: var(--admin-surface);
-    color: var(--admin-ink);
-    border-radius: 999px;
-    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    color: var(--admin-muted);
+    border-radius: 10px;
+    padding: 9px 12px;
     font: inherit;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     cursor: pointer;
 }
 
 .admin-tab:hover {
-    border-color: #b8ad9a;
-    background: #faf8f4;
+    color: var(--admin-ink);
+    background: transparent;
 }
 
 .admin-tab.active {
-    background: var(--admin-accent);
-    color: #f7f4ee;
-    border-color: var(--admin-accent);
+    background: var(--admin-surface);
+    color: var(--admin-ink);
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .admin-tab.active:hover {
-    background: #333;
-    border-color: #333;
+    background: var(--admin-surface);
+    border: none;
 }
 
 .provider-editor {
     background: var(--admin-surface);
-    border-color: var(--admin-border);
+    border: none;
     margin-bottom: 16px;
 }
 
@@ -270,8 +326,8 @@
 
 .admin-card {
     background: var(--admin-surface);
-    border: 1px solid #e5e0d5;
-    border-radius: 12px;
+    border: none;
+    border-radius: 14px;
     padding: 14px 16px;
     color: var(--admin-ink);
     display: grid;
@@ -313,7 +369,7 @@
     gap: 8px;
     margin-top: 12px;
     padding-top: 10px;
-    border-top: 1px solid #efeae1;
+    border-top: 0.5px solid var(--admin-border);
 }
 
 .admin-card .actions .btn-secondary,
@@ -325,25 +381,24 @@
 }
 
 .admin-body .btn-danger {
-    border: 1px solid #d4504050;
-    background: transparent;
-    color: #d45040;
-    border-radius: 10px;
+    border: none;
+    background: rgba(255, 69, 58, 0.12);
+    color: #d70015;
+    border-radius: 12px;
     cursor: pointer;
     font-weight: 600;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: background 0.15s, color 0.15s;
 }
 
 .admin-body .btn-danger:hover {
-    background: #d4504018;
-    color: #e05545;
-    border-color: #d45040;
+    background: rgba(255, 69, 58, 0.18);
+    color: #d70015;
 }
 
 .admin-card.inactive {
     opacity: 1;
-    background: #f7f5f0;
-    border-style: dashed;
+    background: var(--admin-fill);
+    border-style: none;
 }
 
 .admin-card.inactive h3,
@@ -353,8 +408,8 @@
 
 .admin-card.parked {
     opacity: 0.55;
-    background: #f3f1ec;
-    border-color: #ddd8d0;
+    background: var(--admin-fill);
+    border-color: transparent;
 }
 
 .admin-card.parked h3,
@@ -406,8 +461,7 @@
 }
 
 .coverage-actions .btn-secondary.active {
-    border-color: #1b1b1b;
-    box-shadow: inset 0 0 0 1px #1b1b1b;
+    box-shadow: inset 0 0 0 1.5px var(--admin-ink);
 }
 
 .coverage-divicon {
@@ -450,7 +504,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid var(--admin-border);
+    border: none;
     background: var(--admin-surface);
     color: var(--admin-ink);
     border-radius: 999px;
@@ -462,8 +516,8 @@
 }
 
 .coverage-chip.active {
-    border-color: #1b1b1b;
-    box-shadow: inset 0 0 0 1px #1b1b1b;
+    border: none;
+    box-shadow: inset 0 0 0 1.5px var(--admin-ink);
 }
 
 .coverage-chip-dot {
@@ -477,9 +531,9 @@
     width: 100%;
     height: min(62vh, 560px);
     min-height: 320px;
-    border-radius: 12px;
-    border: 1px solid #e5e0d5;
-    background: #e8e4dc;
+    border-radius: 14px;
+    border: none;
+    background: #e5e5ea;
     overflow: hidden;
 }
 
@@ -594,7 +648,7 @@
 .admin-drawer-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(28, 28, 28, 0.4);
+    background: rgba(0, 0, 0, 0.32);
 }
 
 .admin-drawer-panel {
@@ -603,11 +657,11 @@
     top: 0;
     bottom: 0;
     width: min(420px, 100%);
-    background: var(--admin-surface);
+    background: var(--admin-bg);
     color: var(--admin-ink);
     padding: 20px 18px 32px;
     overflow: auto;
-    box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
 }
 
 /* Desktop: visit form docks beside the map — map stays interactive */
@@ -645,12 +699,12 @@
 }
 
 .admin-drawer-panel .followup-gancho.active {
-    border-color: var(--admin-ink, #1c1c1c);
+    box-shadow: inset 0 0 0 1.5px var(--admin-ink);
 }
 
 .admin-drawer-panel .followup-wa {
     background: #25d366;
-    border-color: #1da851;
+    border: none;
     color: #fff;
 }
 
@@ -668,7 +722,9 @@
     gap: 10px;
     margin: 0 0 16px;
     padding: 16px 0 12px;
-    background: var(--admin-surface);
+    background: color-mix(in srgb, var(--admin-bg) 86%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
 }
 
 .admin-drawer-back {
@@ -677,9 +733,9 @@
     height: 40px;
     margin: 0;
     padding: 0 12px;
-    border: 1px solid var(--admin-border, #d4cdc0);
-    border-radius: 8px;
-    background: var(--admin-surface, #fff);
+    border: none;
+    border-radius: 999px;
+    background: var(--admin-fill);
     color: var(--admin-ink);
     font-size: 0.9rem;
     font-weight: 600;
@@ -688,7 +744,7 @@
 }
 
 .admin-drawer-back:hover {
-    background: var(--admin-muted-bg, #f3efe6);
+    background: #dedee3;
 }
 
 .admin-drawer-panel .admin-drawer-head h2,
@@ -731,7 +787,7 @@
 }
 
 .admin-notes li {
-    border-top: 1px solid #efeae1;
+    border-top: 0.5px solid var(--admin-border);
     padding: 10px 0;
     font-size: 0.9rem;
     color: var(--admin-ink);
@@ -744,9 +800,15 @@
     margin-bottom: 2px;
 }
 
-/* Toast stays usable on light admin */
+.admin-body .followup-lang-btn.active,
+.admin-body .followup-gancho.active,
+.admin-drawer-panel .followup-gancho.active {
+    background: var(--admin-surface);
+    box-shadow: inset 0 0 0 1.5px var(--admin-ink);
+}
+
 .admin-body .toast {
-    color: #f7f4ee;
+    color: #f5f5f7;
     display: inline-flex;
     align-items: center;
     gap: 12px;
@@ -799,8 +861,9 @@
 .dossier-check {
     margin: 0 0 16px;
     padding: 12px 14px;
-    border: 1px solid var(--admin-border, #d8d8d8);
-    background: #fff;
+    border: none;
+    background: var(--admin-surface);
+    border-radius: 14px;
 }
 
 .dossier-check-ok {
@@ -820,10 +883,11 @@
 }
 
 .dossier-section {
-    border: 1px solid var(--admin-border, #d8d8d8);
+    border: none;
     margin: 0 0 14px;
     padding: 12px 14px 16px;
-    background: #fff;
+    background: var(--admin-surface);
+    border-radius: 14px;
 }
 
 .dossier-section legend {
@@ -845,16 +909,17 @@
 .admin-body .hours-day,
 .admin-body .hours-add,
 .admin-body .hours-remove {
-    border: 1px solid var(--admin-border);
-    background: var(--admin-surface);
+    border: none;
+    background: var(--admin-fill);
     color: var(--admin-muted);
 }
 
 .admin-body .hours-preset.on,
 .admin-body .hours-day.on {
-    border-color: #1b1b1b;
-    background: #1b1b1b;
-    color: #faf8f4;
+    border: none;
+    background: var(--admin-accent);
+    color: #fff;
+    box-shadow: none;
 }
 
 .admin-body .hours-label,
@@ -876,6 +941,8 @@
 
 .admin-body .hours-time {
     color-scheme: light;
+    background: var(--admin-fill);
+    color: var(--admin-ink);
 }
 
 .dossier-form .field-missing .field-label {
@@ -886,7 +953,7 @@
     position: sticky;
     bottom: 0;
     padding: 12px 0 4px;
-    background: linear-gradient(transparent, var(--admin-bg, #f7f4ee) 30%);
+    background: linear-gradient(transparent, var(--admin-bg) 30%);
 }
 
 .dossier-readonly .meta {
