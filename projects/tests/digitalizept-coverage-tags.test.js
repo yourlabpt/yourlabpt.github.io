@@ -6,6 +6,7 @@ const { SCHEMA, migrate } = require('../../server/lib/digitalizept-db.js');
 const {
     pinColors,
     normalizeEtapa,
+    defaultEtapaForQuickLead,
     normalizeResultado,
     remapCoberturaToEtapaResultado,
     ETAPA_VALUES,
@@ -147,6 +148,12 @@ describe('digitalizept coverage category filter', async () => {
             filterIds: new Set(['digitalizado'])
         }), false);
         assert.equal(coverageCounts([won, cafe]).byResultado.get('digitalizado'), 1);
+    });
+
+    it('starts novo negócio as contacto remoto even when a pin exists', () => {
+        assert.equal(defaultEtapaForQuickLead(), 'contacto_remoto');
+        assert.equal(defaultEtapaForQuickLead({ lat: 38.72, lng: -9.14 }), 'contacto_remoto');
+        assert.notEqual(defaultEtapaForQuickLead(), 'visitado');
     });
 
     it('counts sítios, map pins, categories and results', () => {

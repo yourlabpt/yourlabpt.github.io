@@ -23,6 +23,7 @@ const {
     isValidResultado,
     isValidCobertura,
     normalizeEtapa,
+    defaultEtapaForQuickLead,
     normalizeResultado,
     pinColors,
     etapaRank,
@@ -2339,6 +2340,8 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
         let morada = cleanText(body.morada || (body.dados && body.dados.morada), 300);
         let cidade = cleanText(body.cidade || (body.dados && body.dados.cidade), 120);
         let mapsUrl = cleanText(body.mapsUrl || body.maps_url || (body.dados && body.dados.maps_url), 800);
+        let instagram = cleanText(body.instagram || (body.dados && body.dados.instagram), 300);
+        let facebook = cleanText(body.facebook || (body.dados && body.dados.facebook), 300);
         let businessTypeId = cleanText(body.businessTypeId || body.categoria, 80);
         let lat = body.lat;
         let lng = body.lng;
@@ -2356,6 +2359,8 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
                 if (!whatsapp) whatsapp = cleanText(d.whatsapp, 60);
                 if (!morada) morada = cleanText(d.morada, 300);
                 if (!cidade) cidade = cleanText(d.cidade, 120);
+                if (!instagram) instagram = cleanText(d.instagram, 300);
+                if (!facebook) facebook = cleanText(d.facebook, 300);
                 horario = cleanText(d.horario, 200);
                 website = cleanText(d.website_atual, 300);
                 if (!businessTypeId || businessTypeId === 'generico') {
@@ -2388,6 +2393,8 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
             email,
             maps_url: mapsUrl
         };
+        if (instagram) dados.instagram = instagram;
+        if (facebook) dados.facebook = facebook;
         if (horario) dados.horario = horario;
         if (website) dados.website_atual = website;
         if (body.dados && typeof body.dados === 'object') {
@@ -2399,12 +2406,14 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
             dados.morada = morada;
             dados.cidade = cidade;
             dados.maps_url = mapsUrl;
+            if (instagram) dados.instagram = instagram;
+            if (facebook) dados.facebook = facebook;
             if (horario) dados.horario = horario;
             if (website) dados.website_atual = website;
         }
         const { obrigatorios, opcionais } = splitDados(dados, businessType);
         const hasCoords = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
-        const etapa = hasCoords ? 'visitado' : 'contacto_remoto';
+        const etapa = defaultEtapaForQuickLead();
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
         const match = findReusableLead(db, { nome, cidade, lat, lng });

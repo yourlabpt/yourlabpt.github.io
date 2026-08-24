@@ -117,4 +117,17 @@ describe('digitalizept maps osm mapping', () => {
         assert.equal(whatsappIfMobile('912345678'), '912345678');
         assert.equal(isPortugueseMobile('931112223'), true);
     });
+
+    it('copies Instagram and Facebook from OSM contact tags', () => {
+        const social = contactFromOsm({
+            phone: '',
+            instagram: '@talho',
+            facebook: 'https://facebook.com/talhodacosta'
+        });
+        assert.equal(social.instagram, '@talho');
+        assert.equal(social.facebook, 'https://facebook.com/talhodacosta');
+        const empty = contactFromOsm(null);
+        assert.equal(empty.instagram, '');
+        assert.equal(empty.facebook, '');
+    });
 });

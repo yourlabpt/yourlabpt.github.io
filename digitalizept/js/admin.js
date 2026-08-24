@@ -820,10 +820,8 @@ async function openQuickLead() {
             toast,
             field,
             inputEl,
-            async onCreated(data) {
-                closeDrawer();
+            async onCreated() {
                 await loadLeads();
-                if (data && data.leadId) await openLeadDossier(data.leadId);
             }
         });
     });

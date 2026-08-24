@@ -115,6 +115,11 @@ function normalizeEtapa(value, fallback = 'contacto_remoto') {
     return fallback;
 }
 
+/** Novo negócio (admin form / map pin) always starts as remote contact — a pin is not a visit. */
+function defaultEtapaForQuickLead() {
+    return 'contacto_remoto';
+}
+
 function normalizeResultado(value) {
     const v = String(value || '').trim();
     if (!v) return '';
@@ -851,6 +856,7 @@ module.exports = {
     isValidCobertura,
     isParkedResultado,
     normalizeEtapa,
+    defaultEtapaForQuickLead,
     normalizeResultado,
     pinColors,
     etapaRank,

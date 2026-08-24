@@ -55,6 +55,8 @@ function osmTags(el) {
         whatsapp: t['contact:whatsapp'] || t.whatsapp || '',
         email: t.email || t['contact:email'] || '',
         website: t.website || t['contact:website'] || '',
+        instagram: t['contact:instagram'] || t.instagram || '',
+        facebook: t['contact:facebook'] || t.facebook || '',
         horario: t.opening_hours || '',
         amenity: t.amenity || '',
         shop: t.shop || '',
@@ -83,7 +85,15 @@ function whatsappIfMobile(phone) {
 
 function contactFromOsm(tags) {
     if (!tags) {
-        return { telefone: '', whatsapp: '', email: '', website: '', horario: '' };
+        return {
+            telefone: '',
+            whatsapp: '',
+            email: '',
+            website: '',
+            horario: '',
+            instagram: '',
+            facebook: ''
+        };
     }
     const telefone = String(tags.phone || '').trim();
     const taggedWa = String(tags.whatsapp || '').trim();
@@ -92,7 +102,9 @@ function contactFromOsm(tags) {
         whatsapp: taggedWa || whatsappIfMobile(telefone),
         email: String(tags.email || '').trim(),
         website: String(tags.website || '').trim(),
-        horario: String(tags.horario || '').trim()
+        horario: String(tags.horario || '').trim(),
+        instagram: String(tags.instagram || '').trim(),
+        facebook: String(tags.facebook || '').trim()
     };
 }
 
@@ -257,6 +269,8 @@ async function lookupFromMaps(input = {}) {
         whatsapp: contact.whatsapp,
         website_atual: contact.website,
         horario: contact.horario,
+        instagram: contact.instagram,
+        facebook: contact.facebook,
         maps_url: parsed.url || String(input.url || '').trim()
     };
 

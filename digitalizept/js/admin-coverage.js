@@ -371,17 +371,11 @@ export function setupCoverage({
                     setPlacing(true);
                     toast('Toque no mapa para fixar o pin.');
                 },
-                async onCreated(data) {
-                    registeringNewBusiness = false;
+                async onCreated() {
                     pendingPoint = null;
                     clearPendingMarker();
-                    quickFormApi = null;
-                    closeDrawer();
                     await refresh();
                     paint({ preserveView: true });
-                    if (data && data.leadId && typeof openDossier === 'function') {
-                        openDossier(data.leadId);
-                    }
                 }
             });
             if (pendingPoint && quickFormApi) {
