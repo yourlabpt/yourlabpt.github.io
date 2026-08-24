@@ -6,7 +6,7 @@
     <title>Admin — Digitalize Portugal</title>
     <link rel="stylesheet" href="./digitalizept.css">
     <link rel="stylesheet" href="./admin.css">
-    <meta name="theme-color" content="#f2f2f7">
+    <meta name="theme-color" content="#f4f1ea">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="robots" content="noindex, nofollow">
@@ -83,7 +83,7 @@
             </section>
 
             <section id="tab-coverage" class="admin-panel hidden">
-                <p class="admin-hint">Mapa OpenStreetMap. Toque numa categoria para ver só esses pins. “Novo negócio” cria a ficha no sítio (nome, categoria, telefone, email, ou link do Maps). “Registar visita” é o caderno da rua. Lead e visitas ligadas partilham um pin.</p>
+                <p class="admin-hint">Mapa OpenStreetMap. Toque numa categoria para ver só esses pins — o número é a quantidade. “Novo negócio” cria a ficha no sítio. “Registar visita” é o caderno da rua. Lead e visitas ligadas partilham um pin.</p>
                 <div class="coverage-toolbar">
                     <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome, categoria, morada…">
                     <div class="coverage-actions">
@@ -92,6 +92,7 @@
                         <button id="coverage-place-btn" type="button" class="btn-secondary">Marcar no mapa</button>
                         <button id="coverage-export-btn" type="button" class="btn-secondary">Descarregar texto</button>
                     </div>
+                    <div id="coverage-stats" class="coverage-stats"></div>
                     <div id="coverage-legend" class="coverage-legend"></div>
                 </div>
                 <div id="coverage-map" class="coverage-map" aria-label="Mapa de cobertura"></div>

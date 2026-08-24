@@ -2,16 +2,6 @@ export function coverageTypeId(pin) {
     return String((pin && pin.business_type) || '').trim();
 }
 
-const TYPE_DOTS = ['#007aff', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#5856d6', '#ffcc00', '#64d2ff'];
-
-export function coverageTypeDot(id) {
-    const key = String(id || '');
-    if (!key) return '#c7c7cc';
-    let hash = 0;
-    for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-    return TYPE_DOTS[hash % TYPE_DOTS.length];
-}
-
 export function pinMatchesCoverageFilters(pin, { filterIds, filterTypes, query, typeLabel } = {}) {
     if (filterIds && filterIds.size) {
         const etapa = pin.etapa || pin.cobertura || 'contacto_remoto';
@@ -26,4 +16,31 @@ export function pinMatchesCoverageFilters(pin, { filterIds, filterTypes, query, 
     return `${pin.nome || ''} ${pin.morada || ''} ${pin.cidade || ''} ${pin.experiencia || ''} ${pin.notas || ''} ${pin.leadNome || ''} ${pin.etapa || ''} ${pin.resultado || ''} ${coverageTypeId(pin)} ${typeLabel || ''}`
         .toLowerCase()
         .includes(q);
+}
+
+function bump(map, key) {
+    const id = key == null ? '' : String(key);
+    map.set(id, (map.get(id) || 0) + 1);
+}
+
+export function coverageCounts(pins) {
+    const list = Array.isArray(pins) ? pins : [];
+    const byType = new Map();
+    const byResultado = new Map();
+    const byEtapa = new Map();
+    let mapped = 0;
+    list.forEach((pin) => {
+        bump(byType, coverageTypeId(pin));
+        bump(byResultado, pin && pin.resultado);
+        bump(byEtapa, (pin && (pin.etapa || pin.cobertura)) || '');
+        if (Number.isFinite(pin && pin.lat) && Number.isFinite(pin && pin.lng)) mapped += 1;
+    });
+    return {
+        total: list.length,
+        mapped,
+        unmapped: list.length - mapped,
+        byType,
+        byResultado,
+        byEtapa
+    };
 }

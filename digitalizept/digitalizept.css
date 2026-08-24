@@ -5,17 +5,17 @@
 }
 
 :root {
-    --primary-dark: #000000;
-    --secondary-dark: #1c1c1e;
-    --accent-dark: #2c2c2e;
-    --fill-color: #2c2c2e;
-    --text-light: #f5f5f7;
-    --text-muted: #8e8e93;
-    --accent-color: #f2f2f7;
-    --accent-soft: rgba(255, 255, 255, 0.08);
-    --separator: rgba(84, 84, 88, 0.45);
-    --success-color: #30d158;
-    --danger-color: #ff453a;
+    --primary-dark: #1b1b1b;
+    --secondary-dark: #242424;
+    --accent-dark: #2a2a2a;
+    --fill-color: #2a2a2a;
+    --text-light: #eeede9;
+    --text-muted: #a9a8a3;
+    --accent-color: #e8d5b7;
+    --accent-soft: rgba(232, 213, 183, 0.16);
+    --separator: rgba(232, 213, 183, 0.18);
+    --success-color: #4ade80;
+    --danger-color: #ff6b6b;
     --header-height: 66px;
     --nav-height: 76px;
     --radius-sm: 10px;
@@ -28,7 +28,7 @@
     --border-color: var(--separator);
     --text-color: var(--text-light);
     --muted-color: var(--text-muted);
-    --accent-strong: var(--text-light);
+    --accent-strong: var(--accent-color);
 }
 
 html, body {
@@ -115,7 +115,7 @@ button, input, textarea, select {
 
 #key-input:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 #login-form button {

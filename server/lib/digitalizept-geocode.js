@@ -134,9 +134,9 @@ function pinColors(etapa, resultado) {
     return {
         color: res ? (RESULTADO_COLORS[res] || PIN_FILL_UNSET) : PIN_FILL_UNSET,
         strokeColor: stroke,
-        strokeWidth: parked ? 2.2 : 2.8,
+        strokeWidth: parked ? 2.4 : 2.8,
         faded: parked,
-        zIndexOffset: parked ? -400 : 0
+        zIndexOffset: parked ? -80 : 0
     };
 }
 

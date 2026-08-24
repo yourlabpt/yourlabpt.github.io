@@ -99,6 +99,7 @@ describe('digitalizept etapa + resultado tags', () => {
 describe('digitalizept coverage category filter', async () => {
     const {
         coverageTypeId,
+        coverageCounts,
         pinMatchesCoverageFilters
     } = await import('../../digitalizept/js/coverage-filters.js');
 
@@ -133,6 +134,23 @@ describe('digitalizept coverage category filter', async () => {
             filterIds: new Set(['sem_interesse']),
             filterTypes: new Set(['loja-roupa'])
         }), false);
+    });
+
+    it('counts sítios, map pins, categories and results', () => {
+        const counts = coverageCounts([
+            { ...cafe, lat: 38.7, lng: -9.1 },
+            { ...loja, lat: 38.8, lng: -9.2, resultado: 'sem_interesse' },
+            orphan
+        ]);
+        assert.equal(counts.total, 3);
+        assert.equal(counts.mapped, 2);
+        assert.equal(counts.unmapped, 1);
+        assert.equal(counts.byType.get('cafe-pastelaria'), 1);
+        assert.equal(counts.byType.get('loja-roupa'), 1);
+        assert.equal(counts.byType.get(''), 1);
+        assert.equal(counts.byResultado.get('sem_interesse'), 1);
+        assert.equal(counts.byResultado.get(''), 2);
+        assert.equal(counts.byEtapa.get('visitado'), 3);
     });
 
     it('finds a pin by category name in the search box', () => {

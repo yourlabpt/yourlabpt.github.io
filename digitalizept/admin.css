@@ -3,13 +3,13 @@
 /* Light admin theme — iOS grouped surfaces over the dark sales styles */
 
 .admin-body {
-    --admin-ink: #1c1c1e;
-    --admin-muted: #8e8e93;
-    --admin-border: rgba(60, 60, 67, 0.12);
+    --admin-ink: #1c1c1c;
+    --admin-muted: #5c564c;
+    --admin-border: #d8d0c4;
     --admin-surface: #ffffff;
-    --admin-bg: #f2f2f7;
-    --admin-fill: #e8e8ed;
-    --admin-accent: #1c1c1e;
+    --admin-bg: #f4f1ea;
+    --admin-fill: #ebe6dc;
+    --admin-accent: #1b1b1b;
 
     --surface-color: var(--admin-surface);
     --surface-muted: var(--admin-fill);
@@ -176,11 +176,11 @@
     outline: none;
     border: none;
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
-    background: #dedee3;
+    background: #e0dbd0;
 }
 
 .admin-body .field-input::placeholder {
-    color: #8e8e93;
+    color: var(--admin-muted);
 }
 
 .admin-body .btn-primary,
@@ -227,7 +227,7 @@
 }
 
 .admin-body .btn-secondary:hover {
-    background: #dedee3;
+    background: #e0dbd0;
 }
 
 .admin-body .btn-logout,
@@ -247,7 +247,7 @@
 .admin-body .btn-logout:hover,
 .admin-body .btn-refresh-app:hover {
     color: var(--admin-ink);
-    background: #dedee3;
+    background: #e0dbd0;
 }
 
 /* ---------- Tabs ---------- */
@@ -414,12 +414,12 @@
 
 .admin-card.parked h3,
 .admin-card.parked .admin-price {
-    color: #8e8b85;
+    color: var(--admin-muted);
     font-weight: 500;
 }
 
 .admin-card.parked .meta {
-    color: #a8a49c;
+    color: color-mix(in srgb, var(--admin-muted) 72%, #f4f1ea);
 }
 
 .admin-empty {
@@ -470,8 +470,44 @@
 }
 
 .coverage-divicon.is-parked {
-    opacity: 0.4;
-    filter: grayscale(0.35);
+    opacity: 0.86;
+}
+
+#coverage-unmapped .admin-card.parked {
+    opacity: 0.82;
+}
+
+.coverage-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--admin-surface);
+    border-radius: 14px;
+}
+
+.coverage-stats-hero,
+.coverage-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin: 0;
+}
+
+.coverage-stat {
+    font-size: 0.82rem;
+    color: var(--admin-muted);
+}
+
+.coverage-stats-hero .coverage-stat {
+    font-size: 0.95rem;
+    color: var(--admin-ink);
+}
+
+.coverage-stat strong {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--admin-ink);
 }
 
 .coverage-legend {
@@ -488,8 +524,8 @@
 
 .coverage-legend-title {
     font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     color: var(--admin-muted);
 }
@@ -503,28 +539,32 @@
 .coverage-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     border: none;
-    background: var(--admin-surface);
+    background: var(--admin-fill);
     color: var(--admin-ink);
     border-radius: 999px;
-    padding: 6px 10px;
+    padding: 7px 12px;
     font: inherit;
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-size: 0.82rem;
+    font-weight: 500;
     cursor: pointer;
 }
 
-.coverage-chip.active {
-    border: none;
-    box-shadow: inset 0 0 0 1.5px var(--admin-ink);
+.coverage-chip-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--admin-muted);
 }
 
-.coverage-chip-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
+.coverage-chip.active {
+    background: var(--admin-accent);
+    color: #fff;
+    box-shadow: none;
+}
+
+.coverage-chip.active .coverage-chip-count {
+    color: rgba(255, 255, 255, 0.72);
 }
 
 .coverage-map {
@@ -533,7 +573,7 @@
     min-height: 320px;
     border-radius: 14px;
     border: none;
-    background: #e5e5ea;
+    background: #ece8df;
     overflow: hidden;
 }
 
@@ -744,7 +784,7 @@
 }
 
 .admin-drawer-back:hover {
-    background: #dedee3;
+    background: #e0dbd0;
 }
 
 .admin-drawer-panel .admin-drawer-head h2,

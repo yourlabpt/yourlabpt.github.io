@@ -1,7 +1,7 @@
 import { getToken } from './auth.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
 import {
-    coverageTypeDot,
+    coverageCounts,
     coverageTypeId,
     pinMatchesCoverageFilters
 } from './coverage-filters.js';
@@ -40,19 +40,16 @@ function pinIcon(fill, stroke, strokeWidth, opts = {}) {
     const color = fill || '#8e8a84';
     const outline = stroke || '#1b1b1b';
     const width = strokeWidth || 1.2;
-    const w = faded ? 18 : 28;
-    const h = faded ? 23 : 36;
-    const r = faded ? 2.6 : 4.2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 28 36">
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
       <path fill="${color}" stroke="${outline}" stroke-width="${width}" d="M14 1C7.4 1 2 6.4 2 13c0 9.2 12 21.5 12 21.5S26 22.2 26 13C26 6.4 20.6 1 14 1z"/>
-      <circle cx="14" cy="13" r="${r}" fill="#faf8f4"/>
+      <circle cx="14" cy="13" r="4.2" fill="#faf8f4"/>
     </svg>`;
     return window.L.divIcon({
         className: faded ? 'coverage-divicon is-parked' : 'coverage-divicon',
         html: svg,
-        iconSize: [w, h],
-        iconAnchor: [Math.round(w / 2), h - 2],
-        popupAnchor: [0, faded ? -18 : -28]
+        iconSize: [28, 36],
+        iconAnchor: [14, 34],
+        popupAnchor: [0, -28]
     });
 }
 
@@ -146,36 +143,29 @@ export function setupCoverage({
         return (businessTypes.find((t) => t.id === id) || {}).nome || id;
     }
 
-    function categoryLegendItems() {
-        const used = new Set(pins.map(coverageTypeId));
+    function countFor(map, id) {
+        return (map && map.get(id)) || 0;
+    }
+
+    function categoryLegendItems(counts) {
+        const byType = (counts && counts.byType) || new Map();
         const items = [];
         const seen = new Set();
         businessTypes.forEach((t) => {
             seen.add(t.id);
-            items.push({
-                id: t.id,
-                axis: 'categoria',
-                label: t.nome,
-                color: coverageTypeDot(t.id)
-            });
+            const n = countFor(byType, t.id);
+            if (!n && !filterTypes.has(t.id)) return;
+            items.push({ id: t.id, axis: 'categoria', label: t.nome, count: n });
         });
-        used.forEach((id) => {
-            if (!id || seen.has(id)) return;
-            items.push({
-                id,
-                axis: 'categoria',
-                label: id,
-                color: coverageTypeDot(id)
-            });
+        byType.forEach((n, id) => {
+            if (!id || seen.has(id) || !n) return;
+            items.push({ id, axis: 'categoria', label: id, count: n });
         });
-        if (used.has('')) {
-            items.push({
-                id: '',
-                axis: 'categoria',
-                label: 'Sem categoria',
-                color: coverageTypeDot('')
-            });
+        const none = countFor(byType, '');
+        if (none || filterTypes.has('')) {
+            items.push({ id: '', axis: 'categoria', label: 'Sem categoria', count: none });
         }
+        items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt'));
         return items;
     }
 
@@ -189,8 +179,62 @@ export function setupCoverage({
         }));
     }
 
+    function appendStat(row, n, label) {
+        const item = document.createElement('span');
+        item.className = 'coverage-stat';
+        const num = document.createElement('strong');
+        num.textContent = String(n);
+        item.append(num, document.createTextNode(` ${label}`));
+        row.appendChild(item);
+    }
+
+    function renderStats() {
+        if (!el.coverageStats) return;
+        el.coverageStats.innerHTML = '';
+        const all = coverageCounts(pins);
+        const shown = coverageCounts(filtered());
+        const filtering = filterIds.size || filterTypes.size || (el.coverageFilter.value || '').trim();
+
+        const hero = document.createElement('p');
+        hero.className = 'coverage-stats-hero';
+        if (filtering && shown.total !== all.total) {
+            appendStat(hero, shown.total, 'a mostrar');
+            appendStat(hero, all.total, 'no total');
+            appendStat(hero, shown.mapped, 'no mapa');
+        } else {
+            appendStat(hero, all.total, all.total === 1 ? 'sítio' : 'sítios');
+            appendStat(hero, all.mapped, 'no mapa');
+            appendStat(hero, all.unmapped, 'sem pin');
+        }
+        el.coverageStats.appendChild(hero);
+
+        const source = filtering && shown.total !== all.total ? shown : all;
+
+        const results = document.createElement('p');
+        results.className = 'coverage-stats-row';
+        const resultadoItems = [
+            ...(legend.resultados || []),
+            { id: '', label: 'Sem resultado' }
+        ];
+        resultadoItems.forEach((item) => {
+            const n = countFor(source.byResultado, item.id);
+            if (!n) return;
+            appendStat(results, n, item.label.toLowerCase());
+        });
+        if (results.childNodes.length) el.coverageStats.appendChild(results);
+
+        const types = document.createElement('p');
+        types.className = 'coverage-stats-row';
+        categoryLegendItems(source).forEach((item) => {
+            if (!item.count) return;
+            appendStat(types, item.count, item.label.toLowerCase());
+        });
+        if (types.childNodes.length) el.coverageStats.appendChild(types);
+    }
+
     function renderLegend() {
         el.coverageLegend.innerHTML = '';
+        const counts = coverageCounts(pins);
         const addGroup = (title, items) => {
             if (!items?.length) return;
             const group = document.createElement('div');
@@ -205,18 +249,16 @@ export function setupCoverage({
                 const selected = item.axis === 'categoria'
                     ? filterTypes.has(item.id)
                     : filterIds.has(item.id);
+                if (!item.count && !selected) return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = `coverage-chip${selected ? ' active' : ''}`;
-                const dot = document.createElement('span');
-                dot.className = 'coverage-chip-dot';
-                if (item.axis === 'etapa') {
-                    dot.style.background = '#faf8f4';
-                    dot.style.boxShadow = `inset 0 0 0 2px ${item.color}`;
-                } else {
-                    dot.style.background = item.color;
-                }
-                btn.append(dot, document.createTextNode(item.label));
+                const name = document.createElement('span');
+                name.textContent = item.label;
+                const num = document.createElement('span');
+                num.className = 'coverage-chip-count';
+                num.textContent = String(item.count || 0);
+                btn.append(name, num);
                 btn.addEventListener('click', () => {
                     const bucket = item.axis === 'categoria' ? filterTypes : filterIds;
                     if (bucket.has(item.id)) bucket.delete(item.id);
@@ -226,12 +268,20 @@ export function setupCoverage({
                 });
                 row.appendChild(btn);
             });
+            if (!row.childNodes.length) return;
             group.appendChild(row);
             el.coverageLegend.appendChild(group);
         };
-        addGroup('Categoria', categoryLegendItems());
-        addGroup('Resultado', legend.resultados || []);
-        addGroup('Etapa', legend.etapas || []);
+        addGroup('Categoria', categoryLegendItems(counts));
+        addGroup('Resultado', (legend.resultados || []).map((item) => ({
+            ...item,
+            count: countFor(counts.byResultado, item.id)
+        })));
+        addGroup('Etapa', (legend.etapas || []).map((item) => ({
+            ...item,
+            count: countFor(counts.byEtapa, item.id)
+        })));
+        renderStats();
     }
 
     function etapaSelect(selected) {
@@ -981,8 +1031,8 @@ export function setupCoverage({
                 title: `${pin.nome || ''} — ${tagLabel(pin, legend)}`,
                 draggable: !placing && !registeringNewVisit,
                 autoPan: true,
-                zIndexOffset: pin.faded ? (pin.zIndexOffset || -400) : 0,
-                opacity: pin.faded ? 0.42 : 1
+                zIndexOffset: pin.faded ? (pin.zIndexOffset || -80) : 0,
+                opacity: 1
             }).addTo(map);
             marker.on('click', () => {
                 if (placing || registeringNewVisit) return;
@@ -1019,8 +1069,9 @@ export function setupCoverage({
             : (registeringNewVisit
                 ? 'A preencher visita — pode pan/zoom e corrigir o pin laranja.'
                 : (mapped.length
-                    ? `${mapped.length} no mapa · arraste um pin · Desfazer no aviso a seguir${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
+                    ? `${mapped.length} no mapa · arraste um pin${unmapped.length ? ` · ${unmapped.length} sem ponto` : ''}`
                     : (unmapped.length ? `${unmapped.length} sítios sem ponto no mapa.` : 'Sem sítios para mostrar.')));
+        renderStats();
 
         if (el.coverageUnmapped) {
             el.coverageUnmapped.innerHTML = '';

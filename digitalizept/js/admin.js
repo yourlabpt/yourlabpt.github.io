@@ -60,6 +60,7 @@ const el = {
     catalogAddBtn: document.getElementById('catalog-add-btn'),
     leadsEmailDemosBtn: document.getElementById('leads-email-demos-btn'),
     coverageFilter: document.getElementById('coverage-filter'),
+    coverageStats: document.getElementById('coverage-stats'),
     coverageLegend: document.getElementById('coverage-legend'),
     coverageMap: document.getElementById('coverage-map'),
     coverageStatus: document.getElementById('coverage-status'),
