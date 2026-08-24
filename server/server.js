@@ -2070,12 +2070,6 @@ function digitalizeptPublicOrigin(req) {
     return `${proto}://${host}`.replace(/\/$/, '');
 }
 
-function saveLeadFollowup(db, leadId, followup) {
-    db.prepare('UPDATE lead SET followup_json = ? WHERE id = ?')
-        .run(JSON.stringify(followup), leadId);
-    return followup;
-}
-
 function loadLeadOutreachRow(db, leadId) {
     return db.prepare(`
         SELECT l.id, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.business_type,
@@ -2098,7 +2092,28 @@ function ganchoExtrasFromBody(body = {}) {
     if (body.fichaComErro != null) extras.fichaComErro = body.fichaComErro === true;
     if (body.siteVelho != null) extras.siteVelho = body.siteVelho === true;
     if (body.problemaFicha != null) extras.problemaFicha = cleanText(body.problemaFicha, 200);
+    if (body.includePrices != null) extras.includePrices = body.includePrices !== false && body.includePrices !== 'false';
+    if (body.campanhaPct != null) extras.campanhaPct = body.campanhaPct;
+    if (body.campanhaShowPrices != null) extras.campanhaShowPrices = body.campanhaShowPrices !== false && body.campanhaShowPrices !== 'false';
     return extras;
+}
+
+function applyLeadCampaignToWizard(db, leadId, campanhaPct) {
+    const row = db.prepare('SELECT wizard_json FROM lead WHERE id = ?').get(leadId);
+    if (!row) return;
+    const wizard = parseJsonSafe(row.wizard_json, {});
+    if (!wizard.proposta || typeof wizard.proposta !== 'object') wizard.proposta = {};
+    wizard.proposta.descontoPct = outreach.clampCampanhaPct(campanhaPct);
+    db.prepare('UPDATE lead SET wizard_json = ? WHERE id = ?').run(JSON.stringify(wizard), leadId);
+}
+
+function saveLeadFollowup(db, leadId, followup, { syncCampaign = false } = {}) {
+    db.prepare('UPDATE lead SET followup_json = ? WHERE id = ?')
+        .run(JSON.stringify(followup), leadId);
+    if (syncCampaign || Number(followup.campanhaPct) > 0) {
+        applyLeadCampaignToWizard(db, leadId, followup.campanhaPct);
+    }
+    return followup;
 }
 
 function buildLeadOutreach(db, leadId, req, extras = {}) {
@@ -2147,7 +2162,12 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         lng: row.lng,
         ganchoId: followup.ganchoId,
         sinais,
-        lang: followup.lang
+        lang: followup.lang,
+        offer: {
+            includePrices: followup.includePrices,
+            campanhaPct: followup.campanhaPct,
+            campanhaShowPrices: followup.campanhaShowPrices
+        }
     });
     return { row, dados, followup, ctx, origin, sinais };
 }
@@ -4310,6 +4330,24 @@ app.post('/api/digitalizept/leads/:leadId/outreach/lang', requireDigitalizept, (
     }
 });
 
+app.post('/api/digitalizept/leads/:leadId/outreach/offer', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const packed = buildLeadOutreach(db, leadId, req, ganchoExtrasFromBody(req.body || {}));
+        if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        saveLeadFollowup(db, leadId, packed.followup, { syncCampaign: true });
+        return res.json({
+            ok: true,
+            followup: packed.followup,
+            descontoPct: packed.followup.campanhaPct
+        });
+    } catch (err) {
+        console.error('digitalizept outreach offer error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar a campanha.' });
+    }
+});
+
 app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizept, (req, res) => {
     try {
         const leadId = cleanText(req.params.leadId, 80);
@@ -4440,8 +4478,16 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         saveLeadFollowup(db, leadId, packed.followup);
         applyAutoEtapa(db, leadId, 'demo_criada');
         scheduleLeadGeocode(leadId, { force: false });
+        const offerBits = [];
+        if (!packed.followup.includePrices) offerBits.push('sem valores');
+        if (packed.followup.campanhaPct > 0) {
+            offerBits.push(packed.followup.campanhaShowPrices
+                ? `campanha ${packed.followup.campanhaPct}% com valores`
+                : `campanha ${packed.followup.campanhaPct}%`);
+        }
+        const offerNote = offerBits.length ? ` (${offerBits.join(', ')})` : '';
         db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
-            .run(crypto.randomUUID(), leadId, `Email HTML da demo enviado para ${to}.`, now);
+            .run(crypto.randomUUID(), leadId, `Email HTML da demo enviado para ${to}${offerNote}.`, now);
         return res.json({ ok: true, followup: packed.followup, sent: true });
     } catch (err) {
         console.error('digitalizept outreach email error:', err.message);

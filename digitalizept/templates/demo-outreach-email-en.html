@@ -263,7 +263,28 @@
       </td>
     </tr>
 
+    <!-- ============ CAMPAIGN ============ -->
+    <!--IF_CAMPANHA-->
+    <tr>
+      <td class="px" style="padding:30px 44px 0 44px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1C1C1C;">
+          <tr>
+            <td style="padding:18px 22px;">
+              <p style="margin:0 0 6px 0; font-family:Helvetica,Arial,sans-serif; font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:#A8A49C;">
+                {{campanhaTitulo}}
+              </p>
+              <p style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:20px; line-height:28px; color:#F2F0EB;">
+                {{campanhaLinha}}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <!--/IF_CAMPANHA-->
+
     <!-- ============ PRICES ============ -->
+    <!--IF_PRECOS-->
     <tr>
       <td class="px" style="padding:30px 44px 0 44px;">
         <p style="margin:0 0 12px 0; font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:24px; color:#8A867E;">
@@ -274,32 +295,39 @@
             <td style="padding:20px 22px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td valign="top" style="padding-bottom:10px; font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:26px; color:#1C1C1C; width:76px;">490&nbsp;€</td>
+                  <td valign="top" style="padding-bottom:10px; font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:26px; color:#1C1C1C; width:92px;">
+                    <!--IF_PRECO_ANTIGO--><span style="display:block; text-decoration:line-through; color:#9A958C; font-size:13px; line-height:18px;">{{precoTudoLista}}&nbsp;€</span><!--/IF_PRECO_ANTIGO-->{{precoTudo}}&nbsp;€
+                  </td>
                   <td valign="top" style="padding-bottom:10px; font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:26px; color:#3A3A3A;">
                     Everything handled and live in 3 days
                   </td>
                 </tr>
                 <tr>
-                  <td valign="top" style="padding-bottom:10px; font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:26px; color:#5A5750;">190&nbsp;€</td>
+                  <td valign="top" style="padding-bottom:10px; font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:26px; color:#5A5750;">
+                    <!--IF_PRECO_ANTIGO--><span style="display:block; text-decoration:line-through; color:#9A958C; font-size:13px; line-height:18px;">{{precoPaginaLista}}&nbsp;€</span><!--/IF_PRECO_ANTIGO-->{{precoPagina}}&nbsp;€
+                  </td>
                   <td valign="top" style="padding-bottom:10px; font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:26px; color:#5A5750;">
                     Just the page, for you to put live
                   </td>
                 </tr>
                 <tr>
-                  <td valign="top" style="font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:26px; color:#5A5750;">90&nbsp;€</td>
+                  <td valign="top" style="font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:26px; color:#5A5750;">
+                    <!--IF_PRECO_ANTIGO--><span style="display:block; text-decoration:line-through; color:#9A958C; font-size:13px; line-height:18px;">{{precoGoogleLista}}&nbsp;€</span><!--/IF_PRECO_ANTIGO-->{{precoGoogle}}&nbsp;€
+                  </td>
                   <td valign="top" style="font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height:26px; color:#5A5750;">
                     Just the Google part
                   </td>
                 </tr>
               </table>
               <p style="margin:14px 0 0 0; font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:20px; color:#9A958C;">
-                VAT not included. If you start with 90 € or 190 €, that amount comes off if you later want everything.
+                {{precoNota}}
               </p>
             </td>
           </tr>
         </table>
       </td>
     </tr>
+    <!--/IF_PRECOS-->
 
     <!-- ============ MORE ============ -->
     <tr>

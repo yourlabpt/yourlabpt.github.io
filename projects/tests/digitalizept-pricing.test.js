@@ -738,6 +738,23 @@ describe('digitalizept followup messages', () => {
         assert.match(email.body, /VAT not included/);
     });
 
+    it('omits street prices from WhatsApp 2 and email when includePrices is off', () => {
+        const state = {
+            data: {
+                demoUrl: '/d/cafe-exemplo',
+                followup: { lang: 'pt', includePrices: false, campanhaPct: 10, campanhaShowPrices: false },
+                dados: { nome_negocio: 'Café do Zé', cidade: 'Braga' }
+            }
+        };
+        const config = { provider: { nome: 'YourLab' } };
+        const wa2 = buildWhatsAppMessage(state, config, 2);
+        assert.match(wa2, /Campanha: 10%/);
+        assert.doesNotMatch(wa2, /490 euros/);
+        const email = buildEmailContent(state, config);
+        assert.match(email.body, /Campanha de 10%/);
+        assert.doesNotMatch(email.body, /490 euros/);
+    });
+
     it('builds absolute demo url and whatsapp phone', () => {
         assert.equal(normalizePhoneForWa('965 601 954'), '351965601954');
         const url = buildWhatsAppUrl('351965601954', 'Olá');

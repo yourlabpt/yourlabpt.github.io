@@ -19,6 +19,7 @@ import {
     pickGancho,
     sinaisFromWizardState
 } from './outreach-ganchos.js';
+import { CAMPANHA_PRESETS, normalizeOffer, showPriceBlock } from './outreach-offer.js';
 import {
     askCallNotifyPermission,
     callCopy,
@@ -199,6 +200,92 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     const siteVelhoCheck = flagCheck('siteVelho', 'Site velho');
     ganchoBox.append(ganchoTitle, ganchoList, problemaWrap, flagsWrap);
 
+    const offerBox = document.createElement('div');
+    offerBox.className = 'followup-offer';
+    const offerTitle = document.createElement('p');
+    offerTitle.className = 'field-group-title';
+    offerTitle.textContent = 'Valores e campanha';
+    const offerHint = document.createElement('p');
+    offerHint.className = 'id-disclaimer';
+    offerHint.textContent = 'A campanha fica nesta lead e entra já no desconto da proposta.';
+    const priceLabel = document.createElement('span');
+    priceLabel.className = 'field-label';
+    priceLabel.textContent = 'Valores no email';
+    const priceRow = document.createElement('div');
+    priceRow.className = 'followup-offer-row';
+    const priceOffBtn = document.createElement('button');
+    priceOffBtn.type = 'button';
+    priceOffBtn.className = 'disc-chip';
+    priceOffBtn.textContent = 'Sem valores';
+    const priceOnBtn = document.createElement('button');
+    priceOnBtn.type = 'button';
+    priceOnBtn.className = 'disc-chip';
+    priceOnBtn.textContent = 'Com 490 / 190 / 90';
+    priceRow.append(priceOffBtn, priceOnBtn);
+
+    const campLabel = document.createElement('span');
+    campLabel.className = 'field-label';
+    campLabel.textContent = 'Campanha nesta lead';
+    const campRow = document.createElement('div');
+    campRow.className = 'followup-offer-row disc-chips';
+    const campNoneBtn = document.createElement('button');
+    campNoneBtn.type = 'button';
+    campNoneBtn.className = 'disc-chip';
+    campNoneBtn.dataset.pct = '0';
+    campNoneBtn.textContent = 'Sem campanha';
+    campRow.appendChild(campNoneBtn);
+    const campPresetBtns = {};
+    CAMPANHA_PRESETS.forEach((pct) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'disc-chip';
+        btn.dataset.pct = String(pct);
+        btn.textContent = `${pct}%`;
+        campPresetBtns[pct] = btn;
+        campRow.appendChild(btn);
+    });
+    const campOutroBtn = document.createElement('button');
+    campOutroBtn.type = 'button';
+    campOutroBtn.className = 'disc-chip';
+    campOutroBtn.textContent = 'Outro';
+    campRow.appendChild(campOutroBtn);
+    const campCustom = document.createElement('input');
+    campCustom.type = 'number';
+    campCustom.min = '1';
+    campCustom.max = '100';
+    campCustom.className = 'field-input followup-offer-custom';
+    campCustom.placeholder = '%';
+    campCustom.hidden = true;
+
+    const modeLabel = document.createElement('span');
+    modeLabel.className = 'field-label';
+    modeLabel.textContent = 'Mostrar na campanha';
+    const modeRow = document.createElement('div');
+    modeRow.className = 'followup-offer-row';
+    const modeValuesBtn = document.createElement('button');
+    modeValuesBtn.type = 'button';
+    modeValuesBtn.className = 'disc-chip';
+    modeValuesBtn.textContent = 'Valores com desconto';
+    const modePctBtn = document.createElement('button');
+    modePctBtn.type = 'button';
+    modePctBtn.className = 'disc-chip';
+    modePctBtn.textContent = 'Só a percentagem';
+    modeRow.append(modeValuesBtn, modePctBtn);
+    const modeWrap = document.createElement('div');
+    modeWrap.className = 'followup-offer-mode';
+    modeWrap.append(modeLabel, modeRow);
+
+    offerBox.append(
+        offerTitle,
+        offerHint,
+        priceLabel,
+        priceRow,
+        campLabel,
+        campRow,
+        campCustom,
+        modeWrap
+    );
+
     const tabs = document.createElement('div');
     tabs.className = 'followup-tabs';
     let activeStep = nextSendableWaStep(ctx.state.data.followup) || Math.max(1, Number(ctx.state.data.followup.waStep) || 1);
@@ -229,8 +316,64 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
             sinaisDeMovimento: f.sinaisDeMovimento === true,
             fichaComErro: selected === 'E' || f.fichaComErro === true,
             siteVelho: f.siteVelho === true,
-            problemaFicha: String(f.problemaFicha || '').trim()
+            problemaFicha: String(f.problemaFicha || '').trim(),
+            ...offerPayload()
         };
+    }
+
+    function offerPayload() {
+        return normalizeOffer(followupOf());
+    }
+
+    function persistOffer(patch) {
+        const next = normalizeOffer({ ...offerPayload(), ...patch });
+        ctx.update({
+            followup: { ...followupOf(), ...next },
+            proposta: { ...(ctx.state.data.proposta || {}), descontoPct: next.campanhaPct },
+            followupWa2: '',
+            followupEmailBody: ''
+        });
+        emailPreview.dataset.autofill = '1';
+        emailPreview.value = '';
+        paintOffer();
+        paintMessages();
+        persistOfferRemote(next);
+    }
+
+    async function persistOfferRemote(offer) {
+        const id = leadIdOf(ctx);
+        if (!id || typeof config.api !== 'function') return;
+        try {
+            const { response, data } = await outreach('/offer', offer);
+            if (response.ok && data.followup) {
+                ctx.update({
+                    followup: { ...followupOf(), ...data.followup },
+                    proposta: {
+                        ...(ctx.state.data.proposta || {}),
+                        descontoPct: data.descontoPct != null ? data.descontoPct : offer.campanhaPct
+                    }
+                });
+            }
+        } catch (_) { /* local preview still works */ }
+    }
+
+    function paintOffer() {
+        const o = offerPayload();
+        priceOnBtn.classList.toggle('active', showPriceBlock(o));
+        priceOffBtn.classList.toggle('active', !showPriceBlock(o));
+        campNoneBtn.classList.toggle('active', o.campanhaPct === 0);
+        Object.entries(campPresetBtns).forEach(([pct, btn]) => {
+            btn.classList.toggle('active', o.campanhaPct === Number(pct));
+        });
+        const preset = o.campanhaPct === 0 || CAMPANHA_PRESETS.includes(o.campanhaPct);
+        campOutroBtn.classList.toggle('active', o.campanhaPct > 0 && !CAMPANHA_PRESETS.includes(o.campanhaPct));
+        campCustom.hidden = preset;
+        if (!preset && document.activeElement !== campCustom) {
+            campCustom.value = String(o.campanhaPct);
+        }
+        modeWrap.classList.toggle('hidden', o.campanhaPct <= 0);
+        modeValuesBtn.classList.toggle('active', o.campanhaShowPrices);
+        modePctBtn.classList.toggle('active', !o.campanhaShowPrices);
     }
 
     function rewriteCopyFromGancho() {
@@ -391,6 +534,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
 
         paintCall();
         paintGanchos();
+        paintOffer();
         paintTabs();
         waPreview.value = buildWhatsAppMessage(ctx.state, config, activeStep);
         const email = buildEmailContent(ctx.state, config);
@@ -473,6 +617,24 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     siteVelhoCheck.addEventListener('change', () => {
         persistGancho({ siteVelho: siteVelhoCheck.checked });
     });
+
+    priceOnBtn.addEventListener('click', () => persistOffer({ includePrices: true }));
+    priceOffBtn.addEventListener('click', () => persistOffer({ includePrices: false, campanhaShowPrices: false }));
+    campNoneBtn.addEventListener('click', () => persistOffer({ campanhaPct: 0 }));
+    Object.entries(campPresetBtns).forEach(([pct, btn]) => {
+        btn.addEventListener('click', () => persistOffer({ campanhaPct: Number(pct) }));
+    });
+    campOutroBtn.addEventListener('click', () => {
+        campCustom.hidden = false;
+        campCustom.focus();
+        if (!campCustom.value) campCustom.value = '25';
+        persistOffer({ campanhaPct: Number(campCustom.value) || 25 });
+    });
+    campCustom.addEventListener('change', () => {
+        persistOffer({ campanhaPct: Number(campCustom.value) || 0 });
+    });
+    modeValuesBtn.addEventListener('click', () => persistOffer({ campanhaShowPrices: true, includePrices: true }));
+    modePctBtn.addEventListener('click', () => persistOffer({ campanhaShowPrices: false }));
 
     Object.entries(langButtons).forEach(([id, btn]) => {
         btn.addEventListener('click', () => applyLang(id));
@@ -717,7 +879,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         }
     });
 
-    host.append(title, hint, senderHost, controls, linkStatus, seqStatus, callBox, ganchoBox, tabs,
+    host.append(title, hint, senderHost, controls, linkStatus, seqStatus, callBox, ganchoBox, offerBox, tabs,
         waLabel, waPreview, emailLabel, emailSubject, emailPreview, actions
     );
     paintMessages();

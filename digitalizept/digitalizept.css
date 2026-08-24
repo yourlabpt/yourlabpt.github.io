@@ -1334,6 +1334,30 @@ select.field-input {
     cursor: pointer;
 }
 
+.followup-offer {
+    margin: 14px 0 16px;
+}
+
+.followup-offer .field-label {
+    display: block;
+    margin: 10px 0 6px;
+}
+
+.followup-offer-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.followup-offer-custom {
+    max-width: 96px;
+    margin: 8px 0 0;
+}
+
+.followup-offer-mode {
+    margin-top: 8px;
+}
+
 .followup-tabs {
     display: flex;
     gap: 6px;

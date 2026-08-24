@@ -72,14 +72,7 @@ Gostou? Marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar
 {{link}}
 
 Feito à medida. E o site fica vosso, não nosso. Cada página é construída de raiz para a casa — fica em nome da empresa.
-
-*490 euros* - tudo tratado e no ar em 3 dias
-*190 euros* - só a página, para pôr no ar por si
-*90 euros* - só a parte do Google
-
-Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.
-
-Isto é só uma parte do que fazemos. Se precisar de marcações, fichas, stocks — diga e falamos também.`,
+{{blocoPrecosWa}}Isto é só uma parte do que fazemos. Se precisar de marcações, fichas, stocks — diga e falamos também.`,
 
     3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}}.
 
@@ -102,7 +95,7 @@ Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, s
 
 {{link}}
 
-Gostou? Responda a este email e marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final. 490 euros tudo / 190 só a página / 90 só o Google, sem IVA.
+Gostou? Responda a este email e marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.{{fechoPreco}}
 
 {{vendedorNome}}
 YourLab, {{zona}}
@@ -127,14 +120,7 @@ If it makes sense, we book a short meeting. We take care of everything — you j
 {{link}}
 
 Built for this house. And the site is yours, not ours. Each page is made from scratch for the business — it stays in the company's name.
-
-*490 euros* - everything handled and live in 3 days
-*190 euros* - just the page, for you to put live
-*90 euros* - just the Google part
-
-VAT not included. If you start with 90 or 190 euros, it comes off the rest.
-
-This is only part of what we do. If you need bookings, client files, stock — say so and we can talk about that too.`,
+{{blocoPrecosWa}}This is only part of what we do. If you need bookings, client files, stock — say so and we can talk about that too.`,
 
     3: `{{saudacao}} {{clienteNome}}, it was good to stop by {{visitaQuando}}.
 
@@ -157,7 +143,7 @@ To show you what I mean, I put two things together for {{negocioNome}}, without 
 
 {{link}}
 
-If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery. 490 euros everything / 190 just the page / 90 just Google, VAT not included.
+If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery.{{fechoPreco}}
 
 {{vendedorNome}}
 YourLab, {{zona}}
@@ -241,7 +227,10 @@ function fillTemplate(template, ctx) {
 function applyOptionalBlocks(html, ctx) {
     return String(html || '')
         .replace(/<!--IF_IMAGEM_GOOGLE-->([\s\S]*?)<!--\/IF_IMAGEM_GOOGLE-->/g, ctx.imagemGoogle ? '$1' : '')
-        .replace(/<!--IF_IMAGEM_SITE-->([\s\S]*?)<!--\/IF_IMAGEM_SITE-->/g, ctx.imagemSite ? '$1' : '');
+        .replace(/<!--IF_IMAGEM_SITE-->([\s\S]*?)<!--\/IF_IMAGEM_SITE-->/g, ctx.imagemSite ? '$1' : '')
+        .replace(/<!--IF_CAMPANHA-->([\s\S]*?)<!--\/IF_CAMPANHA-->/g, ctx.showCampanha ? '$1' : '')
+        .replace(/<!--IF_PRECOS-->([\s\S]*?)<!--\/IF_PRECOS-->/g, ctx.showPrecos ? '$1' : '')
+        .replace(/<!--IF_PRECO_ANTIGO-->([\s\S]*?)<!--\/IF_PRECO_ANTIGO-->/g, ctx.showPrecoAntigo ? '$1' : '');
 }
 
 const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto']);
@@ -283,6 +272,149 @@ function parseJsonSafe(raw, fallback) {
     }
 }
 
+const STREET_PRICES = { tudo: 490, pagina: 190, google: 90 };
+const CAMPANHA_PRESETS = [5, 10, 15, 20];
+
+function clampCampanhaPct(value) {
+    const n = Math.round(Number(value) || 0);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, n));
+}
+
+function normalizeOffer(raw = {}) {
+    return {
+        includePrices: raw.includePrices !== false,
+        campanhaPct: clampCampanhaPct(raw.campanhaPct),
+        campanhaShowPrices: raw.campanhaShowPrices !== false
+    };
+}
+
+function showPriceBlock(offer) {
+    const o = normalizeOffer(offer);
+    return o.includePrices || (o.campanhaPct > 0 && o.campanhaShowPrices);
+}
+
+function showCampaignBlock(offer) {
+    return normalizeOffer(offer).campanhaPct > 0;
+}
+
+function pricesAreDiscounted(offer) {
+    const o = normalizeOffer(offer);
+    return o.campanhaPct > 0 && o.campanhaShowPrices && showPriceBlock(o);
+}
+
+function euroOf(list, pct) {
+    if (!pct) return list;
+    return Math.round(list * (100 - pct) / 100);
+}
+
+function offerPrices(offer) {
+    const o = normalizeOffer(offer);
+    const pct = pricesAreDiscounted(o) ? o.campanhaPct : 0;
+    return {
+        tudo: euroOf(STREET_PRICES.tudo, pct),
+        pagina: euroOf(STREET_PRICES.pagina, pct),
+        google: euroOf(STREET_PRICES.google, pct),
+        tudoLista: STREET_PRICES.tudo,
+        paginaLista: STREET_PRICES.pagina,
+        googleLista: STREET_PRICES.google
+    };
+}
+
+function offerCopy(offer, lang = 'pt') {
+    const o = normalizeOffer(offer);
+    const p = offerPrices(o);
+    const en = normalizeOutreachLang(lang) === 'en';
+    const showPrecos = showPriceBlock(o);
+    const showCampanha = showCampaignBlock(o);
+    const showPrecoAntigo = pricesAreDiscounted(o);
+
+    let campanhaTitulo = '';
+    let campanhaLinha = '';
+    if (showCampanha) {
+        campanhaTitulo = en ? 'Campaign' : 'Campanha';
+        if (showPrecoAntigo) {
+            campanhaLinha = en
+                ? `${o.campanhaPct}% off — the amounts below already include this discount.`
+                : `${o.campanhaPct}% de desconto — os valores em baixo já incluem esta campanha.`;
+        } else if (showPrecos) {
+            campanhaLinha = en
+                ? `${o.campanhaPct}% off on this conversation. The amounts below are the list prices.`
+                : `${o.campanhaPct}% de desconto nesta conversa. Os valores em baixo são de tabela.`;
+        } else {
+            campanhaLinha = en
+                ? `${o.campanhaPct}% off on this conversation. We talk numbers when we meet.`
+                : `${o.campanhaPct}% de desconto nesta conversa. Falamos dos valores na reunião.`;
+        }
+    }
+
+    let precoNota = '';
+    if (showPrecos) {
+        if (showPrecoAntigo) {
+            precoNota = en
+                ? `VAT not included. Campaign prices. If you start with ${p.google} € or ${p.pagina} €, that amount comes off if you later want everything.`
+                : `Sem IVA. Valores da campanha. Se começar pelos ${p.google} € ou ${p.pagina} €, o valor é descontado se depois quiser tudo.`;
+        } else {
+            precoNota = en
+                ? `VAT not included. If you start with ${p.google} € or ${p.pagina} €, that amount comes off if you later want everything.`
+                : `Sem IVA. Se começar pelos ${p.google} € ou ${p.pagina} €, o valor é descontado se depois quiser tudo.`;
+        }
+    }
+
+    const waLines = [];
+    if (showCampanha) {
+        waLines.push(en
+            ? `*Campaign: ${o.campanhaPct}% off*`
+            : `*Campanha: ${o.campanhaPct}% de desconto*`);
+    }
+    if (showPrecos) {
+        if (en) {
+            waLines.push(`*${p.tudo} euros* - everything handled and live in 3 days`);
+            waLines.push(`*${p.pagina} euros* - just the page, for you to put live`);
+            waLines.push(`*${p.google} euros* - just the Google part`);
+            waLines.push(precoNota.replace(/ €/g, ' euros'));
+        } else {
+            waLines.push(`*${p.tudo} euros* - tudo tratado e no ar em 3 dias`);
+            waLines.push(`*${p.pagina} euros* - só a página, para pôr no ar por si`);
+            waLines.push(`*${p.google} euros* - só a parte do Google`);
+            waLines.push(precoNota.replace(/ €/g, ' euros'));
+        }
+    }
+    const blocoPrecosWa = waLines.length ? `\n\n${waLines.join('\n')}\n` : '\n\n';
+
+    let fechoPreco = '';
+    if (showCampanha && !showPrecos) {
+        fechoPreco = en
+            ? ` Campaign: ${o.campanhaPct}% off.`
+            : ` Campanha de ${o.campanhaPct}%.`;
+    } else if (showPrecos) {
+        const campanhaBit = showCampanha
+            ? (en ? ` Campaign ${o.campanhaPct}%.` : ` Campanha de ${o.campanhaPct}%.`)
+            : '';
+        fechoPreco = en
+            ? `${campanhaBit} ${p.tudo} euros everything / ${p.pagina} just the page / ${p.google} just Google, VAT not included.`
+            : `${campanhaBit} ${p.tudo} euros tudo / ${p.pagina} só a página / ${p.google} só o Google, sem IVA.`;
+    }
+
+    return {
+        ...o,
+        showPrecos,
+        showCampanha,
+        showPrecoAntigo,
+        precoTudo: p.tudo,
+        precoPagina: p.pagina,
+        precoGoogle: p.google,
+        precoTudoLista: p.tudoLista,
+        precoPaginaLista: p.paginaLista,
+        precoGoogleLista: p.googleLista,
+        campanhaTitulo,
+        campanhaLinha,
+        precoNota,
+        blocoPrecosWa,
+        fechoPreco
+    };
+}
+
 function emptyFollowup() {
     return {
         waStep: 0,
@@ -303,6 +435,9 @@ function emptyFollowup() {
         siteVelho: false,
         problemaFicha: '',
         lang: 'pt',
+        includePrices: true,
+        campanhaPct: 0,
+        campanhaShowPrices: true,
         edits: {}
     };
 }
@@ -310,7 +445,7 @@ function emptyFollowup() {
 function parseFollowup(raw) {
     const parsed = typeof raw === 'string' ? parseJsonSafe(raw, {}) : (raw || {});
     const base = emptyFollowup();
-    return {
+    const merged = {
         ...base,
         ...parsed,
         waStep: Math.min(3, Math.max(0, Number(parsed.waStep) || 0)),
@@ -323,6 +458,11 @@ function parseFollowup(raw) {
         lang: normalizeOutreachLang(parsed.lang),
         edits: parsed.edits && typeof parsed.edits === 'object' ? parsed.edits : {}
     };
+    const offer = normalizeOffer(merged);
+    merged.includePrices = offer.includePrices;
+    merged.campanhaPct = offer.campanhaPct;
+    merged.campanhaShowPrices = offer.campanhaShowPrices;
+    return merged;
 }
 
 function loadGanchos() {
@@ -404,6 +544,19 @@ function applyGanchoFields(followup, patch = {}) {
     if (patch.fichaComErro != null) f.fichaComErro = patch.fichaComErro === true;
     if (patch.siteVelho != null) f.siteVelho = patch.siteVelho === true;
     if (patch.problemaFicha != null) f.problemaFicha = String(patch.problemaFicha || '').trim();
+    return applyOfferFields(f, patch);
+}
+
+function applyOfferFields(followup, patch = {}) {
+    const f = parseFollowup(followup);
+    const next = normalizeOffer({
+        includePrices: patch.includePrices != null ? patch.includePrices : f.includePrices,
+        campanhaPct: patch.campanhaPct != null ? patch.campanhaPct : f.campanhaPct,
+        campanhaShowPrices: patch.campanhaShowPrices != null ? patch.campanhaShowPrices : f.campanhaShowPrices
+    });
+    f.includePrices = next.includePrices;
+    f.campanhaPct = next.campanhaPct;
+    f.campanhaShowPrices = next.campanhaShowPrices;
     return f;
 }
 
@@ -574,7 +727,8 @@ function buildOutreachContext({
     lng = null,
     ganchoId = '',
     sinais = {},
-    lang = 'pt'
+    lang = 'pt',
+    offer = {}
 } = {}) {
     const outreachLang = normalizeOutreachLang(lang);
     const en = outreachLang === 'en';
@@ -654,8 +808,23 @@ function buildOutreachContext({
         ganchoTitulo: '',
         ganchoTexto: '',
         ganchoTextoCurto: '',
-        ganchoTextoWa: ''
+        ganchoTextoWa: '',
+        showPrecos: false,
+        showCampanha: false,
+        showPrecoAntigo: false,
+        precoTudo: STREET_PRICES.tudo,
+        precoPagina: STREET_PRICES.pagina,
+        precoGoogle: STREET_PRICES.google,
+        precoTudoLista: STREET_PRICES.tudo,
+        precoPaginaLista: STREET_PRICES.pagina,
+        precoGoogleLista: STREET_PRICES.google,
+        campanhaTitulo: '',
+        campanhaLinha: '',
+        precoNota: '',
+        blocoPrecosWa: '\n\n',
+        fechoPreco: ''
     };
+    Object.assign(ctx, offerCopy(offer, outreachLang));
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
     ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
     ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto);
@@ -748,6 +917,13 @@ module.exports = {
     pickGancho,
     normalizeGanchoId,
     applyGanchoFields,
+    applyOfferFields,
+    normalizeOffer,
+    offerCopy,
+    offerPrices,
+    STREET_PRICES,
+    CAMPANHA_PRESETS,
+    clampCampanhaPct,
     sinaisFromLead,
     shortGanchoTexto
 };

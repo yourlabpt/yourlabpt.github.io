@@ -354,4 +354,65 @@ describe('digitalizept outreach', () => {
         assert.match(waTextForStep(1, ctx), /sou a Maria Silva, da YourLab/);
         assert.match(renderEmailHtml(ctx), /sou a Maria Silva/);
     });
+
+    it('can send the demo email without prices, or with a campaign on that lead', () => {
+        const base = {
+            dados: { nome_negocio: 'Talho da Costa', cidade: 'Porto' },
+            provider: { nome: 'YourLab', nif: '509000000', morada: 'Rua A 1, 4700-000 Braga' },
+            origin: 'https://yourlabpt.com',
+            demoSlug: 'talho-da-costa'
+        };
+        const withPrices = buildOutreachContext(base);
+        assert.equal(withPrices.showPrecos, true);
+        assert.equal(withPrices.precoTudo, 490);
+        assert.match(renderEmailHtml(withPrices), /490/);
+        assert.match(waTextForStep(2, withPrices), /490 euros/);
+        assert.match(renderEmailText(withPrices), /490 euros tudo/);
+        assert.doesNotMatch(renderEmailHtml(withPrices), /IF_PRECOS/);
+        assert.doesNotMatch(renderEmailHtml(withPrices), /IF_CAMPANHA/);
+
+        const noPrices = buildOutreachContext({
+            ...base,
+            offer: { includePrices: false }
+        });
+        assert.equal(noPrices.showPrecos, false);
+        assert.doesNotMatch(renderEmailHtml(noPrices), /490/);
+        assert.doesNotMatch(waTextForStep(2, noPrices), /490 euros/);
+        assert.doesNotMatch(renderEmailText(noPrices), /490 euros/);
+        assert.match(renderEmailText(noPrices), /marcamos uma conversa/);
+
+        const pctOnly = buildOutreachContext({
+            ...base,
+            offer: { includePrices: false, campanhaPct: 15, campanhaShowPrices: false }
+        });
+        assert.equal(pctOnly.showCampanha, true);
+        assert.equal(pctOnly.showPrecos, false);
+        assert.match(renderEmailHtml(pctOnly), /15% de desconto nesta conversa/);
+        assert.doesNotMatch(renderEmailHtml(pctOnly), /490/);
+        assert.match(renderEmailText(pctOnly), /Campanha de 15%/);
+        assert.match(waTextForStep(2, pctOnly), /Campanha: 15%/);
+
+        const withValues = buildOutreachContext({
+            ...base,
+            offer: { includePrices: true, campanhaPct: 15, campanhaShowPrices: true }
+        });
+        assert.equal(withValues.precoTudo, 417);
+        assert.equal(withValues.precoPagina, 162);
+        assert.equal(withValues.precoGoogle, 77);
+        assert.equal(withValues.showPrecoAntigo, true);
+        const html = renderEmailHtml(withValues);
+        assert.match(html, /417/);
+        assert.match(html, /15% de desconto/);
+        assert.match(html, /490/);
+        assert.match(waTextForStep(2, withValues), /417 euros/);
+
+        const stored = applyGanchoFields(parseFollowup({}), {
+            includePrices: false,
+            campanhaPct: 10,
+            campanhaShowPrices: false
+        });
+        assert.equal(stored.includePrices, false);
+        assert.equal(stored.campanhaPct, 10);
+        assert.equal(stored.campanhaShowPrices, false);
+    });
 });

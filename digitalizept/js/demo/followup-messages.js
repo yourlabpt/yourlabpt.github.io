@@ -10,6 +10,7 @@ import {
     normalizeOutreachLang,
     visitaQuandoFor
 } from './outreach-lang.js';
+import { offerCopy, normalizeOffer } from './outreach-offer.js';
 
 export { normalizeOutreachLang };
 
@@ -29,14 +30,7 @@ Gostou? Marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar
 {{link}}
 
 Feito à medida. E o site fica vosso, não nosso. Cada página é construída de raiz para a casa — fica em nome da empresa.
-
-*490 euros* - tudo tratado e no ar em 3 dias
-*190 euros* - só a página, para pôr no ar por si
-*90 euros* - só a parte do Google
-
-Sem IVA. Se começar pelos 90 ou 190 euros, desconta-se do resto.
-
-Isto é só uma parte do que fazemos. Se precisar de marcações, fichas, stocks — diga e falamos também.`,
+{{blocoPrecosWa}}Isto é só uma parte do que fazemos. Se precisar de marcações, fichas, stocks — diga e falamos também.`,
 
     3: `{{saudacao}} Sr. {{clienteNome}}, foi um gosto passar por aí {{visitaQuando}}.
 
@@ -63,14 +57,7 @@ If it makes sense, we book a short meeting. We take care of everything — you j
 {{link}}
 
 Built for this house. And the site is yours, not ours. Each page is made from scratch for the business — it stays in the company's name.
-
-*490 euros* - everything handled and live in 3 days
-*190 euros* - just the page, for you to put live
-*90 euros* - just the Google part
-
-VAT not included. If you start with 90 or 190 euros, it comes off the rest.
-
-This is only part of what we do. If you need bookings, client files, stock — say so and we can talk about that too.`,
+{{blocoPrecosWa}}This is only part of what we do. If you need bookings, client files, stock — say so and we can talk about that too.`,
 
     3: `{{saudacao}} {{clienteNome}}, it was good to stop by {{visitaQuando}}.
 
@@ -96,7 +83,7 @@ Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, s
 
 {{link}}
 
-Gostou? Responda a este email e marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final. 490 euros tudo / 190 só a página / 90 só o Google, sem IVA.
+Gostou? Responda a este email e marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.{{fechoPreco}}
 
 {{vendedorNome}}
 YourLab, {{zona}}
@@ -113,7 +100,7 @@ To show you what I mean, I put two things together for {{negocioNome}}, without 
 
 {{link}}
 
-If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery. 490 euros everything / 190 just the page / 90 just Google, VAT not included.
+If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery.{{fechoPreco}}
 
 {{vendedorNome}}
 YourLab, {{zona}}
@@ -233,7 +220,9 @@ export function buildFollowupContext(state, config) {
         ganchoTitulo: '',
         ganchoTexto: '',
         ganchoTextoCurto: '',
-        ganchoTextoWa: ''
+        ganchoTextoWa: '',
+        blocoPrecosWa: '\n\n',
+        fechoPreco: ''
     };
     const sinais = sinaisFromWizardState(state);
     ctx.problemaFicha = sinais.problemaFicha;
@@ -247,6 +236,7 @@ export function buildFollowupContext(state, config) {
     ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
     ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto);
     ctx.ganchoTextoWa = ctx.ganchoTextoCurto ? `\n\n${ctx.ganchoTextoCurto}` : '';
+    Object.assign(ctx, offerCopy(normalizeOffer(state.data && state.data.followup), lang));
     return ctx;
 }
 
