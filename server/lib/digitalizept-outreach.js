@@ -65,7 +65,7 @@ Fiz duas coisas para a *{{negocioNome}}*, sem lhe pedir nada. São exemplos — 
 
 {{link}}
 
-Gostou? Diga só que sim e falamos. Se não for de interesse, uma palavra e não volto a incomodar.`,
+Gostou? Marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.`,
 
     2: `No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
 
@@ -87,7 +87,7 @@ Aqui fica a página que lhe mostrei — a história toda num sítio só vosso:
 
 {{link}}
 
-Gostou? Diga só que sim. Se quiser que lhe explique melhor, passo aí {{followupDia}} de manhã — são 10 minutos, sem compromisso.`
+Marcamos {{followupDia}} de manhã? Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.`
 };
 
 const EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
@@ -102,12 +102,14 @@ Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, s
 
 {{link}}
 
-Gostou? Responda a este email e falamos. 490 euros tudo / 190 só a página / 90 só o Google, sem IVA. Se não for de interesse, responda REMOVER.
+Gostou? Responda a este email e marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final. 490 euros tudo / 190 só a página / 90 só o Google, sem IVA.
 
 {{vendedorNome}}
 YourLab, {{zona}}
 {{vendedorTelefone}}
-{{site}}`;
+{{site}}
+
+Para sair da lista, responda REMOVER.`;
 
 const WA_TEMPLATES_EN = {
     1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
@@ -118,7 +120,7 @@ I put two things together for *{{negocioNome}}*, without asking you for anything
 
 {{link}}
 
-If you like it, just say yes and we talk. If it is not of interest, one word and I will not bother you again.`,
+If it makes sense, we book a short meeting. We take care of everything — you just need to be happy with it before final delivery.`,
 
     2: `In the email you can see how *{{negocioNome}}* would look when someone searches "{{oQueFaz}} in {{zona}}". And the page that holds the whole story.
 
@@ -140,7 +142,7 @@ Here is the page I showed you — the whole story in one place that is yours:
 
 {{link}}
 
-If you like it, just say yes. If you want me to walk you through it, I can come by {{followupDia}} in the morning — 10 minutes, no commitment.`
+Shall we meet {{followupDia}} in the morning? We take care of everything — you just need to be happy with it before final delivery.`
 };
 
 const EMAIL_SUBJECT_EN = '{{clienteNome}}, I made this for {{negocioNome}}';
@@ -155,12 +157,14 @@ To show you what I mean, I put two things together for {{negocioNome}}, without 
 
 {{link}}
 
-If you like it, reply to this email and we talk. 490 euros everything / 190 just the page / 90 just Google, VAT not included. If it is not of interest, reply REMOVE.
+If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery. 490 euros everything / 190 just the page / 90 just Google, VAT not included.
 
 {{vendedorNome}}
 YourLab, {{zona}}
 {{vendedorTelefone}}
-{{site}}`;
+{{site}}
+
+To leave the list, reply REMOVE.`;
 
 function normalizeOutreachLang(value) {
     return String(value || '').trim().toLowerCase() === 'en' ? 'en' : 'pt';
@@ -593,7 +597,7 @@ function buildOutreachContext({
     const vendedorTelefone = phone.display;
     const vendedorTelefoneTel = phone.tel;
     const vendedorEmail = String(provider.email || '').trim() || 'yourlabpt@gmail.com';
-    const ctaBody = en ? 'I liked what I saw. Can we talk?' : 'Gostei do que vi. Podemos falar?';
+    const ctaBody = en ? 'I liked what I saw. Can we book a short meeting?' : 'Gostei do que vi. Podemos marcar uma conversa?';
     const problemaFicha = String(sinais.problemaFicha || dados.problemaFicha || '').trim();
     const picked = pickGancho({
         override: ganchoId,

@@ -152,8 +152,8 @@ describe('digitalizept outreach', () => {
         assert.match(html, /Digitalize a sua empresa/);
         assert.doesNotMatch(html, /\{\{gancho/);
         assert.match(html, /mailto:yourlabpt@gmail.com\?subject=Gostei%20-%20Loja%20X/);
-        assert.match(html, /body=Gostei%20do%20que%20vi\.%20Podemos%20falar%3F/);
-        assert.match(html, /Sim, vamos falar/);
+        assert.match(html, /body=Gostei%20do%20que%20vi\.%20Podemos%20marcar%20uma%20conversa%3F/);
+        assert.match(html, /Marcar conversa/);
         assert.match(html, /Abrir o exemplo/);
         assert.match(html, /\+351 936 732 879/);
         assert.match(html, /tel:\+351936732879/);
@@ -162,8 +162,10 @@ describe('digitalizept outreach', () => {
         assert.doesNotMatch(html, /Ver no Google/);
         assert.doesNotMatch(html, /IF_IMAGEM_GOOGLE/);
         assert.doesNotMatch(html, /<!--IF_IMAGEM_SITE-->/);
+        assert.doesNotMatch(html, /não volto a incomodar/);
         const text = renderEmailText(ctx);
         assert.match(text, /yourlabpt.com\/d\/loja-x/);
+        assert.match(text, /marcamos uma conversa/);
         assert.doesNotMatch(text, /google\.com\/maps/);
     });
 
@@ -260,19 +262,21 @@ describe('digitalizept outreach', () => {
             sinais: { website: 'nao', instagram: '@farmaciasol' }
         });
         assert.equal(ctx.ganchoId, 'B');
-        assert.match(ctx.ganchoTitulo, /Instagram é da Meta/);
+        assert.match(ctx.ganchoTitulo, /Facebook não é nosso/);
         assert.match(ctx.ganchoTexto, /farmácia em Braga/);
         assert.doesNotMatch(ctx.ganchoTexto, /não estão na internet/);
         const html = renderEmailHtml(ctx);
-        assert.match(html, /Instagram é da Meta/);
+        assert.match(html, /Facebook não é nosso/);
         assert.match(html, /farmácia em Braga/);
         assert.doesNotMatch(html, /\{\{gancho/);
         assert.doesNotMatch(html, /2026 e a vossa história/);
         const wa1 = waTextForStep(1, ctx);
-        assert.match(wa1, /Instagram é da Meta/);
+        assert.match(wa1, /Facebook não é nosso/);
+        assert.match(wa1, /Marcamos uma conversa/);
+        assert.doesNotMatch(wa1, /não volto a incomodar/);
         assert.doesNotMatch(wa1, /2026/);
         const text = renderEmailText(ctx);
-        assert.match(text, /Instagram é da Meta/);
+        assert.match(text, /Facebook não é nosso/);
         assert.doesNotMatch(text, /2026 e a vossa história/);
 
         const eCtx = buildOutreachContext({
@@ -326,14 +330,16 @@ describe('digitalizept outreach', () => {
         assert.match(html, /lang="en"/);
         assert.match(html, /I made an example/);
         assert.match(html, /Open the example/);
-        assert.match(html, /Yes, let's talk/);
+        assert.match(html, /Book a meeting/);
         assert.match(html, /Digitize your business/);
         assert.doesNotMatch(html, /Sr\./);
         assert.doesNotMatch(html, /Digitalize a sua empresa/);
         assert.doesNotMatch(html, /Abrir o exemplo/);
+        assert.doesNotMatch(html, /Yes, let's talk/);
         assert.doesNotMatch(html, /\{\{\w+\}\}/);
         const text = renderEmailText(ctx);
         assert.match(text, /VAT not included/);
+        assert.match(text, /book a short meeting/);
         assert.match(text, /REMOVE/);
     });
 

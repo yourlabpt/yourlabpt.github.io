@@ -22,11 +22,11 @@ export const OUTREACH_GANCHOS = {
     },
     B: {
         nome: 'Só redes sociais',
-        ganchoTitulo: 'O Instagram é da Meta. A vossa história também devia ser vossa.',
-        ganchoTexto: 'A conta, os seguidores e as fotografias estão em casa alheia — basta um bloqueio para desaparecer tudo. E ninguém escreve "{{oQueFaz}} em {{zona}}" no Instagram. Escreve no Google.',
+        ganchoTitulo: 'Facebook não é nosso, a vossa história também devia ser vossa.',
+        ganchoTexto: 'A conta, os seguidores e as fotografias estão em casa alheia — basta um bloqueio para desaparecer tudo. E ninguém escreve "{{oQueFaz}} em {{zona}}" no Facebook. Escreve no Google.',
         en: {
-            ganchoTitulo: 'Instagram belongs to Meta. Your story should belong to you.',
-            ganchoTexto: 'The account, the followers and the photos sit in someone else’s house — one block and it all disappears. And nobody types “{{oQueFaz}} in {{zona}}” on Instagram. They type it on Google.'
+            ganchoTitulo: 'Facebook is not ours. Your story should be yours too.',
+            ganchoTexto: 'The account, the followers and the photos sit in someone else’s house — one block and it all disappears. And nobody types “{{oQueFaz}} in {{zona}}” on Facebook. They type it on Google.'
         }
     },
     C: {
