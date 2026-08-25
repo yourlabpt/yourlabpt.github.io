@@ -356,18 +356,40 @@ async function loadMetricas() {
     origens.appendChild(origTitle);
     const origHint = document.createElement('p');
     origHint.className = 'meta';
-    origHint.textContent = 'Demo aberta = o artefacto funciona. Resposta = a abertura funciona. Chamada atendida = a ligação funciona.';
+    origHint.textContent = 'Primeiro sinal de cada lead — não é o número de vezes que a demo abriu.';
     origens.appendChild(origHint);
     const origGrelha = document.createElement('div');
     origGrelha.className = 'metric-grelha';
     origGrelha.append(
         metricCell('Respondeu', String(origem.respondeu || 0), 'saúde da abertura'),
         metricCell('Atendeu a chamada', String(origem.chamada_atendida || 0), 'saúde da ligação'),
-        metricCell('Abriu a demo', String(origem.visitou_demo || 0), 'saúde do artefacto'),
+        metricCell('Abriu a demo', String(origem.visitou_demo || 0), 'primeiro sinal = a página'),
         metricCell('Sem sinal', String(origem.nenhum || 0), 'ainda no escuro')
     );
     origens.appendChild(origGrelha);
     host.appendChild(origens);
+
+    const demo = data.demo || {};
+    const demoBloco = document.createElement('section');
+    demoBloco.className = 'metric-bloco';
+    const demoTitle = document.createElement('h4');
+    demoTitle.textContent = 'Demo — o cliente abriu';
+    demoBloco.appendChild(demoTitle);
+    const demoHint = document.createElement('p');
+    demoHint.className = 'meta';
+    demoHint.textContent = 'Sessões depois do email ou WhatsApp. O teu browser no admin não conta. Refresh na mesma hora = uma abertura.';
+    demoBloco.appendChild(demoHint);
+    const demoGrelha = document.createElement('div');
+    demoGrelha.className = 'metric-grelha';
+    demoGrelha.append(
+        metricCell('Leads que abriram', String(demo.abriram || 0), `de ${demo.enviou || 0} enviados`),
+        metricCell('Aberturas', String(demo.aberturas || 0), 'sessões do cliente'),
+        metricCell('Enviou e ninguém abriu', String(demo.semAbertura || 0), 'já saiu o email ou o WA'),
+        metricCell('Taxa', fmtPct(demo.taxa), 'abriu / enviou'),
+        metricCell('Média', String(demo.media || 0), 'aberturas por lead que abriu')
+    );
+    demoBloco.appendChild(demoGrelha);
+    host.appendChild(demoBloco);
 
     const ganchoLabel = (id) => {
         if (id === 'sem gancho') return 'Sem gancho';
@@ -442,7 +464,7 @@ function parkButton(item, { leadId, onDone, className = 'btn-secondary' }) {
     btn.addEventListener('click', async () => {
         if (!id) return;
         if (!parked) {
-            toast('Encerra no Controlo da lead: data, oferta final e pergunta de referência.');
+            toast('Encerra no Controlo da lead: Como ficou — o que foi o não, a data, e a mensagem.');
             openLeadDossier(id);
             return;
         }

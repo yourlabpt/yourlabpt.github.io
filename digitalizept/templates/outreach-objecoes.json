@@ -1,14 +1,26 @@
 [
   {
+    "id": "sem_interesse",
+    "revisitarMeses": 6,
+    "pt": {
+      "label": "Não temos interesse",
+      "resposta": "Boa tarde.\n\nSem problema nenhum, e obrigado por me responder — já é mais do que muita gente faz.\n\nFica o exemplo guardado. Se um dia fizer sentido, fazemos ao vosso lado — vocês não têm de gastar tempo nisto. Só percebemos o que querem e o valor ajusta-se ao momento do negócio.\n\nContinuação de bom trabalho."
+    },
+    "en": {
+      "label": "We're not interested",
+      "resposta": "Good afternoon.\n\nNo problem at all, and thank you for getting back to me — that is already more than most people do.\n\nThe example stays saved. If it ever makes sense, we do this alongside you — you don't have to spend time on it. We just need to understand what you want, and the price adjusts to where the business is at that moment.\n\nAll the best with the work."
+    }
+  },
+  {
     "id": "preco",
     "revisitarMeses": 6,
     "pt": {
       "label": "É caro",
-      "resposta": "Sem problema nenhum. O exemplo fica guardado, e o valor também — não mexo. Quando fizer mais sentido, é só dizer."
+      "resposta": "O valor é justo e negociável para o momento do negócio — não é uma tabela fixa. Se quiser, passo aí cinco minutos — de manhã ou à tarde é menos mau?"
     },
     "en": {
       "label": "It's expensive",
-      "resposta": "No problem at all. The example stays saved, and so does the price — I won't change it. When the timing is better, just say so."
+      "resposta": "The price is fair and negotiable for where the business is right now — it is not a fixed table. If you like, I can stop by for five minutes — morning or afternoon, whichever is less bad?"
     }
   },
   {
@@ -40,11 +52,11 @@
     "revisitarMeses": 3,
     "pt": {
       "label": "Não tenho tempo",
-      "resposta": "Por isso é que tratamos nós de tudo. Vocês só precisam de estar satisfeitos antes de ir para o ar. Quando é que é menos mau — de manhã ou à tarde?"
+      "resposta": "É isso — vocês não têm de tratar disto. Descobrimos o que querem e fazemos ao vosso lado. Se quiser, passo aí cinco minutos — de manhã ou à tarde é menos mau?"
     },
     "en": {
       "label": "I don't have time",
-      "resposta": "That's why we handle everything. You only need to be satisfied before it goes live. When is less bad — morning or afternoon?"
+      "resposta": "That's the point — you don't have to handle this. We find out what you want and we do it alongside you. If you like, I can stop by for five minutes — morning or afternoon, whichever is less bad?"
     }
   },
   {
@@ -52,11 +64,11 @@
     "revisitarMeses": 6,
     "pt": {
       "label": "Já me ligaram muitos",
-      "resposta": "Compreendo. Eu não estou a vender uma coisa que ainda não existe — o exemplo já está feito, é só para verem. Se não for altura, digo já e não volto a ligar agora."
+      "resposta": "Compreendo. Eu não estou a vender uma coisa que ainda não existe — o exemplo já está feito, é só para verem. Fazemos ao vosso lado; vocês não têm de gastar tempo nisto."
     },
     "en": {
       "label": "Lots of people have already called",
-      "resposta": "I understand. I'm not selling something that does not exist yet — the example is already made, just for you to see. If the timing is wrong, say so and I won't call again now."
+      "resposta": "I understand. I'm not selling something that does not exist yet — the example is already made, just for you to see. We do this alongside you; you don't have to spend time on it."
     }
   },
   {
@@ -76,11 +88,11 @@
     "revisitarMeses": 2,
     "pt": {
       "label": "Tenho de falar com o sócio",
-      "resposta": "Faz todo o sentido. Quer que passe aí cinco minutos para mostrar aos dois ao mesmo tempo? É mais rápido do que estar a explicar por mensagem."
+      "resposta": "Faz todo o sentido. Vocês não têm de tratar disto — descobrimos o que querem e fazemos ao lado. Quer que passe aí cinco minutos para mostrar aos dois ao mesmo tempo?"
     },
     "en": {
       "label": "I need to talk to my partner",
-      "resposta": "That makes complete sense. Want me to stop by for five minutes and show both of you at once? It's faster than explaining over messages."
+      "resposta": "That makes complete sense. You don't have to handle this — we find out what you want and we do it alongside you. Want me to stop by for five minutes and show both of you at once?"
     }
   },
   {

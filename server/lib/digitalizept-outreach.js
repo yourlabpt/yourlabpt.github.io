@@ -65,7 +65,7 @@ Fiz duas coisas para a *{{negocioNome}}*, sem lhe pedir nada. São exemplos — 
 
 {{link}}
 
-Gostou? Marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.`,
+Gostou? Se fizer sentido, marcamos cinco minutos. Fazemos isto ao vosso lado — vocês não têm de gastar tempo a pensar nisto. Só precisamos de perceber o que querem. O valor é justo e ajusta-se ao momento do negócio.`,
 
     2: `No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
 
@@ -80,7 +80,7 @@ Aqui fica a página que lhe mostrei — a história toda num sítio só vosso:
 
 {{link}}
 
-Marcamos {{followupDia}} de manhã? Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.`
+Marcamos {{followupDia}} de manhã? Fazemos isto ao vosso lado — vocês não têm de gastar tempo a pensar nisto. Só precisamos de perceber o que querem. O valor é justo e ajusta-se ao momento do negócio.`
 };
 
 // Lower case, no selling verb: it reads like a note, not a campaign.
@@ -114,7 +114,7 @@ I put two things together for *{{negocioNome}}*, without asking you for anything
 
 {{link}}
 
-If it makes sense, we book a short meeting. We take care of everything — you just need to be happy with it before final delivery.`,
+If it makes sense, we book five minutes. We do this alongside you — you don't have to spend time thinking about it. We just need to understand what you want. The price is fair and it adjusts to where the business is right now.`,
 
     2: `In the email you can see how *{{negocioNome}}* would look when someone searches "{{oQueFaz}} in {{zona}}". And the page that holds the whole story.
 
@@ -129,7 +129,7 @@ Here is the page I showed you — the whole story in one place that is yours:
 
 {{link}}
 
-Shall we meet {{followupDia}} in the morning? We take care of everything — you just need to be happy with it before final delivery.`
+Shall we meet {{followupDia}} in the morning? We do this alongside you — you don't have to spend time thinking about it. We just need to understand what you want. The price is fair and it adjusts to where the business is right now.`
 };
 
 const EMAIL_SUBJECT_EN = 'an example we made for {{negocioNome}}';
@@ -154,10 +154,9 @@ YourLab, {{zona}}
 To leave the list, reply REMOVE.`;
 
 /**
- * Closing copy. Three rules hold across all of it: the example stays saved, the
- * price stays frozen, and the door stays open. "Não o incomodo mais com isto" is
- * allowed — it is respect with an opening in the next sentence, unlike
- * "não volto a incomodar", which is a promise that closes the return.
+ * Closing copy. The example stays saved, we do the work alongside them, and
+ * the door stays open. Price is fair and negotiable for this shop's moment —
+ * never a frozen number glued to a "no".
  */
 const PASSO_TEMPLATES = {
     N1: {
@@ -173,26 +172,30 @@ O exemplo continua guardado, não apago.`,
 The example stays saved on our side; we do not delete it.`
     },
     R1: {
-        pt: `Fica assim então, Sr. {{clienteNome}}. O exemplo da *{{negocioNome}}* fica guardado do nosso lado e o valor fica o mesmo — {{precoCongelado}}, sem IVA.
+        pt: `{{saudacao}}.
 
-{{ofertaFinal}}
+Sem problema nenhum, e obrigado por me responder — já é mais do que muita gente faz.
 
-Volto a dar notícias por volta de {{mesRevisita}}. E já agora — conhece aqui na zona alguém que precise disto?`,
-        en: `Let us leave it like this, {{clienteNome}}. The example for *{{negocioNome}}* stays saved on our side and the price stays the same — {{precoCongelado}}, VAT not included.
+Fica o exemplo da *{{negocioNome}}* guardado. Se um dia fizer sentido, fazemos ao vosso lado — vocês não têm de gastar tempo nisto. Só percebemos o que querem e o valor ajusta-se ao momento do negócio.
 
-{{ofertaFinal}}
+Continuação de bom trabalho.`,
+        en: `{{saudacao}}.
 
-I will get back to you around {{mesRevisita}}. And while I have you — do you know anyone here in the area who needs this?`
+No problem at all, and thank you for getting back to me — that is already more than most people do.
+
+The example for *{{negocioNome}}* stays saved. If it ever makes sense, we do this alongside you — you don't have to spend time on it. We just need to understand what you want, and the price adjusts to where the business is at that moment.
+
+All the best with the work.`
     },
     REVISITA: {
         pt: `{{saudacao}} Sr. {{clienteNome}}, é {{vendedorArtigo}} {{vendedorNome}} da YourLab. Falámos em {{mesAnterior}} e ficou combinado eu voltar por esta altura.
 
-O exemplo da *{{negocioNome}}* continua guardado, tal como estava, e o valor também — {{precoCongelado}}, sem IVA.
+O exemplo da *{{negocioNome}}* continua guardado. Fazemos ao vosso lado — vocês não têm de gastar tempo nisto. O valor ajusta-se ao momento do negócio.
 
 Quer que lhe mande outra vez?`,
         en: `{{saudacao}} {{clienteNome}}, this is {{vendedorNome}} from YourLab. We spoke back in {{mesAnterior}} and we agreed I would come back around now.
 
-The example for *{{negocioNome}}* is still saved, exactly as it was, and so is the price — {{precoCongelado}}, VAT not included.
+The example for *{{negocioNome}}* is still saved. We do this alongside you — you don't have to spend time on it. The price adjusts to where the business is right now.
 
 Would you like me to send it again?`
     },

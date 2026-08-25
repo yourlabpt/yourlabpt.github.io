@@ -95,10 +95,27 @@ function dataHora(iso) {
     });
 }
 
+function linhaDemoAberturas(d) {
+    if (!d || !d.enviou) return '';
+    if (!d.cliente) return 'Ainda não abriu (já enviaste).';
+    const vezes = d.cliente === 1 ? '1 vez' : `${d.cliente} vezes`;
+    if (d.depoisWa > 0) return `Abriu ${vezes} depois do WhatsApp.`;
+    if (d.depoisEmail > 0) return `Abriu ${vezes} depois do email.`;
+    return `Abriu ${vezes}.`;
+}
+
 function proximaSemana(meses = 3) {
     const d = new Date();
     d.setMonth(d.getMonth() + meses);
     return d.toISOString().slice(0, 10);
+}
+
+function proximoJaneiro() {
+    return `${new Date().getFullYear() + 1}-01-15`;
+}
+
+function dataParaFecho(tipo) {
+    return tipo === 'e_nao' ? proximoJaneiro() : proximaSemana(3);
 }
 
 const COMO_FAZER = {
@@ -114,7 +131,6 @@ export function renderLeadProcess(host, {
     let view = null;
     let timer = null;
     let abrirFecho = false;
-    let fechoWhatsappAberto = false;
 
     const toast = (msg, bad) => { if (onToast) onToast(msg, bad); };
 
@@ -204,6 +220,8 @@ export function renderLeadProcess(host, {
         if (view.revisitarEm) {
             statusHost.appendChild(el('p', 'meta', `Revisita marcada para ${formatCallDue(view.revisitarEm) || view.revisitarEm}.`));
         }
+        const demoLinha = linhaDemoAberturas(view.demoAberturas);
+        if (demoLinha) statusHost.appendChild(el('p', 'meta', demoLinha));
         if (view.proximaAcaoDetalhe) {
             const ir = el('button', 'btn-primary', 'Fazer agora');
             ir.type = 'button';
@@ -375,7 +393,7 @@ export function renderLeadProcess(host, {
             box.appendChild(el('h4', '', 'Nada pendente'));
             box.appendChild(el('p', 'meta', view.estado === 'REMOVIDO'
                 ? 'O cliente pediu REMOVER. Todos os canais estão fechados.'
-                : 'Este lead saiu do ciclo ativo. Reabre pelo encerramento em baixo, ou espera a revisita.'));
+                : 'Este lead saiu do ciclo ativo. Reabre por Como ficou em baixo, ou espera a revisita.'));
             return box;
         }
         const instrucoes = detalhe.instrucoes || {};
@@ -393,7 +411,7 @@ export function renderLeadProcess(host, {
         if (detalhe.passo === 'R1') {
             const guia = instrucoesBox(instrucoes);
             if (guia) box.appendChild(guia);
-            box.appendChild(el('p', 'meta', 'Os três movimentos estão em Encerrar, a seguir. Abre o WhatsApp de lá, envia, e confirma.'));
+            box.appendChild(el('p', 'meta', 'O que foi este não? Grava em Como ficou, em baixo. Abre o WhatsApp de lá, envia, e confirma.'));
             return box;
         }
 
@@ -453,16 +471,50 @@ export function renderLeadProcess(host, {
             titulo: 'Objeções',
             onPick: (item) => {
                 const extra = item.resposta || '';
-                texto.value = [texto.value.trim(), extra].filter(Boolean).join('\n\n');
+                const recusa = item.id === 'sem_interesse';
+                texto.value = recusa
+                    ? extra
+                    : [texto.value.trim(), extra].filter(Boolean).join('\n\n');
                 const meses = Number(item.revisitarMeses) || 3;
                 view._objecao = item.id;
-                view._revisitarSugerida = proximaSemana(meses);
+                view._revisitarSugerida = recusa ? proximoJaneiro() : proximaSemana(meses);
                 const dataInput = host.querySelector('[data-revisitar]');
-                if (dataInput) dataInput.value = view._revisitarSugerida;
+                if (dataInput) {
+                    dataInput.value = view._revisitarSugerida;
+                    dataInput.dataset.edited = '';
+                }
+                if (recusa) {
+                    view._fechoTipo = 'e_nao';
+                    view._fechoMsg = extra;
+                    abrirFecho = true;
+                    const msg = host.querySelector('[data-fecho-msg]');
+                    if (msg) {
+                        msg.value = extra;
+                        msg.dispatchEvent(new Event('input'));
+                    }
+                    const pick = host.querySelector('[data-fecho-tipo="e_nao"]');
+                    if (pick) pick.click();
+                    const node = host.querySelector('.lead-proc-fecho');
+                    if (node) {
+                        node.open = true;
+                        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    toast('É não. Grava em Como ficou — sem perguntar porquê.');
+                    return;
+                }
                 toast(`Objeção «${item.label}». Revisita sugerida daqui a ${meses} meses.`);
             }
         });
-        if (objecoes && detalhe.canal === 'ligacao') box.appendChild(objecoes);
+        if (objecoes && (detalhe.canal === 'ligacao' || detalhe.canal === 'whatsapp')) {
+            box.appendChild(objecoes);
+        }
+        if (detalhe.canal === 'whatsapp') {
+            box.appendChild(el(
+                'p',
+                'meta',
+                'Uma mensagem. Se for não, não perguntes porquê; não cites euros depois do não.'
+            ));
+        }
 
         const filtros = chipsBox(view.filtrosAtendedor, {
             titulo: 'O atendedor diz…',
@@ -745,7 +797,7 @@ export function renderLeadProcess(host, {
         box.appendChild(el('summary', '', n === 1 ? 'O que já aconteceu · 1 toque' : `O que já aconteceu · ${n} toques`));
         if (view.processo && view.processo.sinal) {
             const origem = SINAL_ORIGEM_LABEL[view.processo.sinalOrigem] || view.processo.sinalOrigem;
-            box.appendChild(el('p', 'meta', `Sinal: ${origem}. Se foste tu a abrir a demo, isto não conta — recarrega o painel depois de um cliente real.`));
+            box.appendChild(el('p', 'meta', `Sinal: ${origem}. Aberturas tuas no admin já não contam — só o cliente, depois do email ou do WhatsApp.`));
         }
         const lista = el('ul', 'lead-proc-toques');
         toques.forEach((t) => {
@@ -777,91 +829,163 @@ export function renderLeadProcess(host, {
 
     /* ------------------------------------------------------------------ fecho */
 
+    function buildFechoWaUrl(mensagem) {
+        if (view.fecho && view.fecho.url) {
+            const base = String(view.fecho.url).split('?')[0];
+            if (base) return `${base}?text=${encodeURIComponent(mensagem || '')}`;
+        }
+        const c = view.contacto || {};
+        const tel = digitsPhone(c.whatsapp || c.telefone);
+        return tel ? `https://wa.me/${tel}?text=${encodeURIComponent(mensagem || '')}` : '';
+    }
+
+    function fechoTipoInicial() {
+        if (view._fechoTipo) return view._fechoTipo;
+        const last = (view.toques || [])[0];
+        if (last && last.resultado === 'nao_agora') return 'nao_agora';
+        if (view.estado === 'ADORMECIDO') return 'nao_agora';
+        return 'e_nao';
+    }
+
     function fechoCard() {
         const box = document.createElement('details');
         box.className = 'lead-proc-fecho';
         const passo = view.proximaAcao && view.proximaAcao.passo;
+        const tipoInicial = fechoTipoInicial();
+        view._fechoTipo = tipoInicial;
         box.open = abrirFecho
             || passo === 'R1'
             || view.estado === 'RECUSADO';
-        box.appendChild(el('summary', '', 'Encerrar'));
+        box.appendChild(el('summary', '', 'Como ficou'));
         if (view.estado === 'REMOVIDO') {
             box.appendChild(el('p', 'meta', 'Já está removido. Nada mais sai daqui.'));
             return box;
         }
-        box.appendChild(el('p', 'meta', 'Um não com data não é um beco. Os três movimentos são obrigatórios: a data em que voltas, a oferta que fica com ele, e a pergunta de referência.'));
+        box.appendChild(el('p', 'meta', 'Ele disse não. Grava o que é, quando voltas, e a mensagem que fica com ele.'));
 
+        const escolhas = el('div', 'lead-proc-fecho-escolhas');
+        const defs = [
+            { id: 'nao_agora', titulo: 'Não agora', detalhe: 'Má altura. Voltas na data.' },
+            { id: 'e_nao', titulo: 'É não', detalhe: 'Não faz falta. O exemplo fica; voltas se um dia fizer sentido.' },
+            { id: 'parar', titulo: 'Pediu para parar', detalhe: 'REMOVER. Sem data, sem mensagem de venda.', quiet: true }
+        ];
+        const botoes = {};
+        defs.forEach((d) => {
+            const btn = el('button', `lead-proc-fecho-escolha${d.quiet ? ' lead-proc-fecho-parar' : ''}`);
+            btn.type = 'button';
+            btn.setAttribute('data-fecho-tipo', d.id);
+            btn.appendChild(el('strong', '', d.titulo));
+            btn.appendChild(el('span', '', d.detalhe));
+            escolhas.appendChild(btn);
+            botoes[d.id] = btn;
+        });
+        box.appendChild(escolhas);
+
+        const blocoActivo = el('div', 'lead-proc-fecho-activo');
         const data = el('input', 'field-input');
         data.type = 'date';
         data.setAttribute('data-revisitar', '1');
-        data.value = view._revisitarSugerida || proximaSemana(3);
-        const oferta = el('textarea', 'field-input');
-        oferta.rows = 3;
-        oferta.placeholder = 'A oferta final que fica com ele, sem compromisso.';
-        // Pre-filled by the active hook — E gets the Google listing fix, C the
-        // site report, everything else the example as a PDF.
-        oferta.value = (view.processo && view.processo.ofertaFinal)
-            || (view.fecho && view.fecho.ofertaFinalSugerida)
-            || '';
-        if (view.fecho && view.fecho.precoCongelado) {
-            box.appendChild(el('p', 'meta', `O valor que fica congelado: ${view.fecho.precoCongelado}, sem IVA.`));
-        }
+        data.value = view._revisitarSugerida || dataParaFecho(tipoInicial);
+        data.addEventListener('change', () => { data.dataset.edited = '1'; });
+
+        const msg = el('textarea', 'field-input lead-proc-msg');
+        msg.rows = 8;
+        msg.setAttribute('data-fecho-msg', '1');
+        msg.value = view._fechoMsg || (view.fecho && view.fecho.mensagem) || '';
+
+        const refWrap = document.createElement('details');
+        refWrap.className = 'lead-proc-fecho-ref';
+        refWrap.appendChild(el('summary', '', 'Se saiu um nome, anota aqui'));
         const referencia = el('input', 'field-input');
-        referencia.placeholder = 'Perguntei — e o que disse';
-        const grid = el('div', 'dossier-grid');
-        grid.append(
-            fieldWrap('Voltar a dar notícias em', data),
-            fieldWrap('Pergunta de referência', referencia)
+        referencia.placeholder = 'Nome e o que disse';
+        refWrap.appendChild(referencia);
+
+        blocoActivo.append(
+            el('p', 'meta', 'Sem data este lead desaparece. Marca quando voltas — mesmo que seja daqui a meses.'),
+            fieldWrap('Volto a dar notícias em', data),
+            fieldWrap('Mensagem', msg),
+            refWrap
         );
-        box.append(grid, fieldWrap('Oferta final', oferta));
+        box.appendChild(blocoActivo);
 
         const acoes = el('div', 'lead-proc-acoes');
-        if (view.fecho && view.fecho.url) {
-            const abrir = el('a', 'btn-primary', 'Abrir WhatsApp do fecho');
-            abrir.href = view.fecho.url;
-            abrir.target = '_blank';
-            abrir.rel = 'noopener';
-            abrir.addEventListener('click', () => { fechoWhatsappAberto = true; });
-            acoes.appendChild(abrir);
+        const abrir = el('a', 'btn-secondary', 'Abrir WhatsApp');
+        abrir.target = '_blank';
+        abrir.rel = 'noopener';
+        function refreshWa() {
+            const url = buildFechoWaUrl(msg.value);
+            if (url) {
+                abrir.href = url;
+                abrir.hidden = view._fechoTipo === 'parar';
+            } else {
+                abrir.removeAttribute('href');
+                abrir.hidden = true;
+            }
         }
-        const fechar = (estado, resultado, label, classe) => {
-            const btn = el('button', classe, label);
-            btn.type = 'button';
-            btn.addEventListener('click', () => {
-                if (view.fecho && view.fecho.url && !fechoWhatsappAberto) {
-                    if (!window.confirm('A oferta ainda não saiu no WhatsApp. Abriste a mensagem? Sem isso o fecho não chega ao cliente.')) return;
-                }
+        msg.addEventListener('input', () => {
+            view._fechoMsg = msg.value;
+            refreshWa();
+        });
+        acoes.appendChild(abrir);
+
+        const gravar = el('button', 'btn-primary', 'Gravar — é não');
+        gravar.type = 'button';
+        gravar.addEventListener('click', () => {
+            const tipo = view._fechoTipo;
+            if (tipo === 'parar') {
+                if (!window.confirm('Fechar todos os canais para este lead? Isto não se desfaz daqui.')) return;
                 act(() => call(
                     `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/close`,
-                    {
-                        method: 'POST',
-                        body: {
-                            estado,
-                            resultado,
-                            revisitarEm: data.value ? new Date(data.value).toISOString() : '',
-                            ofertaFinal: oferta.value,
-                            referenciaPedida: referencia.value,
-                            objecao: view._objecao || '',
-                            texto: (view.fecho && view.fecho.mensagem) || ''
-                        }
-                    }
-                ), btn);
-            });
-            acoes.appendChild(btn);
-        };
-        fechar('ADORMECIDO', 'nao_agora', 'Não agora', 'btn-secondary');
-        fechar('RECUSADO', 'e_nao', 'É não', 'btn-secondary');
-        const remover = el('button', 'btn-secondary lead-proc-remover', 'Pediu REMOVER');
-        remover.type = 'button';
-        remover.addEventListener('click', () => {
-            if (!window.confirm('Fechar todos os canais para este lead? Isto não se desfaz daqui.')) return;
+                    { method: 'POST', body: { estado: 'REMOVIDO' } }
+                ), gravar);
+                return;
+            }
+            if (!data.value) {
+                toast('Sem data este lead desaparece. Marca quando voltas.', true);
+                return;
+            }
+            const estado = tipo === 'nao_agora' ? 'ADORMECIDO' : 'RECUSADO';
+            const resultado = tipo === 'nao_agora' ? 'nao_agora' : 'e_nao';
             act(() => call(
                 `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/close`,
-                { method: 'POST', body: { estado: 'REMOVIDO' } }
-            ), remover);
+                {
+                    method: 'POST',
+                    body: {
+                        estado,
+                        resultado,
+                        revisitarEm: new Date(data.value).toISOString(),
+                        referenciaPedida: referencia.value,
+                        objecao: view._objecao || '',
+                        texto: msg.value
+                    }
+                }
+            ), gravar);
         });
-        acoes.appendChild(remover);
+        acoes.appendChild(gravar);
         box.appendChild(acoes);
+
+        function setTipo(id) {
+            view._fechoTipo = id;
+            Object.keys(botoes).forEach((k) => {
+                botoes[k].classList.toggle('is-on', k === id);
+            });
+            const parar = id === 'parar';
+            blocoActivo.hidden = parar;
+            gravar.textContent = id === 'nao_agora'
+                ? 'Gravar — não agora'
+                : id === 'parar'
+                    ? 'Gravar — parar de contactar'
+                    : 'Gravar — é não';
+            if (!parar && data.dataset.edited !== '1') {
+                data.value = dataParaFecho(id);
+                view._revisitarSugerida = data.value;
+            }
+            refreshWa();
+        }
+        Object.keys(botoes).forEach((id) => {
+            botoes[id].addEventListener('click', () => setTipo(id));
+        });
+        setTipo(tipoInicial);
         return box;
     }
 

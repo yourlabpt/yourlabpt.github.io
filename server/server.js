@@ -2206,42 +2206,12 @@ function mesDe(iso, lang) {
     return nomes[d.getMonth()] || '';
 }
 
-const OFERTA_FINAL = {
-    E: {
-        pt: 'E fica-lhe isto, sem compromisso: mando-lhe por escrito o que está errado na ficha do Google e como se corrige. Corrija o senhor, ou quem quiser — não precisa de nós para isso.',
-        en: 'And this stays with you, no strings: I will write down what is wrong on the Google listing and how to fix it. Fix it yourself, or have anyone else do it — you do not need us for that.'
-    },
-    C: {
-        pt: 'E fica-lhe isto: mando-lhe numa folha o que está a falhar no site atual — o que aparece no telemóvel, o que o Google não lê. Serve-lhe seja com quem for.',
-        en: 'And this stays with you: one page listing what is failing on the current site — what shows on a phone, what Google cannot read. It serves you whoever you work with.'
-    },
-    default: {
-        pt: 'E fica-lhe o exemplo em PDF, para ter à mão. Se um dia mostrar a alguém, mostre — o trabalho é vosso.',
-        en: 'And the example stays with you as a PDF, to keep at hand. If you ever show it to someone, show it — the work is yours.'
-    }
-};
-
-function ofertaFinalFor(ganchoId, lang) {
-    const en = outreach.normalizeOutreachLang(lang) === 'en' ? 'en' : 'pt';
-    const pack = OFERTA_FINAL[String(ganchoId || '').toUpperCase()] || OFERTA_FINAL.default;
-    return pack[en];
-}
-
-/** Frozen price and final offer are what keep a "no" from being a dead end. */
-function processoCopyFields(processo, followup, ctx) {
-    const lang = outreach.normalizeOutreachLang(followup && followup.lang);
+/** Optional leftover copy from an old close. New closes do not freeze a price. */
+function processoCopyFields(processo) {
     const congelado = Number(processo && processo.precoCongelado) || 0;
-    const prices = outreach.offerPrices({
-        includePrices: true,
-        campanhaPct: followup ? followup.campanhaPct : 0,
-        campanhaShowPrices: followup ? followup.campanhaShowPrices : true
-    });
-    const valor = congelado || prices.tudo;
     return {
-        precoCongelado: `${valor} €`,
-        ofertaFinal: processo && processo.ofertaFinal
-            ? processo.ofertaFinal
-            : ofertaFinalFor(ctx && ctx.ganchoId, lang),
+        precoCongelado: congelado ? `${congelado} €` : '',
+        ofertaFinal: (processo && processo.ofertaFinal) || '',
         mesRevisita: '',
         mesAnterior: ''
     };
@@ -4977,8 +4947,6 @@ function buildProcessoView(db, leadId, req) {
             lista: outreach.listGanchos()
         },
         fecho: {
-            ofertaFinalSugerida: ofertaFinalFor(packed.ctx.ganchoId, packed.followup.lang),
-            precoCongelado: packed.ctx.precoCongelado,
             mensagem: outreach.textForPasso('R1', packed.ctx, packed.followup.edits),
             url: waUrlFor(telefone, outreach.textForPasso('R1', packed.ctx, packed.followup.edits))
         },
@@ -5029,7 +4997,11 @@ function buildProcessoView(db, leadId, req) {
             sinaisDeMovimento: packed.followup.sinaisDeMovimento === true,
             siteVelho: packed.followup.siteVelho === true,
             unsubscribed: packed.followup.unsubscribed === true
-        }
+        },
+        demoAberturas: leadProcess.resumoDemoAberturas(
+            leadProcess.listDemoVisitas(db, leadId),
+            snapshot.toques || []
+        )
     };
 }
 
@@ -5154,42 +5126,32 @@ app.post('/api/digitalizept/leads/:leadId/process/close', requireDigitalizept, (
         const leadId = cleanText(req.params.leadId, 80);
         const body = req.body || {};
         const db = getDigitalizeptDb();
-        const estado = leadProcess.normalizeEstado(body.estado);
-        if (!['RECUSADO', 'ADORMECIDO', 'REMOVIDO'].includes(estado)) {
-            return res.status(400).json({ error: 'Estado de fecho inválido.' });
-        }
+        const fecho = leadProcess.validarFecho({
+            estado: body.estado,
+            revisitarEm: body.revisitarEm
+        });
+        if (fecho.error) return res.status(400).json({ error: fecho.error });
+        const estado = fecho.estado;
         const snapshot = leadProcess.recomputeProcesso(db, leadId);
         if (!snapshot) return res.status(404).json({ error: 'Lead não encontrado.' });
         const revisitarEm = cleanText(body.revisitarEm, 40);
-        if (estado !== 'REMOVIDO' && !revisitarEm) {
-            return res.status(400).json({
-                error: 'Um não sem data fecha a porta. Marque quando voltas a dar notícias.'
-            });
-        }
         const ofertaFinal = cleanText(body.ofertaFinal, 600);
         const referenciaPedida = cleanText(body.referenciaPedida, 120);
-        if (estado !== 'REMOVIDO') {
-            if (!ofertaFinal) {
-                return res.status(400).json({ error: 'Falta a oferta final — é o que mantém a porta aberta.' });
-            }
-            if (!referenciaPedida) {
-                return res.status(400).json({ error: 'Falta registar a pergunta de referência.' });
-            }
-            if (snapshot.processo.ofertaFinalEnviada === true) {
-                return res.status(409).json({ error: 'A oferta final já saiu. Oferta repetida deixa de ser oferta.' });
-            }
-        }
         if (estado === 'REMOVIDO') {
             const followup = outreach.parseFollowup(snapshot.row.followup_json);
             followup.unsubscribed = true;
             saveLeadFollowup(db, leadId, followup);
         }
-        const precoCongelado = Math.max(0, Math.round(Number(body.precoCongelado) || 0))
-            || outreach.offerPrices({
-                includePrices: true,
-                campanhaPct: snapshot.followup.campanhaPct,
-                campanhaShowPrices: snapshot.followup.campanhaShowPrices
-            }).tudo;
+        const processo = {};
+        if (estado !== 'REMOVIDO') {
+            const objecao = cleanText(body.objecao, 60);
+            if (objecao) processo.objecao = objecao;
+            if (referenciaPedida) processo.referenciaPedida = referenciaPedida;
+            if (ofertaFinal) {
+                processo.ofertaFinal = ofertaFinal;
+                processo.ofertaFinalEnviada = true;
+            }
+        }
         const feito = leadProcess.registarToque(db, leadId, {
             passo: estado === 'REMOVIDO' ? 'REMOVER' : 'R1',
             canal: estado === 'REMOVIDO' ? '' : 'whatsapp',
@@ -5201,15 +5163,7 @@ app.post('/api/digitalizept/leads/:leadId/process/close', requireDigitalizept, (
             lang: snapshot.followup.lang,
             proximoEstado: estado,
             revisitarEm: estado === 'REMOVIDO' ? '' : revisitarEm,
-            processo: estado === 'REMOVIDO'
-                ? {}
-                : {
-                    ofertaFinal,
-                    ofertaFinalEnviada: true,
-                    referenciaPedida,
-                    precoCongelado,
-                    objecao: cleanText(body.objecao, 60)
-                }
+            processo
         });
         return res.json({ ok: true, ...processoPayload(feito) });
     } catch (err) {
@@ -5238,7 +5192,8 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
                 leadId: row.id,
                 slug,
                 referer: req.get('referer') || '',
-                userAgent: req.get('user-agent') || ''
+                userAgent: req.get('user-agent') || '',
+                seller: leadProcess.cookieSeller(req.get('cookie') || '')
             });
             if (novo) leadProcess.recomputeProcesso(db, row.id);
         } catch (err) {

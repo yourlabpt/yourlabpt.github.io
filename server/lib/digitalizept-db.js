@@ -266,8 +266,12 @@ function migrate(db) {
         lead_id TEXT NOT NULL REFERENCES lead(id),
         slug TEXT NOT NULL DEFAULT '',
         referer TEXT NOT NULL DEFAULT '',
+        fonte TEXT NOT NULL DEFAULT '',
         criado_em TEXT NOT NULL
     )`);
+    addMissingColumns(db, 'demo_visita', {
+        fonte: "TEXT NOT NULL DEFAULT ''"
+    });
     db.exec(`CREATE INDEX IF NOT EXISTS idx_demo_visita_lead ON demo_visita(lead_id, criado_em)`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS app_setting (

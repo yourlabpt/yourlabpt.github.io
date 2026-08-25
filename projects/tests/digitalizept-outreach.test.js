@@ -71,6 +71,8 @@ describe('digitalizept outreach', () => {
         assert.match(wa1, /Quando alguém vos recomenda/);
         assert.doesNotMatch(wa1, /2026/);
         assert.match(wa1, /São exemplos/);
+        assert.match(wa1, /ao vosso lado/);
+        assert.doesNotMatch(wa1, /Tratamos de tudo/);
         assert.doesNotMatch(wa1, /café do Zé/);
 
         // No amounts on a cold lead: the seller has to turn prices on.
@@ -80,6 +82,13 @@ describe('digitalizept outreach', () => {
         assert.match(wa2, /história toda/);
         assert.doesNotMatch(wa2, /demonstrador/);
         assert.doesNotMatch(wa2, /google\.com\/maps/);
+
+        const r1 = textForPasso('R1', ctx);
+        assert.match(r1, /ao vosso lado/);
+        assert.match(r1, /Talho da Costa/);
+        assert.doesNotMatch(r1, /€/);
+        assert.doesNotMatch(r1, /conhece/);
+        assert.doesNotMatch(r1, /IVA/);
 
         const html = fillHtmlTemplate(
             'Olá {{negocioNome}} em {{zona}} <a href="{{link}}">x</a>',
@@ -279,7 +288,8 @@ describe('digitalizept outreach', () => {
         assert.doesNotMatch(html, /2026 e a vossa história/);
         const wa1 = waTextForStep(1, ctx);
         assert.match(wa1, /Facebook não é nosso/);
-        assert.match(wa1, /Marcamos uma conversa/);
+        assert.match(wa1, /marcamos cinco minutos/);
+        assert.match(wa1, /ao vosso lado/);
         assert.doesNotMatch(wa1, /não volto a incomodar/);
         assert.doesNotMatch(wa1, /2026/);
         const text = renderEmailText(ctx);

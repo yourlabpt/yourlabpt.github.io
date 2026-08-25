@@ -4039,3 +4039,56 @@ a.btn-secondary {
 .lead-proc-chip:hover {
     background: var(--surface-muted, rgba(0, 0, 0, 0.04));
 }
+
+.lead-proc-fecho-escolhas {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0 14px;
+}
+
+.lead-proc-fecho-escolha {
+    appearance: none;
+    text-align: left;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.16));
+    background: var(--surface-color, #fff);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.lead-proc-fecho-escolha strong {
+    display: block;
+}
+
+.lead-proc-fecho-escolha span {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.85rem;
+    color: var(--text-muted, #5a5348);
+}
+
+.lead-proc-fecho-escolha.is-on {
+    border-color: #1f1f1f;
+    background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+}
+
+.lead-proc-fecho-parar {
+    opacity: 0.82;
+}
+
+.lead-proc-fecho-ref {
+    margin-top: 8px;
+}
+
+.lead-proc-fecho-ref > summary {
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--text-muted, #5a5348);
+    list-style: none;
+}
+
+.lead-proc-fecho-ref > summary::-webkit-details-marker {
+    display: none;
+}

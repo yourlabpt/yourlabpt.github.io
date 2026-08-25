@@ -198,8 +198,8 @@ const INSTRUCOES = {
     LIG2: {
         titulo: 'Ligação 2 — a última',
         objetivo: 'Sair com data ou com um não claro. A pergunta é: é não, ou é não agora? Quase todos escolhem não agora — que é uma data.',
-        naoFazer: 'Não argumentar contra o não. Termina sempre com a pergunta de referência: conhece aqui na zona alguém que precise disto?',
-        registar: 'Não agora pede a data. É não abre o fecho com a oferta final.'
+        naoFazer: 'Não argumentar contra o não. Não perguntes o porquê nem cites euros depois do não.',
+        registar: 'Não agora pede a data. É não abre Como ficou.'
     },
     EMAIL2: {
         titulo: 'Email 2 — fecho do ciclo',
@@ -214,10 +214,10 @@ const INSTRUCOES = {
         registar: 'Envia e marca como enviado.'
     },
     R1: {
-        titulo: 'Fecho com porta aberta',
-        objetivo: 'Três movimentos, por esta ordem: a data em que voltas, a oferta final que fica com ele, e a pergunta de referência.',
-        naoFazer: 'Não descontar para reabrir. O valor fica congelado — descontar ensina o cliente a que esperar compensa.',
-        registar: 'Grava a data, a oferta final e se pediste referência.'
+        titulo: 'Como ficou',
+        objetivo: 'O que foi este não? Grava se é não agora ou é não, a data em que voltas, e a mensagem que fica com ele.',
+        naoFazer: 'Não vender depois do não. Sem oferta final, sem preço congelado, sem pergunta de referência.',
+        registar: 'Abre o WhatsApp, envia a mensagem curta, e grava.'
     },
     REVISITA: {
         titulo: 'Revisita — a data chegou',
@@ -958,7 +958,7 @@ function bloqueios({ estado, processo = {}, toques = [], passo = '', revisitarEm
     if (estado === 'RECUSADO' && !revisitarEm) {
         lista.push({
             id: 'sem_revisita',
-            motivo: 'Um não sem data fecha a porta. Grava a data da revisita antes de encerrar.'
+            motivo: 'Sem data este lead desaparece. Marca quando voltas a dar notícias.'
         });
     }
     if (passo === 'R1' && processo.ofertaFinalEnviada === true) {
@@ -968,6 +968,17 @@ function bloqueios({ estado, processo = {}, toques = [], passo = '', revisitarEm
         });
     }
     return lista;
+}
+
+function validarFecho({ estado, revisitarEm } = {}) {
+    const alvo = normalizeEstado(estado);
+    if (!['RECUSADO', 'ADORMECIDO', 'REMOVIDO'].includes(alvo)) {
+        return { error: 'Estado de fecho inválido.' };
+    }
+    if (alvo !== 'REMOVIDO' && !cleanStr(revisitarEm, 40)) {
+        return { error: 'Sem data este lead desaparece. Marca quando voltas a dar notícias.' };
+    }
+    return { ok: true, estado: alvo };
 }
 
 /* ---------------------------------------------------------------- persistência */
@@ -981,8 +992,63 @@ function listToques(db, leadId) {
 }
 
 function countDemoVisitas(db, leadId) {
-    const row = db.prepare('SELECT COUNT(*) AS n FROM demo_visita WHERE lead_id = ?').get(leadId);
+    const row = db.prepare(`
+        SELECT COUNT(*) AS n FROM demo_visita
+        WHERE lead_id = ? AND fonte != 'vendedor'
+    `).get(leadId);
     return row ? Number(row.n) || 0 : 0;
+}
+
+function listDemoVisitas(db, leadId) {
+    return db.prepare(
+        'SELECT fonte, criado_em FROM demo_visita WHERE lead_id = ? ORDER BY criado_em ASC'
+    ).all(leadId);
+}
+
+function cookieSeller(raw) {
+    return /(?:^|;\s*)digitalizept_seller=1(?:;|$)/.test(String(raw || ''));
+}
+
+function refererYourLab(referer) {
+    const ref = String(referer || '').toLowerCase();
+    return ref.includes('/digitalizept/') || ref.includes('admin.html');
+}
+
+function primeiroEnvioDoLead(toques = []) {
+    const email = toques
+        .filter((t) => t.passo === 'EMAIL1' && t.estado === 'feito' && t.executado_em)
+        .map((t) => t.executado_em)
+        .sort()[0] || '';
+    const wa = toques
+        .filter((t) => t.passo === 'WA1' && t.estado === 'feito' && t.executado_em)
+        .map((t) => t.executado_em)
+        .sort()[0] || '';
+    const quando = [email, wa].filter(Boolean).sort()[0] || '';
+    return { email, wa, quando };
+}
+
+function resumoDemoAberturas(visitas = [], toques = []) {
+    const envio = primeiroEnvioDoLead(toques);
+    let vendedor = 0;
+    let cliente = 0;
+    let depoisEmail = 0;
+    let depoisWa = 0;
+    visitas.forEach((v) => {
+        if (String(v.fonte || '') === 'vendedor') {
+            vendedor += 1;
+            return;
+        }
+        if (envio.quando && String(v.criado_em || '') >= envio.quando) cliente += 1;
+        if (envio.email && String(v.criado_em || '') >= envio.email) depoisEmail += 1;
+        if (envio.wa && String(v.criado_em || '') >= envio.wa) depoisWa += 1;
+    });
+    return {
+        cliente,
+        vendedor,
+        depoisEmail,
+        depoisWa,
+        enviou: Boolean(envio.quando)
+    };
 }
 
 function loadContext(db, leadId) {
@@ -1208,22 +1274,34 @@ function registarVisitaRua(db, leadId, { nota = '', experiencia = '' } = {}) {
     });
 }
 
-/** Records a demo page hit. Deduplicated by hour so a refresh is not a new signal. */
-function registarVisitaDemo(db, { leadId, slug = '', referer = '', userAgent = '' } = {}) {
+/** Records a demo page hit. Deduplicated by hour and fonte so a refresh is not a new signal. */
+function registarVisitaDemo(db, {
+    leadId, slug = '', referer = '', userAgent = '', seller = false
+} = {}) {
     if (!leadId || !looksLikeBrowser(userAgent)) return false;
-    const ref = String(referer || '').toLowerCase();
-    if (ref.includes('admin.html') || ref.includes('/digitalizept/admin')) return false;
+    const sellerHit = seller === true || refererYourLab(referer);
+    const primeiro = primeiroEnvioDoLead(listToques(db, leadId));
+    const fonte = (!sellerHit && primeiro.quando) ? 'cliente' : 'vendedor';
     const agora = nowIso();
     const limite = new Date(new Date(agora).getTime() - 3600000).toISOString();
-    const recente = db.prepare(
-        'SELECT id FROM demo_visita WHERE lead_id = ? AND criado_em >= ? LIMIT 1'
-    ).get(leadId, limite);
+    const recente = db.prepare(`
+        SELECT id FROM demo_visita
+        WHERE lead_id = ? AND fonte = ? AND criado_em >= ?
+        LIMIT 1
+    `).get(leadId, fonte, limite);
     if (recente) return false;
     db.prepare(`
-        INSERT INTO demo_visita (id, lead_id, slug, referer, criado_em)
-        VALUES (?, ?, ?, ?, ?)
-    `).run(crypto.randomUUID(), leadId, cleanStr(slug, 120), cleanStr(referer, 300), agora);
-    return true;
+        INSERT INTO demo_visita (id, lead_id, slug, referer, fonte, criado_em)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+        crypto.randomUUID(),
+        leadId,
+        cleanStr(slug, 120),
+        cleanStr(referer, 300),
+        fonte,
+        agora
+    );
+    return fonte === 'cliente';
 }
 
 const TRILHO_PRINCIPAL = [
@@ -1341,7 +1419,7 @@ function steerProcesso(db, leadId, { acao = '', passo = '', estado = '' } = {}) 
                 limparEstado: true
             });
         }
-        if (alvo === 'REMOVIDO') return { error: 'Para REMOVER, usa Encerrar.' };
+        if (alvo === 'REMOVIDO') return { error: 'Para REMOVER, usa Como ficou.' };
         return recomputeProcesso(db, leadId, {
             patchProcesso: { estadoTravado: alvo },
             forcarEstado: alvo,
@@ -1525,15 +1603,43 @@ function diagnosticar({ geral, ratios, porOrigem, porCategoria }) {
     return linhas.slice(0, 2);
 }
 
+function metricasDemo(leads, toquesPorLead, visitasPorLead) {
+    let enviou = 0;
+    let abriram = 0;
+    let aberturas = 0;
+    leads.forEach((row) => {
+        const r = resumoDemoAberturas(visitasPorLead[row.id] || [], toquesPorLead[row.id] || []);
+        if (!r.enviou) return;
+        enviou += 1;
+        if (r.cliente > 0) {
+            abriram += 1;
+            aberturas += r.cliente;
+        }
+    });
+    return {
+        enviou,
+        abriram,
+        aberturas,
+        semAbertura: Math.max(0, enviou - abriram),
+        taxa: pct(abriram, enviou),
+        media: abriram ? Math.round((aberturas / abriram) * 10) / 10 : 0
+    };
+}
+
 function computeMetricas(db) {
     const leads = db.prepare(`
         SELECT id, business_type, cidade, processo_estado, processo_json, resultado, followup_json
         FROM lead
     `).all();
     const toquesPorLead = {};
-    db.prepare('SELECT lead_id, passo, canal, estado, resultado, vendedor FROM lead_toque').all().forEach((t) => {
+    db.prepare('SELECT lead_id, passo, canal, estado, resultado, vendedor, executado_em FROM lead_toque').all().forEach((t) => {
         if (!toquesPorLead[t.lead_id]) toquesPorLead[t.lead_id] = [];
         toquesPorLead[t.lead_id].push(t);
+    });
+    const visitasPorLead = {};
+    db.prepare('SELECT lead_id, fonte, criado_em FROM demo_visita').all().forEach((v) => {
+        if (!visitasPorLead[v.lead_id]) visitasPorLead[v.lead_id] = [];
+        visitasPorLead[v.lead_id].push(v);
     });
     const geral = bucketMetricas();
     const porCategoria = {};
@@ -1579,6 +1685,7 @@ function computeMetricas(db) {
         porVendedor: packMap(porVendedor),
         porGancho: packMap(porGancho),
         porOrigem,
+        demo: metricasDemo(leads, toquesPorLead, visitasPorLead),
         diagnostico,
         alertas,
         limiar: { respostaPct: LIMIAR_RESPOSTA_PCT, wa1: MIN_WA1_ALERTA },
@@ -1624,6 +1731,9 @@ module.exports = {
     bloqueios,
     listToques,
     countDemoVisitas,
+    listDemoVisitas,
+    cookieSeller,
+    resumoDemoAberturas,
     loadContext,
     resultadoFromEstado,
     recomputeProcesso,
@@ -1643,5 +1753,6 @@ module.exports = {
     vendedorDoLead,
     trilhoPassos,
     steerProcesso,
+    validarFecho,
     LIMIAR_RESPOSTA_PCT
 };

@@ -48,6 +48,7 @@ describe('digitalizept lead process — schema', () => {
         });
         const visita = db.prepare('PRAGMA table_info(demo_visita)').all().map((c) => c.name);
         assert.ok(visita.includes('slug'));
+        assert.ok(visita.includes('fonte'));
         db.close();
     });
 });
@@ -231,18 +232,42 @@ describe('digitalizept lead process — sinal', () => {
         assert.equal(proc.registarVisitaDemo(db, { leadId, userAgent: '' }), false);
         assert.equal(proc.countDemoVisitas(db, leadId), 0);
 
+        // Before outreach, a browser hit is your preview — not a client signal.
+        assert.equal(proc.registarVisitaDemo(db, { leadId, userAgent: CHROME_UA }), false);
+        assert.equal(proc.countDemoVisitas(db, leadId), 0);
+        assert.equal(proc.resumoDemoAberturas(proc.listDemoVisitas(db, leadId), []).vendedor, 1);
+
+        proc.registarToque(db, leadId, {
+            passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'enviado'
+        });
         assert.equal(proc.registarVisitaDemo(db, { leadId, userAgent: CHROME_UA }), true);
-        // Deduplicated by the hour: a refresh is not a second signal.
         assert.equal(proc.registarVisitaDemo(db, { leadId, userAgent: CHROME_UA }), false);
         assert.equal(proc.countDemoVisitas(db, leadId), 1);
+        const resumo = proc.resumoDemoAberturas(
+            proc.listDemoVisitas(db, leadId),
+            proc.listToques(db, leadId)
+        );
+        assert.equal(resumo.cliente, 1);
+        assert.equal(resumo.depoisWa, 1);
+        assert.equal(resumo.enviou, true);
 
         const outro = seedLead(db, { demo: 'talho-y', email: 'y@example.com' });
+        proc.registarToque(db, outro, {
+            passo: 'EMAIL1', canal: 'email', estado: 'feito', resultado: 'enviado'
+        });
         assert.equal(proc.registarVisitaDemo(db, {
             leadId: outro,
             userAgent: CHROME_UA,
             referer: 'https://yourlabpt.com/digitalizept/admin.html'
         }), false);
+        assert.equal(proc.registarVisitaDemo(db, {
+            leadId: outro,
+            userAgent: CHROME_UA,
+            seller: true
+        }), false);
         assert.equal(proc.countDemoVisitas(db, outro), 0);
+        assert.ok(proc.cookieSeller('digitalizept_seller=1; foo=bar'));
+        assert.equal(proc.cookieSeller('other=1'), false);
         db.close();
     });
 });
@@ -503,7 +528,21 @@ describe('digitalizept lead process — instruções e demo', () => {
             'utf8'
         );
         assert.doesNotMatch(adminCss, /procpasso/);
-        assert.match(sw, /digitalizept-v95/);
+        assert.match(sw, /digitalizept-v97/);
+        assert.match(panel, /Como ficou/);
+        assert.match(panel, /sem_interesse/);
+        assert.match(panel, /canal === 'whatsapp'/);
+        assert.match(panel, /demoAberturas/);
+        const metricasUi = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin.js'),
+            'utf8'
+        );
+        assert.match(metricasUi, /Demo — o cliente abriu/);
+        const auth = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'digitalizept', 'js', 'auth.js'),
+            'utf8'
+        );
+        assert.match(auth, /digitalizept_seller/);
     });
 });
 
@@ -679,7 +718,16 @@ describe('digitalizept lead process — guião, objeções e métricas', () => {
         assert.ok(guiao.ramos.some((r) => r.id === 'viu'));
         const obj = proc.listObjecoes('pt');
         assert.ok(obj.some((o) => o.id === 'preco' && o.revisitarMeses === 6));
+        assert.ok(obj.some((o) => o.id === 'sem_interesse' && /ao vosso lado/.test(o.resposta)));
+        assert.ok(obj.some((o) => o.id === 'preco' && /negociável/.test(o.resposta)));
+        assert.equal(obj.some((o) => /não volto a ligar agora/.test(o.resposta)), false);
         assert.ok(proc.filtrosAtendedor({ negocioNome: 'Talho X' }).some((f) => /Talho X/.test(f.resposta)));
+        const r1 = proc.instrucoesFor('R1');
+        assert.match(r1.titulo, /Como ficou/);
+        assert.doesNotMatch(r1.objetivo, /referência/);
+        assert.ok(proc.validarFecho({ estado: 'RECUSADO' }).error);
+        assert.equal(proc.validarFecho({ estado: 'RECUSADO', revisitarEm: '2027-01-15' }).ok, true);
+        assert.equal(proc.validarFecho({ estado: 'REMOVIDO' }).ok, true);
     });
 
     it('computes reply and signal rates from the touches already stored', () => {
@@ -736,6 +784,11 @@ describe('digitalizept lead process — guião, objeções e métricas', () => {
         assert.equal(m.geral.wa1, 10);
         assert.ok(m.geral.respostaPct < proc.LIMIAR_RESPOSTA_PCT);
         assert.equal(m.porOrigem.visitou_demo, 10);
+        assert.equal(m.demo.enviou, 10);
+        assert.equal(m.demo.abriram, 10);
+        assert.equal(m.demo.aberturas, 10);
+        assert.equal(m.demo.semAbertura, 0);
+        assert.equal(m.demo.taxa, 100);
         assert.ok(m.diagnostico.some((d) => d.id === 'gancho_ou_lista'));
         assert.ok(m.alertas.some((d) => d.id === 'gancho_ou_lista'));
         db.close();
