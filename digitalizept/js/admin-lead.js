@@ -266,7 +266,7 @@ export function renderLeadDossier(host, payload, {
         mais.appendChild(zip);
     }
     extras.appendChild(mais);
-    const hint = el('p', 'dossier-controlo-hint', 'Faz só o que está em baixo. Depois disto o sistema escolhe o passo seguinte.');
+    const hint = el('p', 'dossier-controlo-hint', 'Faz o passo de baixo. Podes voltar atrás, saltar, ou tocar noutro passo no trilho.');
     chrome.append(back, nome, toggle, extras, hint);
     host.appendChild(chrome);
 

@@ -1,9 +1,8 @@
 /**
  * Controlo da lead — the single place where outreach happens.
  *
- * The panel never shows a menu of options: it shows one pending action, with the
- * message already written, and buttons for what happened. The seller decides the
- * outcome; the server decides what comes next.
+ * The pending action is already written. The seller records what happened, can
+ * walk the trail back or skip ahead, and the server keeps the cadence in sync.
  */
 import { formatCountdown, formatCallDue } from './demo/confirm-call.js';
 
@@ -146,6 +145,13 @@ export function renderLeadProcess(host, {
         }
     }
 
+    function steer(body) {
+        return call(
+            `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/steer`,
+            { method: 'POST', body }
+        );
+    }
+
     /* --------------------------------------------------------------- estado */
 
     function linhaCountdown(iso, prefixo = 'Próxima ação') {
@@ -208,6 +214,77 @@ export function renderLeadProcess(host, {
             });
             statusHost.appendChild(ir);
         }
+    }
+
+    /* --------------------------------------------------------------- trilho */
+
+    function trilhoCard() {
+        const trilho = view.trilho || [];
+        const box = el('div', 'lead-proc-trilho');
+        if (trilho.length) {
+            const fila = el('div', 'lead-proc-trilho-fila');
+            trilho.forEach((item) => {
+                const btn = el('button', 'lead-proc-trilho-passo', item.label);
+                btn.type = 'button';
+                if (item.agora) btn.classList.add('is-agora');
+                if (item.feito && !item.agora) btn.classList.add('is-feito');
+                if (item.forçado) btn.classList.add('is-forcado');
+                btn.title = item.agora
+                    ? 'Passo actual'
+                    : (item.feito ? 'Já feito — tocar para repetir' : 'Tocar para ir a este passo');
+                btn.addEventListener('click', () => {
+                    if (item.agora && !item.forçado) return;
+                    act(() => steer({ acao: 'irPara', passo: item.id }), btn);
+                });
+                fila.appendChild(btn);
+            });
+            box.appendChild(fila);
+        }
+
+        const barra = el('div', 'lead-proc-trilho-barra');
+        const voltar = el('button', 'btn-secondary', 'Passo anterior');
+        voltar.type = 'button';
+        voltar.disabled = !(view.controlo && view.controlo.podeVoltar);
+        voltar.addEventListener('click', () => act(() => steer({ acao: 'voltar' }), voltar));
+
+        const passo = view.proximaAcao && view.proximaAcao.passo;
+        const saltar = el('button', 'btn-secondary', 'Saltar este');
+        saltar.type = 'button';
+        saltar.disabled = !passo || passo === 'DEMO' || passo === 'ACOMPANHAR';
+        saltar.addEventListener('click', () => {
+            if (!window.confirm('Saltar este passo e seguir para o próximo?')) return;
+            act(() => steer({ acao: 'saltar' }), saltar);
+        });
+
+        const diverted = Boolean(view.controlo && (view.controlo.passoForcado || view.controlo.estadoTravado));
+        const auto = el('button', 'btn-secondary', 'Seguir o processo');
+        auto.type = 'button';
+        auto.disabled = !diverted;
+        auto.addEventListener('click', () => act(() => steer({ acao: 'automatico' }), auto));
+
+        const estadoSel = el('select', 'field-input lead-proc-estado-sel');
+        const actual = document.createElement('option');
+        actual.value = '';
+        actual.textContent = `Estado: ${view.estadoLabel || view.estado || 'automático'}`;
+        estadoSel.appendChild(actual);
+        (view.controlo && view.controlo.estados ? view.controlo.estados : []).forEach((item) => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.label;
+            estadoSel.appendChild(opt);
+        });
+        estadoSel.value = (view.controlo && view.controlo.estadoTravado) || '';
+        estadoSel.addEventListener('change', () => act(
+            () => steer({ acao: 'estado', estado: estadoSel.value }),
+            estadoSel
+        ));
+
+        barra.append(voltar, saltar, auto, estadoSel);
+        box.appendChild(barra);
+        if (diverted) {
+            box.appendChild(el('p', 'lead-proc-trilho-nota', 'Estás a guiar à mão. Seguir o processo devolve a cadência.'));
+        }
+        return box;
     }
 
     /* ------------------------------------------------------------ cartão agora */
@@ -302,8 +379,12 @@ export function renderLeadProcess(host, {
             return box;
         }
         const instrucoes = detalhe.instrucoes || {};
-        box.appendChild(el('h4', '', instrucoes.titulo || detalhe.passo));
-        box.appendChild(el('p', 'lead-proc-canal', CANAL_LABEL[detalhe.canal] || 'Passo'));
+        const cabeca = el('div', 'lead-proc-agora-cabeca');
+        cabeca.appendChild(el('h4', 'lead-proc-agora-titulo', instrucoes.titulo || detalhe.passo));
+        if (detalhe.canal) {
+            cabeca.appendChild(el('span', 'lead-proc-canal', CANAL_LABEL[detalhe.canal] || 'Passo'));
+        }
+        box.appendChild(cabeca);
         const quando = linhaCountdown(view.proximaAcao && view.proximaAcao.agendadoPara, 'Este passo');
         if (quando) box.appendChild(quando);
         const como = comoFazerBox(detalhe.canal);
@@ -353,11 +434,11 @@ export function renderLeadProcess(host, {
             box.appendChild(fieldWrap('Assunto', assuntoInput));
         }
         const texto = el('textarea', 'field-input lead-proc-msg');
-        texto.rows = detalhe.canal === 'ligacao' ? 4 : 10;
+        texto.rows = detalhe.canal === 'ligacao' ? 5 : 8;
         texto.value = detalhe.mensagem || '';
         if (detalhe.canal === 'ligacao') texto.placeholder = 'Como foi a chamada — o que ele disse, palavra a palavra se der.';
         box.appendChild(fieldWrap(
-            detalhe.canal === 'ligacao' ? 'Nota da chamada' : 'Mensagem para este lead',
+            detalhe.canal === 'ligacao' ? 'Nota da chamada' : 'Texto',
             texto
         ));
         if (detalhe.passo === 'EMAIL1') {
@@ -659,7 +740,9 @@ export function renderLeadProcess(host, {
         if (!toques.length) return null;
         const box = document.createElement('details');
         box.className = 'lead-proc-timeline';
-        box.appendChild(el('summary', '', 'O que já aconteceu'));
+        box.open = true;
+        const n = toques.length;
+        box.appendChild(el('summary', '', n === 1 ? 'O que já aconteceu · 1 toque' : `O que já aconteceu · ${n} toques`));
         if (view.processo && view.processo.sinal) {
             const origem = SINAL_ORIGEM_LABEL[view.processo.sinalOrigem] || view.processo.sinalOrigem;
             box.appendChild(el('p', 'meta', `Sinal: ${origem}. Se foste tu a abrir a demo, isto não conta — recarrega o painel depois de um cliente real.`));
@@ -811,6 +894,7 @@ export function renderLeadProcess(host, {
         const apelidoBloqueia = (view.bloqueios || []).some((b) => b.id === 'apelido');
         const eChamada = detalhe && detalhe.canal === 'ligacao';
 
+        host.appendChild(trilhoCard());
         host.appendChild(agoraCard());
         if (precisaFecho) host.appendChild(fechoCard());
         if (eChamada || apelidoBloqueia) {

@@ -105,6 +105,53 @@ describe('digitalizept lead process — estados', () => {
     });
 });
 
+describe('digitalizept lead process — steer', () => {
+    it('lets the seller walk back and pick another step', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db);
+        proc.registarToque(db, leadId, { passo: 'EMAIL1', canal: 'email', estado: 'feito' });
+        proc.registarToque(db, leadId, { passo: 'WA1', canal: 'whatsapp', estado: 'feito' });
+        let snap = proc.steerProcesso(db, leadId, { acao: 'voltar' });
+        assert.equal(snap.error, undefined);
+        assert.equal(snap.proxima.passo, 'WA1');
+        assert.equal(snap.processo.passoForcado, 'WA1');
+        assert.equal(proc.listToques(db, leadId).some((t) => t.passo === 'WA1' && t.estado === 'feito'), false);
+
+        snap = proc.steerProcesso(db, leadId, { acao: 'irPara', passo: 'LIG1' });
+        assert.equal(snap.proxima.passo, 'LIG1');
+        assert.equal(snap.proxima.forçado, true);
+
+        snap = proc.steerProcesso(db, leadId, { acao: 'automatico' });
+        assert.equal(snap.processo.passoForcado, '');
+        assert.equal(snap.proxima.passo, 'WA1');
+        db.close();
+    });
+
+    it('can park a lead in another estado without sending', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db);
+        const snap = proc.steerProcesso(db, leadId, { acao: 'estado', estado: 'VISITA' });
+        assert.equal(snap.estado, 'VISITA');
+        assert.equal(snap.processo.estadoTravado, 'VISITA');
+        assert.equal(snap.proxima.passo, 'WA3');
+        db.close();
+    });
+
+    it('builds a trail of done, current and open steps', () => {
+        const items = proc.trilhoPassos({
+            estado: 'EM_SEQUENCIA',
+            toques: [{ passo: 'EMAIL1', estado: 'feito' }],
+            processo: {},
+            proxima: { passo: 'WA1' }
+        });
+        const email = items.find((i) => i.id === 'EMAIL1');
+        const wa = items.find((i) => i.id === 'WA1');
+        assert.equal(email.feito, true);
+        assert.equal(email.agora, false);
+        assert.equal(wa.agora, true);
+    });
+});
+
 describe('digitalizept lead process — motor de tempo', () => {
     it('lets the global exclusions win over any category window', () => {
         // Friday 15:00 Lisbon is inside a retail window and still excluded.
@@ -448,14 +495,15 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(ficha, /Dados da loja/);
         assert.match(ficha, /O que fazer agora/);
         assert.match(ficha, /dossier-mais/);
-        assert.match(ficha, /Faz só o que está em baixo/);
+        assert.match(ficha, /Faz o passo de baixo/);
+        assert.match(panel, /lead-proc-trilho/);
         assert.doesNotMatch(ficha, /aberturaHost/);
         const adminCss = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'admin.css'),
             'utf8'
         );
         assert.doesNotMatch(adminCss, /procpasso/);
-        assert.match(sw, /digitalizept-v94/);
+        assert.match(sw, /digitalizept-v95/);
     });
 });
 

@@ -411,7 +411,9 @@ function emptyProcesso() {
         ofertaFinalEnviada: false,
         referenciaPedida: '',
         precoCongelado: 0,
-        revisitas: 0
+        revisitas: 0,
+        passoForcado: '',
+        estadoTravado: ''
     };
 }
 
@@ -436,7 +438,9 @@ function parseProcesso(raw) {
         ofertaFinalEnviada: parsed.ofertaFinalEnviada === true,
         referenciaPedida: cleanStr(parsed.referenciaPedida, 120),
         precoCongelado: Math.max(0, Math.round(Number(parsed.precoCongelado) || 0)),
-        revisitas: Math.max(0, Math.round(Number(parsed.revisitas) || 0))
+        revisitas: Math.max(0, Math.round(Number(parsed.revisitas) || 0)),
+        passoForcado: cleanStr(parsed.passoForcado, 20).toUpperCase(),
+        estadoTravado: normalizeEstado(parsed.estadoTravado)
     };
 }
 
@@ -535,6 +539,8 @@ function computeEstado({ row = {}, followup = {}, toques = [], processo = {}, co
     }
     const stored = normalizeEstado(row.processo_estado);
     if (stored === 'REMOVIDO') return 'REMOVIDO';
+    const travado = normalizeEstado(processo.estadoTravado);
+    if (travado && travado !== 'GANHO' && travado !== 'REMOVIDO') return travado;
     if (ESTADOS_MANUAIS.has(stored)) return stored;
 
     if (followup.replied1At || followup.replied2At || toques.some((t) => t.resultado === 'respondeu')) {
@@ -794,6 +800,18 @@ function nextTouch({
 } = {}) {
     if (['REMOVIDO', 'GANHO', 'ARQUIVADO'].includes(estado)) return null;
 
+    const forçado = cleanStr(processo.passoForcado, 20).toUpperCase();
+    if (forçado && (Object.prototype.hasOwnProperty.call(PASSO_CANAL, forçado) || INSTRUCOES[forçado])) {
+        return {
+            passo: forçado,
+            canal: PASSO_CANAL[forçado] || '',
+            intervaloHoras: 0,
+            agendadoPara: agora,
+            saltar: false,
+            forçado: true
+        };
+    }
+
     if (estado === 'NOVO') {
         return { passo: 'DEMO', canal: '', intervaloHoras: 0, agendadoPara: '', saltar: false };
     }
@@ -1007,7 +1025,7 @@ function resultadoFromEstado(estado, atual) {
  * Recomputes signal, state and the next action, and writes them back. Every path
  * that changes a lead goes through here so the queue can never drift.
  */
-function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = '', revisitarEm = null, agora = nowIso(), autoSaltar = 0 } = {}) {
+function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = '', revisitarEm = null, agora = nowIso(), autoSaltar = 0, limparEstado = false } = {}) {
     const ctx = loadContext(db, leadId);
     if (!ctx) return null;
 
@@ -1024,9 +1042,9 @@ function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = ''
     if (!processo.canalDireto && temCanalDireto(processo, contacto)) processo.canalDireto = true;
 
     const estadoForcado = normalizeEstado(forcarEstado);
-    const rowParaEstado = estadoForcado
-        ? { ...ctx.row, processo_estado: estadoForcado }
-        : ctx.row;
+    let rowParaEstado = ctx.row;
+    if (limparEstado) rowParaEstado = { ...rowParaEstado, processo_estado: '' };
+    if (estadoForcado) rowParaEstado = { ...rowParaEstado, processo_estado: estadoForcado };
     const estado = computeEstado({
         row: rowParaEstado,
         followup: ctx.followup,
@@ -1122,6 +1140,7 @@ function registarToque(db, leadId, patch = {}) {
     const estado = TOQUE_ESTADOS.includes(patch.estado) ? patch.estado : 'feito';
     const processoPatch = { ...(patch.processo || {}) };
     if (patch.resultado === 'canal_direto') processoPatch.canalDireto = true;
+    if (estado !== 'agendado') processoPatch.passoForcado = '';
     const ordem = db.prepare('SELECT COUNT(*) AS n FROM lead_toque WHERE lead_id = ?').get(leadId);
     const vendedor = resolverVendedor(db, leadId, patch);
     db.prepare(`
@@ -1205,6 +1224,132 @@ function registarVisitaDemo(db, { leadId, slug = '', referer = '', userAgent = '
         VALUES (?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), leadId, cleanStr(slug, 120), cleanStr(referer, 300), agora);
     return true;
+}
+
+const TRILHO_PRINCIPAL = [
+    { id: 'EMAIL1', label: 'Email 1' },
+    { id: 'WA1', label: 'WhatsApp 1' },
+    { id: 'LIG1', label: 'Ligação 1' },
+    { id: 'WA2', label: 'WhatsApp 2', alt: 'N1', altLabel: 'Não respondeu' },
+    { id: 'LIG2', label: 'Ligação 2' },
+    { id: 'EMAIL2', label: 'Email 2' }
+];
+const TRILHO_DESCOBERTA = [
+    { id: 'D1', label: 'Descoberta 1' },
+    { id: 'D2', label: 'Descoberta 2' },
+    { id: 'D3', label: 'Visita' },
+    { id: 'D4', label: 'Email D' }
+];
+const TRILHO_EXTRA = [
+    { id: 'WA3', label: 'WhatsApp 3' },
+    { id: 'R1', label: 'Fecho' },
+    { id: 'REVISITA', label: 'Revisita' }
+];
+
+function passoConhecido(passo) {
+    const key = cleanStr(passo, 20).toUpperCase();
+    return Object.prototype.hasOwnProperty.call(PASSO_CANAL, key) || Boolean(INSTRUCOES[key]);
+}
+
+function trilhoPassos({ estado = '', toques = [], processo = {}, proxima = null } = {}) {
+    const agora = (proxima && proxima.passo) || '';
+    const feitos = new Set((toques || []).map((t) => t.passo));
+    const descoberta = estado === 'DESCOBERTA' || (toques || []).some((t) => String(t.passo || '').startsWith('D'));
+    const items = [];
+    if (estado === 'NOVO') items.push({ id: 'DEMO', label: 'Demo' });
+    if (descoberta) items.push(...TRILHO_DESCOBERTA);
+    items.push(...TRILHO_PRINCIPAL);
+    TRILHO_EXTRA.forEach((extra) => {
+        const visivel = agora === extra.id
+            || feitos.has(extra.id)
+            || (estado === 'VISITA' && extra.id === 'WA3')
+            || (estado === 'RECUSADO' && extra.id === 'R1')
+            || (['ADORMECIDO', 'REVISITA'].includes(estado) && extra.id === 'REVISITA');
+        if (visivel) items.push(extra);
+    });
+    if (estado === 'PROPOSTA') items.push({ id: 'ACOMPANHAR', label: 'Acompanhar' });
+
+    return items.map((item) => {
+        const ids = item.alt ? [item.id, item.alt] : [item.id];
+        const isAgora = ids.includes(agora);
+        const id = isAgora ? agora : item.id;
+        return {
+            id,
+            label: item.alt && agora === item.alt ? (item.altLabel || item.label) : item.label,
+            feito: ids.some((key) => passoFeito(toques, key)),
+            agora: isAgora,
+            forçado: ids.includes(cleanStr(processo.passoForcado, 20).toUpperCase())
+        };
+    });
+}
+
+function steerProcesso(db, leadId, { acao = '', passo = '', estado = '' } = {}) {
+    const ctx = loadContext(db, leadId);
+    if (!ctx) return null;
+    const cmd = cleanStr(acao, 20).toLowerCase();
+
+    if (cmd === 'voltar') {
+        const last = db.prepare(`
+            SELECT id, passo FROM lead_toque
+            WHERE lead_id = ? ORDER BY criado_em DESC, ordem DESC LIMIT 1
+        `).get(leadId);
+        if (!last) return { error: 'Não há nenhum passo para desfazer.' };
+        if (last.passo === 'REMOVER') {
+            const fu = { ...ctx.followup, unsubscribed: false };
+            db.prepare('UPDATE lead SET followup_json = ? WHERE id = ?').run(JSON.stringify(fu), leadId);
+        }
+        db.prepare('DELETE FROM lead_toque WHERE id = ?').run(last.id);
+        return recomputeProcesso(db, leadId, {
+            patchProcesso: { passoForcado: last.passo, estadoTravado: '' },
+            limparEstado: true
+        });
+    }
+
+    if (cmd === 'irpara') {
+        const alvo = cleanStr(passo, 20).toUpperCase();
+        if (!passoConhecido(alvo)) return { error: 'Passo desconhecido.' };
+        return recomputeProcesso(db, leadId, { patchProcesso: { passoForcado: alvo } });
+    }
+
+    if (cmd === 'automatico') {
+        return recomputeProcesso(db, leadId, {
+            patchProcesso: { passoForcado: '', estadoTravado: '' },
+            limparEstado: true
+        });
+    }
+
+    if (cmd === 'saltar') {
+        const snapshot = recomputeProcesso(db, leadId);
+        const atual = snapshot && snapshot.proxima && snapshot.proxima.passo;
+        if (!atual || atual === 'DEMO' || atual === 'ACOMPANHAR') {
+            return { error: 'Não há passo para saltar.' };
+        }
+        return registarToque(db, leadId, {
+            passo: atual,
+            canal: PASSO_CANAL[atual] || '',
+            estado: 'saltado',
+            resultado: 'saltado',
+            nota: 'Saltado à mão no Controlo.'
+        });
+    }
+
+    if (cmd === 'estado') {
+        const alvo = normalizeEstado(estado);
+        if (!alvo) {
+            return recomputeProcesso(db, leadId, {
+                patchProcesso: { estadoTravado: '' },
+                limparEstado: true
+            });
+        }
+        if (alvo === 'REMOVIDO') return { error: 'Para REMOVER, usa Encerrar.' };
+        return recomputeProcesso(db, leadId, {
+            patchProcesso: { estadoTravado: alvo },
+            forcarEstado: alvo,
+            limparEstado: ESTADOS_MANUAIS.has(normalizeEstado(ctx.row.processo_estado))
+        });
+    }
+
+    return { error: 'Ação desconhecida.' };
 }
 
 function instrucoesFor(passo) {
@@ -1496,5 +1641,7 @@ module.exports = {
     computeMetricas,
     ancoraDeMelhorHora,
     vendedorDoLead,
+    trilhoPassos,
+    steerProcesso,
     LIMIAR_RESPOSTA_PCT
 };

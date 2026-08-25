@@ -4905,7 +4905,8 @@ function processoPayload(snapshot) {
                 canal: proxima.canal,
                 agendadoPara: proxima.agendadoPara || '',
                 saltar: proxima.saltar === true,
-                motivo: proxima.motivo || ''
+                motivo: proxima.motivo || '',
+                forçado: proxima.forçado === true
             }
             : null
     };
@@ -5004,6 +5005,20 @@ function buildProcessoView(db, leadId, req) {
             revisitarEm
         }),
         toques: (snapshot.toques || []).slice().reverse(),
+        trilho: leadProcess.trilhoPassos({
+            estado: snapshot.estado,
+            toques: snapshot.toques,
+            processo: snapshot.processo,
+            proxima: snapshot.proxima
+        }),
+        controlo: {
+            passoForcado: snapshot.processo.passoForcado || '',
+            estadoTravado: snapshot.processo.estadoTravado || '',
+            podeVoltar: (snapshot.toques || []).length > 0,
+            estados: leadProcess.PROCESSO_ESTADOS
+                .filter((id) => id !== 'REMOVIDO')
+                .map((id) => ({ id, label: leadProcess.ESTADO_LABELS[id] }))
+        },
         followup: {
             lang: packed.followup.lang,
             includePrices: packed.followup.includePrices,
@@ -5112,6 +5127,25 @@ app.post('/api/digitalizept/leads/:leadId/process/contact', requireDigitalizept,
     } catch (err) {
         console.error('digitalizept process contact error:', err.message);
         return res.status(500).json({ error: 'Não foi possível guardar o contacto.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/process/steer', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const feito = leadProcess.steerProcesso(db, leadId, {
+            acao: cleanText(body.acao, 20),
+            passo: cleanText(body.passo, 20),
+            estado: cleanText(body.estado, 20)
+        });
+        if (!feito) return res.status(404).json({ error: 'Lead não encontrado.' });
+        if (feito.error) return res.status(400).json({ error: feito.error });
+        return res.json({ ok: true, ...processoPayload(feito) });
+    } catch (err) {
+        console.error('digitalizept process steer error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível alterar o processo.' });
     }
 });
 
