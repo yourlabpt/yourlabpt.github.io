@@ -54,6 +54,7 @@ const mapsPresenca = require('./lib/maps/presenca');
 const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/states');
 const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
 const outreach = require('./lib/digitalizept-outreach');
+const leadProcess = require('./lib/digitalizept-lead-process');
 const dossier = require('./lib/digitalizept-dossier');
 const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
 const { ensureLeadFromVisit, findReusableLead, reconcileVisitLeadPair, syncLinkedVisitsIdentity } = require('./lib/digitalizept-visit-lead');
@@ -2147,6 +2148,14 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         : {};
     const sinais = outreach.sinaisFromLead({ dados, diag, presence, followup });
     const origin = digitalizeptPublicOrigin(req);
+    const toques = leadProcess.listToques(db, leadId);
+    const processo = leadProcess.parseProcesso(row.processo_json);
+    // Amounts stay off in cold outreach and come on by themselves once there is a
+    // signal, or when the objection on the table is the price.
+    const mostrarPrecos = followup.includePrices === true
+        || processo.emailPrecosLigado === true
+        || processo.sinal === true
+        || processo.objecao === 'preco';
     const ctx = outreach.buildOutreachContext({
         dados,
         provider: activeProvider(db),
@@ -2164,12 +2173,73 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         sinais,
         lang: followup.lang,
         offer: {
-            includePrices: followup.includePrices,
+            includePrices: mostrarPrecos,
             campanhaPct: followup.campanhaPct,
             campanhaShowPrices: followup.campanhaShowPrices
         }
     });
-    return { row, dados, followup, ctx, origin, sinais };
+    // The WA1 bridge line must never claim an email that did not go out.
+    Object.assign(ctx, leadProcess.pontEmailFor(toques, followup.lang));
+    Object.assign(ctx, processoCopyFields(processo, followup, ctx));
+    return { row, dados, followup, ctx, origin, sinais, toques, processo, mostrarPrecos };
+}
+
+const MESES_PT = [
+    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+];
+const MESES_EN = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+function mesDe(iso, lang) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const nomes = outreach.normalizeOutreachLang(lang) === 'en' ? MESES_EN : MESES_PT;
+    return nomes[d.getMonth()] || '';
+}
+
+const OFERTA_FINAL = {
+    E: {
+        pt: 'E fica-lhe isto, sem compromisso: mando-lhe por escrito o que está errado na ficha do Google e como se corrige. Corrija o senhor, ou quem quiser — não precisa de nós para isso.',
+        en: 'And this stays with you, no strings: I will write down what is wrong on the Google listing and how to fix it. Fix it yourself, or have anyone else do it — you do not need us for that.'
+    },
+    C: {
+        pt: 'E fica-lhe isto: mando-lhe numa folha o que está a falhar no site atual — o que aparece no telemóvel, o que o Google não lê. Serve-lhe seja com quem for.',
+        en: 'And this stays with you: one page listing what is failing on the current site — what shows on a phone, what Google cannot read. It serves you whoever you work with.'
+    },
+    default: {
+        pt: 'E fica-lhe o exemplo em PDF, para ter à mão. Se um dia mostrar a alguém, mostre — o trabalho é vosso.',
+        en: 'And the example stays with you as a PDF, to keep at hand. If you ever show it to someone, show it — the work is yours.'
+    }
+};
+
+function ofertaFinalFor(ganchoId, lang) {
+    const en = outreach.normalizeOutreachLang(lang) === 'en' ? 'en' : 'pt';
+    const pack = OFERTA_FINAL[String(ganchoId || '').toUpperCase()] || OFERTA_FINAL.default;
+    return pack[en];
+}
+
+/** Frozen price and final offer are what keep a "no" from being a dead end. */
+function processoCopyFields(processo, followup, ctx) {
+    const lang = outreach.normalizeOutreachLang(followup && followup.lang);
+    const congelado = Number(processo && processo.precoCongelado) || 0;
+    const prices = outreach.offerPrices({
+        includePrices: true,
+        campanhaPct: followup ? followup.campanhaPct : 0,
+        campanhaShowPrices: followup ? followup.campanhaShowPrices : true
+    });
+    const valor = congelado || prices.tudo;
+    return {
+        precoCongelado: `${valor} €`,
+        ofertaFinal: processo && processo.ofertaFinal
+            ? processo.ofertaFinal
+            : ofertaFinalFor(ctx && ctx.ganchoId, lang),
+        mesRevisita: '',
+        mesAnterior: ''
+    };
 }
 
 function parseJsonSafe(raw, fallback) {
@@ -2522,16 +2592,23 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
 app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
+        // The day queue is a list by the hour, not a database: leads with a pending
+        // action first, in the order the action comes due.
+        const fila = cleanText((req.query && req.query.fila) || '', 20) === 'hoje';
+        const ordem = fila
+            ? `CASE WHEN l.proxima_acao_em = '' THEN 1 ELSE 0 END, l.proxima_acao_em ASC`
+            : 'l.criado_em DESC';
         const rows = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
                    l.cobertura, l.resultado, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng, l.followup_json,
+                   l.processo_estado, l.proxima_acao_em, l.revisitar_em,
                    d.obrigatorios_json, d.opcionais_json, cl.email AS legal_email,
                    p.total_com_iva_centimos, p.iva_rate
             FROM lead l
             LEFT JOIN proposta p ON p.lead_id = l.id
             LEFT JOIN dados_negocio d ON d.lead_id = l.id
             LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
-            ORDER BY l.criado_em DESC
+            ORDER BY ${ordem}
             LIMIT 200
         `).all();
         return res.json({
@@ -2562,6 +2639,10 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     followupUnsubscribed: followup.unsubscribed === true,
                     callDueAt: followup.callDueAt || '',
                     callDoneAt: followup.callDoneAt || '',
+                    processoEstado: r.processo_estado || '',
+                    processoEstadoLabel: leadProcess.ESTADO_LABELS[r.processo_estado] || '',
+                    proximaAcaoEm: r.proxima_acao_em || '',
+                    revisitarEm: r.revisitar_em || '',
                     fichaMissing: dossier.assessCompleteness({
                         nome_negocio: r.nome,
                         morada: r.morada,
@@ -3864,6 +3945,8 @@ app.delete('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) =>
             db.prepare('UPDATE visita SET lead_id = NULL WHERE lead_id = ?').run(leadId);
             db.prepare('DELETE FROM nota WHERE lead_id = ?').run(leadId);
             db.prepare('DELETE FROM evento WHERE entidade = ? AND entidade_id = ?').run('lead', leadId);
+            db.prepare('DELETE FROM lead_toque WHERE lead_id = ?').run(leadId);
+            db.prepare('DELETE FROM demo_visita WHERE lead_id = ?').run(leadId);
             db.prepare('DELETE FROM dados_negocio WHERE lead_id = ?').run(leadId);
             db.prepare('DELETE FROM lead WHERE id = ?').run(leadId);
         });
@@ -4194,6 +4277,11 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         leadId = persist();
         scheduleLeadGeocode(leadId);
         try {
+            leadProcess.recomputeProcesso(db, leadId);
+        } catch (err) {
+            console.error('digitalizept process recompute failed:', err.message);
+        }
+        try {
             writeDemoFolder({
                 slug,
                 demo,
@@ -4254,6 +4342,11 @@ app.get('/api/digitalizept/unsub', (req, res) => {
         saveLeadFollowup(db, match.id, followup);
         const nextResultado = outreach.unsubResultadoFor(match.resultado);
         applyAutoResultado(db, match.id, nextResultado);
+        try {
+            leadProcess.recomputeProcesso(db, match.id);
+        } catch (err) {
+            console.error('digitalizept unsub process recompute failed:', err.message);
+        }
         if (!already) {
             const nome = String(match.nome || 'este contacto').trim() || 'este contacto';
             db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
@@ -4334,8 +4427,20 @@ app.post('/api/digitalizept/leads/:leadId/outreach/offer', requireDigitalizept, 
     try {
         const leadId = cleanText(req.params.leadId, 80);
         const db = getDigitalizeptDb();
+        const antes = outreach.parseFollowup(
+            (db.prepare('SELECT followup_json FROM lead WHERE id = ?').get(leadId) || {}).followup_json
+        );
         const packed = buildLeadOutreach(db, leadId, req, ganchoExtrasFromBody(req.body || {}));
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const estado = leadProcess.normalizeEstado(packed.row.processo_estado);
+        // Discounting to reopen teaches the client that waiting pays off.
+        if (['ADORMECIDO', 'REVISITA'].includes(estado)
+            && packed.followup.campanhaPct > antes.campanhaPct) {
+            return res.status(409).json({
+                error: 'Este lead está adormecido: o valor fica congelado. Não se aumenta o desconto para reabrir.',
+                followup: antes
+            });
+        }
         saveLeadFollowup(db, leadId, packed.followup, { syncCampaign: true });
         return res.json({
             ok: true,
@@ -4383,11 +4488,17 @@ app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizep
         saveLeadFollowup(db, leadId, packed.followup);
         if (step === 1) {
             applyAutoEtapa(db, leadId, 'demo_criada');
-            const texto = `WhatsApp 1 enviado (${now.slice(0, 16).replace('T', ' ')}).`;
-            db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
-                .run(crypto.randomUUID(), leadId, texto, now);
         }
-        return res.json({ ok: true, followup: packed.followup });
+        const snapshot = leadProcess.registarToque(db, leadId, {
+            passo: `WA${step}`,
+            canal: 'whatsapp',
+            estado: 'feito',
+            resultado: 'enviado',
+            texto: cleanText(body.text, 8000) || outreach.textForPasso(`WA${step}`, packed.ctx, packed.followup.edits),
+            lang: packed.followup.lang,
+            executadoEm: now
+        });
+        return res.json({ ok: true, followup: packed.followup, processo: processoPayload(snapshot) });
     } catch (err) {
         console.error('digitalizept outreach wa error:', err.message);
         return res.status(500).json({ error: 'Não foi possível actualizar o WhatsApp.' });
@@ -4407,8 +4518,18 @@ app.post('/api/digitalizept/leads/:leadId/outreach/reply', requireDigitalizept, 
                 followup: packed.followup
             });
         }
-        packed.followup[`replied${step}At`] = digitalizeptNow();
+        const respondeuEm = digitalizeptNow();
+        packed.followup[`replied${step}At`] = respondeuEm;
         saveLeadFollowup(db, leadId, packed.followup);
+        leadProcess.registarToque(db, leadId, {
+            passo: `WA${step}`,
+            canal: 'whatsapp',
+            estado: 'feito',
+            resultado: 'respondeu',
+            nota: 'O cliente respondeu.',
+            lang: packed.followup.lang,
+            executadoEm: respondeuEm
+        });
         return res.json({
             ok: true,
             followup: packed.followup,
@@ -4429,10 +4550,18 @@ app.post('/api/digitalizept/leads/:leadId/outreach/call-done', requireDigitalize
         const now = digitalizeptNow();
         packed.followup.callDoneAt = now;
         saveLeadFollowup(db, leadId, packed.followup);
-        const nome = packed.row.nome || 'negócio';
-        db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
-            .run(crypto.randomUUID(), leadId, `Ligação de confirmação feita (${nome}).`, now);
-        return res.json({ ok: true, followup: packed.followup });
+        const body = req.body || {};
+        const snapshot = leadProcess.registarToque(db, leadId, {
+            passo: cleanText(body.passo, 20) || 'LIG1',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: cleanText(body.resultado, 40) || 'ligou',
+            destino: packed.processo.canalDireto ? 'direto' : 'negocio',
+            nota: cleanText(body.nota, 2000),
+            lang: packed.followup.lang,
+            executadoEm: now
+        });
+        return res.json({ ok: true, followup: packed.followup, processo: processoPayload(snapshot) });
     } catch (err) {
         console.error('digitalizept call-done error:', err.message);
         return res.status(500).json({ error: 'Não foi possível marcar a ligação.' });
@@ -4458,17 +4587,31 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         if (!packed.row.demo_slug) {
             return res.status(400).json({ error: 'Publique a demo antes de enviar o email.' });
         }
-        const subject = cleanText(body.subject, 240) || outreach.emailSubjectFor(packed.ctx, packed.followup.edits);
-        const text = String(body.text || outreach.renderEmailText(packed.ctx));
-        const html = outreach.renderEmailHtml(packed.ctx);
+        const passo = cleanText(body.passo, 20).toUpperCase() === 'EMAIL2' ? 'EMAIL2' : 'EMAIL1';
+        const subject = cleanText(body.subject, 240)
+            || outreach.subjectForPasso(passo, packed.ctx, packed.followup.edits);
+        const text = String(body.text || outreach.textForPasso(passo, packed.ctx, packed.followup.edits));
+        // Email 2 closes the cycle in plain text; only Email 1 carries the layout.
+        const html = passo === 'EMAIL2' ? '' : outreach.renderEmailHtml(packed.ctx);
         const result = await sendProjectNotificationEmail({
             to,
             subject,
             text,
-            html,
+            html: html || undefined,
             from: digitalizeptMailFrom(packed.ctx)
         });
         if (!result.sent) {
+            // A refused send is recorded: the WA1 bridge reads this and drops the
+            // line about the email instead of claiming something that never left.
+            leadProcess.registarToque(db, leadId, {
+                passo,
+                canal: 'email',
+                estado: 'falhado',
+                resultado: 'smtp_falhou',
+                nota: cleanText(result.reason, 300),
+                texto: text,
+                lang: packed.followup.lang
+            });
             return res.status(503).json({ error: result.reason || 'SMTP não configurado.' });
         }
         const now = digitalizeptNow();
@@ -4486,9 +4629,22 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
                 : `campanha ${packed.followup.campanhaPct}%`);
         }
         const offerNote = offerBits.length ? ` (${offerBits.join(', ')})` : '';
-        db.prepare('INSERT INTO nota (id, lead_id, texto, criado_em) VALUES (?, ?, ?, ?)')
-            .run(crypto.randomUUID(), leadId, `Email HTML da demo enviado para ${to}${offerNote}.`, now);
-        return res.json({ ok: true, followup: packed.followup, sent: true });
+        const snapshot = leadProcess.registarToque(db, leadId, {
+            passo,
+            canal: 'email',
+            estado: 'feito',
+            resultado: 'enviado',
+            nota: `Enviado para ${to}${offerNote}.`,
+            texto: text,
+            lang: packed.followup.lang,
+            executadoEm: now
+        });
+        return res.json({
+            ok: true,
+            followup: packed.followup,
+            sent: true,
+            processo: processoPayload(snapshot)
+        });
     } catch (err) {
         console.error('digitalizept outreach email error:', err.message);
         return res.status(500).json({ error: 'Não foi possível enviar o email.' });
@@ -4545,6 +4701,16 @@ app.post('/api/digitalizept/outreach/email-demos', requireDigitalizept, async (r
             saveLeadFollowup(db, row.id, packed.followup);
             applyAutoEtapa(db, row.id, 'demo_criada');
             scheduleLeadGeocode(row.id, { force: false });
+            leadProcess.registarToque(db, row.id, {
+                passo: 'EMAIL1',
+                canal: 'email',
+                estado: 'feito',
+                resultado: 'enviado',
+                nota: `Enviado para ${to} (envio em massa).`,
+                texto: text,
+                lang: packed.followup.lang,
+                executadoEm: packed.followup.emailSentAt
+            });
             results.sent += 1;
         }
         return res.json({ ok: true, ...results });
@@ -4554,12 +4720,285 @@ app.post('/api/digitalizept/outreach/email-demos', requireDigitalizept, async (r
     }
 });
 
+function processoPayload(snapshot) {
+    if (!snapshot) return null;
+    const proxima = snapshot.proxima || null;
+    return {
+        estado: snapshot.estado,
+        estadoLabel: leadProcess.ESTADO_LABELS[snapshot.estado] || snapshot.estado,
+        processo: snapshot.processo,
+        proximaAcao: proxima
+            ? {
+                passo: proxima.passo,
+                canal: proxima.canal,
+                agendadoPara: proxima.agendadoPara || '',
+                saltar: proxima.saltar === true,
+                motivo: proxima.motivo || ''
+            }
+            : null
+    };
+}
+
+function waUrlFor(phone, message) {
+    const digits = String(phone || '').replace(/\D/g, '');
+    const base = digits ? `https://wa.me/${digits}` : 'https://wa.me/';
+    return `${base}?text=${encodeURIComponent(message || '')}`;
+}
+
+function mesesAtras(iso, meses) {
+    const d = new Date(iso || Date.now());
+    d.setMonth(d.getMonth() + Number(meses || 0));
+    return d.toISOString();
+}
+
+/**
+ * The whole panel in one payload: one pending action with its text already
+ * rendered, the guidance for that step, what blocks it, and the full timeline.
+ */
+function buildProcessoView(db, leadId, req) {
+    const snapshot = leadProcess.recomputeProcesso(db, leadId);
+    if (!snapshot) return null;
+    const packed = buildLeadOutreach(db, leadId, req);
+    if (!packed) return null;
+    const passo = snapshot.proxima ? snapshot.proxima.passo : '';
+    const revisitarEm = cleanText(snapshot.row.revisitar_em, 40)
+        || (snapshot.estado === 'RECUSADO' ? mesesAtras(digitalizeptNow(), 3) : '');
+    const ultimoR1 = (snapshot.toques || [])
+        .filter((t) => t.passo === 'R1' && t.estado === 'feito')
+        .sort((a, b) => String(b.executado_em).localeCompare(String(a.executado_em)))[0];
+    packed.ctx.mesRevisita = mesDe(revisitarEm, packed.followup.lang);
+    packed.ctx.mesAnterior = mesDe(
+        ultimoR1 ? ultimoR1.executado_em : mesesAtras(digitalizeptNow(), -3),
+        packed.followup.lang
+    );
+    const mensagem = passo ? outreach.textForPasso(passo, packed.ctx, packed.followup.edits) : '';
+    const assunto = passo ? outreach.subjectForPasso(passo, packed.ctx, packed.followup.edits) : '';
+    const telefone = packed.dados.whatsapp || packed.dados.telefone || '';
+    let url = '';
+    if (leadProcess.PASSO_CANAL[passo] === 'whatsapp') url = waUrlFor(telefone, mensagem);
+    else if (leadProcess.PASSO_CANAL[passo] === 'ligacao') url = telefone ? `tel:${String(telefone).replace(/\s/g, '')}` : '';
+    else if (leadProcess.PASSO_CANAL[passo] === 'email' && packed.ctx.clienteEmail) {
+        url = `mailto:${encodeURIComponent(packed.ctx.clienteEmail)}`;
+    }
+    return {
+        ok: true,
+        ...processoPayload(snapshot),
+        revisitarEm,
+        lead: {
+            id: leadId,
+            nome: snapshot.row.nome || '',
+            cidade: snapshot.row.cidade || '',
+            businessType: snapshot.row.business_type || '',
+            demoSlug: snapshot.row.demo_slug || '',
+            demoUrl: snapshot.row.demo_slug ? `/d/${snapshot.row.demo_slug}` : ''
+        },
+        contacto: {
+            ...snapshot.contacto,
+            temEmail: Boolean(packed.ctx.clienteEmail)
+        },
+        gancho: {
+            id: packed.ctx.ganchoId,
+            titulo: packed.ctx.ganchoTitulo,
+            nomeCurto: outreach.GANCHO_NOME_CURTO[packed.ctx.ganchoId] || '',
+            sugerido: outreach.pickGancho({ sinais: packed.sinais }).id,
+            lista: outreach.listGanchos()
+        },
+        fecho: {
+            ofertaFinalSugerida: ofertaFinalFor(packed.ctx.ganchoId, packed.followup.lang),
+            precoCongelado: packed.ctx.precoCongelado
+        },
+        proximaAcaoDetalhe: passo
+            ? {
+                passo,
+                canal: leadProcess.PASSO_CANAL[passo] || '',
+                instrucoes: leadProcess.instrucoesFor(passo),
+                resultados: leadProcess.resultadosFor(passo),
+                mensagem,
+                assunto,
+                url
+            }
+            : null,
+        bloqueios: leadProcess.bloqueios({
+            estado: snapshot.estado,
+            processo: snapshot.processo,
+            toques: snapshot.toques,
+            passo,
+            revisitarEm
+        }),
+        toques: (snapshot.toques || []).slice().reverse(),
+        followup: {
+            lang: packed.followup.lang,
+            includePrices: packed.followup.includePrices,
+            precosVisiveis: packed.mostrarPrecos,
+            campanhaPct: packed.followup.campanhaPct,
+            campanhaShowPrices: packed.followup.campanhaShowPrices,
+            problemaFicha: packed.followup.problemaFicha || '',
+            sinaisDeMovimento: packed.followup.sinaisDeMovimento === true,
+            siteVelho: packed.followup.siteVelho === true,
+            unsubscribed: packed.followup.unsubscribed === true
+        }
+    };
+}
+
+app.get('/api/digitalizept/leads/:leadId/process', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const view = buildProcessoView(db, leadId, req);
+        if (!view) return res.status(404).json({ error: 'Lead não encontrado.' });
+        return res.json(view);
+    } catch (err) {
+        console.error('digitalizept process get error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível carregar o processo.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/process/advance', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const snapshot = leadProcess.recomputeProcesso(db, leadId);
+        if (!snapshot) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const passo = cleanText(body.passo, 20).toUpperCase();
+        if (!passo) return res.status(400).json({ error: 'Falta o passo.' });
+        const revisitarEm = cleanText(body.revisitarEm, 40);
+        const travas = leadProcess.bloqueios({
+            estado: snapshot.estado,
+            processo: snapshot.processo,
+            toques: snapshot.toques,
+            passo,
+            revisitarEm: revisitarEm || cleanText(snapshot.row.revisitar_em, 40)
+        });
+        const saltar = body.saltar === true;
+        if (travas.length && !saltar) {
+            return res.status(409).json({ error: travas[0].motivo, bloqueios: travas });
+        }
+        const patchProcesso = {};
+        if (body.melhorHora != null) patchProcesso.melhorHora = cleanText(body.melhorHora, 40);
+        if (body.nomeAtendedor != null) patchProcesso.nomeAtendedor = cleanText(body.nomeAtendedor, 80);
+        if (body.canalDireto != null) patchProcesso.canalDireto = body.canalDireto === true;
+        if (body.objecao != null) patchProcesso.objecao = cleanText(body.objecao, 60);
+        if (body.canalPreferido != null) patchProcesso.canalPreferido = cleanText(body.canalPreferido, 20);
+        const feito = leadProcess.registarToque(db, leadId, {
+            passo,
+            canal: cleanText(body.canal, 20) || leadProcess.PASSO_CANAL[passo] || '',
+            estado: saltar ? 'saltado' : (cleanText(body.estado, 20) || 'feito'),
+            resultado: cleanText(body.resultado, 40),
+            destino: snapshot.processo.canalDireto ? 'direto' : 'negocio',
+            objecao: cleanText(body.objecao, 60),
+            nota: cleanText(body.nota, 2000),
+            texto: cleanText(body.texto, 8000),
+            lang: body.lang || snapshot.followup.lang,
+            proximoEstado: cleanText(body.proximoEstado, 20),
+            revisitarEm: revisitarEm || null,
+            processo: Object.keys(patchProcesso).length ? patchProcesso : null
+        });
+        return res.json({ ok: true, ...processoPayload(feito) });
+    } catch (err) {
+        console.error('digitalizept process advance error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível avançar o processo.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/process/contact', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const patch = {};
+        if (body.tipoNumero != null) patch.tipoNumero = cleanText(body.tipoNumero, 10);
+        if (body.temWhatsapp != null) patch.temWhatsapp = body.temWhatsapp === true;
+        if (body.apelidoConfirmado != null) patch.apelidoConfirmado = body.apelidoConfirmado === true;
+        if (body.nomeAtendedor != null) patch.nomeAtendedor = cleanText(body.nomeAtendedor, 80);
+        if (body.melhorHora != null) patch.melhorHora = cleanText(body.melhorHora, 40);
+        if (body.canalPreferido != null) patch.canalPreferido = cleanText(body.canalPreferido, 20);
+        if (body.canalDireto != null) patch.canalDireto = body.canalDireto === true;
+        if (body.emailPrecosLigado != null) patch.emailPrecosLigado = body.emailPrecosLigado === true;
+        const snapshot = leadProcess.recomputeProcesso(db, leadId, { patchProcesso: patch });
+        if (!snapshot) return res.status(404).json({ error: 'Lead não encontrado.' });
+        return res.json({ ok: true, ...processoPayload(snapshot) });
+    } catch (err) {
+        console.error('digitalizept process contact error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar o contacto.' });
+    }
+});
+
+app.post('/api/digitalizept/leads/:leadId/process/close', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const estado = leadProcess.normalizeEstado(body.estado);
+        if (!['RECUSADO', 'ADORMECIDO', 'REMOVIDO'].includes(estado)) {
+            return res.status(400).json({ error: 'Estado de fecho inválido.' });
+        }
+        const snapshot = leadProcess.recomputeProcesso(db, leadId);
+        if (!snapshot) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const revisitarEm = cleanText(body.revisitarEm, 40);
+        if (estado !== 'REMOVIDO' && !revisitarEm) {
+            return res.status(400).json({
+                error: 'Um não sem data fecha a porta. Marque quando voltas a dar notícias.'
+            });
+        }
+        const ofertaFinal = cleanText(body.ofertaFinal, 600);
+        const referenciaPedida = cleanText(body.referenciaPedida, 120);
+        if (estado !== 'REMOVIDO') {
+            if (!ofertaFinal) {
+                return res.status(400).json({ error: 'Falta a oferta final — é o que mantém a porta aberta.' });
+            }
+            if (!referenciaPedida) {
+                return res.status(400).json({ error: 'Falta registar a pergunta de referência.' });
+            }
+            if (snapshot.processo.ofertaFinalEnviada === true) {
+                return res.status(409).json({ error: 'A oferta final já saiu. Oferta repetida deixa de ser oferta.' });
+            }
+        }
+        if (estado === 'REMOVIDO') {
+            const followup = outreach.parseFollowup(snapshot.row.followup_json);
+            followup.unsubscribed = true;
+            saveLeadFollowup(db, leadId, followup);
+        }
+        const precoCongelado = Math.max(0, Math.round(Number(body.precoCongelado) || 0))
+            || outreach.offerPrices({
+                includePrices: true,
+                campanhaPct: snapshot.followup.campanhaPct,
+                campanhaShowPrices: snapshot.followup.campanhaShowPrices
+            }).tudo;
+        const feito = leadProcess.registarToque(db, leadId, {
+            passo: estado === 'REMOVIDO' ? 'REMOVER' : 'R1',
+            canal: estado === 'REMOVIDO' ? '' : 'whatsapp',
+            estado: 'feito',
+            resultado: estado === 'REMOVIDO' ? 'removido' : cleanText(body.resultado, 40) || 'nao_agora',
+            objecao: cleanText(body.objecao, 60),
+            nota: cleanText(body.nota, 2000),
+            texto: cleanText(body.texto, 8000),
+            lang: snapshot.followup.lang,
+            proximoEstado: estado,
+            revisitarEm: estado === 'REMOVIDO' ? '' : revisitarEm,
+            processo: estado === 'REMOVIDO'
+                ? {}
+                : {
+                    ofertaFinal,
+                    ofertaFinalEnviada: true,
+                    referenciaPedida,
+                    precoCongelado,
+                    objecao: cleanText(body.objecao, 60)
+                }
+        });
+        return res.json({ ok: true, ...processoPayload(feito) });
+    } catch (err) {
+        console.error('digitalizept process close error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível encerrar o processo.' });
+    }
+});
+
 app.get('/api/digitalizept/public/:slug', (req, res) => {
     try {
         const slug = cleanText(req.params.slug, 80);
         const db = getDigitalizeptDb();
         const row = db.prepare(`
-            SELECT l.nome, l.business_type, l.demo_json, l.identidade_json, l.demo_html, l.wizard_json,
+            SELECT l.id, l.nome, l.business_type, l.demo_json, l.identidade_json, l.demo_html, l.wizard_json,
                    d.obrigatorios_json, d.opcionais_json
             FROM lead l
             LEFT JOIN dados_negocio d ON d.lead_id = l.id
@@ -4567,6 +5006,18 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
         `).get(slug);
         if (!row || ((!row.demo_json || row.demo_json === '{}') && !row.demo_html)) {
             return res.status(404).json({ error: 'Demonstração não encontrada.' });
+        }
+        // The demo hit is the only clean signal — the cold email carries no pixel.
+        try {
+            const novo = leadProcess.registarVisitaDemo(db, {
+                leadId: row.id,
+                slug,
+                referer: req.get('referer') || '',
+                userAgent: req.get('user-agent') || ''
+            });
+            if (novo) leadProcess.recomputeProcesso(db, row.id);
+        } catch (err) {
+            console.error('digitalizept demo visit error:', err.message);
         }
         const types = loadBusinessTypes();
         const businessType = types.find((t) => t.id === row.business_type) || { id: row.business_type, nome: row.business_type };

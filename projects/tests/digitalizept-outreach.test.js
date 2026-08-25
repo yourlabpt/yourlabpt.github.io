@@ -21,7 +21,11 @@ const {
     nextConfirmCallAt,
     scheduleConfirmCall,
     confirmCallState,
-    formatCountdown
+    formatCountdown,
+    offerCopy,
+    emailSubjectFor,
+    textForPasso,
+    subjectForPasso
 } = require('../../server/lib/digitalizept-outreach.js');
 
 describe('digitalizept outreach', () => {
@@ -68,8 +72,10 @@ describe('digitalizept outreach', () => {
         assert.match(wa1, /São exemplos/);
         assert.doesNotMatch(wa1, /café do Zé/);
 
+        // No amounts on a cold lead: the seller has to turn prices on.
         const wa2 = waTextForStep(2, ctx);
-        assert.match(wa2, /490 euros/);
+        assert.doesNotMatch(wa2, /490 euros/);
+        assert.match(waTextForStep(2, { ...ctx, ...offerCopy({ includePrices: true }, 'pt') }), /490 euros/);
         assert.match(wa2, /história toda/);
         assert.doesNotMatch(wa2, /demonstrador/);
         assert.doesNotMatch(wa2, /google\.com\/maps/);
@@ -338,9 +344,13 @@ describe('digitalizept outreach', () => {
         assert.doesNotMatch(html, /Yes, let's talk/);
         assert.doesNotMatch(html, /\{\{\w+\}\}/);
         const text = renderEmailText(ctx);
-        assert.match(text, /VAT not included/);
         assert.match(text, /book a short meeting/);
         assert.match(text, /REMOVE/);
+        assert.doesNotMatch(text, /VAT not included/);
+        assert.match(
+            renderEmailText({ ...ctx, ...offerCopy({ includePrices: true }, 'en') }),
+            /VAT not included/
+        );
     });
 
     it('uses sou a when the sender is configured that way', () => {
@@ -362,7 +372,7 @@ describe('digitalizept outreach', () => {
             origin: 'https://yourlabpt.com',
             demoSlug: 'talho-da-costa'
         };
-        const withPrices = buildOutreachContext(base);
+        const withPrices = buildOutreachContext({ ...base, offer: { includePrices: true } });
         assert.equal(withPrices.showPrecos, true);
         assert.equal(withPrices.precoTudo, 490);
         assert.match(renderEmailHtml(withPrices), /490/);
@@ -371,10 +381,8 @@ describe('digitalizept outreach', () => {
         assert.doesNotMatch(renderEmailHtml(withPrices), /IF_PRECOS/);
         assert.doesNotMatch(renderEmailHtml(withPrices), /IF_CAMPANHA/);
 
-        const noPrices = buildOutreachContext({
-            ...base,
-            offer: { includePrices: false }
-        });
+        // Cold is the default, so an empty offer already means no amounts.
+        const noPrices = buildOutreachContext(base);
         assert.equal(noPrices.showPrecos, false);
         assert.doesNotMatch(renderEmailHtml(noPrices), /490/);
         assert.doesNotMatch(waTextForStep(2, noPrices), /490 euros/);
@@ -383,7 +391,7 @@ describe('digitalizept outreach', () => {
 
         const pctOnly = buildOutreachContext({
             ...base,
-            offer: { includePrices: false, campanhaPct: 15, campanhaShowPrices: false }
+            offer: { campanhaPct: 15, campanhaShowPrices: false }
         });
         assert.equal(pctOnly.showCampanha, true);
         assert.equal(pctOnly.showPrecos, false);

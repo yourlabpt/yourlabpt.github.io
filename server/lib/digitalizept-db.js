@@ -193,7 +193,11 @@ function migrate(db) {
         geocoded_at: "TEXT NOT NULL DEFAULT ''",
         geocode_status: "TEXT NOT NULL DEFAULT ''",
         demo_html: "TEXT NOT NULL DEFAULT ''",
-        followup_json: "TEXT NOT NULL DEFAULT '{}'"
+        followup_json: "TEXT NOT NULL DEFAULT '{}'",
+        processo_estado: "TEXT NOT NULL DEFAULT ''",
+        proxima_acao_em: "TEXT NOT NULL DEFAULT ''",
+        revisitar_em: "TEXT NOT NULL DEFAULT ''",
+        processo_json: "TEXT NOT NULL DEFAULT '{}'"
     });
     addMissingColumns(db, 'contrato', {
         html_path: "TEXT NOT NULL DEFAULT ''"
@@ -229,6 +233,40 @@ function migrate(db) {
         resultado: "TEXT NOT NULL DEFAULT ''"
     });
     db.exec(`CREATE INDEX IF NOT EXISTS idx_visita_lead ON visita(lead_id)`);
+
+    // The guided process timeline. `texto` keeps what was actually sent, so a lead
+    // can be resumed months later without repeating a single message.
+    db.exec(`CREATE TABLE IF NOT EXISTS lead_toque (
+        id TEXT PRIMARY KEY,
+        lead_id TEXT NOT NULL REFERENCES lead(id),
+        ordem INTEGER NOT NULL DEFAULT 0,
+        passo TEXT NOT NULL DEFAULT '',
+        canal TEXT NOT NULL DEFAULT '',
+        estado TEXT NOT NULL DEFAULT 'agendado',
+        agendado_para TEXT NOT NULL DEFAULT '',
+        executado_em TEXT NOT NULL DEFAULT '',
+        resultado TEXT NOT NULL DEFAULT '',
+        destino TEXT NOT NULL DEFAULT '',
+        objecao TEXT NOT NULL DEFAULT '',
+        nota TEXT NOT NULL DEFAULT '',
+        texto TEXT NOT NULL DEFAULT '',
+        lang TEXT NOT NULL DEFAULT 'pt',
+        criado_em TEXT NOT NULL
+    )`);
+    addMissingColumns(db, 'lead_toque', {
+        destino: "TEXT NOT NULL DEFAULT ''"
+    });
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_lead_toque_lead ON lead_toque(lead_id, criado_em)`);
+
+    // Demo page hits are the only clean signal source — the cold email carries no tracking.
+    db.exec(`CREATE TABLE IF NOT EXISTS demo_visita (
+        id TEXT PRIMARY KEY,
+        lead_id TEXT NOT NULL REFERENCES lead(id),
+        slug TEXT NOT NULL DEFAULT '',
+        referer TEXT NOT NULL DEFAULT '',
+        criado_em TEXT NOT NULL
+    )`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_demo_visita_lead ON demo_visita(lead_id, criado_em)`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS app_setting (
         key TEXT PRIMARY KEY,

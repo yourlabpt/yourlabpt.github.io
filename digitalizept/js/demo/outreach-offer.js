@@ -13,9 +13,10 @@ export function clampCampanhaPct(value) {
     return Math.max(0, Math.min(100, n));
 }
 
+// Cold leads carry no amounts: a number without context always reads as expensive.
 export function normalizeOffer(raw = {}) {
     return {
-        includePrices: raw.includePrices !== false,
+        includePrices: raw.includePrices === true,
         campanhaPct: clampCampanhaPct(raw.campanhaPct),
         campanhaShowPrices: raw.campanhaShowPrices !== false
     };

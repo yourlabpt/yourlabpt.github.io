@@ -7,8 +7,8 @@ import { renderMapsCockpit } from './admin-maps.js';
 import { createLeadWebsiteZipButton, downloadStandaloneWebsiteZipFromLead } from './demo/site-zip.js';
 import { fetchConfig } from './settings.js';
 import { renderProviderEditor } from './provider-editor.js';
-import { renderFollowupShare } from './demo/followup-ui.js';
 import { renderLeadDossier, dossierHash, leadIdFromHash } from './admin-lead.js';
+import { renderLeadProcess } from './admin-lead-process.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
 import {
     askCallNotifyPermission,
@@ -81,6 +81,7 @@ let catalog = [];
 let leads = [];
 let deals = [];
 let coverageUi = null;
+let leadProcessUi = null;
 let businessTypes = [];
 
 function toast(message, isError = false, options = {}) {
@@ -556,12 +557,8 @@ function renderDemos() {
             const share = document.createElement('button');
             share.type = 'button';
             share.className = 'btn-secondary';
-            share.textContent = 'WhatsApp / Email';
-            share.addEventListener('click', () => openFollowupShare({
-                leadId: l.id,
-                nome: l.nome,
-                demo_slug: l.demo_slug
-            }));
+            share.textContent = 'Controlo da lead';
+            share.addEventListener('click', () => openLeadDossier(l.id));
             actions.appendChild(share);
         }
 
@@ -719,12 +716,8 @@ function renderDeals() {
                 const share = document.createElement('button');
                 share.type = 'button';
                 share.className = 'btn-secondary';
-                share.textContent = 'WhatsApp / Email';
-                share.addEventListener('click', () => openFollowupShare({
-                    leadId: d.leadId,
-                    nome: d.nome || d.cliente_nome,
-                    demo_slug: d.demo_slug
-                }));
+                share.textContent = 'Controlo da lead';
+                share.addEventListener('click', () => openLeadDossier(d.leadId));
                 actions.appendChild(share);
             }
         }
@@ -848,6 +841,15 @@ async function openLeadDossier(leadId) {
         }
         const handlers = {};
         handlers.onToast = toast;
+        handlers.mountProcess = (node, id) => {
+            if (leadProcessUi && typeof leadProcessUi.destroy === 'function') leadProcessUi.destroy();
+            leadProcessUi = renderLeadProcess(node, {
+                leadId: id,
+                api,
+                onToast: toast,
+                onChanged: () => { loadLeads().catch(() => {}); }
+            });
+        };
         handlers.onBack = () => {
             history.replaceState(null, '', window.location.pathname + window.location.search);
             switchTab('leads');
@@ -904,84 +906,6 @@ async function jumpToLeadMap(leadId) {
         await coverageUi.openOrCreateVisitForLead(leadId);
     } catch (_) {
         toast('Não foi possível abrir no mapa.', true);
-    }
-}
-
-async function openFollowupShare({ leadId, nome, demo_slug }) {
-    if (!leadId) {
-        toast('Lead em falta.', true);
-        return;
-    }
-    openDrawer(`Enviar demonstração — ${nome || 'Lead'}`, (panel) => {
-        const loading = document.createElement('p');
-        loading.className = 'admin-hint';
-        loading.textContent = 'A carregar dados…';
-        panel.appendChild(loading);
-    });
-
-    try {
-        const [{ response, data }, config] = await Promise.all([
-            api(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/resume`),
-            fetchConfig({ onUnauthorized })
-        ]);
-        if (!response.ok) {
-            closeDrawer();
-            toast((data && data.error) || 'Não foi possível carregar o lead.', true);
-            return;
-        }
-
-        const resume = data.data || {};
-        const stateData = {
-            ...resume,
-            leadId,
-            demoUrl: resume.demoUrl || (demo_slug ? `/d/${demo_slug}` : ''),
-            dados: {
-                ...(resume.dados || {}),
-                nome_negocio: (resume.dados && resume.dados.nome_negocio) || nome || '',
-                email: (resume.dados && resume.dados.email)
-                    || (resume.clienteLegal && resume.clienteLegal.email)
-                    || '',
-                telefone: (resume.dados && resume.dados.telefone) || '',
-                whatsapp: (resume.dados && resume.dados.whatsapp) || '',
-                responsavel: (resume.dados && resume.dados.responsavel)
-                    || (resume.clienteLegal && resume.clienteLegal.nome)
-                    || ''
-            }
-        };
-
-        const ctx = {
-            state: { data: stateData },
-            update(patch) {
-                Object.assign(stateData, patch);
-            },
-            showToast: toast,
-            onUnauthorized
-        };
-
-        openDrawer(`Enviar demonstração — ${stateData.dados.nome_negocio || nome || 'Lead'}`, (panel) => {
-            const host = document.createElement('div');
-            panel.appendChild(host);
-            renderFollowupShare(host, ctx, {
-                ...(config || { provider: {} }),
-                api,
-                onPinLead: async (id) => {
-                    const { response: geoRes, data: geo } = await api(
-                        `/api/digitalizept/leads/${encodeURIComponent(id)}/geocode`,
-                        { method: 'POST' }
-                    );
-                    if (!geoRes.ok) throw new Error((geo && geo.error) || 'geocode');
-                    if (coverageUi && typeof coverageUi.refresh === 'function') {
-                        await coverageUi.refresh();
-                    }
-                    return true;
-                }
-            }, {
-                hidePublish: Boolean(stateData.demoUrl)
-            });
-        });
-    } catch (_) {
-        closeDrawer();
-        toast('Erro de rede.', true);
     }
 }
 
@@ -1237,7 +1161,7 @@ coverageUi = setupCoverage({
     field,
     inputEl,
     openNotes,
-    openFollowup: openFollowupShare,
+    openFollowup: openLeadDossier,
     openDossier: openLeadDossier,
     onUnauthorized
 });

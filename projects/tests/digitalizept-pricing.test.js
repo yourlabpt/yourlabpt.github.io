@@ -692,8 +692,11 @@ describe('digitalizept followup messages', () => {
         assert.match(wa, /\/d\/cafe-exemplo/);
         assert.match(wa, /YourLab, aqui de/);
 
+        // No email sent yet, so the WhatsApp message never mentions one.
+        assert.doesNotMatch(wa, /Mandei-lhe um email/);
+
         const wa2 = buildWhatsAppMessage(state, config, 2);
-        assert.match(wa2, /490 euros/);
+        assert.doesNotMatch(wa2, /490 euros/);
         assert.match(wa2, /história toda/);
         assert.doesNotMatch(wa2, /demonstrador/);
         assert.doesNotMatch(wa2, /google\.com\/maps/);
@@ -702,9 +705,31 @@ describe('digitalizept followup messages', () => {
         assert.match(wa3, /sexta-feira/);
 
         const email = buildEmailContent(state, config);
-        assert.match(email.subject, /Café do Zé/);
+        assert.match(email.subject, /exemplo que fizemos para a Café do Zé/);
         assert.match(email.body, /\/d\/cafe-exemplo/);
         assert.match(email.body, /Túlio Soares/);
+    });
+
+    it('mentions the email in WhatsApp 1 only after the email really went out', () => {
+        const base = {
+            demoUrl: '/d/cafe-exemplo',
+            dados: { responsavel: 'Silva', nome_negocio: 'Café do Zé', cidade: 'Braga' }
+        };
+        const config = { provider: { responsavel: 'Túlio Soares' } };
+        const semEmail = buildWhatsAppMessage({ data: { ...base, followup: { lang: 'pt' } } }, config);
+        assert.doesNotMatch(semEmail, /Mandei-lhe um email/);
+
+        const comEmail = buildWhatsAppMessage({
+            data: { ...base, followup: { lang: 'pt', emailSentAt: new Date().toISOString() } }
+        }, config);
+        assert.match(comEmail, /Mandei-lhe um email hoje/);
+        assert.match(comEmail, /mais fácil de ver/);
+
+        const en = buildWhatsAppMessage({
+            data: { ...base, followup: { lang: 'en', emailSentAt: new Date().toISOString() } }
+        }, config);
+        assert.match(en, /I sent you an email/);
+        assert.doesNotMatch(en, /Mandei-lhe/);
     });
 
     it('fills English WhatsApp and email when followup.lang is en', () => {
@@ -733,9 +758,12 @@ describe('digitalizept followup messages', () => {
         assert.match(wa3, /tomorrow/);
         assert.doesNotMatch(wa3, /amanhã/);
         const email = buildEmailContent(state, config);
-        assert.match(email.subject, /I made this for Café do Zé/);
+        assert.match(email.subject, /an example we made for Café do Zé/);
         assert.doesNotMatch(email.body, /Sr\./);
-        assert.match(email.body, /VAT not included/);
+        assert.doesNotMatch(email.body, /VAT not included/);
+
+        state.data.followup.includePrices = true;
+        assert.match(buildEmailContent(state, config).body, /VAT not included/);
     });
 
     it('omits street prices from WhatsApp 2 and email when includePrices is off', () => {

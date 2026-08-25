@@ -15,7 +15,7 @@ import { offerCopy, normalizeOffer } from './outreach-offer.js';
 export { normalizeOutreachLang };
 
 export const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+    1: `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.{{pontEmailFrase}}
 
 *{{ganchoTitulo}}*{{ganchoTextoWa}}
 
@@ -42,7 +42,7 @@ Marcamos {{followupDia}} de manhã? Tratamos de tudo — vocês só precisam de 
 };
 
 export const WA_TEMPLATES_EN = {
-    1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+    1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.{{pontEmailFrase}}
 
 *{{ganchoTitulo}}*{{ganchoTextoWa}}
 
@@ -70,8 +70,8 @@ Shall we meet {{followupDia}} in the morning? We take care of everything — you
 
 export const DEFAULT_WHATSAPP_TEMPLATE = WA_TEMPLATES[1];
 
-export const DEFAULT_EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
-export const DEFAULT_EMAIL_SUBJECT_EN = '{{clienteNome}}, I made this for {{negocioNome}}';
+export const DEFAULT_EMAIL_SUBJECT = 'exemplo que fizemos para a {{negocioNome}}';
+export const DEFAULT_EMAIL_SUBJECT_EN = 'an example we made for {{negocioNome}}';
 
 export const DEFAULT_EMAIL_BODY = `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
@@ -164,6 +164,28 @@ export function outreachLangOf(state) {
     return normalizeOutreachLang(state && state.data && state.data.followup && state.data.followup.lang);
 }
 
+/**
+ * The line that refers to the email is what separates a follow-up from a scam —
+ * so it only exists when the email actually went out. With no email sent, the
+ * line disappears rather than claiming something false in the first sentence.
+ */
+export function pontEmailFields(followup, lang, hour = new Date().getHours()) {
+    const enviadoEm = followup && followup.emailSentAt;
+    if (!enviadoEm) return { pontEmail: '', pontEmailFrase: '', quandoEmail: '' };
+    const en = normalizeOutreachLang(lang) === 'en';
+    const quando = new Date(enviadoEm);
+    const hoje = new Date();
+    const mesmoDia = quando.toDateString() === hoje.toDateString();
+    let quandoEmail;
+    if (!mesmoDia) quandoEmail = en ? 'the other day' : 'há dias';
+    else if (quando.getHours() < 13 && Number(hour) >= 13) quandoEmail = en ? 'this morning' : 'hoje de manhã';
+    else quandoEmail = en ? 'today' : 'hoje';
+    const pontEmail = en
+        ? `I sent you an email ${quandoEmail}; sending it here too as it is easier to see.`
+        : `Mandei-lhe um email ${quandoEmail}, mando por aqui que é mais fácil de ver.`;
+    return { pontEmail, pontEmailFrase: ` ${pontEmail}`, quandoEmail };
+}
+
 export function buildFollowupContext(state, config) {
     const dados = (state && state.data && state.data.dados) || {};
     const provider = (config && config.provider) || {};
@@ -222,8 +244,12 @@ export function buildFollowupContext(state, config) {
         ganchoTextoCurto: '',
         ganchoTextoWa: '',
         blocoPrecosWa: '\n\n',
-        fechoPreco: ''
+        fechoPreco: '',
+        pontEmail: '',
+        pontEmailFrase: '',
+        quandoEmail: ''
     };
+    Object.assign(ctx, pontEmailFields(state.data && state.data.followup, lang, hour));
     const sinais = sinaisFromWizardState(state);
     ctx.problemaFicha = sinais.problemaFicha;
     const picked = pickGancho({

@@ -888,7 +888,7 @@ export function setupCoverage({
             const emailPin = document.createElement('button');
             emailPin.type = 'button';
             emailPin.className = 'btn-secondary';
-            emailPin.textContent = 'Email + pin pela morada';
+            emailPin.textContent = 'Controlo da lead + pin pela morada';
             emailPin.addEventListener('click', async () => {
                 emailPin.disabled = true;
                 try {
@@ -902,11 +902,11 @@ export function setupCoverage({
                         await refresh();
                         paint({ preserveView: true });
                     }
-                    // Open admin follow-up drawer for email if available on parent.
+                    // Sending happens in the lead's control panel, not on the map.
                     if (typeof openFollowup === 'function') {
-                        openFollowup({ leadId: pin.id, nome: pin.nome, demo_slug: pin.demo_slug });
+                        openFollowup(pin.id);
                     } else {
-                        toast('Abra “Enviar demonstração” no lead para o email.', false);
+                        toast('Abra o controlo da lead para enviar.', false);
                     }
                 } catch (_) {
                     toast('Erro de rede.', true);

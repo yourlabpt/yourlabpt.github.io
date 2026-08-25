@@ -57,7 +57,7 @@ const NOTICE_TEMPLATE_PATH = path.join(
 const DEFAULT_VENDEDOR_TELEFONE = '+351936732879';
 
 const WA_TEMPLATES = {
-    1: `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+    1: `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.{{pontEmailFrase}}
 
 *{{ganchoTitulo}}*{{ganchoTextoWa}}
 
@@ -83,7 +83,8 @@ Aqui fica a página que lhe mostrei — a história toda num sítio só vosso:
 Marcamos {{followupDia}} de manhã? Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.`
 };
 
-const EMAIL_SUBJECT = 'Sr. {{clienteNome}}, fiz isto para a {{negocioNome}}';
+// Lower case, no selling verb: it reads like a note, not a campaign.
+const EMAIL_SUBJECT = 'exemplo que fizemos para a {{negocioNome}}';
 
 const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
@@ -105,7 +106,7 @@ YourLab, {{zona}}
 Para sair da lista, responda REMOVER.`;
 
 const WA_TEMPLATES_EN = {
-    1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+    1: `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.{{pontEmailFrase}}
 
 *{{ganchoTitulo}}*{{ganchoTextoWa}}
 
@@ -131,7 +132,7 @@ Here is the page I showed you — the whole story in one place that is yours:
 Shall we meet {{followupDia}} in the morning? We take care of everything — you just need to be happy with it before final delivery.`
 };
 
-const EMAIL_SUBJECT_EN = '{{clienteNome}}, I made this for {{negocioNome}}';
+const EMAIL_SUBJECT_EN = 'an example we made for {{negocioNome}}';
 
 const EMAIL_TEXT_EN = `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
 
@@ -144,6 +145,84 @@ To show you what I mean, I put two things together for {{negocioNome}}, without 
 {{link}}
 
 If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery.{{fechoPreco}}
+
+{{vendedorNome}}
+YourLab, {{zona}}
+{{vendedorTelefone}}
+{{site}}
+
+To leave the list, reply REMOVE.`;
+
+/**
+ * Closing copy. Three rules hold across all of it: the example stays saved, the
+ * price stays frozen, and the door stays open. "Não o incomodo mais com isto" is
+ * allowed — it is respect with an opening in the next sentence, unlike
+ * "não volto a incomodar", which is a promise that closes the return.
+ */
+const PASSO_TEMPLATES = {
+    N1: {
+        pt: `Sr. {{clienteNome}}, não sei se viu a mensagem. Mando só a parte do Google, que é a que costuma surpreender — é assim que a *{{negocioNome}}* aparece a quem a procura no telemóvel.
+
+{{link}}
+
+O exemplo continua guardado, não apago.`,
+        en: `{{clienteNome}}, I am not sure you saw my message. Here is just the Google part, which is usually the surprising one — this is how *{{negocioNome}}* shows up to someone searching on their phone.
+
+{{link}}
+
+The example stays saved on our side; we do not delete it.`
+    },
+    R1: {
+        pt: `Fica assim então, Sr. {{clienteNome}}. O exemplo da *{{negocioNome}}* fica guardado do nosso lado e o valor fica o mesmo — {{precoCongelado}}, sem IVA.
+
+{{ofertaFinal}}
+
+Volto a dar notícias por volta de {{mesRevisita}}. E já agora — conhece aqui na zona alguém que precise disto?`,
+        en: `Let us leave it like this, {{clienteNome}}. The example for *{{negocioNome}}* stays saved on our side and the price stays the same — {{precoCongelado}}, VAT not included.
+
+{{ofertaFinal}}
+
+I will get back to you around {{mesRevisita}}. And while I have you — do you know anyone here in the area who needs this?`
+    },
+    REVISITA: {
+        pt: `{{saudacao}} Sr. {{clienteNome}}, é {{vendedorArtigo}} {{vendedorNome}} da YourLab. Falámos em {{mesAnterior}} e ficou combinado eu voltar por esta altura.
+
+O exemplo da *{{negocioNome}}* continua guardado, tal como estava, e o valor também — {{precoCongelado}}, sem IVA.
+
+Quer que lhe mande outra vez?`,
+        en: `{{saudacao}} {{clienteNome}}, this is {{vendedorNome}} from YourLab. We spoke back in {{mesAnterior}} and we agreed I would come back around now.
+
+The example for *{{negocioNome}}* is still saved, exactly as it was, and so is the price — {{precoCongelado}}, VAT not included.
+
+Would you like me to send it again?`
+    }
+};
+
+const EMAIL2_SUBJECT = 'fica só o registo — {{negocioNome}}';
+const EMAIL2_SUBJECT_EN = 'just for the record — {{negocioNome}}';
+
+const EMAIL2_TEXT = `Sr. {{clienteNome}},
+
+Não o incomodo mais com isto.
+
+Fica só o registo: o exemplo da {{negocioNome}} continua guardado do nosso lado, não apagamos. Se um dia for altura, é só responder a este email e retomamos onde ficámos — pelo mesmo valor.
+
+Fico à disposição.
+
+{{vendedorNome}}
+YourLab, {{zona}}
+{{vendedorTelefone}}
+{{site}}
+
+Para sair da lista, responda REMOVER.`;
+
+const EMAIL2_TEXT_EN = `{{clienteNome}},
+
+I won't take up more of your time on this.
+
+Just for the record: the example for {{negocioNome}} is still saved on our side — we don't delete it. If the timing ever works, just reply to this email and we pick up where we left off, at the same price.
+
+Always available.
 
 {{vendedorNome}}
 YourLab, {{zona}}
@@ -281,9 +360,11 @@ function clampCampanhaPct(value) {
     return Math.max(0, Math.min(100, n));
 }
 
+// Cold leads carry no amounts: a number without context always reads as expensive.
+// Prices only appear once the seller turns them on, or once there is a signal.
 function normalizeOffer(raw = {}) {
     return {
-        includePrices: raw.includePrices !== false,
+        includePrices: raw.includePrices === true,
         campanhaPct: clampCampanhaPct(raw.campanhaPct),
         campanhaShowPrices: raw.campanhaShowPrices !== false
     };
@@ -435,7 +516,7 @@ function emptyFollowup() {
         siteVelho: false,
         problemaFicha: '',
         lang: 'pt',
-        includePrices: true,
+        includePrices: false,
         campanhaPct: 0,
         campanhaShowPrices: true,
         edits: {}
@@ -822,7 +903,14 @@ function buildOutreachContext({
         campanhaLinha: '',
         precoNota: '',
         blocoPrecosWa: '\n\n',
-        fechoPreco: ''
+        fechoPreco: '',
+        pontEmail: '',
+        pontEmailFrase: '',
+        quandoEmail: '',
+        ofertaFinal: '',
+        precoCongelado: '',
+        mesRevisita: '',
+        mesAnterior: ''
     };
     Object.assign(ctx, offerCopy(offer, outreachLang));
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
@@ -862,6 +950,42 @@ function renderEmailText(ctx) {
     return fillTemplate(pack, ctx);
 }
 
+/** Email 2 is plain text on purpose — no HTML, no images, so it reads as written by hand. */
+function renderEmail2Text(ctx) {
+    const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL2_TEXT_EN : EMAIL2_TEXT;
+    return fillTemplate(pack, ctx);
+}
+
+function email2SubjectFor(ctx) {
+    const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL2_SUBJECT_EN : EMAIL2_SUBJECT;
+    return fillTemplate(pack, ctx);
+}
+
+const PASSO_WA_STEP = { WA1: 1, WA2: 2, WA3: 3 };
+
+/** One entry point per step of the guided process. */
+function textForPasso(passo, ctx, edits = {}) {
+    const key = String(passo || '').trim().toUpperCase();
+    if (PASSO_WA_STEP[key]) return waTextForStep(PASSO_WA_STEP[key], ctx, edits);
+    const pack = PASSO_TEMPLATES[key];
+    if (pack) {
+        const lang = normalizeOutreachLang(ctx && ctx.lang);
+        const editado = edits[key.toLowerCase()];
+        if (editado && !String(editado).includes('{{')) return String(editado);
+        return fillTemplate(editado || pack[lang] || pack.pt, ctx);
+    }
+    if (key === 'EMAIL1') return renderEmailText(ctx);
+    if (key === 'EMAIL2') return renderEmail2Text(ctx);
+    return '';
+}
+
+function subjectForPasso(passo, ctx, edits = {}) {
+    const key = String(passo || '').trim().toUpperCase();
+    if (key === 'EMAIL2') return email2SubjectFor(ctx);
+    if (key === 'EMAIL1') return emailSubjectFor(ctx, edits);
+    return '';
+}
+
 function newUnsubToken() {
     return crypto.randomBytes(16).toString('hex');
 }
@@ -874,7 +998,18 @@ function leadEmailFromRows(obrigatoriosJson, opcionaisJson, legalEmail) {
 
 module.exports = {
     WA_TEMPLATES,
+    WA_TEMPLATES_EN,
+    PASSO_TEMPLATES,
     EMAIL_SUBJECT,
+    EMAIL_SUBJECT_EN,
+    EMAIL2_SUBJECT,
+    EMAIL2_SUBJECT_EN,
+    EMAIL2_TEXT,
+    EMAIL2_TEXT_EN,
+    renderEmail2Text,
+    email2SubjectFor,
+    textForPasso,
+    subjectForPasso,
     EMAIL_TEMPLATE_PATH,
     EMAIL_TEMPLATE_PATH_EN,
     normalizeOutreachLang,

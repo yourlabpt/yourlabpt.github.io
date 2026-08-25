@@ -3605,3 +3605,219 @@ a.btn-secondary {
     font-size: 0.85rem;
     color: var(--accent-color, #a07d3a);
 }
+
+/* Controlo da lead — one pending action, its guidance, and the timeline. */
+.lead-proc {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.lead-proc > div {
+    padding: 14px 16px;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+    border-radius: 10px;
+    background: var(--surface-color, #fff);
+}
+
+.lead-proc h4 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+}
+
+.lead-proc-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.lead-proc-title h3 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.lead-proc-estado {
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: var(--surface-muted, rgba(0, 0, 0, 0.05));
+}
+
+.lead-proc-estado[data-estado="REMOVIDO"],
+.lead-proc-estado[data-estado="RECUSADO"] {
+    background: rgba(178, 58, 46, 0.12);
+    color: #8c2c22;
+}
+
+.lead-proc-estado[data-estado="EM_SEQUENCIA"],
+.lead-proc-estado[data-estado="RESPONDEU"] {
+    background: rgba(160, 125, 58, 0.16);
+    color: #6c5220;
+}
+
+.lead-proc-gancho {
+    margin: 4px 0 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.lead-proc-conta {
+    margin: 8px 0 0;
+    font-size: 0.88rem;
+    color: var(--text-muted, #5a5348);
+}
+
+.lead-proc-conta-due {
+    color: #8c2c22;
+    font-weight: 600;
+}
+
+.lead-proc-agora {
+    border-left: 3px solid var(--accent-color, #a07d3a);
+}
+
+.lead-proc-canal {
+    margin: 0 0 8px;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted, #5a5348);
+}
+
+.lead-proc-instrucoes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.lead-proc-obj {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.lead-proc-nao {
+    margin: 0;
+    padding-left: 10px;
+    border-left: 2px solid rgba(178, 58, 46, 0.4);
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #8c2c22;
+}
+
+.lead-proc-bloqueios {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(178, 58, 46, 0.08);
+}
+
+.lead-proc-bloqueio-titulo {
+    margin: 0 0 4px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #8c2c22;
+}
+
+.lead-proc-bloqueio,
+.lead-proc-saltar {
+    margin: 0 0 4px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.lead-proc-saltar {
+    color: var(--text-muted, #5a5348);
+}
+
+.lead-proc-msg {
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.lead-proc-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.lead-proc-off {
+    opacity: 0.5;
+    pointer-events: auto;
+}
+
+.lead-proc-check,
+.lead-proc-flags label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+}
+
+.lead-proc-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.lead-proc-ganchos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.lead-proc-ganchos .followup-gancho.is-active {
+    border-color: var(--accent-color, #a07d3a);
+    box-shadow: inset 0 0 0 1px var(--accent-color, #a07d3a);
+}
+
+.lead-proc-toques {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.lead-proc-toque {
+    padding-left: 10px;
+    border-left: 2px solid var(--border-color, rgba(0, 0, 0, 0.12));
+}
+
+.lead-proc-toque-saltado {
+    border-left-color: rgba(160, 125, 58, 0.6);
+}
+
+.lead-proc-toque-falhado {
+    border-left-color: rgba(178, 58, 46, 0.6);
+}
+
+.lead-proc-toque-head {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.lead-proc-texto {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+    font-size: 0.82rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+.lead-proc-remover {
+    margin-left: auto;
+}

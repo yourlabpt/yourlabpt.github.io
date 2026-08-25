@@ -220,12 +220,22 @@ function appendField(grid, field, value, missing, attr, attrValue) {
     return control;
 }
 
-export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMapsLookup, onWebsiteZip } = {}) {
+export function renderLeadDossier(host, payload, {
+    onSave, onBack, onToast, onMapsLookup, onWebsiteZip, mountProcess
+} = {}) {
     host.innerHTML = '';
     host.className = 'dossier';
     if (!payload || !payload.lead) {
         host.appendChild(el('p', 'admin-empty', 'Lead não encontrado.'));
         return;
+    }
+
+    // The guided process lives above the ficha and outside the form: it is the
+    // only place where email, WhatsApp and calls happen.
+    if (typeof mountProcess === 'function') {
+        const processHost = el('div', 'dossier-process');
+        host.appendChild(processHost);
+        mountProcess(processHost, payload.lead.id);
     }
 
     const miss = missingSet(payload.completeness);
@@ -479,12 +489,10 @@ export function renderLeadDossier(host, payload, { onSave, onBack, onToast, onMa
     const idn = payload.identidade || {};
     const demo = payload.demo || {};
     const prop = payload.proposta || {};
-    const fu = payload.followup || {};
     const lines = [
         `Identidade: ${idn.estilo || '—'} / ${idn.paleta || '—'} · logo ${idn.hasLogo ? 'sim' : 'não'} · ${idn.fotoCount || 0} foto(s)`,
         demo.url ? `Demo: ${demo.titulo || demo.slug} (${demo.url})` : 'Demo: ainda não publicada',
-        prop.pacote ? `Proposta: ${prop.pacote}${prop.extras.length ? ` + ${prop.extras.join(', ')}` : ''}` : 'Proposta: ainda não fechada',
-        `Envio: WhatsApp ${fu.waStep || 0}/3${fu.emailSentAt ? ' · email enviado' : ''}${fu.callDueAt && !fu.callDoneAt ? ' · ligação pendente' : ''}${fu.unsubscribed ? ' · sem interesse (REMOVER)' : ''}`
+        prop.pacote ? `Proposta: ${prop.pacote}${prop.extras.length ? ` + ${prop.extras.join(', ')}` : ''}` : 'Proposta: ainda não fechada'
     ];
     lines.forEach((line) => read.appendChild(el('p', 'meta', line)));
     if ((payload.visits || []).length) {

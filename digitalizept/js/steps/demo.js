@@ -40,8 +40,6 @@ import {
 } from '../optional-ai.js';
 import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
-import { fetchConfig } from '../settings.js';
-import { renderFollowupShare } from '../demo/followup-ui.js';
 import { bindLeadToNome } from '../demo/business-identity.js';
 import { currentSubstep, renderAsk } from '../substep.js';
 import { scheduleSaveDraftLead } from '../draft.js';
@@ -447,9 +445,7 @@ function renderWebsiteDemo(body, ctx) {
     previewBtn.disabled = !isValid(ctx.state);
     previewBtn.addEventListener('click', () => {
         openPreview(ctx.state, ctx, { mode: 'website' });
-        publishDemo(ctx).then(() => {
-            if (followupUi) followupUi.refresh();
-        });
+        publishDemo(ctx);
     });
     const refreshBtn = document.createElement('button');
     refreshBtn.type = 'button';
@@ -484,34 +480,12 @@ function renderWebsiteDemo(body, ctx) {
     previewGroup.append(previewTitle, previewHint, stack, previewBtnWrap, zipHint, status);
     body.appendChild(previewGroup);
 
-    const followupHost = document.createElement('div');
-    body.appendChild(followupHost);
-    let followupUi = null;
-    fetchConfig(ctx).then((config) => {
-        if (!config) return;
-        followupUi = renderFollowupShare(followupHost, ctx, {
-            ...config,
-            api: async (path, options) => {
-                const { getToken } = await import('../auth.js');
-                const { apiRequest } = await import('../api.js');
-                return apiRequest(path, { ...options, token: getToken() });
-            },
-            onPinLead: async (leadId) => {
-                const { getToken } = await import('../auth.js');
-                const { apiRequest } = await import('../api.js');
-                const { response, data } = await apiRequest(
-                    `/api/digitalizept/leads/${encodeURIComponent(leadId)}/geocode`,
-                    { method: 'POST', token: getToken() }
-                );
-                if (!response.ok) throw new Error((data && data.error) || 'geocode');
-                return true;
-            }
-        }, {
-            onPublish: () => publishDemo(ctx).then((url) => {
-                if (url && followupUi) followupUi.refresh();
-            })
-        });
-    }).catch(() => { /* follow-up block is optional */ });
+    // Sending lives in the lead's control panel, in the admin, and nowhere else.
+    // This page only builds and publishes the demo.
+    const controloHint = document.createElement('p');
+    controloHint.className = 'id-disclaimer';
+    controloHint.textContent = 'Email, WhatsApp e ligações fazem-se no controlo da lead, no admin. Aqui só se constrói e publica a demo.';
+    body.appendChild(controloHint);
 
     if (identityChanged) {
         showStatus('Demo actualizada com as cores, logo e fotos do passo anterior.', 'ok');
