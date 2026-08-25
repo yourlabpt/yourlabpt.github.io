@@ -17,13 +17,48 @@ import { scrubDemoState } from './demo/html.js';
 // mid-visit must not cost a deal that is halfway to a signature.
 const STORAGE_KEY = 'yourlab_digitalizept_wizard';
 
+let pendingResumeState = null;
+
+function slimIdentidade(identidade) {
+    if (!identidade || typeof identidade !== 'object') return identidade;
+    const logo = identidade.logo && identidade.logo.tipo === 'upload'
+        ? { tipo: 'nenhum' }
+        : identidade.logo;
+    return { ...identidade, fotos: [], logo };
+}
+
+function writeWizardStorage(state) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return true;
+    } catch (_) {
+        try {
+            const slim = {
+                ...state,
+                data: {
+                    ...state.data,
+                    demoHtml: '',
+                    demoHtmlCustom: '',
+                    identidade: slimIdentidade(state.data && state.data.identidade)
+                }
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+}
+
 export function clearWizardState() {
+    pendingResumeState = null;
     try {
         localStorage.removeItem(STORAGE_KEY);
     } catch (_) { /* ignore */ }
 }
 
 export function getWizardState() {
+    if (pendingResumeState) return pendingResumeState;
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) return JSON.parse(raw);
@@ -38,15 +73,19 @@ export function seedWizardState(data, { step = 0, substep = 0 } = {}) {
         substep: Number.isFinite(Number(substep)) ? Math.max(0, Math.floor(Number(substep))) : 0,
         data: data && typeof data === 'object' ? data : {}
     };
+    if (!state.data.dados || typeof state.data.dados !== 'object') state.data.dados = {};
+    state.data.resumeBound = true;
     scrubDemoState(state);
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (_) { /* ignore */ }
+    pendingResumeState = state;
+    writeWizardStorage(state);
     return state;
 }
 
 // Used to decide whether discarding needs a confirmation.
 export function hasWizardProgress() {
+    if (pendingResumeState && pendingResumeState.data && Object.keys(pendingResumeState.data).length > 0) {
+        return true;
+    }
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return false;
@@ -72,6 +111,11 @@ const STEPS = [
 ];
 
 function loadState() {
+    if (pendingResumeState) {
+        const seeded = pendingResumeState;
+        pendingResumeState = null;
+        return seeded;
+    }
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
@@ -131,17 +175,13 @@ export function createWizard({ onUnauthorized, showToast }) {
 
     function persist() {
         if (state.abandoned) return;
-        try {
-            scrubDemoState(state);
-            if (typeof state.data.demoHtml === 'string' && state.data.demoHtml.length > 900000) {
-                state.data.demoHtml = state.data.demoHtml.slice(0, 900000);
-            }
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        } catch (_) {
-            if (!persistWarned) {
-                persistWarned = true;
-                showToast('Não deu para gravar no telemóvel. A demo fica só nesta sessão.', true);
-            }
+        scrubDemoState(state);
+        if (typeof state.data.demoHtml === 'string' && state.data.demoHtml.length > 900000) {
+            state.data.demoHtml = state.data.demoHtml.slice(0, 900000);
+        }
+        if (!writeWizardStorage(state) && !persistWarned) {
+            persistWarned = true;
+            showToast('Não deu para gravar no telemóvel. A demo fica só nesta sessão.', true);
         }
     }
 
@@ -269,8 +309,8 @@ export function createWizard({ onUnauthorized, showToast }) {
             if (state.step >= STEPS.length - 1) return;
             // Persist mid-funnel progress so admin can reopen unfinished leads.
             const leaving = STEPS[state.step];
-            if (leaving === dataStep || leaving === diagnosticoStep || leaving === identityStep
-                || leaving === demoStep || leaving === servicesStep) {
+            if (leaving === businessTypeStep || leaving === dataStep || leaving === diagnosticoStep
+                || leaving === identityStep || leaving === demoStep || leaving === servicesStep) {
                 try { await saveDraftLead(state, { update, onUnauthorized, showToast, getDealEpoch }); }
                 catch (_) { /* a missed draft must not block the visit */ }
             }

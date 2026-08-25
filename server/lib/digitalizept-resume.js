@@ -70,6 +70,91 @@ function persistableCustomHtml({
     return pickCustomHtml('', existingWizard);
 }
 
+function dadosFromDemoHtml(html) {
+    const src = String(html || '');
+    const out = {};
+    const tel = src.match(/href=["']tel:([^"']+)/i);
+    if (tel && tel[1]) {
+        const value = decodeURIComponent(tel[1]).replace(/[^\d+]/g, '');
+        if (value.length >= 9) out.telefone = value;
+    }
+    const wa = src.match(/wa\.me\/(\d{9,15})/i);
+    if (wa && wa[1]) out.whatsapp = wa[1];
+    return out;
+}
+
+function dadosFromDemoCopy(demo) {
+    const d = demo && typeof demo === 'object' ? demo : {};
+    const out = {};
+    if (d.sobre && d.sobre.texto) out.o_que_faz = String(d.sobre.texto).trim();
+    const itens = d.servicos && Array.isArray(d.servicos.itens) ? d.servicos.itens : [];
+    const names = itens.map((item) => {
+        if (item && typeof item === 'object') return String(item.nome || '').trim();
+        return String(item || '').trim();
+    }).filter(Boolean);
+    if (names.length) out.principais_servicos = names.join(', ');
+    return out;
+}
+
+function dadosFromVisit(visit) {
+    if (!visit || typeof visit !== 'object') return {};
+    const out = {};
+    if (visit.nome) out.nome_negocio = visit.nome;
+    if (visit.morada) out.morada = visit.morada;
+    if (visit.cidade) out.cidade = visit.cidade;
+    return out;
+}
+
+function dadosFromLegal(legal) {
+    if (!legal || typeof legal !== 'object') return {};
+    const out = {};
+    if (legal.email) out.email = legal.email;
+    if (legal.telefone) out.telefone = legal.telefone;
+    if (legal.morada) out.morada = legal.morada;
+    if (legal.nome) out.responsavel = legal.nome;
+    return out;
+}
+
+function dadosFromPresence(presence) {
+    if (!presence || typeof presence !== 'object') return {};
+    const out = {};
+    if (presence.instagram) out.instagram = presence.instagram;
+    if (presence.facebook) out.facebook = presence.facebook;
+    if (presence.website) out.website_atual = presence.website;
+    if (presence.descricao) out.o_que_faz = presence.descricao;
+    return out;
+}
+
+/**
+ * Rebuild the ficha from everything admin still has: lead columns, visits,
+ * legal, Maps presence, and the published demo. Empty wizard state must not
+ * open Continuar venda as a blank deal.
+ */
+function hydrateResumeDados({
+    ficha = {},
+    wizardDados = {},
+    visit = null,
+    legal = null,
+    presence = null,
+    demo = null,
+    demoHtml = '',
+    slug = ''
+} = {}) {
+    let acc = dadosFromDemoHtml(demoHtml);
+    acc = mergeDadosPreserve(acc, dadosFromDemoCopy(demo));
+    acc = mergeDadosPreserve(acc, dadosFromVisit(visit));
+    acc = mergeDadosPreserve(acc, dadosFromLegal(legal));
+    acc = mergeDadosPreserve(acc, dadosFromPresence(presence));
+    acc = mergeDadosPreserve(acc, wizardDados);
+    acc = mergeDadosPreserve(acc, ficha);
+    if (!String(acc.nome_negocio || '').trim()) {
+        const hero = demo && demo.hero && demo.hero.titulo;
+        if (hero) acc.nome_negocio = String(hero).trim();
+        else if (slug) acc.nome_negocio = String(slug).replace(/-/g, ' ').trim();
+    }
+    return acc;
+}
+
 /**
  * Incoming non-empty fields win; blank incoming never deletes a stored ficha value.
  */
@@ -242,6 +327,7 @@ module.exports = {
     mergeDemoIntoWizardJson,
     mergeDadosPreserve,
     mergeWizardSnapshot,
+    hydrateResumeDados,
     hasDemoContent,
     hasHero,
     isBoilerplateHtml,

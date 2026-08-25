@@ -5,6 +5,7 @@ const { pathToFileURL } = require('node:url');
 const {
     sameBusinessName,
     reusableLeadId,
+    shouldReuseExistingLead,
     allocateDemoSlug
 } = require('../../server/lib/digitalizept-business-identity.js');
 
@@ -46,6 +47,13 @@ describe('digitalizept lead isolation', () => {
         assert.equal(reusableLeadId(thai, 'Thai Golden', 'Lisboa'), 'lead-thai');
         assert.equal(reusableLeadId(null, 'Escondidinho', 'Barreiro'), '');
         assert.equal(reusableLeadId({ id: 'lead-stub', nome: '' }, 'Escondidinho Barreiro', 'Barreiro'), 'lead-stub');
+    });
+
+    it('keeps the same lead when Continuar venda binds the admin record', () => {
+        const thai = { id: 'lead-thai', nome: 'Restaurante Thai Golden' };
+        assert.equal(shouldReuseExistingLead(thai, 'Escondidinho Barreiro', 'Barreiro', { bound: true }), true);
+        assert.equal(shouldReuseExistingLead(thai, 'Escondidinho Barreiro', 'Barreiro', { bound: false }), false);
+        assert.equal(shouldReuseExistingLead(null, 'Thai Golden', 'Lisboa', { bound: true }), false);
     });
 
     it('keeps the existing demo slug only for the same shop', () => {

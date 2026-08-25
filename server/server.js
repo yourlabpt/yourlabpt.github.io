@@ -15,6 +15,7 @@ const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
 const {
     reusableLeadId,
+    shouldReuseExistingLead,
     allocateDemoSlug
 } = require('./lib/digitalizept-business-identity');
 const { sanitizeDemoHtml } = require('./lib/sanitize-demo-html');
@@ -49,6 +50,7 @@ const {
     mergeDemoIntoWizardJson,
     mergeDadosPreserve,
     mergeWizardSnapshot,
+    hydrateResumeDados,
     persistableCustomHtml,
     pickCustomHtml
 } = require('./lib/digitalizept-resume');
@@ -2268,6 +2270,48 @@ function splitDados(dados, businessType) {
     return { obrigatorios, opcionais };
 }
 
+function persistRecoveredLeadFicha(db, row, dados, businessType) {
+    if (!row || !row.id || !dados || !cleanText(dados.nome_negocio, 200)) return;
+    const nome = cleanText(dados.nome_negocio, 200);
+    const morada = cleanText(dados.morada, 300);
+    const cidade = cleanText(dados.cidade, 120);
+    const telefone = cleanText(dados.telefone, 60);
+    const whatsapp = cleanText(dados.whatsapp, 60);
+    if ((nome && nome !== (row.nome || ''))
+        || (morada && !row.morada)
+        || (cidade && !row.cidade)
+        || (telefone && !row.telefone)
+        || (whatsapp && !row.whatsapp)) {
+        db.prepare(`UPDATE lead SET nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ? WHERE id = ?`)
+            .run(
+                nome || row.nome || '',
+                morada || row.morada || '',
+                cidade || row.cidade || '',
+                telefone || row.telefone || '',
+                whatsapp || row.whatsapp || '',
+                row.id
+            );
+    }
+    const { obrigatorios, opcionais } = splitDados(dados, businessType);
+    const dadosRow = db.prepare(
+        'SELECT id, obrigatorios_json, opcionais_json FROM dados_negocio WHERE lead_id = ?'
+    ).get(row.id);
+    if (dadosRow) {
+        const existing = {
+            ...parseJsonSafe(dadosRow.obrigatorios_json, {}),
+            ...parseJsonSafe(dadosRow.opcionais_json, {})
+        };
+        const merged = mergeDadosPreserve(existing, dados);
+        const split = splitDados(merged, businessType);
+        db.prepare('UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?')
+            .run(JSON.stringify(split.obrigatorios), JSON.stringify(split.opcionais), dadosRow.id);
+    } else {
+        db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
+            VALUES (?, ?, ?, ?, ?)`).run(
+            crypto.randomUUID(), row.id, JSON.stringify(obrigatorios), JSON.stringify(opcionais), digitalizeptNow());
+    }
+}
+
 let digitalizeptParseDemo = null;
 async function parseDemoFromRaw(raw) {
     if (!digitalizeptParseDemo) {
@@ -2342,7 +2386,12 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     SELECT id, nome, morada, cidade, telefone, whatsapp, business_type, wizard_json
                     FROM lead WHERE id = ?
                 `).get(leadId);
-                if (reusableLeadId(found, nome, cleanText(incomingDados.cidade, 120))) {
+                if (shouldReuseExistingLead(
+                    found,
+                    nome,
+                    cleanText(incomingDados.cidade, 120),
+                    { bound: body.resumeBound === true }
+                )) {
                     existing = found;
                     leadId = found.id;
                 } else {
@@ -3330,7 +3379,13 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             parseJsonSafe(row.obrigatorios_json, {}),
             parseJsonSafe(row.opcionais_json, {})
         );
-        const dados = mergeDadosPreserve(wizardExtra.dados, ficha);
+        const visit = db.prepare(`
+            SELECT nome, morada, cidade FROM visita WHERE lead_id = ?
+            ORDER BY visitado_em DESC, criado_em DESC LIMIT 1
+        `).get(leadId);
+        const legalRow = db.prepare(
+            'SELECT nome, nif, morada, email, telefone FROM cliente_legal WHERE lead_id = ?'
+        ).get(leadId);
 
         const identidade = parseJsonSafe(row.identidade_json, {});
         const leadDemo = parseJsonSafe(row.demo_json, null);
@@ -3340,12 +3395,24 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
             leadDemoHtml: row.demo_html || '',
             wizard: wizardExtra
         });
+        const dados = hydrateResumeDados({
+            ficha,
+            wizardDados: wizardExtra.dados,
+            visit,
+            legal: legalRow,
+            presence: googlePresence,
+            demo: mergedDemo.demo || leadDemo,
+            demoHtml: mergedDemo.demoHtml || row.demo_html || '',
+            slug: row.demo_slug || ''
+        });
+        persistRecoveredLeadFicha(db, row, dados, businessType);
         const { suggestedStep, suggestedSubstep } = resumeWizardPosition(wizardExtra, {
             hasDemo: Boolean(
                 mergedDemo.demo
                 || mergedDemo.demoHtml
                 || mergedDemo.demoHtmlCustom
                 || mergedDemo.demoRaw
+                || row.demo_slug
             ),
             hasType: Boolean(row.business_type),
             hasDados: Boolean(dados.nome_negocio),
@@ -3422,6 +3489,7 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
 
         const data = {
             leadId: row.id,
+            resumeBound: true,
             leadBoundNome: row.nome || dados.nome_negocio || '',
             businessType,
             dados,
@@ -4270,7 +4338,12 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
         const foundLead = leadId
             ? db.prepare('SELECT id, nome, demo_slug, wizard_json, demo_html FROM lead WHERE id = ?').get(leadId)
             : null;
-        const existing = reusableLeadId(foundLead, cleanText(dados.nome_negocio, 200), cleanText(dados.cidade, 120))
+        const existing = shouldReuseExistingLead(
+            foundLead,
+            cleanText(dados.nome_negocio, 200),
+            cleanText(dados.cidade, 120),
+            { bound: body.resumeBound === true }
+        )
             ? foundLead
             : null;
         if (!existing) leadId = crypto.randomUUID();
@@ -4288,7 +4361,11 @@ app.post('/api/digitalizept/demos', requireDigitalizept, (req, res) => {
             nome: dados.nome_negocio,
             existingSlug: existing ? existing.demo_slug : '',
             leadId,
-            existingNome: existing ? existing.nome : '',
+            existingNome: existing
+                ? (body.resumeBound === true
+                    ? cleanText(dados.nome_negocio, 200)
+                    : existing.nome)
+                : '',
             cidade: dados.cidade,
             makeSlug: digitalizeptSlug
         });

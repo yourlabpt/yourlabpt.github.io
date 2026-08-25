@@ -54,6 +54,13 @@ function reusableLeadId(existing, incomingNome, cidade) {
     return '';
 }
 
+/** Continuar venda from admin always updates that lead — never forks a duplicate. */
+function shouldReuseExistingLead(existing, incomingNome, cidade, { bound = false } = {}) {
+    if (!existing || !existing.id) return false;
+    if (bound) return true;
+    return Boolean(reusableLeadId(existing, incomingNome, cidade));
+}
+
 function slugOwnedByOtherLead(db, slug, leadId) {
     const key = String(slug || '').trim();
     if (!key) return false;
@@ -88,6 +95,7 @@ module.exports = {
     significantTokens,
     sameBusinessName,
     reusableLeadId,
+    shouldReuseExistingLead,
     slugOwnedByOtherLead,
     allocateDemoSlug
 };

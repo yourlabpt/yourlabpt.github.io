@@ -99,6 +99,7 @@ async function publishDemo(ctx) {
             token: getToken(),
             body: {
                 leadId: sentId,
+                resumeBound: ctx.state.data.resumeBound === true,
                 businessType: ctx.state.data.businessType,
                 dados: ctx.state.data.dados,
                 identidade: ctx.state.data.identidade,

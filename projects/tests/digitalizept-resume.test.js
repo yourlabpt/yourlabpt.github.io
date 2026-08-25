@@ -178,6 +178,31 @@ describe('digitalizept resume merge', () => {
         assert.equal(next.identidade, undefined);
         assert.equal(next._clearDemo, undefined);
     });
+
+    it('rebuilds an empty ficha from the published demo, visit and admin columns', () => {
+        const { hydrateResumeDados } = require('../../server/lib/digitalizept-resume.js');
+        const dados = hydrateResumeDados({
+            ficha: { nome_negocio: '', morada: '', cidade: '', telefone: '', whatsapp: '' },
+            wizardDados: {},
+            visit: { nome: 'Thai Golden', morada: 'Rua A 1', cidade: 'Lisboa' },
+            legal: { email: 'thai@example.com', telefone: '210000000' },
+            demo: {
+                hero: { titulo: 'Comida thai na Baixa' },
+                sobre: { texto: 'Curry e wok no Barreiro.' },
+                servicos: { itens: [{ nome: 'Curry' }, { nome: 'Wok' }] }
+            },
+            demoHtml: '<a href="tel:+351210000000">Ligar</a> <a href="https://wa.me/351910000000">WhatsApp</a>',
+            slug: 'thai-golden'
+        });
+        assert.equal(dados.nome_negocio, 'Thai Golden');
+        assert.equal(dados.morada, 'Rua A 1');
+        assert.equal(dados.cidade, 'Lisboa');
+        assert.equal(dados.email, 'thai@example.com');
+        assert.equal(dados.telefone, '210000000');
+        assert.equal(dados.whatsapp, '351910000000');
+        assert.match(dados.o_que_faz, /Curry/);
+        assert.match(dados.principais_servicos, /Wok/);
+    });
 });
 
 describe('digitalizept seed guard and wizard snapshot', () => {

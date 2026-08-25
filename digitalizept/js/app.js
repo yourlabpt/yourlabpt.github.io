@@ -138,6 +138,7 @@ async function applyResumeLead(leadId) {
     seed.leadBoundNome = seed.leadBoundNome
         || (seed.dados && seed.dados.nome_negocio)
         || '';
+    seed.resumeBound = true;
     // Re-open always needs a fresh signature (new or revised contract).
     delete seed.assinatura;
     delete seed.assinaturaPrestador;

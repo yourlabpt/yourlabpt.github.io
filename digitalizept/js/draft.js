@@ -54,6 +54,7 @@ export async function saveDraftLead(state, ctx) {
         token: getToken(),
         body: {
             leadId: sentId,
+            resumeBound: state.data.resumeBound === true,
             businessType: {
                 id: state.data.businessType && state.data.businessType.id,
                 nome: state.data.businessType && state.data.businessType.nome

@@ -93,18 +93,22 @@ async function render(body, ctx) {
                     return;
                 }
                 if (prevId && prevId !== type.id) {
+                    const bound = Boolean(ctx.state.data.leadId || ctx.state.data.resumeBound);
                     const destructive = hasSavedDemo(ctx.state.data)
                         || Boolean(ctx.state.data.identidade)
-                        || Boolean(ctx.state.data.leadId);
+                        || bound;
                     if (destructive
-                        && !window.confirm('Mudar de categoria apaga a demonstração deste negócio. Continuar?')) {
+                        && !window.confirm(bound
+                            ? 'Mudar a categoria deste negócio? A ficha e a demonstração ficam.'
+                            : 'Mudar de categoria apaga a demonstração deste negócio. Continuar?')) {
                         return;
                     }
                 }
                 grid.querySelectorAll('.type-card').forEach((c) => c.classList.remove('selected'));
                 card.classList.add('selected');
                 const patch = { businessType: type };
-                if (prevId && prevId !== type.id) Object.assign(patch, clearTypeBoundState());
+                const bound = Boolean(ctx.state.data.leadId || ctx.state.data.resumeBound);
+                if (prevId && prevId !== type.id && !bound) Object.assign(patch, clearTypeBoundState());
                 ctx.update(patch);
                 ctx.setValid(true);
                 scheduleGoNext(ctx.goNext);
