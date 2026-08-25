@@ -67,10 +67,11 @@ function tagLabel(pin, legend) {
     const etapaId = pin.etapa || pin.cobertura || '';
     const resId = pin.resultado || '';
     const procId = pin.processoEstado || '';
-    const etapa = etapas.find((i) => i.id === etapaId)?.label || etapaId;
-    const resultado = resultados.find((i) => i.id === resId)?.label || '';
-    const processo = processos.find((i) => i.id === procId)?.label || pin.processoEstadoLabel || '';
-    return [etapa, processo, resultado].filter(Boolean).join(' · ');
+    const rua = etapas.find((i) => i.id === etapaId)?.label || etapaId;
+    const fecho = resultados.find((i) => i.id === resId)?.label || '';
+    const controlo = processos.find((i) => i.id === procId)?.label || pin.processoEstadoLabel || '';
+    if (fecho) return [rua, fecho].filter(Boolean).join(' · ');
+    return [rua, controlo].filter(Boolean).join(' · ');
 }
 
 export function setupCoverage({
@@ -224,7 +225,7 @@ export function setupCoverage({
         results.className = 'coverage-stats-row';
         const resultadoItems = [
             ...(legend.resultados || []),
-            { id: '', label: 'Sem resultado' }
+            { id: '', label: 'Em aberto' }
         ];
         resultadoItems.forEach((item) => {
             const n = countFor(source.byResultado, item.id);
@@ -268,7 +269,7 @@ export function setupCoverage({
                 const selected = item.axis === 'categoria'
                     ? filterTypes.has(item.id)
                     : filterIds.has(item.id);
-                if (!item.count && !selected && item.axis !== 'resultado' && item.axis !== 'processo' && item.axis !== 'etapa') return;
+                if (!item.count && !selected) return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = `coverage-chip${selected ? ' active' : ''}`;
@@ -293,22 +294,26 @@ export function setupCoverage({
             group.appendChild(row);
             el.coverageLegend.appendChild(group);
         };
-        addGroup('Categoria', categoryLegendItems(counts));
-        addGroup('Processo', (legend.processos || []).map((item) => ({
-            ...item,
-            axis: 'processo',
-            count: countFor(counts.byProcesso, item.id)
-        })));
-        addGroup('Etapa', (legend.etapas || []).map((item) => ({
+        const hint = document.createElement('p');
+        hint.className = 'coverage-legend-hint';
+        hint.textContent = 'Anel = na rua. Preenchimento = controlo — ou o fecho, se já decidiu.';
+        el.coverageLegend.appendChild(hint);
+        addGroup('Na rua', (legend.etapas || []).map((item) => ({
             ...item,
             axis: 'etapa',
             count: countFor(counts.byEtapa, item.id)
         })));
-        addGroup('Resultado', (legend.resultados || []).map((item) => ({
+        addGroup('Controlo', (legend.processos || []).map((item) => ({
+            ...item,
+            axis: 'processo',
+            count: countFor(counts.byProcesso, item.id)
+        })));
+        addGroup('Fecho', (legend.resultados || []).map((item) => ({
             ...item,
             axis: 'resultado',
             count: countFor(counts.byResultado, item.id)
         })));
+        addGroup('Categoria', categoryLegendItems(counts));
         renderStats();
     }
 
@@ -343,7 +348,7 @@ export function setupCoverage({
         select.className = 'field-input';
         const none = document.createElement('option');
         none.value = '';
-        none.textContent = '— (sem resultado)';
+        none.textContent = '— (ainda em aberto)';
         select.appendChild(none);
         (legend.resultados || []).forEach((item) => {
             const opt = document.createElement('option');
@@ -465,8 +470,8 @@ export function setupCoverage({
                 field('Nome do sítio', nome),
                 field('Morada', morada),
                 field('Cidade', cidade),
-                field('Etapa', etapa),
-                field('Resultado', resultado),
+                field('Na rua', etapa),
+                field('Fecho', resultado),
                 field('Como correu a visita', experiencia)
             );
 
@@ -777,7 +782,7 @@ export function setupCoverage({
         openDrawer(pin.nome || 'Negócio', (panel) => {
             const tagsLine = document.createElement('p');
             tagsLine.className = 'meta';
-            tagsLine.textContent = tagLabel(pin, legend) || 'Etapa por definir';
+            tagsLine.textContent = tagLabel(pin, legend) || 'Na rua por definir';
             panel.appendChild(tagsLine);
             const meta = document.createElement('p');
             meta.className = 'meta';
@@ -828,8 +833,8 @@ export function setupCoverage({
             const experiencia = inputEl('textarea', '', { rows: 4 });
             experiencia.placeholder = 'Como correu nesta visita…';
             form.append(
-                field('Etapa', etapa),
-                field('Resultado', resultado),
+                field('Na rua', etapa),
+                field('Fecho', resultado),
                 field('Como correu (acrescenta uma nota)', experiencia)
             );
             const save = document.createElement('button');

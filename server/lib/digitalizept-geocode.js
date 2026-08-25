@@ -6,11 +6,11 @@
  * fallback. Prefer house/building/amenity hits over city centroids so pins
  * land on the shop, not the town centre.
  *
- * Coverage pins use two tags, plus live process fill when no resultado is set:
- *   resultado (fill)     — closed outcome (futuro / sem interesse / digitalizado)
- *   processo  (fill)     — live cadence when still open (same palette as etapa)
- *   etapa     (stroke)   — funnel progress (remote / visited / demo created / presented)
- * The DB column `cobertura` stores etapa; `resultado` is its own column.
+ * Coverage pins use three tags that answer different questions:
+ *   etapa     (ring)  — na rua: have we been / shown the demo
+ *   processo  (fill)  — Controlo: where the lead is in the cadence
+ *   resultado (fill)  — fecho: only when it already decided (overrides processo)
+
  */
 
 const ETAPA_VALUES = [
@@ -21,10 +21,10 @@ const ETAPA_VALUES = [
 ];
 
 const ETAPA_LABELS = {
-    contacto_remoto: 'Contacto Remoto',
-    visitado: 'Visitado',
-    demo_criada: 'Demo criada',
-    demo_apresentada: 'Demo apresentada'
+    contacto_remoto: 'Ainda não fomos',
+    visitado: 'Já passámos',
+    demo_criada: 'Demo no mapa',
+    demo_apresentada: 'Mostrei na loja'
 };
 
 const ETAPA_COLORS = {
@@ -41,9 +41,9 @@ const RESULTADO_VALUES = [
 ];
 
 const RESULTADO_LABELS = {
-    futuro: 'Futuro',
-    sem_interesse: 'Sem interesse',
-    digitalizado: 'Digitalizado'
+    futuro: 'Voltar mais tarde',
+    sem_interesse: 'Não quer',
+    digitalizado: 'Já é cliente'
 };
 
 const RESULTADO_COLORS = {
@@ -800,7 +800,7 @@ function formatCoverageExport(pins, legend) {
         'DIGITALIZE PORTUGAL — REGISTO DE COBERTURA',
         `Gerado em ${new Date().toLocaleString('pt-PT')}`,
         '',
-        'Sítios já contactados na rua. Etapa = progresso; Resultado = Futuro / Sem Interesse / Digitalizado.',
+        'Sítios já contactados na rua. Anel = na rua. Preenchimento = controlo — ou o fecho, se já decidiu.',
         'Não voltar a bater à mesma porta sem ler a experiência.',
         ''
     ];
@@ -815,7 +815,7 @@ function formatCoverageExport(pins, legend) {
             const resultado = pin.resultado || '';
             lines.push(`${pin.nome || 'Sem nome'}  [${kind}]`);
             lines.push(`  Onde: ${where}`);
-            lines.push(`  Etapa: ${labels[etapa] || etapa || '—'}${resultado ? ` · Resultado: ${labels[resultado] || resultado}` : ''}`);
+            lines.push(`  Na rua: ${labels[etapa] || etapa || '—'}${resultado ? ` · Fecho: ${labels[resultado] || resultado}` : ''}`);
             if (pin.telefone) lines.push(`  Tel: ${pin.telefone}`);
             if (pin.visitado_em) lines.push(`  Visita: ${when(pin.visitado_em)}`);
             else if (pin.criado_em) lines.push(`  Registo: ${when(pin.criado_em)}`);

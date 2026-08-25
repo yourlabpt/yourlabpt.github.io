@@ -528,7 +528,7 @@ describe('digitalizept lead process — instruções e demo', () => {
             'utf8'
         );
         assert.doesNotMatch(adminCss, /procpasso/);
-        assert.match(sw, /digitalizept-v97/);
+        assert.match(sw, /digitalizept-v98/);
         assert.match(panel, /Como ficou/);
         assert.match(panel, /sem_interesse/);
         assert.match(panel, /canal === 'whatsapp'/);

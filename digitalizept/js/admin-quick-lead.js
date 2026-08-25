@@ -109,7 +109,7 @@ export function renderQuickLeadForm(panel, {
         ? 'Sem ponto ainda — toque no mapa, use “Marcar no mapa”, ou cole o link.'
         : 'Sem ponto ainda — cole o link do Maps ou preencha a morada.';
     const coordHint = el('p', 'meta', coordText || noPointHint);
-    const etapaHint = el('p', 'meta', 'No mapa entra como Contacto remoto. Visita fica para “Registar visita”.');
+    const etapaHint = el('p', 'meta', 'No mapa entra como ainda não fomos. Visita fica para “Registar visita”.');
     const fields = {
         nome_negocio: nome,
         telefone,

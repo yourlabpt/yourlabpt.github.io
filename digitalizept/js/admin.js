@@ -1154,9 +1154,9 @@ function openDealEditor(deal) {
         resultado.className = 'field-input';
         [
             { id: '', label: '— (em jogo)' },
-            { id: 'futuro', label: 'Futuro' },
-            { id: 'sem_interesse', label: 'Sem interesse' },
-            { id: 'digitalizado', label: 'Digitalizado' }
+            { id: 'futuro', label: 'Voltar mais tarde' },
+            { id: 'sem_interesse', label: 'Não quer' },
+            { id: 'digitalizado', label: 'Já é cliente' }
         ].forEach((item) => {
             const opt = document.createElement('option');
             opt.value = item.id;
@@ -1164,7 +1164,7 @@ function openDealEditor(deal) {
             if ((deal.resultado || '') === item.id) opt.selected = true;
             resultado.appendChild(opt);
         });
-        form.append(field('Resultado', resultado));
+        form.append(field('Fecho', resultado));
         const save = document.createElement('button');
         save.type = 'submit';
         save.className = 'btn-primary';

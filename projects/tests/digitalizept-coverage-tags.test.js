@@ -11,6 +11,8 @@ const {
     remapCoberturaToEtapaResultado,
     ETAPA_VALUES,
     RESULTADO_VALUES,
+    ETAPA_LABELS,
+    RESULTADO_LABELS,
     ETAPA_COLORS,
     RESULTADO_COLORS
 } = require('../../server/lib/digitalizept-geocode.js');
@@ -123,6 +125,10 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.ok(ETAPA_VALUES.includes('demo_apresentada'));
         assert.ok(RESULTADO_VALUES.includes('futuro'));
         assert.equal(RESULTADO_COLORS.sem_interesse, '#b8b4ac');
+        assert.equal(ETAPA_LABELS.contacto_remoto, 'Ainda não fomos');
+        assert.equal(ETAPA_LABELS.demo_criada, 'Demo no mapa');
+        assert.equal(RESULTADO_LABELS.futuro, 'Voltar mais tarde');
+        assert.equal(RESULTADO_LABELS.sem_interesse, 'Não quer');
     });
 });
 
@@ -220,9 +226,15 @@ describe('digitalizept coverage category filter', async () => {
         }), false);
         assert.equal(pinMatchesCoverageFilters({
             ...cafe,
-            processoEstadoLabel: 'Demo pronta'
+            processoEstadoLabel: 'Pronta a enviar'
         }, {
-            query: 'demo pronta'
+            query: 'pronta a enviar'
+        }), true);
+        assert.equal(pinMatchesCoverageFilters({
+            ...cafe,
+            etapaLabel: 'Já passámos'
+        }, {
+            query: 'já passámos'
         }), true);
     });
 

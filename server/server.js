@@ -2835,6 +2835,8 @@ function pinTagFields(etapaRaw, resultadoRaw, etapaFallback, processoEstado) {
         resultado: resultado || undefined,
         processoEstado: estado || undefined,
         processoEstadoLabel: estado ? (leadProcess.ESTADO_LABELS[estado] || estado) : undefined,
+        etapaLabel: ETAPA_LABELS[etapa] || etapa,
+        resultadoLabel: resultado ? (RESULTADO_LABELS[resultado] || resultado) : undefined,
         color: colors.color,
         strokeColor: colors.strokeColor,
         strokeWidth: colors.strokeWidth,
@@ -3672,7 +3674,7 @@ function loadLeadDossier(db, leadId) {
         visits,
         etapas: ETAPA_VALUES.map((id) => ({ id, label: ETAPA_LABELS[id] })),
         resultados: [
-            { id: '', label: 'Sem resultado' },
+            { id: '', label: 'Ainda em aberto' },
             ...RESULTADO_VALUES.map((id) => ({ id, label: RESULTADO_LABELS[id] }))
         ]
     };

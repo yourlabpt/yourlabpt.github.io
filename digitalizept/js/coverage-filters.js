@@ -27,7 +27,7 @@ export function pinMatchesCoverageFilters(pin, { filterIds, filterTypes, query, 
     }
     const q = String(query || '').trim().toLowerCase();
     if (!q) return true;
-    return `${pin.nome || ''} ${pin.morada || ''} ${pin.cidade || ''} ${pin.experiencia || ''} ${pin.notas || ''} ${pin.leadNome || ''} ${pin.etapa || ''} ${pin.resultado || ''} ${pin.processoEstado || ''} ${pin.processoEstadoLabel || ''} ${coverageTypeId(pin)} ${typeLabel || ''}`
+    return `${pin.nome || ''} ${pin.morada || ''} ${pin.cidade || ''} ${pin.experiencia || ''} ${pin.notas || ''} ${pin.leadNome || ''} ${pin.etapa || ''} ${pin.etapaLabel || ''} ${pin.resultado || ''} ${pin.resultadoLabel || ''} ${pin.processoEstado || ''} ${pin.processoEstadoLabel || ''} ${coverageTypeId(pin)} ${typeLabel || ''}`
         .toLowerCase()
         .includes(q);
 }

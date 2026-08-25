@@ -559,6 +559,13 @@
     color: var(--admin-muted);
 }
 
+.coverage-legend-hint {
+    margin: 0 0 8px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--admin-muted);
+}
+
 .coverage-legend-row {
     display: flex;
     flex-wrap: wrap;

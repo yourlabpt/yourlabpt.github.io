@@ -31,11 +31,11 @@ const PROCESSO_ESTADOS = [
 
 const ESTADO_LABELS = {
     NOVO: 'Novo',
-    DEMO_PRONTO: 'Demo pronta',
+    DEMO_PRONTO: 'Pronta a enviar',
     DESCOBERTA: 'Descoberta',
     EM_SEQUENCIA: 'Em sequência',
     RESPONDEU: 'Respondeu',
-    VISITA: 'Visita',
+    VISITA: 'Visita marcada',
     PROPOSTA: 'Proposta',
     GANHO: 'Ganho',
     RECUSADO: 'Recusado',

@@ -498,10 +498,10 @@ export function renderLeadDossier(host, payload, {
     const coverGrid = el('div', 'dossier-grid');
     const etapa = selectFor(payload.etapas, payload.lead.cobertura);
     etapa.setAttribute('data-etapa', '1');
-    coverGrid.appendChild(fieldWrap('Etapa', etapa));
+    coverGrid.appendChild(fieldWrap('Na rua', etapa));
     const resultado = selectFor(payload.resultados, payload.lead.resultado);
     resultado.setAttribute('data-resultado', '1');
-    coverGrid.appendChild(fieldWrap('Resultado', resultado));
+    coverGrid.appendChild(fieldWrap('Fecho', resultado));
     const pin = el('p', 'meta');
     pin.textContent = Number.isFinite(payload.lead.lat)
         ? `Pin: ${payload.lead.lat.toFixed(5)}, ${payload.lead.lng.toFixed(5)} (${payload.lead.geocode_status || 'ok'})`
