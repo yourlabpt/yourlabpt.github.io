@@ -6,7 +6,12 @@
  * `lead_toque` with the text actually sent, so a lead can be resumed months later.
  */
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const outreach = require('./digitalizept-outreach');
+
+const OBJECCOES_PATH = path.join(__dirname, '../../digitalizept/templates/outreach-objecoes.json');
+const GUIAO_PATH = path.join(__dirname, '../../digitalizept/templates/outreach-guiao.json');
 
 const PROCESSO_ESTADOS = [
     'NOVO',
@@ -61,6 +66,7 @@ const PASSO_CANAL = {
     D2: 'ligacao',
     D3: 'visita',
     D4: 'email',
+    D_FIM: '',
     DEMO: '',
     ACOMPANHAR: ''
 };
@@ -114,10 +120,23 @@ const RESULTADOS_POR_PASSO = {
         { id: 'canal_direto', label: 'Consegui o canal direto' },
         { id: 'funcionario', label: 'Atendeu funcionário' },
         { id: 'nao_atendeu', label: 'Não atendeu' }
+    ],
+    D2: [
+        { id: 'viu', label: 'Falou com o dono' },
+        { id: 'canal_direto', label: 'Consegui o canal direto' },
+        { id: 'funcionario', label: 'Atendeu funcionário' },
+        { id: 'nao_atendeu', label: 'Não atendeu' }
+    ],
+    D3: [
+        { id: 'canal_direto', label: 'Consegui o canal direto' },
+        { id: 'mostrou', label: 'Mostrei a demo' },
+        { id: 'nao_estava', label: 'Não estava — volto' }
+    ],
+    D4: [
+        { id: 'enviado', label: 'Email enviado' },
+        { id: 'sem_email', label: 'Não tem email geral' }
     ]
 };
-
-RESULTADOS_POR_PASSO.D2 = RESULTADOS_POR_PASSO.LIG1;
 
 const INSTRUCOES = {
     EMAIL1: {
@@ -186,6 +205,24 @@ const INSTRUCOES = {
         naoFazer: 'Nunca fazer o pitch a quem não decide, e nunca disfarçar o motivo. Antes de ligar, faz os 3 minutos: o número é 9x ou 2x, tem WhatsApp, e procura o apelido nas respostas do Maps, nas avaliações e na bio do Instagram.',
         registar: 'Grava o nome de quem atendeu, a hora indicada e o canal direto. Máximo 2 chamadas por semana ao número da loja.'
     },
+    D2: {
+        titulo: 'Descoberta — ligar na hora que o negócio marcou',
+        objetivo: 'Falar com o dono exatamente na melhor hora que o atendedor indicou. Foi o próprio negócio que marcou esta chamada.',
+        naoFazer: 'Não chegar fora de horas e não fazer o pitch a quem atendeu da outra vez.',
+        registar: 'Se der o WhatsApp ou o email, é canal direto e a sequência arranca. Se não, segue para a visita.'
+    },
+    D3: {
+        titulo: 'Descoberta — visita na hora morta',
+        objetivo: 'Mostrar o demo no tablet. Se não estiver, perguntar a hora e voltar. Não deixar flyer.',
+        naoFazer: 'Não deixar papel. Um flyer numa rua destas é lixo, e o nome fica associado.',
+        registar: 'Mostrei, não estava, ou saí com o canal direto.'
+    },
+    D4: {
+        titulo: 'Descoberta — email para o geral@',
+        objetivo: 'Deixar um registo escrito se existir um email da loja. Não é para vender.',
+        naoFazer: 'Não insistir se não houver email. Sem sucesso no Ciclo D, o lead adormece três meses.',
+        registar: 'Envia ou marca que não tem email. Depois disto, ou há canal direto, ou arquiva.'
+    },
     DEMO: {
         titulo: 'Construir os dois artefactos',
         objetivo: 'A aparência no Google e a página com a história. Sem os dois, não há nada para enviar.',
@@ -215,6 +252,120 @@ function parseJsonSafe(raw, fallback) {
     } catch (_) {
         return fallback;
     }
+}
+
+const FILTROS_ATENDEDOR = [
+    {
+        id: 'deixe_contacto',
+        oQueDiz: 'Deixe o contacto que ele liga',
+        resposta: 'Deixo, com certeza. Mas para não estar à espera — de manhã ou à tarde é melhor para o apanhar?',
+        nunca: 'Aceitar sem devolver pergunta'
+    },
+    {
+        id: 'o_que_era',
+        oQueDiz: 'O que é que era?',
+        resposta: 'É sobre o site da {{negocioNome}}. Já fizemos um exemplo, é só para ele ver.',
+        nunca: 'Explicar tudo / dar preços'
+    },
+    {
+        id: 'nao_quer',
+        oQueDiz: 'Ele não quer nada disso',
+        resposta: 'Pode ser que sim. Mesmo assim, importa-se de lhe dizer que liguei? Se ele disser que não, fica arrumado.',
+        nunca: 'Contrariá-la'
+    },
+    {
+        id: 'ocupado',
+        oQueDiz: 'Ele está ocupado',
+        resposta: 'Com certeza. A que horas é que costuma estar mais livre?',
+        nunca: 'Insistir para falar já'
+    }
+];
+
+const HORAS = (pares) => pares.map(([h1, m1, h2, m2]) => [h1 * 60 + m1, h2 * 60 + m2]);
+const JANELA_RESTAURACAO = { horas: HORAS([[15, 0, 17, 0]]), nuncaAntes: 11 * 60 };
+const JANELA_SALAO = { horas: HORAS([[10, 0, 12, 0], [15, 0, 17, 0]]), semSabado: true };
+const JANELA_RETALHO = { horas: HORAS([[10, 0, 12, 0], [15, 0, 18, 0]]), saltaNatal: true };
+const JANELA_MECANICO = { horas: HORAS([[8, 30, 10, 0], [16, 0, 18, 0]]) };
+const JANELA_GENERICO = { horas: HORAS([[10, 0, 12, 0], [15, 0, 17, 0]]) };
+
+const JANELAS_POR_TIPO = {
+    restaurante: JANELA_RESTAURACAO,
+    'cafe-pastelaria': JANELA_RESTAURACAO,
+    'salao-beleza': JANELA_SALAO,
+    'clinica-estetica': JANELA_SALAO,
+    mercadinho: JANELA_RETALHO,
+    'drogaria-ferragens': JANELA_RETALHO,
+    'loja-roupa': JANELA_RETALHO,
+    'loja-flores-decoracao': JANELA_RETALHO,
+    joalharia: JANELA_RETALHO,
+    otica: JANELA_RETALHO,
+    tapecaria: JANELA_RETALHO,
+    'mecanico-automovel': JANELA_MECANICO,
+    generico: JANELA_GENERICO
+};
+
+function janelaDaCategoria(tipo) {
+    return JANELAS_POR_TIPO[String(tipo || '').trim()] || JANELA_GENERICO;
+}
+
+function isDuasSemanasAntesNatal(p) {
+    return p.m === 12 && p.d >= 11;
+}
+
+let objecoesCache = null;
+let guiaoCache = null;
+
+function loadJsonFile(filePath, fallback) {
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function listObjecoes(lang = 'pt') {
+    if (!objecoesCache) objecoesCache = loadJsonFile(OBJECCOES_PATH, []);
+    const en = outreach.normalizeOutreachLang(lang) === 'en';
+    return (objecoesCache || []).map((item) => {
+        const pack = en ? item.en : item.pt;
+        return {
+            id: item.id,
+            revisitarMeses: Number(item.revisitarMeses) || 3,
+            label: pack && pack.label ? pack.label : item.id,
+            resposta: pack && pack.resposta ? pack.resposta : ''
+        };
+    });
+}
+
+function loadGuiao() {
+    if (!guiaoCache) guiaoCache = loadJsonFile(GUIAO_PATH, {});
+    return guiaoCache || {};
+}
+
+function guiaoFor(passo, ctx = {}) {
+    const key = cleanStr(passo, 20).toUpperCase();
+    const raw = loadGuiao()[key];
+    if (!raw) return null;
+    const fill = (value) => outreach.fillTemplate(value, ctx);
+    return {
+        abertura: fill(raw.abertura || ''),
+        licenca: fill(raw.licenca || ''),
+        pergunta: fill(raw.pergunta || ''),
+        ramos: (raw.ramos || []).map((r) => ({
+            id: r.id,
+            titulo: fill(r.titulo || ''),
+            texto: fill(r.texto || '')
+        }))
+    };
+}
+
+function filtrosAtendedor(ctx = {}) {
+    return FILTROS_ATENDEDOR.map((f) => ({
+        id: f.id,
+        oQueDiz: f.oQueDiz,
+        resposta: outreach.fillTemplate(f.resposta, ctx),
+        nunca: f.nunca
+    }));
 }
 
 function emptyProcesso() {
@@ -421,7 +572,9 @@ function slotIsAllowed(date, janelas = null) {
         const dentro = janelas.horas.some(([ini, fim]) => minutes >= ini && minutes < fim);
         if (!dentro) return false;
     }
+    if (janelas && Number(janelas.nuncaAntes) > 0 && minutes < janelas.nuncaAntes) return false;
     if (janelas && janelas.semSabado === true && p.weekday === 6) return false;
+    if (janelas && janelas.saltaNatal === true && isDuasSemanasAntesNatal(p)) return false;
     if (p.weekday === 0 || p.weekday === 6) return false;
     if (p.weekday === 1) return false;
     if (p.weekday === 5 && minutes >= SEXTA_TARDE) return false;
@@ -450,6 +603,12 @@ function proximaAcaoEm(fromIso, horas = 0, { ancora = null, janelas = null } = {
         const round = p.minute % PASSO_MINUTOS;
         if (round) {
             cursor = new Date(isoAtLisbon(p.y, p.m, p.d, p.hour, p.minute - round + PASSO_MINUTOS));
+        }
+    }
+    if (janelas && janelas.saltaNatal) {
+        const p = lisbonParts(cursor);
+        if (isDuasSemanasAntesNatal(p)) {
+            cursor = new Date(isoAtLisbon(p.y + 1, 1, 2, 10, 0));
         }
     }
     for (let i = 0; i < LIMITE_BUSCA; i++) {
@@ -528,6 +687,70 @@ function passoFeito(toques, passo) {
  * recorded as `saltado` so the queue moves on — a block would leave the lead
  * waiting forever for an action it can never perform.
  */
+function ancoraDeMelhorHora(raw) {
+    const m = String(raw || '').match(/(\d{1,2})\s*[h:]\s*(\d{2})?/);
+    if (!m) return null;
+    const hour = Number(m[1]);
+    const minute = m[2] ? Number(m[2]) : 0;
+    if (!Number.isFinite(hour) || hour > 23 || minute > 59) return null;
+    return { hour, minute };
+}
+
+function agendarPasso(canal, horas, agora, { ancora = null, janelas = null, melhorHora = '' } = {}) {
+    const janelasPasso = canal === 'email' ? null : janelas;
+    const ancoraHora = ancora || (canal === 'ligacao' ? ancoraDeMelhorHora(melhorHora) : null);
+    return proximaAcaoEm(agora, horas, { ancora: ancoraHora, janelas: janelasPasso });
+}
+
+function mesesAPartirDe(iso, meses) {
+    const d = new Date(iso || Date.now());
+    d.setMonth(d.getMonth() + Number(meses || 0));
+    return d.toISOString();
+}
+
+function nextTouchDescoberta({ toques = [], processo = {}, contacto = {}, agora, janelas }) {
+    const plano = [
+        { passo: 'D1', canal: 'ligacao', horas: 0 },
+        { passo: 'D2', canal: 'ligacao', horas: 0, precisaHora: true },
+        { passo: 'D3', canal: 'visita', horas: 0 },
+        { passo: 'D4', canal: 'email', horas: 0 }
+    ];
+    for (const item of plano) {
+        if (passoFeito(toques, item.passo)) continue;
+        if (item.precisaHora && !processo.melhorHora) continue;
+        if (item.passo === 'D4' && !contacto.email) {
+            return {
+                passo: 'D4',
+                canal: 'email',
+                intervaloHoras: 0,
+                agendadoPara: '',
+                saltar: true,
+                motivo: 'sem_email'
+            };
+        }
+        return {
+            passo: item.passo,
+            canal: item.canal,
+            intervaloHoras: item.horas,
+            agendadoPara: agendarPasso(item.canal, item.horas, agora, {
+                janelas,
+                melhorHora: processo.melhorHora
+            }),
+            saltar: false
+        };
+    }
+    return {
+        passo: 'D_FIM',
+        canal: '',
+        intervaloHoras: 0,
+        agendadoPara: '',
+        saltar: true,
+        motivo: 'sem_canal_direto',
+        proximoEstado: 'ADORMECIDO',
+        revisitarEm: mesesAPartirDe(agora, 3)
+    };
+}
+
 function nextTouch({
     estado,
     toques = [],
@@ -536,7 +759,8 @@ function nextTouch({
     followup = {},
     leadId = '',
     revisitarEm = '',
-    agora = nowIso()
+    agora = nowIso(),
+    janelas = null
 } = {}) {
     if (['REMOVIDO', 'GANHO', 'ARQUIVADO'].includes(estado)) return null;
 
@@ -547,19 +771,31 @@ function nextTouch({
         return { passo: 'ACOMPANHAR', canal: '', intervaloHoras: 0, agendadoPara: '', saltar: false };
     }
     if (estado === 'DESCOBERTA') {
-        return { passo: 'D1', canal: 'ligacao', intervaloHoras: 0, agendadoPara: proximaAcaoEm(agora, 0), saltar: false };
+        return nextTouchDescoberta({ toques, processo, contacto, agora, janelas });
     }
     if (estado === 'VISITA') {
         if (passoFeito(toques, 'WA3')) return null;
         const visita = toques
-            .filter((t) => t.passo === 'VISITA' && t.estado === 'feito')
+            .filter((t) => ['VISITA', 'D3'].includes(t.passo) && t.estado === 'feito')
             .sort((a, b) => String(b.executado_em).localeCompare(String(a.executado_em)))[0];
         const desde = visita ? (visita.executado_em || visita.criado_em) : agora;
-        return { passo: 'WA3', canal: 'whatsapp', intervaloHoras: 2, agendadoPara: proximaAcaoEm(desde, 2), saltar: false };
+        return {
+            passo: 'WA3',
+            canal: 'whatsapp',
+            intervaloHoras: 2,
+            agendadoPara: agendarPasso('whatsapp', 2, desde, { janelas }),
+            saltar: false
+        };
     }
     if (estado === 'RECUSADO') {
         if (passoFeito(toques, 'R1')) return null;
-        return { passo: 'R1', canal: 'whatsapp', intervaloHoras: 0, agendadoPara: proximaAcaoEm(agora, 0), saltar: false };
+        return {
+            passo: 'R1',
+            canal: 'whatsapp',
+            intervaloHoras: 0,
+            agendadoPara: agendarPasso('whatsapp', 0, agora, { janelas }),
+            saltar: false
+        };
     }
     if (estado === 'ADORMECIDO') {
         if (!revisitarEm) return null;
@@ -567,17 +803,29 @@ function nextTouch({
             passo: 'REVISITA',
             canal: 'whatsapp',
             intervaloHoras: 0,
-            agendadoPara: proximaAcaoEm(revisitarEm, 0),
+            agendadoPara: agendarPasso('whatsapp', 0, revisitarEm, { janelas }),
             saltar: false
         };
     }
     if (estado === 'REVISITA') {
         if (passoFeito(toques, 'REVISITA')) return null;
-        return { passo: 'REVISITA', canal: 'whatsapp', intervaloHoras: 0, agendadoPara: proximaAcaoEm(agora, 0), saltar: false };
+        return {
+            passo: 'REVISITA',
+            canal: 'whatsapp',
+            intervaloHoras: 0,
+            agendadoPara: agendarPasso('whatsapp', 0, agora, { janelas }),
+            saltar: false
+        };
     }
     if (estado === 'RESPONDEU') {
         if (passoFeito(toques, 'WA2')) return null;
-        return { passo: 'WA2', canal: 'whatsapp', intervaloHoras: 0, agendadoPara: proximaAcaoEm(agora, 0), saltar: false };
+        return {
+            passo: 'WA2',
+            canal: 'whatsapp',
+            intervaloHoras: 0,
+            agendadoPara: agendarPasso('whatsapp', 0, agora, { janelas }),
+            saltar: false
+        };
     }
 
     // DEMO_PRONTO and EM_SEQUENCIA walk the six-touch plan.
@@ -586,7 +834,6 @@ function nextTouch({
     for (const toque of PLANO_TOQUES) {
         const passo = (toque.semSinal && !sinal) ? toque.semSinal : toque.passo;
         if (passoFeito(toques, passo)) continue;
-        // WA2 and N1 are the same touch: either one closes it.
         const alternativa = toque.semSinal ? (passo === toque.passo ? toque.semSinal : toque.passo) : '';
         if (alternativa && passoFeito(toques, alternativa)) continue;
 
@@ -618,7 +865,10 @@ function nextTouch({
             passo,
             canal: toque.canal,
             intervaloHoras: horas,
-            agendadoPara: proximaAcaoEm(desde, horas, { ancora: toque.ancora || null }),
+            agendadoPara: agendarPasso(toque.canal, horas, desde, {
+                ancora: toque.ancora || null,
+                janelas
+            }),
             saltar: false
         };
     }
@@ -727,7 +977,7 @@ function resultadoFromEstado(estado, atual) {
  * Recomputes signal, state and the next action, and writes them back. Every path
  * that changes a lead goes through here so the queue can never drift.
  */
-function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = '', revisitarEm = null, agora = nowIso() } = {}) {
+function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = '', revisitarEm = null, agora = nowIso(), autoSaltar = 0 } = {}) {
     const ctx = loadContext(db, leadId);
     if (!ctx) return null;
 
@@ -756,6 +1006,7 @@ function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = ''
     });
 
     const proximaRevisita = revisitarEm != null ? cleanStr(revisitarEm, 40) : cleanStr(ctx.row.revisitar_em, 40);
+    const janelas = janelaDaCategoria(ctx.row.business_type);
     const proxima = nextTouch({
         estado,
         toques: ctx.toques,
@@ -764,7 +1015,8 @@ function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = ''
         followup: ctx.followup,
         leadId,
         revisitarEm: proximaRevisita,
-        agora
+        agora,
+        janelas
     });
 
     const resultado = resultadoFromEstado(estado, ctx.row.resultado);
@@ -780,7 +1032,19 @@ function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = ''
         leadId
     );
 
-    return { estado, processo, proxima, contacto, toques: ctx.toques, followup: ctx.followup, row: ctx.row };
+    const snapshot = { estado, processo, proxima, contacto, toques: ctx.toques, followup: ctx.followup, row: ctx.row, janelas };
+    if (proxima && proxima.saltar === true && autoSaltar < 6) {
+        return registarToque(db, leadId, {
+            passo: proxima.passo,
+            canal: proxima.canal,
+            estado: 'saltado',
+            resultado: proxima.motivo || 'saltado',
+            proximoEstado: proxima.proximoEstado || '',
+            revisitarEm: proxima.revisitarEm != null ? proxima.revisitarEm : null,
+            autoSaltar: autoSaltar + 1
+        });
+    }
+    return snapshot;
 }
 
 function registarToque(db, leadId, patch = {}) {
@@ -788,6 +1052,8 @@ function registarToque(db, leadId, patch = {}) {
     const passo = cleanStr(patch.passo, 20).toUpperCase();
     const canal = CANAIS.includes(patch.canal) ? patch.canal : (PASSO_CANAL[passo] || '');
     const estado = TOQUE_ESTADOS.includes(patch.estado) ? patch.estado : 'feito';
+    const processoPatch = { ...(patch.processo || {}) };
+    if (patch.resultado === 'canal_direto') processoPatch.canalDireto = true;
     const ordem = db.prepare('SELECT COUNT(*) AS n FROM lead_toque WHERE lead_id = ?').get(leadId);
     db.prepare(`
         INSERT INTO lead_toque (id, lead_id, ordem, passo, canal, estado, agendado_para,
@@ -812,16 +1078,50 @@ function registarToque(db, leadId, patch = {}) {
         criado_em: agora
     });
     return recomputeProcesso(db, leadId, {
-        patchProcesso: patch.processo || null,
+        patchProcesso: Object.keys(processoPatch).length ? processoPatch : null,
         forcarEstado: patch.estado === 'agendado' ? '' : cleanStr(patch.proximoEstado, 20),
         revisitarEm: patch.revisitarEm != null ? patch.revisitarEm : null,
-        agora
+        agora,
+        autoSaltar: Number(patch.autoSaltar) || 0
+    });
+}
+
+function registarVisitaRua(db, leadId, { nota = '', experiencia = '' } = {}) {
+    const ctx = loadContext(db, leadId);
+    if (!ctx) return null;
+    const contacto = contactoFromDados(ctx.dados);
+    const estado = computeEstado({
+        row: ctx.row,
+        followup: ctx.followup,
+        toques: ctx.toques,
+        processo: ctx.processo,
+        contacto
+    });
+    if (estado === 'DESCOBERTA') {
+        return registarToque(db, leadId, {
+            passo: 'D3',
+            canal: 'visita',
+            estado: 'feito',
+            resultado: 'mostrou',
+            nota: nota || experiencia,
+            destino: 'negocio'
+        });
+    }
+    return registarToque(db, leadId, {
+        passo: 'VISITA',
+        canal: 'visita',
+        estado: 'feito',
+        resultado: 'mostrou',
+        nota: nota || experiencia,
+        proximoEstado: 'VISITA'
     });
 }
 
 /** Records a demo page hit. Deduplicated by hour so a refresh is not a new signal. */
 function registarVisitaDemo(db, { leadId, slug = '', referer = '', userAgent = '' } = {}) {
     if (!leadId || !looksLikeBrowser(userAgent)) return false;
+    const ref = String(referer || '').toLowerCase();
+    if (ref.includes('admin.html') || ref.includes('/digitalizept/admin')) return false;
     const agora = nowIso();
     const limite = new Date(new Date(agora).getTime() - 3600000).toISOString();
     const recente = db.prepare(
@@ -865,6 +1165,121 @@ function pontEmailFor(toques = [], lang = 'pt') {
     return { pontEmail, pontEmailFrase: ` ${pontEmail}`, quandoEmail };
 }
 
+function pct(num, den) {
+    if (!den) return 0;
+    return Math.round((Number(num) || 0) * 1000 / den) / 10;
+}
+
+function bucketMetricas() {
+    return {
+        leads: 0,
+        comSinal: 0,
+        wa1: 0,
+        respostas: 0,
+        visitas: 0,
+        fechos: 0,
+        chamadasDescoberta: 0,
+        chamadasDescobertaAtendidas: 0,
+        canalDireto: 0,
+        revisitas: 0,
+        revisitasReabrem: 0
+    };
+}
+
+function addLeadToBucket(b, { sinal, wa1, respondeu, visita, ganho, dChamada, dAtendida, dCanal, revisita, reabre }) {
+    b.leads += 1;
+    if (sinal) b.comSinal += 1;
+    if (wa1) b.wa1 += 1;
+    if (respondeu) b.respostas += 1;
+    if (visita) b.visitas += 1;
+    if (ganho) b.fechos += 1;
+    if (dChamada) b.chamadasDescoberta += 1;
+    if (dAtendida) b.chamadasDescobertaAtendidas += 1;
+    if (dCanal) b.canalDireto += 1;
+    if (revisita) b.revisitas += 1;
+    if (reabre) b.revisitasReabrem += 1;
+}
+
+function ratiosOf(b) {
+    return {
+        sinalPct: pct(b.comSinal, b.leads),
+        respostaPct: pct(b.respostas, b.wa1),
+        visitasPorResposta: b.respostas ? Math.round((b.visitas / b.respostas) * 100) / 100 : 0,
+        fechosPorVisita: b.visitas ? Math.round((b.fechos / b.visitas) * 100) / 100 : 0,
+        canalDiretoPct: pct(b.canalDireto, b.chamadasDescobertaAtendidas),
+        revisitasReabremPct: pct(b.revisitasReabrem, b.revisitas)
+    };
+}
+
+function computeMetricas(db) {
+    const leads = db.prepare(`
+        SELECT id, business_type, cidade, processo_estado, processo_json, resultado
+        FROM lead
+    `).all();
+    const toquesPorLead = {};
+    db.prepare('SELECT lead_id, passo, canal, estado, resultado FROM lead_toque').all().forEach((t) => {
+        if (!toquesPorLead[t.lead_id]) toquesPorLead[t.lead_id] = [];
+        toquesPorLead[t.lead_id].push(t);
+    });
+    const geral = bucketMetricas();
+    const porCategoria = {};
+    const porZona = {};
+    leads.forEach((row) => {
+        const toques = toquesPorLead[row.id] || [];
+        const processo = parseProcesso(row.processo_json);
+        const wa1 = toques.some((t) => t.passo === 'WA1' && t.estado === 'feito');
+        const respondeu = toques.some((t) => t.resultado === 'respondeu') || processo.sinalOrigem === 'respondeu';
+        const visita = toques.some((t) => ['VISITA', 'D3', 'WA3'].includes(t.passo) && t.estado === 'feito')
+            || row.processo_estado === 'VISITA';
+        const ganho = row.processo_estado === 'GANHO' || row.resultado === 'digitalizado';
+        const dCalls = toques.filter((t) => ['D1', 'D2'].includes(t.passo) && ['feito', 'falhado'].includes(t.estado));
+        const dAtendida = dCalls.some((t) => t.resultado !== 'nao_atendeu');
+        const dCanal = toques.some((t) => t.resultado === 'canal_direto') || processo.canalDireto === true;
+        const revisita = toques.some((t) => t.passo === 'REVISITA');
+        const reabre = revisita && ['EM_SEQUENCIA', 'RESPONDEU', 'VISITA', 'PROPOSTA', 'GANHO'].includes(row.processo_estado);
+        const flags = {
+            sinal: processo.sinal === true,
+            wa1,
+            respondeu,
+            visita,
+            ganho,
+            dChamada: dCalls.length > 0,
+            dAtendida,
+            dCanal: dCanal && dAtendida,
+            revisita,
+            reabre
+        };
+        addLeadToBucket(geral, flags);
+        const cat = row.business_type || 'generico';
+        const zona = String(row.cidade || '').trim() || 'sem zona';
+        if (!porCategoria[cat]) porCategoria[cat] = bucketMetricas();
+        if (!porZona[zona]) porZona[zona] = bucketMetricas();
+        addLeadToBucket(porCategoria[cat], flags);
+        addLeadToBucket(porZona[zona], flags);
+    });
+    const ratios = ratiosOf(geral);
+    const alertas = [];
+    if (geral.wa1 >= 10 && ratios.respostaPct < 8) {
+        alertas.push({
+            id: 'resposta_baixa',
+            texto: `Resposta abaixo de 8% (${ratios.respostaPct}%). O problema é o gancho ou a lista, não a ligação.`
+        });
+    }
+    if (geral.chamadasDescobertaAtendidas >= 8 && ratios.canalDiretoPct < 50) {
+        alertas.push({
+            id: 'ciclo_d',
+            texto: `Menos de 50% das chamadas atendidas no Ciclo D saem com canal direto (${ratios.canalDiretoPct}%). O problema está na abertura, não na proposta.`
+        });
+    }
+    const pack = (b) => ({ ...b, ...ratiosOf(b) });
+    return {
+        geral: pack(geral),
+        porCategoria: Object.fromEntries(Object.entries(porCategoria).map(([k, v]) => [k, pack(v)])),
+        porZona: Object.fromEntries(Object.entries(porZona).map(([k, v]) => [k, pack(v)])),
+        alertas
+    };
+}
+
 module.exports = {
     PROCESSO_ESTADOS,
     ESTADO_LABELS,
@@ -877,6 +1292,7 @@ module.exports = {
     LIMITE_CHAMADAS_NEGOCIO_SEMANA,
     PONTE_HORAS_MIN,
     PONTE_HORAS_MAX,
+    JANELAS_POR_TIPO,
     emptyProcesso,
     parseProcesso,
     normalizeEstado,
@@ -890,6 +1306,7 @@ module.exports = {
     slotIsAllowed,
     proximaAcaoEm,
     ponteHoras,
+    janelaDaCategoria,
     tentativasDoPasso,
     toquesDoPasso,
     chamadasNegocioNaSemana,
@@ -903,9 +1320,15 @@ module.exports = {
     recomputeProcesso,
     registarToque,
     registarVisitaDemo,
+    registarVisitaRua,
     instrucoesFor,
     resultadosFor,
     pontEmailFor,
     lisbonParts,
-    isoAtLisbon
+    isoAtLisbon,
+    listObjecoes,
+    guiaoFor,
+    filtrosAtendedor,
+    computeMetricas,
+    ancoraDeMelhorHora
 };

@@ -1,0 +1,105 @@
+{
+  "LIG1": {
+    "abertura": "Bom dia, Sr. {{clienteNome}}? Fala {{vendedorNome}}, da YourLab, aqui de {{zona}}. Fui eu que lhe mandei aquela mensagem com o exemplo do site. Apanhei-o em má altura?",
+    "licenca": "Pedir licença é a técnica mais rentável da chamada. Se disser que sim, aceita-se de imediato: «Sem problema, quando é melhor — amanhã de manhã?» — e desliga-se. Isso já é uma marcação.",
+    "pergunta": "Só lhe queria perguntar uma coisa: chegou a ver aquilo que lhe mandei?",
+    "ramos": [
+      {
+        "id": "viu",
+        "titulo": "Vi, sim.",
+        "texto": "E o que é que achou? — e cala-se, mesmo que demore. Depois: «Aquilo é só um exemplo, é para vocês verem a ideia. Se quiser, passo aí cinco minutos para lhe mostrar como funciona — {{followupDia}} de manhã dá-lhe jeito?»"
+      },
+      {
+        "id": "nao_viu",
+        "titulo": "Não vi / não sei o que é.",
+        "texto": "É uma página que fizemos para a {{negocioNome}}, para verem como ficaria. Não custa nada ver, e não está publicada. Prefere que lhe mande outra vez pelo WhatsApp, ou é mais fácil eu passar aí?"
+      },
+      {
+        "id": "nao_e_altura",
+        "titulo": "Não estou interessado / não é altura.",
+        "texto": "Não argumentar. Uma resposta só da tabela de objeções, e depois: «Sem problema nenhum. O exemplo fica guardado, não apago. Volto a dar notícias por volta de {{mesRevisita}}, fica bem?»"
+      },
+      {
+        "id": "funcionario",
+        "titulo": "Atendeu um funcionário.",
+        "texto": "Nunca fazer o pitch a quem não decide. «Boa tarde, o Sr. {{clienteNome}} está? … Sem problema, a que horas costuma estar? Diga-lhe só que ligou o {{vendedorNome}} da YourLab, ele já recebeu uma mensagem minha.» Anotar a hora e ligar nessa hora."
+      },
+      {
+        "id": "nao_atendeu",
+        "titulo": "Não atendeu.",
+        "texto": "Sem voicemail. WhatsApp imediato: «Sr. {{clienteNome}}, tentei ligar-lhe agora, desculpe se apanhei em má altura. Era só para saber se chegou a ver o exemplo. Quando puder, diga-me qual é a melhor hora para lhe ligar.» Chamada perdida + WhatsApp = um toque, não dois."
+      }
+    ]
+  },
+  "LIG2": {
+    "abertura": "Bom dia, Sr. {{clienteNome}}, fala o {{vendedorNome}} da YourLab outra vez. Esta é a última vez que lhe ligo sobre isto, não quero estar a chatear. Só preciso de saber uma coisa para arrumar isto: é não, ou é não agora?",
+    "licenca": "A pergunta oferece uma saída digna. Quase toda a gente escolhe «não agora» — que é uma data, não uma recusa.",
+    "pergunta": "É não, ou é não agora?",
+    "ramos": [
+      {
+        "id": "nao_agora",
+        "titulo": "Não agora.",
+        "texto": "Ótimo, então é só uma questão de altura. Quando é que faz mais sentido — depois do verão? Janeiro? Grava a data, dispara o R1 com a oferta final e a pergunta de referência."
+      },
+      {
+        "id": "e_nao",
+        "titulo": "É não.",
+        "texto": "Com certeza, obrigado por me dizer. Fica-lhe o exemplo guardado e o preço válido, se um dia mudar de ideias. Fecha com o R1 e pergunta: «E já agora — conhece aqui na zona alguém que precise disto?»"
+      },
+      {
+        "id": "hesitou",
+        "titulo": "Hesitação / tenho de falar com…",
+        "texto": "Faz todo o sentido. Quer que passe aí cinco minutos para mostrar aos dois ao mesmo tempo? É mais rápido do que estar a explicar por mensagem."
+      },
+      {
+        "id": "nao_atendeu",
+        "titulo": "Não atendeu.",
+        "texto": "Sem voicemail. Segunda tentativa noutro dia e noutro horário. Duas falhadas fecham o passo."
+      }
+    ]
+  },
+  "D1": {
+    "abertura": "Boa tarde. O Sr. {{clienteNome}} está? … Ah, sem problema. Olhe, fala o {{vendedorNome}}, da YourLab, somos aqui de {{zona}}. Não é venda por telefone — preparámos uma coisa para ele ver, já está feita. A que horas é que ele costuma estar?",
+    "licenca": "O atendedor é a fonte, não o obstáculo. Nunca fazer o pitch a quem não decide. Nunca disfarçar o motivo — «é sobre a vossa página no Google» é o guião das burlas que este mercado já conhece.",
+    "pergunta": "Ele tem WhatsApp? É que assim mando-lhe diretamente e não estou aqui a ocupar o telefone da loja. … Desculpe, como é que se chama?",
+    "ramos": [
+      {
+        "id": "canal_direto",
+        "titulo": "Consegui o canal direto.",
+        "texto": "Grava o WhatsApp ou o email, o apelido, e a hora. Sucesso do Ciclo D é canal direto — não reunião. A cadência da sequência arranca a seguir na WA1."
+      },
+      {
+        "id": "funcionario",
+        "titulo": "Atendeu funcionário, ainda sem canal.",
+        "texto": "Grava o nome de quem atendeu e a hora que ela indicou. A chamada seguinte é exatamente a essa hora, e começa: «Boa tarde D. {{nomeAtendedor}}, é o {{vendedorNome}} outra vez.»"
+      },
+      {
+        "id": "nao_atendeu",
+        "titulo": "Não atendeu.",
+        "texto": "Máximo 2 chamadas por semana ao número da loja. O telefone a tocar é um custo para eles, e é assim que se fica marcado como chato numa rua onde toda a gente se conhece."
+      }
+    ]
+  },
+  "D2": {
+    "abertura": "Boa tarde D. {{nomeAtendedor}}, é o {{vendedorNome}} outra vez. Combinámos que o Sr. {{clienteNome}} costuma estar a esta hora — está?",
+    "licenca": "Esta é a chamada com maior taxa de sucesso de todas — foi o próprio negócio que a marcou. Se atender o dono, é LIG 1: identidade, origem local, pedir licença.",
+    "pergunta": "Sr. {{clienteNome}}, fala {{vendedorNome}}, da YourLab, aqui de {{zona}}. Preparámos uma coisa para a {{negocioNome}} ver, já está feita. Apanhei-o em má altura?",
+    "ramos": [
+      {
+        "id": "viu",
+        "titulo": "Falou com o dono.",
+        "texto": "A partir daqui é a LIG 1: uma pergunta e silêncio. Se der o WhatsApp, grava canal direto e a sequência arranca."
+      },
+      {
+        "id": "funcionario",
+        "titulo": "Outra vez o funcionário.",
+        "texto": "Pergunta outra hora. Não insistas para falar já. Duas chamadas neste passo e segue para a visita."
+      },
+      {
+        "id": "nao_atendeu",
+        "titulo": "Não atendeu.",
+        "texto": "Não deixes recado na secretária. Tenta uma vez mais noutro dia, na hora que ela deu."
+      }
+    ]
+  }
+}

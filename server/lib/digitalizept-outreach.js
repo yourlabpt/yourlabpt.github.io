@@ -195,6 +195,26 @@ Quer que lhe mande outra vez?`,
 The example for *{{negocioNome}}* is still saved, exactly as it was, and so is the price — {{precoCongelado}}, VAT not included.
 
 Would you like me to send it again?`
+    },
+    D4: {
+        pt: `Sr. {{clienteNome}},
+
+Fala {{vendedorNome}}, da YourLab, aqui de {{zona}}. Preparámos um exemplo para a {{negocioNome}} — como ficariam no Google e uma página com a vossa história. São exemplos, não estão publicados.
+
+{{link}}
+
+Se fizer sentido, é só responder a este email.
+
+{{vendedorNome}} · YourLab · {{vendedorTelefone}}`,
+        en: `{{clienteNome}},
+
+This is {{vendedorNome}} from YourLab, here in {{zona}}. We put together an example for {{negocioNome}} — how you'd look on Google, and a page with your story. These are examples, not published.
+
+{{link}}
+
+If it makes sense, just reply to this email.
+
+{{vendedorNome}} · YourLab · {{vendedorTelefone}}`
     }
 };
 
@@ -975,13 +995,19 @@ function textForPasso(passo, ctx, edits = {}) {
         return fillTemplate(editado || pack[lang] || pack.pt, ctx);
     }
     if (key === 'EMAIL1') return renderEmailText(ctx);
-    if (key === 'EMAIL2') return renderEmail2Text(ctx);
+    if (key === 'EMAIL2' || key === 'D4') return key === 'D4'
+        ? fillTemplate(PASSO_TEMPLATES.D4[normalizeOutreachLang(ctx && ctx.lang)] || PASSO_TEMPLATES.D4.pt, ctx)
+        : renderEmail2Text(ctx);
     return '';
 }
 
 function subjectForPasso(passo, ctx, edits = {}) {
     const key = String(passo || '').trim().toUpperCase();
     if (key === 'EMAIL2') return email2SubjectFor(ctx);
+    if (key === 'D4') {
+        const en = normalizeOutreachLang(ctx && ctx.lang) === 'en';
+        return fillTemplate(en ? 'an example for {{negocioNome}}' : 'um exemplo para a {{negocioNome}}', ctx);
+    }
     if (key === 'EMAIL1') return emailSubjectFor(ctx, edits);
     return '';
 }

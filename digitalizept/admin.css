@@ -939,6 +939,65 @@
     gap: 10px 14px;
 }
 
+.metric-alerta {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(178, 58, 46, 0.1);
+    color: #8c2c22;
+    font-weight: 650;
+}
+
+.metric-grelha {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.metric-card {
+    padding: 12px 14px;
+    background: var(--admin-surface);
+    border-radius: 14px;
+}
+
+.metric-k {
+    margin: 0;
+    color: var(--admin-muted);
+    font-size: 0.82rem;
+}
+
+.metric-v {
+    margin: 4px 0 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.metric-bloco {
+    margin: 0 0 18px;
+}
+
+.metric-bloco h4 {
+    margin: 0 0 8px;
+}
+
+.metric-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.metric-table th,
+.metric-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--admin-line, rgba(0, 0, 0, 0.08));
+}
+
+.metric-table tbody th {
+    font-weight: 650;
+}
+
 .dossier-form .field-hours {
     grid-column: 1 / -1;
 }

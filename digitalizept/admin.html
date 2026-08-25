@@ -48,6 +48,7 @@
             <button type="button" class="admin-tab" data-tab="leads">Leads</button>
             <button type="button" class="admin-tab" data-tab="deals">Propostas</button>
             <button type="button" class="admin-tab" data-tab="coverage">Cobertura</button>
+            <button type="button" class="admin-tab" data-tab="metricas">Métricas</button>
         </nav>
 
         <main class="admin-main">
@@ -98,6 +99,11 @@
                 <div id="coverage-map" class="coverage-map" aria-label="Mapa de cobertura"></div>
                 <p id="coverage-status" class="coverage-status"></p>
                 <div id="coverage-unmapped" class="admin-list" style="margin-top:12px"></div>
+            </section>
+
+            <section id="tab-metricas" class="admin-panel hidden">
+                <p class="admin-hint">Leitura do processo, não da campanha. Se a resposta cair abaixo de 8%, o problema é o gancho ou a lista — não a ligação.</p>
+                <div id="metricas-root"></div>
             </section>
         </main>
     </div>

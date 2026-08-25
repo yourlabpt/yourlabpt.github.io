@@ -40,6 +40,9 @@ const RESULTADO_LABEL = {
     e_nao: 'é não',
     hesitou: 'hesitou',
     canal_direto: 'canal direto obtido',
+    mostrou: 'mostrei a demo',
+    nao_estava: 'não estava',
+    sem_canal_direto: 'sem canal direto',
     sem_sinal: 'sem sinal',
     sem_email: 'não tem email',
     smtp_falhou: 'o email não saiu',
@@ -54,7 +57,7 @@ const SINAL_ORIGEM_LABEL = {
 };
 
 const PASSOS_WA_SEQUENCIA = { WA1: 1, WA2: 2, WA3: 3 };
-const PASSOS_EMAIL = ['EMAIL1', 'EMAIL2'];
+const PASSOS_EMAIL = ['EMAIL1', 'EMAIL2', 'D4'];
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -192,6 +195,44 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         return box;
     }
 
+    function guiaoBox(detalhe) {
+        const guiao = view.guiao;
+        if (!guiao || detalhe.canal !== 'ligacao') return null;
+        const box = document.createElement('details');
+        box.className = 'lead-proc-guiao';
+        box.open = true;
+        box.appendChild(el('summary', '', 'Guião de chamada'));
+        if (guiao.abertura) {
+            box.appendChild(el('p', 'lead-proc-guiao-abertura', guiao.abertura));
+        }
+        if (guiao.licenca) box.appendChild(el('p', 'meta', guiao.licenca));
+        if (guiao.pergunta) box.appendChild(el('p', 'lead-proc-guiao-pergunta', guiao.pergunta));
+        (guiao.ramos || []).forEach((r) => {
+            const ramo = el('div', 'lead-proc-ramo');
+            ramo.appendChild(el('strong', '', r.titulo || r.id));
+            ramo.appendChild(el('p', '', r.texto));
+            box.appendChild(ramo);
+        });
+        return box;
+    }
+
+    function chipsBox(items, { titulo, onPick, diz, nunca } = {}) {
+        if (!items || !items.length) return null;
+        const box = el('div', 'lead-proc-chips');
+        if (titulo) box.appendChild(el('p', 'lead-proc-chip-titulo', titulo));
+        const fila = el('div', 'lead-proc-chip-fila');
+        items.forEach((item) => {
+            const btn = el('button', 'lead-proc-chip', item.label || item.oQueDiz);
+            btn.type = 'button';
+            if (diz) btn.title = item.nunca ? `Nunca: ${item.nunca}` : '';
+            btn.addEventListener('click', () => onPick(item));
+            fila.appendChild(btn);
+        });
+        box.appendChild(fila);
+        if (nunca) box.appendChild(el('p', 'meta', nunca));
+        return box;
+    }
+
     function agoraCard() {
         const detalhe = view.proximaAcaoDetalhe;
         const box = el('div', 'lead-proc-agora');
@@ -207,24 +248,20 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         box.appendChild(el('p', 'lead-proc-canal', `${CANAL_LABEL[detalhe.canal] || 'Passo'} · ${detalhe.passo}`));
         const guia = instrucoesBox(instrucoes);
         if (guia) box.appendChild(guia);
+        const script = guiaoBox(detalhe);
+        if (script) box.appendChild(script);
         const travas = bloqueiosBox();
         if (travas) box.appendChild(travas);
 
         const proxima = view.proximaAcao || {};
         if (proxima.saltar) {
             const motivo = proxima.motivo === 'sem_sinal'
-                ? 'Não houve sinal nenhum: nem resposta, nem chamada atendida, nem visita à demo. Esta chamada não se faz — o passo grava-se como saltado e o ciclo segue para o email de fecho.'
-                : 'Este lead não tem email, por isso o Email 1 não se envia. Grava-se como saltado e segue para o WhatsApp.';
+                ? 'Não houve sinal nenhum. Esta chamada não se faz — o passo grava-se como saltado e o ciclo segue.'
+                : proxima.motivo === 'sem_canal_direto'
+                    ? 'O Ciclo D não chegou a um canal direto. O lead adormece três meses.'
+                    : 'Este passo não se envia (não há email). Grava-se como saltado e o ciclo segue.';
             box.appendChild(el('p', 'lead-proc-saltar', motivo));
-            const saltarBtn = el('button', 'btn-primary', 'Saltar este passo');
-            saltarBtn.type = 'button';
-            saltarBtn.addEventListener('click', () => act(() => call(
-                `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/advance`,
-                { method: 'POST', body: { passo: detalhe.passo, saltar: true, resultado: proxima.motivo } }
-            ), saltarBtn));
-            const acoes = el('div', 'lead-proc-acoes');
-            acoes.appendChild(saltarBtn);
-            box.appendChild(acoes);
+            box.appendChild(el('p', 'meta', 'O sistema avança sozinho — se ficou parado, recarrega o painel.'));
             return box;
         }
 
@@ -242,6 +279,31 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
             detalhe.canal === 'ligacao' ? 'Nota da chamada' : 'Mensagem para este lead',
             texto
         ));
+
+        const objecoes = chipsBox(view.objecoes, {
+            titulo: 'Objeções',
+            onPick: (item) => {
+                const extra = item.resposta || '';
+                texto.value = [texto.value.trim(), extra].filter(Boolean).join('\n\n');
+                const meses = Number(item.revisitarMeses) || 3;
+                view._objecao = item.id;
+                view._revisitarSugerida = proximaSemana(meses);
+                const dataInput = host.querySelector('[data-revisitar]');
+                if (dataInput) dataInput.value = view._revisitarSugerida;
+                toast(`Objeção «${item.label}». Revisita sugerida daqui a ${meses} meses.`);
+            }
+        });
+        if (objecoes && detalhe.canal === 'ligacao') box.appendChild(objecoes);
+
+        const filtros = chipsBox(view.filtrosAtendedor, {
+            titulo: 'O atendedor diz…',
+            diz: true,
+            onPick: (item) => {
+                texto.value = [texto.value.trim(), item.resposta].filter(Boolean).join('\n\n');
+                toast(`Nunca: ${item.nunca}`);
+            }
+        });
+        if (filtros) box.appendChild(filtros);
 
         const acoes = el('div', 'lead-proc-acoes');
         const travado = (view.bloqueios || []).length > 0;
@@ -295,7 +357,7 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         }
 
         (detalhe.resultados || []).forEach((r) => {
-            if (detalhe.canal !== 'ligacao') return;
+            if (detalhe.canal !== 'ligacao' && detalhe.canal !== 'visita') return;
             const btn = el('button', 'btn-secondary', r.label);
             btn.type = 'button';
             btn.disabled = travado;
@@ -343,10 +405,11 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
             method: 'POST',
             body: {
                 passo: detalhe.passo,
-                canal: 'ligacao',
+                canal: detalhe.canal || 'ligacao',
                 resultado,
                 nota,
-                estado: resultado === 'nao_atendeu' ? 'falhado' : 'feito'
+                estado: resultado === 'nao_atendeu' ? 'falhado' : 'feito',
+                objecao: view._objecao || ''
             }
         });
     }
@@ -552,7 +615,8 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
 
         const data = el('input', 'field-input');
         data.type = 'date';
-        data.value = proximaSemana(3);
+        data.setAttribute('data-revisitar', '1');
+        data.value = view._revisitarSugerida || proximaSemana(3);
         const oferta = el('textarea', 'field-input');
         oferta.rows = 3;
         oferta.placeholder = 'A oferta final que fica com ele, sem compromisso.';
@@ -574,6 +638,13 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         box.append(grid, fieldWrap('Oferta final', oferta));
 
         const acoes = el('div', 'lead-proc-acoes');
+        if (view.fecho && view.fecho.url) {
+            const abrir = el('a', 'btn-primary', 'Abrir WhatsApp do fecho');
+            abrir.href = view.fecho.url;
+            abrir.target = '_blank';
+            abrir.rel = 'noopener';
+            acoes.appendChild(abrir);
+        }
         const fechar = (estado, resultado, label, classe) => {
             const btn = el('button', classe, label);
             btn.type = 'button';
@@ -586,7 +657,9 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
                         resultado,
                         revisitarEm: data.value ? new Date(data.value).toISOString() : '',
                         ofertaFinal: oferta.value,
-                        referenciaPedida: referencia.value
+                        referenciaPedida: referencia.value,
+                        objecao: view._objecao || '',
+                        texto: (view.fecho && view.fecho.mensagem) || ''
                     }
                 }
             ), btn));

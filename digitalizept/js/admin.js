@@ -74,7 +74,8 @@ const el = {
     drawer: document.getElementById('drawer'),
     drawerPanel: document.getElementById('drawer-panel'),
     drawerBackdrop: document.getElementById('drawer-backdrop'),
-    callQueue: document.getElementById('call-queue')
+    callQueue: document.getElementById('call-queue'),
+    metricasRoot: document.getElementById('metricas-root')
 };
 
 let catalog = [];
@@ -202,7 +203,7 @@ function switchTab(name) {
     document.querySelectorAll('.admin-tab').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.tab === name);
     });
-    ['catalog', 'leads', 'deals', 'coverage', 'dossier'].forEach((id) => {
+    ['catalog', 'leads', 'deals', 'coverage', 'dossier', 'metricas'].forEach((id) => {
         const panel = document.getElementById(`tab-${id}`);
         if (panel) panel.classList.toggle('hidden', id !== name);
     });
@@ -216,6 +217,112 @@ function switchTab(name) {
             }
         });
     }
+    if (name === 'metricas') {
+        loadMetricas().catch((err) => {
+            if (!el.metricasRoot) return;
+            el.metricasRoot.replaceChildren();
+            const p = document.createElement('p');
+            p.className = 'admin-empty';
+            p.textContent = err.message || 'Não foi possível carregar as métricas.';
+            el.metricasRoot.appendChild(p);
+        });
+    }
+}
+
+function fmtPct(n) {
+    return `${(Number(n) || 0).toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+function metricCell(label, value, hint) {
+    const node = document.createElement('div');
+    node.className = 'metric-card';
+    const k = document.createElement('p');
+    k.className = 'metric-k';
+    k.textContent = label;
+    const v = document.createElement('p');
+    v.className = 'metric-v';
+    v.textContent = value;
+    node.append(k, v);
+    if (hint) {
+        const h = document.createElement('p');
+        h.className = 'meta';
+        h.textContent = hint;
+        node.appendChild(h);
+    }
+    return node;
+}
+
+function metricTable(titulo, rows) {
+    const wrap = document.createElement('section');
+    wrap.className = 'metric-bloco';
+    const h = document.createElement('h4');
+    h.textContent = titulo;
+    wrap.appendChild(h);
+    if (!rows.length) {
+        const empty = document.createElement('p');
+        empty.className = 'meta';
+        empty.textContent = 'Ainda não há dados neste corte.';
+        wrap.appendChild(empty);
+        return wrap;
+    }
+    const table = document.createElement('table');
+    table.className = 'metric-table';
+    table.innerHTML = '<thead><tr><th></th><th>Leads</th><th>Sinal</th><th>Resposta</th><th>Visitas / resp.</th><th>Fechos / visita</th></tr></thead>';
+    const body = document.createElement('tbody');
+    rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        [row.label, String(row.leads), fmtPct(row.sinalPct), fmtPct(row.respostaPct), String(row.visitasPorResposta), String(row.fechosPorVisita)]
+            .forEach((cell) => {
+                const td = document.createElement(cell === row.label ? 'th' : 'td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+        body.appendChild(tr);
+    });
+    table.appendChild(body);
+    wrap.appendChild(table);
+    return wrap;
+}
+
+function categoriaNome(id) {
+    const hit = businessTypes.find((t) => t.id === id);
+    return (hit && hit.nome) || id || '—';
+}
+
+async function loadMetricas() {
+    if (!el.metricasRoot) return;
+    el.metricasRoot.innerHTML = '<p class="admin-hint">A carregar…</p>';
+    const { response, data } = await api('/api/digitalizept/process/metricas');
+    if (!response.ok) {
+        throw new Error((data && data.error) || 'Não foi possível carregar as métricas.');
+    }
+    const geral = data.geral || {};
+    const host = el.metricasRoot;
+    host.innerHTML = '';
+    (data.alertas || []).forEach((a) => {
+        const box = document.createElement('p');
+        box.className = 'metric-alerta';
+        box.textContent = a.texto;
+        host.appendChild(box);
+    });
+    const grelha = document.createElement('div');
+    grelha.className = 'metric-grelha';
+    grelha.append(
+        metricCell('% com sinal', fmtPct(geral.sinalPct), `${geral.comSinal || 0} de ${geral.leads || 0} leads`),
+        metricCell('% resposta no WA1', fmtPct(geral.respostaPct), `${geral.respostas || 0} respostas em ${geral.wa1 || 0} envios`),
+        metricCell('Visitas por resposta', String(geral.visitasPorResposta || 0), `${geral.visitas || 0} visitas`),
+        metricCell('Fechos por visita', String(geral.fechosPorVisita || 0), `${geral.fechos || 0} ganhos`),
+        metricCell('Ciclo D → canal direto', fmtPct(geral.canalDiretoPct), `${geral.canalDireto || 0} de ${geral.chamadasDescobertaAtendidas || 0} atendidas`),
+        metricCell('Revisitas que reabrem', fmtPct(geral.revisitasReabremPct), `${geral.revisitasReabrem || 0} de ${geral.revisitas || 0}`)
+    );
+    host.appendChild(grelha);
+    const cats = Object.entries(data.porCategoria || {})
+        .map(([id, b]) => ({ label: categoriaNome(id), ...b }))
+        .sort((a, b) => b.leads - a.leads);
+    const zonas = Object.entries(data.porZona || {})
+        .map(([id, b]) => ({ label: id, ...b }))
+        .sort((a, b) => b.leads - a.leads);
+    host.append(metricTable('Por categoria', cats), metricTable('Por zona', zonas));
 }
 
 function estadoLabel(estado) {

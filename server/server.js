@@ -3005,6 +3005,11 @@ app.post('/api/digitalizept/leads/:leadId/visits', requireDigitalizept, (req, re
         );
         applyAutoEtapa(db, leadId, 'visitado');
         reconcileVisitLeadPair(db, id, { identitySource: 'lead', now });
+        try {
+            leadProcess.registarVisitaRua(db, leadId, { experiencia });
+        } catch (err) {
+            console.error('digitalizept visit process error:', err.message);
+        }
         return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
         console.error('digitalizept lead visit create error:', err.message);
@@ -3123,6 +3128,11 @@ app.post('/api/digitalizept/visits', requireDigitalizept, async (req, res) => {
         if (leadId) {
             applyAutoEtapa(db, leadId, 'visitado');
             reconcileVisitLeadPair(db, id, { identitySource: 'lead', now });
+            try {
+                leadProcess.registarVisitaRua(db, leadId, { experiencia });
+            } catch (err) {
+                console.error('digitalizept visit process error:', err.message);
+            }
         }
         return res.json({ ok: true, visit: fetchVisitaEnriched(db, id) });
     } catch (err) {
@@ -4552,7 +4562,7 @@ app.post('/api/digitalizept/leads/:leadId/outreach/call-done', requireDigitalize
         saveLeadFollowup(db, leadId, packed.followup);
         const body = req.body || {};
         const snapshot = leadProcess.registarToque(db, leadId, {
-            passo: cleanText(body.passo, 20) || 'LIG1',
+            passo: cleanText(body.passo, 20) || 'CONFIRM',
             canal: 'ligacao',
             estado: 'feito',
             resultado: cleanText(body.resultado, 40) || 'ligou',
@@ -4587,12 +4597,13 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         if (!packed.row.demo_slug) {
             return res.status(400).json({ error: 'Publique a demo antes de enviar o email.' });
         }
-        const passo = cleanText(body.passo, 20).toUpperCase() === 'EMAIL2' ? 'EMAIL2' : 'EMAIL1';
+        const passoRaw = cleanText(body.passo, 20).toUpperCase();
+        const passo = passoRaw === 'EMAIL2' || passoRaw === 'D4' ? passoRaw : 'EMAIL1';
         const subject = cleanText(body.subject, 240)
             || outreach.subjectForPasso(passo, packed.ctx, packed.followup.edits);
         const text = String(body.text || outreach.textForPasso(passo, packed.ctx, packed.followup.edits));
-        // Email 2 closes the cycle in plain text; only Email 1 carries the layout.
-        const html = passo === 'EMAIL2' ? '' : outreach.renderEmailHtml(packed.ctx);
+        // Email 2 and discovery D4 close in plain text; only Email 1 carries the layout.
+        const html = passo === 'EMAIL1' ? outreach.renderEmailHtml(packed.ctx) : '';
         const result = await sendProjectNotificationEmail({
             to,
             subject,
@@ -4805,8 +4816,14 @@ function buildProcessoView(db, leadId, req) {
         },
         fecho: {
             ofertaFinalSugerida: ofertaFinalFor(packed.ctx.ganchoId, packed.followup.lang),
-            precoCongelado: packed.ctx.precoCongelado
+            precoCongelado: packed.ctx.precoCongelado,
+            mensagem: outreach.textForPasso('R1', packed.ctx, packed.followup.edits),
+            url: waUrlFor(telefone, outreach.textForPasso('R1', packed.ctx, packed.followup.edits))
         },
+        guiao: leadProcess.guiaoFor(passo, packed.ctx),
+        objecoes: leadProcess.listObjecoes(packed.followup.lang),
+        filtrosAtendedor: passo === 'D1' ? leadProcess.filtrosAtendedor(packed.ctx) : [],
+        janela: snapshot.janelas || leadProcess.janelaDaCategoria(snapshot.row.business_type),
         proximaAcaoDetalhe: passo
             ? {
                 passo,
@@ -4839,6 +4856,16 @@ function buildProcessoView(db, leadId, req) {
         }
     };
 }
+
+app.get('/api/digitalizept/process/metricas', requireDigitalizept, (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        return res.json({ ok: true, ...leadProcess.computeMetricas(db) });
+    } catch (err) {
+        console.error('digitalizept process metricas error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível carregar as métricas.' });
+    }
+});
 
 app.get('/api/digitalizept/leads/:leadId/process', requireDigitalizept, (req, res) => {
     try {

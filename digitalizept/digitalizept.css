@@ -3653,7 +3653,8 @@ a.btn-secondary {
 }
 
 .lead-proc-estado[data-estado="EM_SEQUENCIA"],
-.lead-proc-estado[data-estado="RESPONDEU"] {
+.lead-proc-estado[data-estado="RESPONDEU"],
+.lead-proc-estado[data-estado="DESCOBERTA"] {
     background: rgba(160, 125, 58, 0.16);
     color: #6c5220;
 }
@@ -3820,4 +3821,65 @@ a.btn-secondary {
 
 .lead-proc-remover {
     margin-left: auto;
+}
+
+.lead-proc-guiao {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+}
+
+.lead-proc-guiao summary {
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.lead-proc-guiao-abertura,
+.lead-proc-guiao-pergunta {
+    margin: 8px 0 0;
+    line-height: 1.45;
+}
+
+.lead-proc-ramo {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
+.lead-proc-ramo p {
+    margin: 4px 0 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.lead-proc-chips {
+    margin-top: 12px;
+}
+
+.lead-proc-chip-titulo {
+    margin: 0 0 6px;
+    font-size: 0.82rem;
+    font-weight: 650;
+}
+
+.lead-proc-chip-fila {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.lead-proc-chip {
+    appearance: none;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.16));
+    background: var(--surface-color, #fff);
+    border-radius: 999px;
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.lead-proc-chip:hover {
+    background: var(--surface-muted, rgba(0, 0, 0, 0.04));
 }

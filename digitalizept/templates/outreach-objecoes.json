@@ -1,0 +1,98 @@
+[
+  {
+    "id": "preco",
+    "revisitarMeses": 6,
+    "pt": {
+      "label": "É caro",
+      "resposta": "Sem problema nenhum. O exemplo fica guardado, e o valor também — não mexo. Quando fizer mais sentido, é só dizer."
+    },
+    "en": {
+      "label": "It's expensive",
+      "resposta": "No problem at all. The example stays saved, and so does the price — I won't change it. When the timing is better, just say so."
+    }
+  },
+  {
+    "id": "facebook",
+    "revisitarMeses": 4,
+    "pt": {
+      "label": "Tenho o Facebook",
+      "resposta": "Pois, e funciona. A diferença é que o Facebook não é vosso — a conta, as fotografias e os seguidores estão em casa alheia. O exemplo que vos mandei fica em nome da empresa."
+    },
+    "en": {
+      "label": "I have Facebook",
+      "resposta": "Yes, and it works. The difference is Facebook is not yours — the account, the photos and the followers sit in someone else's house. The example I sent you stays in the company's name."
+    }
+  },
+  {
+    "id": "sobrinho",
+    "revisitarMeses": 4,
+    "pt": {
+      "label": "O meu sobrinho faz",
+      "resposta": "Ótimo, então já têm quem trate disto. O exemplo fica guardado na mesma — se um dia precisar de uma segunda opinião, está lá."
+    },
+    "en": {
+      "label": "My nephew does this",
+      "resposta": "Great — you already have someone on it. The example stays saved anyway. If you ever want a second look, it's there."
+    }
+  },
+  {
+    "id": "tempo",
+    "revisitarMeses": 3,
+    "pt": {
+      "label": "Não tenho tempo",
+      "resposta": "Por isso é que tratamos nós de tudo. Vocês só precisam de estar satisfeitos antes de ir para o ar. Quando é que é menos mau — de manhã ou à tarde?"
+    },
+    "en": {
+      "label": "I don't have time",
+      "resposta": "That's why we handle everything. You only need to be satisfied before it goes live. When is less bad — morning or afternoon?"
+    }
+  },
+  {
+    "id": "ja_ligaram",
+    "revisitarMeses": 6,
+    "pt": {
+      "label": "Já me ligaram muitos",
+      "resposta": "Compreendo. Eu não estou a vender uma coisa que ainda não existe — o exemplo já está feito, é só para verem. Se não for altura, digo já e não volto a ligar agora."
+    },
+    "en": {
+      "label": "Lots of people have already called",
+      "resposta": "I understand. I'm not selling something that does not exist yet — the example is already made, just for you to see. If the timing is wrong, say so and I won't call again now."
+    }
+  },
+  {
+    "id": "mais_frente",
+    "revisitarMeses": 3,
+    "pt": {
+      "label": "Mais para a frente",
+      "resposta": "Sem problema. Quando é que faz mais sentido — depois do verão? Janeiro? Fica marcado e o exemplo continua guardado."
+    },
+    "en": {
+      "label": "Later on",
+      "resposta": "No problem. When does it make more sense — after the summer? January? We'll mark it, and the example stays saved."
+    }
+  },
+  {
+    "id": "socio",
+    "revisitarMeses": 2,
+    "pt": {
+      "label": "Tenho de falar com o sócio",
+      "resposta": "Faz todo o sentido. Quer que passe aí cinco minutos para mostrar aos dois ao mesmo tempo? É mais rápido do que estar a explicar por mensagem."
+    },
+    "en": {
+      "label": "I need to talk to my partner",
+      "resposta": "That makes complete sense. Want me to stop by for five minutes and show both of you at once? It's faster than explaining over messages."
+    }
+  },
+  {
+    "id": "manda_email",
+    "revisitarMeses": 1,
+    "pt": {
+      "label": "Manda por email",
+      "resposta": "Mando, com certeza. Já foi hoje de manhã — se não chegou, mando outra vez agora. Prefere que lhe mande também pelo WhatsApp?"
+    },
+    "en": {
+      "label": "Send it by email",
+      "resposta": "Of course. It already went out this morning — if it didn't arrive, I'll send it again now. Would you like it on WhatsApp as well?"
+    }
+  }
+]

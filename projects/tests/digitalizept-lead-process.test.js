@@ -16,13 +16,13 @@ function openMemoryDb() {
     return db;
 }
 
-function seedLead(db, { email = 'dono@example.com', telefone = '912345678', demo = 'talho-x' } = {}) {
+function seedLead(db, { email = 'dono@example.com', telefone = '912345678', demo = 'talho-x', tipo = 'generico' } = {}) {
     const now = new Date().toISOString();
     const leadId = crypto.randomUUID();
     db.prepare(`
         INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, criado_em, demo_slug)
-        VALUES (?, 'generico', 'Talho X', 'Rua A 1', 'Porto', ?, ?, 'novo', ?, ?)
-    `).run(leadId, telefone, telefone, now, demo);
+        VALUES (?, ?, 'Talho X', 'Rua A 1', 'Porto', ?, ?, 'novo', ?, ?)
+    `).run(leadId, tipo, telefone, telefone, now, demo);
     db.prepare(`
         INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
         VALUES (?, ?, ?, '{}', ?)
@@ -175,6 +175,14 @@ describe('digitalizept lead process — sinal', () => {
         // Deduplicated by the hour: a refresh is not a second signal.
         assert.equal(proc.registarVisitaDemo(db, { leadId, userAgent: CHROME_UA }), false);
         assert.equal(proc.countDemoVisitas(db, leadId), 1);
+
+        const outro = seedLead(db, { demo: 'talho-y', email: 'y@example.com' });
+        assert.equal(proc.registarVisitaDemo(db, {
+            leadId: outro,
+            userAgent: CHROME_UA,
+            referer: 'https://yourlabpt.com/digitalizept/admin.html'
+        }), false);
+        assert.equal(proc.countDemoVisitas(db, outro), 0);
         db.close();
     });
 });
@@ -213,7 +221,7 @@ describe('digitalizept lead process — cadência', () => {
         assert.equal(comSinal.passo, 'WA2');
     });
 
-    it('marks LIG2 to be skipped without a signal, and the queue moves to Email 2', () => {
+    it('marks LIG2 skipped without a signal, and the queue moves to Email 2 on its own', () => {
         const db = openMemoryDb();
         const leadId = seedLead(db);
         const base = [
@@ -226,27 +234,15 @@ describe('digitalizept lead process — cadência', () => {
         ];
         base.forEach((t) => proc.registarToque(db, leadId, { estado: 'feito', ...t }));
 
-        const antes = proc.recomputeProcesso(db, leadId);
-        assert.equal(antes.processo.sinal, false);
-        assert.equal(antes.proxima.passo, 'LIG2');
-        assert.equal(antes.proxima.saltar, true);
-        assert.equal(antes.proxima.motivo, 'sem_sinal');
-        // Nothing is scheduled while the touch cannot happen.
-        const parado = db.prepare('SELECT proxima_acao_em FROM lead WHERE id = ?').get(leadId);
-        assert.equal(parado.proxima_acao_em, '');
-
-        const depois = proc.registarToque(db, leadId, {
-            passo: 'LIG2',
-            canal: 'ligacao',
-            estado: 'saltado',
-            resultado: 'sem_sinal'
-        });
+        const depois = proc.recomputeProcesso(db, leadId);
+        assert.equal(depois.processo.sinal, false);
         assert.equal(depois.proxima.passo, 'EMAIL2');
         assert.equal(depois.proxima.saltar, false);
         assert.ok(depois.proxima.agendadoPara);
 
         const saltado = proc.listToques(db, leadId).find((t) => t.passo === 'LIG2');
         assert.equal(saltado.estado, 'saltado');
+        assert.equal(saltado.resultado, 'sem_sinal');
         db.close();
     });
 
@@ -388,7 +384,7 @@ describe('digitalizept lead process — registo', () => {
 
 describe('digitalizept lead process — instruções e demo', () => {
     it('carries guidance for every step in the plan', () => {
-        ['EMAIL1', 'WA1', 'LIG1', 'WA2', 'N1', 'LIG2', 'EMAIL2', 'WA3', 'R1', 'REVISITA', 'D1'].forEach((passo) => {
+        ['EMAIL1', 'WA1', 'LIG1', 'WA2', 'N1', 'LIG2', 'EMAIL2', 'WA3', 'R1', 'REVISITA', 'D1', 'D2', 'D3', 'D4'].forEach((passo) => {
             const guia = proc.instrucoesFor(passo);
             assert.ok(guia, `falta instrução para ${passo}`);
             assert.ok(guia.titulo && guia.objetivo && guia.registar, `instrução incompleta em ${passo}`);
@@ -411,7 +407,164 @@ describe('digitalizept lead process — instruções e demo', () => {
             path.join(__dirname, '..', '..', 'digitalizept', 'sw.js'),
             'utf8'
         );
-        assert.match(sw, /digitalizept-v84/);
+        assert.match(sw, /digitalizept-v85/);
         assert.match(sw, /admin-lead-process\.js/);
+        const adminHtml = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'digitalizept', 'admin.html'),
+            'utf8'
+        );
+        assert.match(adminHtml, /data-tab="metricas"/);
+        const panel = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin-lead-process.js'),
+            'utf8'
+        );
+        assert.match(panel, /lead-proc-guiao/);
+        assert.match(panel, /filtrosAtendedor/);
+    });
+});
+
+describe('digitalizept lead process — janelas por categoria', () => {
+    it('keeps emails at 09:30 even when the category does not call in the morning', () => {
+        const janelas = proc.janelaDaCategoria('restaurante');
+        const proxima = proc.nextTouch({
+            estado: 'DEMO_PRONTO',
+            contacto: { email: 'a@b.pt' },
+            agora: '2026-09-09T06:00:00.000Z',
+            janelas
+        });
+        assert.equal(proxima.passo, 'EMAIL1');
+        const parts = proc.lisbonParts(new Date(proxima.agendadoPara));
+        assert.equal(parts.hour, 9);
+        assert.equal(parts.minute, 30);
+    });
+
+    it('pushes WhatsApp and calls into the category window, under the global exclusions', () => {
+        const restaurante = proc.janelaDaCategoria('restaurante');
+        assert.equal(proc.slotIsAllowed(new Date(proc.isoAtLisbon(2026, 9, 9, 10, 0)), restaurante), false);
+        assert.equal(proc.slotIsAllowed(new Date(proc.isoAtLisbon(2026, 9, 9, 15, 30)), restaurante), true);
+
+        const mecanico = proc.janelaDaCategoria('mecanico-automovel');
+        assert.equal(proc.slotIsAllowed(new Date(proc.isoAtLisbon(2026, 9, 9, 9, 0)), mecanico), true);
+        assert.equal(proc.slotIsAllowed(new Date(proc.isoAtLisbon(2026, 9, 9, 11, 0)), mecanico), false);
+
+        const salao = proc.janelaDaCategoria('salao-beleza');
+        // Saturday is out even if the hour would otherwise fit.
+        assert.equal(proc.slotIsAllowed(new Date(proc.isoAtLisbon(2026, 9, 12, 10, 30)), salao), false);
+    });
+
+    it('skips the two weeks before Christmas for retail, into January', () => {
+        const janelas = proc.janelaDaCategoria('mercadinho');
+        const iso = proc.proximaAcaoEm(proc.isoAtLisbon(2026, 12, 16, 10, 0), 0, { janelas });
+        const parts = proc.lisbonParts(new Date(iso));
+        assert.equal(parts.y, 2027);
+        assert.equal(parts.m, 1);
+        assert.ok(parts.d >= 2);
+        assert.ok(proc.slotIsAllowed(new Date(iso), janelas));
+    });
+});
+
+describe('digitalizept lead process — ciclo D', () => {
+    it('starts on D1 when there is only a shop landline', () => {
+        const proxima = proc.nextTouch({
+            estado: 'DESCOBERTA',
+            contacto: { tipoNumero: '2x' },
+            agora: '2026-09-09T08:00:00.000Z'
+        });
+        assert.equal(proxima.passo, 'D1');
+        assert.equal(proxima.canal, 'ligacao');
+    });
+
+    it('skips D2 until a better hour exists, then D4 without email archives the lead', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db, { email: '', telefone: '222000111', demo: 'loja-x' });
+        const primeiro = proc.recomputeProcesso(db, leadId);
+        assert.equal(primeiro.estado, 'DESCOBERTA');
+        assert.equal(primeiro.proxima.passo, 'D1');
+
+        proc.registarToque(db, leadId, {
+            passo: 'D1',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: 'funcionario',
+            destino: 'negocio'
+        });
+        const semHora = proc.recomputeProcesso(db, leadId);
+        assert.equal(semHora.proxima.passo, 'D3');
+
+        proc.recomputeProcesso(db, leadId, { patchProcesso: { melhorHora: '16h' } });
+        const comHora = proc.recomputeProcesso(db, leadId);
+        assert.equal(comHora.proxima.passo, 'D2');
+        assert.equal(proc.ancoraDeMelhorHora('16h').hour, 16);
+
+        proc.registarToque(db, leadId, {
+            passo: 'D2',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: 'funcionario',
+            destino: 'negocio'
+        });
+        proc.registarToque(db, leadId, {
+            passo: 'D3',
+            canal: 'visita',
+            estado: 'feito',
+            resultado: 'mostrou'
+        });
+        const fim = proc.recomputeProcesso(db, leadId);
+        assert.equal(fim.estado, 'ADORMECIDO');
+        const saltados = proc.listToques(db, leadId).filter((t) => t.estado === 'saltado').map((t) => t.passo);
+        assert.ok(saltados.includes('D4'));
+        assert.ok(saltados.includes('D_FIM'));
+        db.close();
+    });
+
+    it('leaves discovery when the call gets a direct channel', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db, { email: '', telefone: '222000111', demo: 'loja-y' });
+        const snap = proc.registarToque(db, leadId, {
+            passo: 'D1',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: 'canal_direto'
+        });
+        assert.equal(snap.processo.canalDireto, true);
+        assert.equal(snap.estado, 'EM_SEQUENCIA');
+        assert.equal(snap.proxima.passo, 'WA1');
+        const email1 = proc.listToques(db, leadId).find((t) => t.passo === 'EMAIL1');
+        assert.equal(email1.estado, 'saltado');
+        db.close();
+    });
+
+    it('turns a street visit into VISITA and schedules WA3', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db);
+        const snap = proc.registarVisitaRua(db, leadId, { experiencia: 'Mostrei no tablet' });
+        assert.equal(snap.estado, 'VISITA');
+        assert.equal(snap.proxima.passo, 'WA3');
+        db.close();
+    });
+});
+
+describe('digitalizept lead process — guião, objeções e métricas', () => {
+    it('fills the call script and lists objections with a revisit hint', () => {
+        const guiao = proc.guiaoFor('LIG1', { clienteNome: 'Costa', vendedorNome: 'Túlio', zona: 'Porto' });
+        assert.match(guiao.abertura, /Costa/);
+        assert.ok(guiao.ramos.some((r) => r.id === 'viu'));
+        const obj = proc.listObjecoes('pt');
+        assert.ok(obj.some((o) => o.id === 'preco' && o.revisitarMeses === 6));
+        assert.ok(proc.filtrosAtendedor({ negocioNome: 'Talho X' }).some((f) => /Talho X/.test(f.resposta)));
+    });
+
+    it('computes reply and signal rates from the touches already stored', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db);
+        proc.registarToque(db, leadId, { passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'enviado' });
+        proc.registarToque(db, leadId, { passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'respondeu' });
+        const m = proc.computeMetricas(db);
+        assert.equal(m.geral.leads, 1);
+        assert.equal(m.geral.wa1, 1);
+        assert.equal(m.geral.respostas, 1);
+        assert.equal(m.geral.respostaPct, 100);
+        assert.equal(m.alertas.length, 0);
+        db.close();
     });
 });
