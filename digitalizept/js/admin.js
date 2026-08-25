@@ -53,6 +53,7 @@ const el = {
     dealsList: document.getElementById('deals-list'),
     catalogFilter: document.getElementById('catalog-filter'),
     demosFilter: document.getElementById('leads-filter'),
+    leadsOrdem: document.getElementById('leads-ordem'),
     dealsFilter: document.getElementById('deals-filter'),
     catalogAddBtn: document.getElementById('catalog-add-btn'),
     leadsEmailDemosBtn: document.getElementById('leads-email-demos-btn'),
@@ -393,6 +394,28 @@ function isParked(item) {
     return Boolean(item && (item.resultado === 'sem_interesse' || item.followupUnsubscribed));
 }
 
+const LEADS_ORDEM_KEY = 'digitalizept_leads_ordem';
+const LEADS_ORDEM = ['proximo', 'tipo', 'criado'];
+
+function storedLeadsOrdem() {
+    try {
+        const v = localStorage.getItem(LEADS_ORDEM_KEY) || '';
+        return LEADS_ORDEM.includes(v) ? v : 'proximo';
+    } catch (_) {
+        return 'proximo';
+    }
+}
+
+function leadsOrdem() {
+    const fromUi = el.leadsOrdem && el.leadsOrdem.value;
+    return LEADS_ORDEM.includes(fromUi) ? fromUi : storedLeadsOrdem();
+}
+
+function syncLeadsOrdemControl() {
+    if (!el.leadsOrdem) return;
+    el.leadsOrdem.value = storedLeadsOrdem();
+}
+
 function activeFirst(items) {
     return [...items].sort((a, b) => Number(isParked(a)) - Number(isParked(b)));
 }
@@ -609,12 +632,13 @@ function addControloLeadButton(actions, leadId, { primary = true } = {}) {
 
 function renderDemos() {
     const q = (el.demosFilter.value || '').trim().toLowerCase();
-    const items = activeFirst(leads.filter((l) => l.estado !== 'fechado').filter((l) => {
+    const filtered = leads.filter((l) => l.estado !== 'fechado').filter((l) => {
         if (!q) return true;
         return `${l.nome} ${l.business_type} ${l.demo_slug || ''} ${l.morada || ''} ${l.estado || ''}`
             .toLowerCase()
             .includes(q);
-    }));
+    });
+    const items = leadsOrdem() === 'proximo' ? activeFirst(filtered) : filtered;
     el.demosList.innerHTML = '';
     if (!items.length) {
         el.demosList.innerHTML = '<p class="admin-empty">Sem leads em aberto.</p>';
@@ -1171,7 +1195,10 @@ async function loadCatalog() {
 }
 
 async function loadLeads() {
-    const { response, data } = await api('/api/digitalizept/leads?fila=hoje');
+    const ordem = leadsOrdem();
+    const qs = new URLSearchParams({ ordem });
+    if (ordem === 'proximo') qs.set('fila', 'hoje');
+    const { response, data } = await api(`/api/digitalizept/leads?${qs}`);
     if (!response.ok) throw new Error('leads');
     leads = data.leads || [];
     renderDemos();
@@ -1266,6 +1293,17 @@ document.querySelectorAll('.admin-tab').forEach((btn) => {
 });
 el.catalogFilter.addEventListener('input', renderCatalog);
 el.demosFilter.addEventListener('input', renderDemos);
+if (el.leadsOrdem) {
+    syncLeadsOrdemControl();
+    el.leadsOrdem.addEventListener('change', async () => {
+        try { localStorage.setItem(LEADS_ORDEM_KEY, leadsOrdem()); } catch (_) { /* ignore */ }
+        try {
+            await loadLeads();
+        } catch (_) {
+            toast('Não foi possível ordenar a lista.', true);
+        }
+    });
+}
 el.dealsFilter.addEventListener('input', renderDeals);
 el.coverageFilter.addEventListener('input', () => {
     if (coverageUi) coverageUi.repaint();

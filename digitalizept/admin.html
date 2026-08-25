@@ -64,10 +64,15 @@
             <section id="tab-leads" class="admin-panel hidden">
                 <div class="admin-toolbar">
                     <input id="leads-filter" class="field-input" type="search" placeholder="Filtrar leads…">
+                    <select id="leads-ordem" class="field-input admin-toolbar-ordem" aria-label="Ordenar leads">
+                        <option value="proximo">Próximo passo</option>
+                        <option value="tipo">Tipo de loja</option>
+                        <option value="criado">Data de criação</option>
+                    </select>
                     <button id="leads-add-btn" type="button" class="btn-primary">Novo negócio</button>
                     <button id="leads-email-demos-btn" type="button" class="btn-secondary">Email HTML às demos</button>
                 </div>
-                <p class="admin-hint">A lista ordena pela próxima acção. Entras no que fazer agora. Dados da loja é o formulário e o estado; o outro ecrã é só o passo pendente.</p>
+                <p class="admin-hint">Ordena pelo próximo passo, pelo tipo de loja ou pela data. Entras no que fazer agora. Dados da loja é o formulário e o estado; o outro ecrã é só o passo pendente.</p>
                 <div id="leads-list" class="admin-list"></div>
             </section>
 

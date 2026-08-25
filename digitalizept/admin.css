@@ -319,6 +319,12 @@
     min-width: 160px;
 }
 
+.admin-toolbar-ordem {
+    flex: 0 1 12.5rem;
+    min-width: 10rem;
+    max-width: 14rem;
+}
+
 .admin-toolbar .btn-primary {
     flex-shrink: 0;
 }
@@ -1249,6 +1255,11 @@
         font-size: 16px;
         min-height: 48px;
         padding: 12px 14px;
+    }
+
+    .admin-toolbar-ordem {
+        flex: 1 1 100%;
+        max-width: none;
     }
 
     .admin-body .btn-primary,

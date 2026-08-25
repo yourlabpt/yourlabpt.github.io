@@ -56,6 +56,7 @@ const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require
 const outreach = require('./lib/digitalizept-outreach');
 const leadProcess = require('./lib/digitalizept-lead-process');
 const dossier = require('./lib/digitalizept-dossier');
+const { leadsListOrderSql } = require('./lib/digitalizept-leads-list');
 const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
 const { ensureLeadFromVisit, findReusableLead, reconcileVisitLeadPair, syncLinkedVisitsIdentity } = require('./lib/digitalizept-visit-lead');
 const {
@@ -2592,12 +2593,7 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
 app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     try {
         const db = getDigitalizeptDb();
-        // The day queue is a list by the hour, not a database: leads with a pending
-        // action first, in the order the action comes due.
-        const fila = cleanText((req.query && req.query.fila) || '', 20) === 'hoje';
-        const ordem = fila
-            ? `CASE WHEN l.proxima_acao_em = '' THEN 1 ELSE 0 END, l.proxima_acao_em ASC`
-            : 'l.criado_em DESC';
+        const ordem = leadsListOrderSql(req.query);
         const rows = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
                    l.cobertura, l.resultado, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng, l.followup_json,
