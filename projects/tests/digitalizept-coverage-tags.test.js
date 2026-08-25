@@ -14,6 +14,11 @@ const {
     ETAPA_COLORS,
     RESULTADO_COLORS
 } = require('../../server/lib/digitalizept-geocode.js');
+const {
+    PROCESSO_ESTADOS,
+    PROCESSO_COLORS,
+    processoPinStyle
+} = require('../../server/lib/digitalizept-lead-process.js');
 
 function openMemoryDb() {
     const db = new Database(':memory:');
@@ -86,6 +91,30 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.equal(won.strokeColor, ETAPA_COLORS.contacto_remoto);
     });
 
+    it('pinColors: open lead fill comes from processo, ring stays etapa', () => {
+        const seq = processoPinStyle('EM_SEQUENCIA');
+        const open = pinColors('demo_criada', '', seq);
+        assert.equal(open.color, PROCESSO_COLORS.EM_SEQUENCIA);
+        assert.equal(open.strokeColor, ETAPA_COLORS.demo_criada);
+        assert.equal(open.faded, false);
+
+        const refused = pinColors('visitado', '', processoPinStyle('RECUSADO'));
+        assert.equal(refused.color, PROCESSO_COLORS.RECUSADO);
+        assert.equal(refused.strokeColor, ETAPA_COLORS.visitado);
+        assert.equal(refused.faded, true);
+
+        const closedWins = pinColors('demo_apresentada', 'digitalizado', processoPinStyle('EM_SEQUENCIA'));
+        assert.equal(closedWins.color, RESULTADO_COLORS.digitalizado);
+        assert.equal(closedWins.strokeColor, ETAPA_COLORS.demo_apresentada);
+    });
+
+    it('gives every processo estado a map colour', () => {
+        PROCESSO_ESTADOS.forEach((id) => {
+            assert.ok(PROCESSO_COLORS[id], id);
+            assert.match(PROCESSO_COLORS[id], /^#[0-9a-fA-F]{6}$/);
+        });
+    });
+
     it('normalizes etapa and resultado inputs', () => {
         assert.equal(normalizeEtapa('contacto'), 'contacto_remoto');
         assert.equal(normalizeEtapa('demo_criada'), 'demo_criada');
@@ -102,11 +131,12 @@ describe('digitalizept coverage category filter', async () => {
         coverageTypeId,
         coverageCounts,
         coverageResultadoId,
+        coverageProcessoId,
         pinMatchesCoverageFilters
     } = await import('../../digitalizept/js/coverage-filters.js');
 
-    const cafe = { nome: 'Café da Praça', business_type: 'cafe-pastelaria', etapa: 'visitado', resultado: '' };
-    const loja = { nome: 'Loja da Rua', business_type: 'loja-roupa', etapa: 'visitado', resultado: 'futuro' };
+    const cafe = { nome: 'Café da Praça', business_type: 'cafe-pastelaria', etapa: 'visitado', resultado: '', processoEstado: 'DEMO_PRONTO' };
+    const loja = { nome: 'Loja da Rua', business_type: 'loja-roupa', etapa: 'visitado', resultado: 'futuro', processoEstado: 'ADORMECIDO' };
     const orphan = { nome: 'Visita solta', business_type: '', etapa: 'visitado', resultado: '' };
 
     it('reads the shop category off the pin', () => {
@@ -171,6 +201,29 @@ describe('digitalizept coverage category filter', async () => {
         assert.equal(counts.byResultado.get('sem_interesse'), 1);
         assert.equal(counts.byResultado.get(''), 2);
         assert.equal(counts.byEtapa.get('visitado'), 3);
+        assert.equal(counts.byProcesso.get('DEMO_PRONTO'), 1);
+        assert.equal(counts.byProcesso.get('ADORMECIDO'), 1);
+        assert.equal(counts.byProcesso.get(''), 1);
+    });
+
+    it('filters and searches by processo estado', () => {
+        assert.equal(coverageProcessoId(cafe), 'DEMO_PRONTO');
+        assert.equal(pinMatchesCoverageFilters(cafe, {
+            filterIds: new Set(['DEMO_PRONTO'])
+        }), true);
+        assert.equal(pinMatchesCoverageFilters(loja, {
+            filterIds: new Set(['DEMO_PRONTO'])
+        }), false);
+        assert.equal(pinMatchesCoverageFilters(cafe, {
+            query: 'demo pronta',
+            typeLabel: 'Café / Pastelaria'
+        }), false);
+        assert.equal(pinMatchesCoverageFilters({
+            ...cafe,
+            processoEstadoLabel: 'Demo pronta'
+        }, {
+            query: 'demo pronta'
+        }), true);
     });
 
     it('finds a pin by category name in the search box', () => {

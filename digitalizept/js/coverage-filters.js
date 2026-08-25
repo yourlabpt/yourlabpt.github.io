@@ -9,18 +9,25 @@ export function coverageResultadoId(pin) {
     return '';
 }
 
+export function coverageProcessoId(pin) {
+    return String((pin && (pin.processoEstado || pin.processo_estado)) || '').trim().toUpperCase();
+}
+
 export function pinMatchesCoverageFilters(pin, { filterIds, filterTypes, query, typeLabel } = {}) {
     if (filterIds && filterIds.size) {
         const etapa = pin.etapa || pin.cobertura || 'contacto_remoto';
         const resultado = coverageResultadoId(pin);
-        if (!filterIds.has(etapa) && !(resultado && filterIds.has(resultado))) return false;
+        const processo = coverageProcessoId(pin);
+        if (!filterIds.has(etapa)
+            && !(resultado && filterIds.has(resultado))
+            && !(processo && filterIds.has(processo))) return false;
     }
     if (filterTypes && filterTypes.size) {
         if (!filterTypes.has(coverageTypeId(pin))) return false;
     }
     const q = String(query || '').trim().toLowerCase();
     if (!q) return true;
-    return `${pin.nome || ''} ${pin.morada || ''} ${pin.cidade || ''} ${pin.experiencia || ''} ${pin.notas || ''} ${pin.leadNome || ''} ${pin.etapa || ''} ${pin.resultado || ''} ${coverageTypeId(pin)} ${typeLabel || ''}`
+    return `${pin.nome || ''} ${pin.morada || ''} ${pin.cidade || ''} ${pin.experiencia || ''} ${pin.notas || ''} ${pin.leadNome || ''} ${pin.etapa || ''} ${pin.resultado || ''} ${pin.processoEstado || ''} ${pin.processoEstadoLabel || ''} ${coverageTypeId(pin)} ${typeLabel || ''}`
         .toLowerCase()
         .includes(q);
 }
@@ -35,11 +42,13 @@ export function coverageCounts(pins) {
     const byType = new Map();
     const byResultado = new Map();
     const byEtapa = new Map();
+    const byProcesso = new Map();
     let mapped = 0;
     list.forEach((pin) => {
         bump(byType, coverageTypeId(pin));
         bump(byResultado, coverageResultadoId(pin));
         bump(byEtapa, (pin && (pin.etapa || pin.cobertura)) || '');
+        bump(byProcesso, coverageProcessoId(pin));
         if (Number.isFinite(pin && pin.lat) && Number.isFinite(pin && pin.lng)) mapped += 1;
     });
     return {
@@ -48,6 +57,7 @@ export function coverageCounts(pins) {
         unmapped: list.length - mapped,
         byType,
         byResultado,
-        byEtapa
+        byEtapa,
+        byProcesso
     };
 }

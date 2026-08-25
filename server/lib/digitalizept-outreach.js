@@ -329,10 +329,12 @@ function applyOptionalBlocks(html, ctx) {
         .replace(/<!--IF_IMAGEM_SITE-->([\s\S]*?)<!--\/IF_IMAGEM_SITE-->/g, ctx.imagemSite ? '$1' : '')
         .replace(/<!--IF_CAMPANHA-->([\s\S]*?)<!--\/IF_CAMPANHA-->/g, ctx.showCampanha ? '$1' : '')
         .replace(/<!--IF_PRECOS-->([\s\S]*?)<!--\/IF_PRECOS-->/g, ctx.showPrecos ? '$1' : '')
-        .replace(/<!--IF_PRECO_ANTIGO-->([\s\S]*?)<!--\/IF_PRECO_ANTIGO-->/g, ctx.showPrecoAntigo ? '$1' : '');
+        .replace(/<!--IF_PRECO_ANTIGO-->([\s\S]*?)<!--\/IF_PRECO_ANTIGO-->/g, ctx.showPrecoAntigo ? '$1' : '')
+        .replace(/<!--IF_MENSAGEM_EDITADA-->([\s\S]*?)<!--\/IF_MENSAGEM_EDITADA-->/g, ctx.showMensagemEditada ? '$1' : '')
+        .replace(/<!--IF_MENSAGEM_PADRAO-->([\s\S]*?)<!--\/IF_MENSAGEM_PADRAO-->/g, ctx.showMensagemEditada ? '' : '$1');
 }
 
-const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto']);
+const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto', 'emailMensagemHtml']);
 
 function fillHtmlTemplate(template, ctx) {
     const escaped = {};
@@ -969,23 +971,23 @@ function normalizePlain(s) {
     return String(s || '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
 }
 
-function htmlFromPlainText(text) {
-    const esc = String(text || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    const blocks = esc.split(/\n{2,}/).map((block) => (
-        `<p style="margin:0 0 14px 0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.5;color:#1C1C1C;">${
-            block.replace(/\n/g, '<br>')
-        }</p>`
-    ));
-    return `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#fff;">${blocks.join('')}</body></html>`;
+const EMAIL_A_STYLE = 'color:#1C1C1C; text-decoration:underline;';
+
+/** Plain Controlo text → paragraphs that sit inside the HTML email template. */
+function emailBodyHtml(text) {
+    const esc = escapeHtml(String(text || '').replace(/\r\n/g, '\n'));
+    const withLinks = esc.replace(/(https?:\/\/[^\s<]+)/g, `<a href="$1" style="${EMAIL_A_STYLE}">$1</a>`);
+    return withLinks.split(/\n{2,}/).filter(Boolean).map((block, i) => {
+        const margin = i === 0 ? '0' : '14px 0 0 0';
+        return `<p style="margin:${margin}; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:28px; color:#3A3A3A;">${
+            block.replace(/\n/g, '<br />')
+        }</p>`;
+    }).join('');
 }
 
 /**
- * EMAIL1 ships a designed HTML layout. Recipients read that, not the plain-text
- * part — so an edit in Controlo was being thrown away. If the seller changed
- * the textarea, send their words instead of the template.
+ * EMAIL1 always ships the designed HTML template (banner, exemplo, botões).
+ * Controlo edits the letter; the template wraps it. Email 2 / D4 stay plain.
  */
 function outgoingEmail(passo, { text, ctx, edits } = {}) {
     const key = String(passo || '').trim().toUpperCase();
@@ -995,7 +997,11 @@ function outgoingEmail(passo, { text, ctx, edits } = {}) {
     const edited = normalizePlain(body) !== normalizePlain(canned);
     let html = '';
     if (key === 'EMAIL1') {
-        html = edited ? htmlFromPlainText(body) : renderEmailHtml(ctx);
+        html = renderEmailHtml({
+            ...(ctx || {}),
+            showMensagemEditada: edited,
+            emailMensagemHtml: edited ? emailBodyHtml(body) : ''
+        });
     }
     return { text: body, html, edited };
 }

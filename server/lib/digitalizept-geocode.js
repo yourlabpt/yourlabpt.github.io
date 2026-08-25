@@ -6,9 +6,10 @@
  * fallback. Prefer house/building/amenity hits over city centroids so pins
  * land on the shop, not the town centre.
  *
- * Coverage pins use two tags:
- *   resultado (fill)   — process outcome at a glance (futuro / sem interesse / digitalizado)
- *   etapa (stroke)     — funnel progress, for analysis
+ * Coverage pins use two tags, plus live process fill when no resultado is set:
+ *   resultado (fill)     — closed outcome (futuro / sem interesse / digitalizado)
+ *   processo  (fill)     — live cadence when still open (same palette as etapa)
+ *   etapa     (stroke)   — funnel progress (remote / visited / demo created / presented)
  * The DB column `cobertura` stores etapa; `resultado` is its own column.
  */
 
@@ -132,16 +133,19 @@ function isParkedResultado(value) {
     return normalizeResultado(value) === 'sem_interesse';
 }
 
-function pinColors(etapa, resultado) {
+function pinColors(etapa, resultado, extras = {}) {
     const res = normalizeResultado(resultado);
-    const parked = isParkedResultado(res);
+    const parked = isParkedResultado(res) || extras.faded === true;
     const stroke = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
+    let fill = PIN_FILL_UNSET;
+    if (res) fill = RESULTADO_COLORS[res] || PIN_FILL_UNSET;
+    else if (extras.fill) fill = extras.fill;
     return {
-        color: res ? (RESULTADO_COLORS[res] || PIN_FILL_UNSET) : PIN_FILL_UNSET,
+        color: fill,
         strokeColor: stroke,
         strokeWidth: parked ? 2.4 : 2.8,
         faded: parked,
-        zIndexOffset: parked ? -80 : 0
+        zIndexOffset: parked ? -80 : (Number(extras.zIndexOffset) || 0)
     };
 }
 
@@ -747,7 +751,7 @@ function formatCoverageExport(pins, legend) {
     const labels = {};
     const flat = Array.isArray(legend)
         ? legend
-        : [...(legend?.etapas || []), ...(legend?.resultados || [])];
+        : [...(legend?.etapas || []), ...(legend?.processos || []), ...(legend?.resultados || [])];
     flat.forEach((item) => { labels[item.id] = item.label; });
     const groups = {};
     pins.forEach((pin) => {

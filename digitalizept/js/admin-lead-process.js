@@ -360,6 +360,13 @@ export function renderLeadProcess(host, {
             detalhe.canal === 'ligacao' ? 'Nota da chamada' : 'Mensagem para este lead',
             texto
         ));
+        if (detalhe.passo === 'EMAIL1') {
+            box.appendChild(el(
+                'p',
+                'meta',
+                'Pode editar o texto. O envio usa sempre o email HTML da YourLab — banner, exemplo e botões ficam no sítio.'
+            ));
+        }
 
         const objecoes = chipsBox(view.objecoes, {
             titulo: 'Objeções',

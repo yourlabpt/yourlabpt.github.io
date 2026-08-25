@@ -45,6 +45,32 @@ const ESTADO_LABELS = {
     REMOVIDO: 'Removido'
 };
 
+// Same language as the coverage map: fill = where the lead is in the process,
+// ring (etapa) = how far the street/demo funnel has gone.
+const PROCESSO_COLORS = {
+    NOVO: '#faf8f4',
+    DEMO_PRONTO: '#d4b896',
+    DESCOBERTA: '#c4a070',
+    EM_SEQUENCIA: '#c9a227',
+    RESPONDEU: '#e0a020',
+    VISITA: '#1f1f1f',
+    PROPOSTA: '#b8860b',
+    GANHO: '#3d9a6a',
+    RECUSADO: '#b8b4ac',
+    ADORMECIDO: '#5b7c99',
+    REVISITA: '#7a9bb5',
+    ARQUIVADO: '#d4d0c8',
+    REMOVIDO: '#c8c4bc'
+};
+
+const PROCESSO_FADED = new Set(['RECUSADO', 'ADORMECIDO', 'ARQUIVADO', 'REMOVIDO']);
+
+function processoPinStyle(estado) {
+    const id = normalizeEstado(estado);
+    if (!id || !PROCESSO_COLORS[id]) return { fill: '', faded: false };
+    return { fill: PROCESSO_COLORS[id], faded: PROCESSO_FADED.has(id) };
+}
+
 // States that only ever come from an explicit decision — never derived back.
 const ESTADOS_MANUAIS = new Set(['PROPOSTA', 'VISITA', 'RECUSADO', 'ADORMECIDO', 'REVISITA', 'ARQUIVADO']);
 
@@ -1418,6 +1444,8 @@ function computeMetricas(db) {
 module.exports = {
     PROCESSO_ESTADOS,
     ESTADO_LABELS,
+    PROCESSO_COLORS,
+    PROCESSO_FADED,
     ESTADOS_MANUAIS,
     PLANO_TOQUES,
     PASSO_CANAL,
@@ -1431,6 +1459,7 @@ module.exports = {
     emptyProcesso,
     parseProcesso,
     normalizeEstado,
+    processoPinStyle,
     tipoNumeroFor,
     contactoFromDados,
     temCanalDireto,

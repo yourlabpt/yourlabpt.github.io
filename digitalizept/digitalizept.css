@@ -3661,20 +3661,65 @@ a.btn-secondary {
     border-radius: 999px;
     font-size: 0.78rem;
     font-weight: 600;
+    border: 1px solid transparent;
     background: var(--surface-muted, rgba(0, 0, 0, 0.05));
+    color: #3a342c;
 }
 
-.lead-proc-estado[data-estado="REMOVIDO"],
-.lead-proc-estado[data-estado="RECUSADO"] {
-    background: rgba(178, 58, 46, 0.12);
-    color: #8c2c22;
+.lead-proc-estado[data-estado="NOVO"] {
+    background: #faf8f4;
+    border-color: #8e8a84;
 }
 
-.lead-proc-estado[data-estado="EM_SEQUENCIA"],
-.lead-proc-estado[data-estado="RESPONDEU"],
+.lead-proc-estado[data-estado="DEMO_PRONTO"] {
+    background: #d4b896;
+}
+
 .lead-proc-estado[data-estado="DESCOBERTA"] {
-    background: rgba(160, 125, 58, 0.16);
-    color: #6c5220;
+    background: #c4a070;
+}
+
+.lead-proc-estado[data-estado="EM_SEQUENCIA"] {
+    background: #c9a227;
+}
+
+.lead-proc-estado[data-estado="RESPONDEU"] {
+    background: #e0a020;
+}
+
+.lead-proc-estado[data-estado="VISITA"] {
+    background: #1f1f1f;
+    color: #faf8f4;
+}
+
+.lead-proc-estado[data-estado="PROPOSTA"] {
+    background: #b8860b;
+}
+
+.lead-proc-estado[data-estado="GANHO"] {
+    background: #3d9a6a;
+    color: #fff;
+}
+
+.lead-proc-estado[data-estado="RECUSADO"] {
+    background: #b8b4ac;
+}
+
+.lead-proc-estado[data-estado="ADORMECIDO"] {
+    background: #5b7c99;
+    color: #fff;
+}
+
+.lead-proc-estado[data-estado="REVISITA"] {
+    background: #7a9bb5;
+}
+
+.lead-proc-estado[data-estado="ARQUIVADO"] {
+    background: #d4d0c8;
+}
+
+.lead-proc-estado[data-estado="REMOVIDO"] {
+    background: #c8c4bc;
 }
 
 .lead-proc-gancho {

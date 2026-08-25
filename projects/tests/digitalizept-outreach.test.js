@@ -425,7 +425,7 @@ describe('digitalizept outreach', () => {
         assert.equal(stored.campanhaShowPrices, false);
     });
 
-    it('sends the seller’s Controlo edit instead of the EMAIL1 layout', () => {
+    it('keeps the EMAIL1 HTML template when the seller edits the letter in Controlo', () => {
         const ctx = buildOutreachContext({
             dados: { nome_negocio: 'Talho da Costa', cidade: 'Porto', email: 'costa@example.com' },
             provider: { nome: 'YourLab', nif: '509000000', morada: 'Rua A 1, 4700-000 Braga' },
@@ -435,14 +435,19 @@ describe('digitalizept outreach', () => {
         const canned = outgoingEmail('EMAIL1', { ctx });
         assert.equal(canned.edited, false);
         assert.match(canned.html, /Marcar conversa/);
+        assert.match(canned.html, /Digitalize a sua empresa/);
 
         const edited = outgoingEmail('EMAIL1', {
             ctx,
-            text: 'Olá Costa,\n\nMudei o texto à mão. Vê a demo quando puderes.'
+            text: 'Olá Costa,\n\nMudei o texto à mão. Vê a demo quando puderes.\n\nhttps://yourlabpt.com/d/talho-da-costa'
         });
         assert.equal(edited.edited, true);
         assert.match(edited.html, /Mudei o texto à mão/);
-        assert.doesNotMatch(edited.html, /Marcar conversa/);
+        assert.match(edited.html, /Marcar conversa/);
+        assert.match(edited.html, /Digitalize a sua empresa/);
+        assert.match(edited.html, /Abrir o exemplo/);
+        assert.match(edited.html, /href="https:\/\/yourlabpt.com\/d\/talho-da-costa"/);
+        assert.doesNotMatch(edited.html, /padding:24px;background:#fff/);
         assert.equal(
             textForPasso('EMAIL1', ctx, { email1: edited.text }),
             edited.text

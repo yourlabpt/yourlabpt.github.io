@@ -35,6 +35,13 @@ function loadLeaflet() {
     return loadScript(LEAFLET_JS);
 }
 
+function mapPinHtml(pin) {
+    const fill = (pin && pin.color) || '#faf8f4';
+    const stroke = (pin && pin.strokeColor) || '#8e8a84';
+    const faded = pin && pin.faded ? ' is-faded' : '';
+    return `<span class="lead-map-pin${faded}" style="--pin-fill:${fill};--pin-stroke:${stroke}" aria-hidden="true"></span>`;
+}
+
 function pinIcon(fill, stroke, strokeWidth, opts = {}) {
     const faded = opts.faded === true;
     const color = fill || '#8e8a84';
@@ -56,11 +63,14 @@ function pinIcon(fill, stroke, strokeWidth, opts = {}) {
 function tagLabel(pin, legend) {
     const etapas = legend?.etapas || (Array.isArray(legend) ? legend : []);
     const resultados = legend?.resultados || [];
+    const processos = legend?.processos || [];
     const etapaId = pin.etapa || pin.cobertura || '';
     const resId = pin.resultado || '';
+    const procId = pin.processoEstado || '';
     const etapa = etapas.find((i) => i.id === etapaId)?.label || etapaId;
     const resultado = resultados.find((i) => i.id === resId)?.label || '';
-    return resultado ? `${etapa} · ${resultado}` : etapa;
+    const processo = processos.find((i) => i.id === procId)?.label || pin.processoEstadoLabel || '';
+    return [etapa, processo, resultado].filter(Boolean).join(' · ');
 }
 
 export function setupCoverage({
@@ -77,7 +87,7 @@ export function setupCoverage({
     onUnauthorized
 }) {
     let pins = [];
-    let legend = { etapas: [], resultados: [] };
+    let legend = { etapas: [], processos: [], resultados: [] };
     let filterIds = new Set();
     let filterTypes = new Set();
     let map = null;
@@ -223,6 +233,15 @@ export function setupCoverage({
         });
         if (results.childNodes.length) el.coverageStats.appendChild(results);
 
+        const processos = document.createElement('p');
+        processos.className = 'coverage-stats-row';
+        (legend.processos || []).forEach((item) => {
+            const n = countFor(source.byProcesso, item.id);
+            if (!n) return;
+            appendStat(processos, n, item.label.toLowerCase());
+        });
+        if (processos.childNodes.length) el.coverageStats.appendChild(processos);
+
         const types = document.createElement('p');
         types.className = 'coverage-stats-row';
         categoryLegendItems(source).forEach((item) => {
@@ -249,16 +268,18 @@ export function setupCoverage({
                 const selected = item.axis === 'categoria'
                     ? filterTypes.has(item.id)
                     : filterIds.has(item.id);
-                if (!item.count && !selected && item.axis !== 'resultado') return;
+                if (!item.count && !selected && item.axis !== 'resultado' && item.axis !== 'processo' && item.axis !== 'etapa') return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = `coverage-chip${selected ? ' active' : ''}`;
+                const swatch = chipSwatch(item);
                 const name = document.createElement('span');
                 name.textContent = item.label;
                 const num = document.createElement('span');
                 num.className = 'coverage-chip-count';
                 num.textContent = String(item.count || 0);
-                btn.append(name, num);
+                if (swatch) btn.append(swatch, name, num);
+                else btn.append(name, num);
                 btn.addEventListener('click', () => {
                     const bucket = item.axis === 'categoria' ? filterTypes : filterIds;
                     if (bucket.has(item.id)) bucket.delete(item.id);
@@ -273,15 +294,35 @@ export function setupCoverage({
             el.coverageLegend.appendChild(group);
         };
         addGroup('Categoria', categoryLegendItems(counts));
-        addGroup('Resultado', (legend.resultados || []).map((item) => ({
+        addGroup('Processo', (legend.processos || []).map((item) => ({
             ...item,
-            count: countFor(counts.byResultado, item.id)
+            axis: 'processo',
+            count: countFor(counts.byProcesso, item.id)
         })));
         addGroup('Etapa', (legend.etapas || []).map((item) => ({
             ...item,
+            axis: 'etapa',
             count: countFor(counts.byEtapa, item.id)
         })));
+        addGroup('Resultado', (legend.resultados || []).map((item) => ({
+            ...item,
+            axis: 'resultado',
+            count: countFor(counts.byResultado, item.id)
+        })));
         renderStats();
+    }
+
+    function chipSwatch(item) {
+        const fill = item && item.color;
+        if (!fill || item.axis === 'categoria') return null;
+        const swatch = document.createElement('span');
+        swatch.className = item.axis === 'etapa'
+            ? 'coverage-chip-swatch is-ring'
+            : 'coverage-chip-swatch is-fill';
+        swatch.setAttribute('aria-hidden', 'true');
+        swatch.style.setProperty('--swatch-fill', item.axis === 'etapa' ? '#faf8f4' : fill);
+        swatch.style.setProperty('--swatch-stroke', fill);
+        return swatch;
     }
 
     function etapaSelect(selected) {
@@ -319,12 +360,16 @@ export function setupCoverage({
         if (!response.ok) throw new Error('coverage');
         pins = data.pins || [];
         const raw = data.legend;
-        if (raw && !Array.isArray(raw) && (raw.etapas || raw.resultados)) {
-            legend = raw;
+        if (raw && !Array.isArray(raw) && (raw.etapas || raw.resultados || raw.processos)) {
+            legend = {
+                etapas: raw.etapas || [],
+                processos: raw.processos || [],
+                resultados: raw.resultados || []
+            };
         } else if (Array.isArray(raw)) {
-            legend = { etapas: raw, resultados: [] };
+            legend = { etapas: raw, processos: [], resultados: [] };
         } else {
-            legend = { etapas: [], resultados: [] };
+            legend = { etapas: [], processos: [], resultados: [] };
         }
         await loadBusinessTypes();
         renderLegend();
@@ -1074,7 +1119,7 @@ export function setupCoverage({
                 const parked = pin.faded || pin.resultado === 'sem_interesse';
                 card.className = parked ? 'admin-card parked' : 'admin-card';
                 card.innerHTML = `
-                    <h3>${pin.nome || 'Sem nome'}</h3>
+                    <h3>${mapPinHtml(pin)}${pin.nome || 'Sem nome'}</h3>
                     <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${typeLabelFor(pin) || 'sem categoria'} · ${tagLabel(pin, legend)} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
                 `;
                 const actions = document.createElement('div');

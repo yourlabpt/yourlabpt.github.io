@@ -606,6 +606,13 @@ function openServiceEditor(servico) {
     });
 }
 
+function leadMapPinHtml(lead) {
+    const fill = (lead && lead.color) || '#faf8f4';
+    const stroke = (lead && lead.strokeColor) || '#8e8a84';
+    const faded = lead && lead.faded ? ' is-faded' : '';
+    return `<span class="lead-map-pin${faded}" style="--pin-fill:${fill};--pin-stroke:${stroke}" aria-hidden="true"></span>`;
+}
+
 function processoMetaHtml(lead) {
     const estado = lead.processoEstadoLabel || '';
     const when = lead.proximaAcaoEm;
@@ -634,7 +641,7 @@ function renderDemos() {
     const q = (el.demosFilter.value || '').trim().toLowerCase();
     const filtered = leads.filter((l) => l.estado !== 'fechado').filter((l) => {
         if (!q) return true;
-        return `${l.nome} ${l.business_type} ${l.demo_slug || ''} ${l.morada || ''} ${l.estado || ''}`
+        return `${l.nome} ${l.business_type} ${l.demo_slug || ''} ${l.morada || ''} ${l.estado || ''} ${l.processoEstado || ''} ${l.processoEstadoLabel || ''}`
             .toLowerCase()
             .includes(q);
     });
@@ -649,7 +656,7 @@ function renderDemos() {
         const parked = isParked(l);
         card.className = parked ? 'admin-card parked' : 'admin-card';
         card.innerHTML = `
-            <h3>${l.nome || 'Sem nome'}</h3>
+            <h3>${leadMapPinHtml(l)}${l.nome || 'Sem nome'}</h3>
             <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
             ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
