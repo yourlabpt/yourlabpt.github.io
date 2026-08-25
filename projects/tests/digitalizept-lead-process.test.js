@@ -434,6 +434,10 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(panel, /lead-proc-guiao/);
         assert.match(panel, /filtrosAtendedor/);
         assert.match(panel, /paintStatus/);
+        assert.match(panel, /COMO_FAZER/);
+        assert.match(panel, /Abre o email → envia → toca em Enviar email/);
+        assert.match(panel, /Abertura desta lead/);
+        assert.doesNotMatch(panel, /aberturaHost/);
         const ficha = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin-lead.js'),
             'utf8'
@@ -441,6 +445,17 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(ficha, /dossier-toggle/);
         assert.match(ficha, /vista === 'ficha'/);
         assert.match(ficha, /statusHost/);
+        assert.match(ficha, /Dados da loja/);
+        assert.match(ficha, /O que fazer agora/);
+        assert.match(ficha, /dossier-mais/);
+        assert.match(ficha, /Faz só o que está em baixo/);
+        assert.doesNotMatch(ficha, /aberturaHost/);
+        const adminCss = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'digitalizept', 'admin.css'),
+            'utf8'
+        );
+        assert.doesNotMatch(adminCss, /procpasso/);
+        assert.match(sw, /digitalizept-v89/);
     });
 });
 

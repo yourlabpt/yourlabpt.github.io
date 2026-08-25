@@ -238,23 +238,14 @@ export function renderLeadDossier(host, payload, {
     back.addEventListener('click', () => { if (onBack) onBack(); });
     const nome = el('h2', 'dossier-nome', payload.lead.nome || 'Lead');
     const toggle = el('div', 'dossier-toggle');
-    const btnFicha = el('button', 'dossier-toggle-btn', 'Ficha');
+    const btnFicha = el('button', 'dossier-toggle-btn', 'Dados da loja');
     btnFicha.type = 'button';
     btnFicha.setAttribute('data-vista', 'ficha');
-    const btnControlo = el('button', 'dossier-toggle-btn', 'Controlo');
+    const btnControlo = el('button', 'dossier-toggle-btn', 'O que fazer agora');
     btnControlo.type = 'button';
     btnControlo.setAttribute('data-vista', 'controlo');
     toggle.append(btnFicha, btnControlo);
     const extras = el('div', 'dossier-chrome-actions');
-    const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
-    resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
-    extras.appendChild(resume);
-    if (typeof onWebsiteZip === 'function') {
-        const zip = el('button', 'btn-secondary', 'Descarregar website (ZIP)');
-        zip.type = 'button';
-        zip.addEventListener('click', () => onWebsiteZip(payload.lead.id, zip));
-        extras.appendChild(zip);
-    }
     if (payload.demo && payload.demo.url) {
         const demoLink = el('a', 'btn-secondary', 'Abrir demo');
         demoLink.href = payload.demo.url;
@@ -262,15 +253,27 @@ export function renderLeadDossier(host, payload, {
         demoLink.rel = 'noopener';
         extras.appendChild(demoLink);
     }
-    chrome.append(back, nome, toggle, extras);
+    const mais = document.createElement('details');
+    mais.className = 'dossier-mais';
+    mais.appendChild(el('summary', 'btn-secondary', 'Mais'));
+    const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
+    resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
+    mais.appendChild(resume);
+    if (typeof onWebsiteZip === 'function') {
+        const zip = el('button', 'btn-secondary', 'Descarregar website (ZIP)');
+        zip.type = 'button';
+        zip.addEventListener('click', () => onWebsiteZip(payload.lead.id, zip));
+        mais.appendChild(zip);
+    }
+    extras.appendChild(mais);
+    const hint = el('p', 'dossier-controlo-hint', 'Faz só o que está em baixo. Depois disto o sistema escolhe o passo seguinte.');
+    chrome.append(back, nome, toggle, extras, hint);
     host.appendChild(chrome);
 
     const pageFicha = el('div', 'dossier-page dossier-page-ficha');
     const statusHost = el('div', 'dossier-status');
     statusHost.innerHTML = '<p class="meta">A carregar o estado…</p>';
     pageFicha.appendChild(statusHost);
-    const aberturaHost = el('div', 'dossier-abertura');
-    pageFicha.appendChild(aberturaHost);
 
     const pageControlo = el('div', 'dossier-page dossier-page-controlo');
     const processHost = el('div', 'dossier-process');
@@ -292,7 +295,7 @@ export function renderLeadDossier(host, payload, {
     btnControlo.addEventListener('click', () => setVista('controlo'));
 
     if (typeof mountProcess === 'function') {
-        mountProcess(processHost, payload.lead.id, { statusHost, aberturaHost });
+        mountProcess(processHost, payload.lead.id, { statusHost });
     }
 
     const miss = missingSet(payload.completeness);

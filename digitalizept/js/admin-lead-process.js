@@ -102,8 +102,15 @@ function proximaSemana(meses = 3) {
     return d.toISOString().slice(0, 10);
 }
 
+const COMO_FAZER = {
+    email: 'Abre o email → envia → toca em Enviar email.',
+    whatsapp: 'Abre o WhatsApp → envia → toca em Enviei a mensagem.',
+    ligacao: 'Liga → escolhe o que aconteceu.',
+    visita: 'Mostra a demo → escolhe o que aconteceu.'
+};
+
 export function renderLeadProcess(host, {
-    leadId, api, onToast, onChanged, statusHost, aberturaHost
+    leadId, api, onToast, onChanged, statusHost
 } = {}) {
     let view = null;
     let timer = null;
@@ -211,9 +218,9 @@ export function renderLeadProcess(host, {
         box.appendChild(el('p', 'lead-proc-bloqueio-titulo', 'Antes de avançar'));
         view.bloqueios.forEach((b) => box.appendChild(el('p', 'lead-proc-bloqueio', b.motivo)));
         if (view.bloqueios.some((b) => b.id === 'apelido')) {
-            const hint = el('p', 'meta', 'Confirma o apelido na ficha de contacto, em baixo, e toca em Guardar contacto.');
+            const hint = el('p', 'meta', 'Confirma o apelido em Antes de ligar, em baixo, e toca em Guardar contacto.');
             box.appendChild(hint);
-            const ir = el('button', 'btn-secondary', 'Ir à ficha de contacto');
+            const ir = el('button', 'btn-secondary', 'Ir a Antes de ligar');
             ir.type = 'button';
             ir.addEventListener('click', () => {
                 const alvo = host.querySelector('[data-contacto]');
@@ -227,9 +234,22 @@ export function renderLeadProcess(host, {
     function instrucoesBox(instrucoes) {
         if (!instrucoes) return null;
         const box = el('div', 'lead-proc-instrucoes');
-        box.appendChild(el('p', 'lead-proc-obj', instrucoes.objetivo));
-        if (instrucoes.naoFazer) box.appendChild(el('p', 'lead-proc-nao', instrucoes.naoFazer));
-        if (instrucoes.registar) box.appendChild(el('p', 'meta', instrucoes.registar));
+        if (instrucoes.objetivo) box.appendChild(el('p', 'lead-proc-obj', instrucoes.objetivo));
+        if (instrucoes.naoFazer || instrucoes.registar) {
+            const extra = document.createElement('details');
+            extra.className = 'lead-proc-instrucoes-mais';
+            extra.appendChild(el('summary', '', 'O que não fazer'));
+            if (instrucoes.naoFazer) extra.appendChild(el('p', 'lead-proc-nao', instrucoes.naoFazer));
+            if (instrucoes.registar) extra.appendChild(el('p', 'meta', instrucoes.registar));
+            box.appendChild(extra);
+        }
+        return box;
+    }
+
+    function comoFazerBox(canal) {
+        const texto = COMO_FAZER[canal];
+        if (!texto) return null;
+        const box = el('p', 'lead-proc-como', texto);
         return box;
     }
 
@@ -283,14 +303,16 @@ export function renderLeadProcess(host, {
         }
         const instrucoes = detalhe.instrucoes || {};
         box.appendChild(el('h4', '', instrucoes.titulo || detalhe.passo));
-        box.appendChild(el('p', 'lead-proc-canal', `${CANAL_LABEL[detalhe.canal] || 'Passo'} · ${detalhe.passo}`));
+        box.appendChild(el('p', 'lead-proc-canal', CANAL_LABEL[detalhe.canal] || 'Passo'));
         const quando = linhaCountdown(view.proximaAcao && view.proximaAcao.agendadoPara, 'Este passo');
         if (quando) box.appendChild(quando);
+        const como = comoFazerBox(detalhe.canal);
+        if (como) box.appendChild(como);
 
         if (detalhe.passo === 'R1') {
             const guia = instrucoesBox(instrucoes);
             if (guia) box.appendChild(guia);
-            box.appendChild(el('p', 'meta', 'Os três movimentos estão no passo Encerrar, a seguir. Abre o WhatsApp de lá, envia, e confirma.'));
+            box.appendChild(el('p', 'meta', 'Os três movimentos estão em Encerrar, a seguir. Abre o WhatsApp de lá, envia, e confirma.'));
             return box;
         }
 
@@ -488,8 +510,9 @@ export function renderLeadProcess(host, {
     function aberturaCard() {
         const gancho = view.gancho || {};
         const fu = view.followup || {};
-        const box = el('div', 'lead-proc-abertura');
-        box.appendChild(el('h4', '', 'Abertura desta lead'));
+        const box = document.createElement('details');
+        box.className = 'lead-proc-abertura';
+        box.appendChild(el('summary', '', 'Abertura desta lead'));
 
         const lista = el('div', 'lead-proc-ganchos');
         let escolhido = gancho.id || gancho.sugerido || 'A';
@@ -564,12 +587,14 @@ export function renderLeadProcess(host, {
 
     /* --------------------------------------------------------- ficha contacto */
 
-    function contactoCard() {
+    function contactoCard(abrir) {
         const proc = view.processo || {};
         const contacto = view.contacto || {};
-        const box = el('div', 'lead-proc-contacto');
+        const box = document.createElement('details');
+        box.className = 'lead-proc-contacto';
+        box.open = abrir === true;
         box.setAttribute('data-contacto', '1');
-        box.appendChild(el('h4', '', 'Antes de ligar'));
+        box.appendChild(el('summary', '', 'Antes de ligar'));
         box.appendChild(el('p', 'meta', [
             contacto.tipoNumero === '9x' ? 'Número 9x — telemóvel, provável do dono' : '',
             contacto.tipoNumero === '2x' ? 'Número 2x — fixo, atendedor quase certo' : '',
@@ -623,16 +648,14 @@ export function renderLeadProcess(host, {
     /* ------------------------------------------------------------- linha tempo */
 
     function timelineCard() {
-        const box = el('div', 'lead-proc-timeline');
-        box.appendChild(el('h4', '', 'O que já aconteceu'));
+        const toques = view.toques || [];
+        if (!toques.length) return null;
+        const box = document.createElement('details');
+        box.className = 'lead-proc-timeline';
+        box.appendChild(el('summary', '', 'O que já aconteceu'));
         if (view.processo && view.processo.sinal) {
             const origem = SINAL_ORIGEM_LABEL[view.processo.sinalOrigem] || view.processo.sinalOrigem;
             box.appendChild(el('p', 'meta', `Sinal: ${origem}. Se foste tu a abrir a demo, isto não conta — recarrega o painel depois de um cliente real.`));
-        }
-        const toques = view.toques || [];
-        if (!toques.length) {
-            box.appendChild(el('p', 'meta', 'Ainda não houve nenhum toque.'));
-            return box;
         }
         const lista = el('ul', 'lead-proc-toques');
         toques.forEach((t) => {
@@ -775,21 +798,21 @@ export function renderLeadProcess(host, {
         host.className = 'lead-proc';
         if (!view) return;
         paintStatus();
-        if (aberturaHost) {
-            aberturaHost.innerHTML = '';
-            aberturaHost.appendChild(aberturaCard());
-        }
         const passo = view.proximaAcao && view.proximaAcao.passo;
+        const detalhe = view.proximaAcaoDetalhe;
         const precisaFecho = abrirFecho || passo === 'R1' || view.estado === 'RECUSADO';
-        const agora = agoraCard();
-        const contacto = contactoCard();
-        const tempo = timelineCard();
-        const fecho = fechoCard();
-        if (precisaFecho) {
-            host.append(agora, fecho, contacto, tempo);
-        } else {
-            host.append(agora, contacto, tempo, fecho);
+        const apelidoBloqueia = (view.bloqueios || []).some((b) => b.id === 'apelido');
+        const eChamada = detalhe && detalhe.canal === 'ligacao';
+
+        host.appendChild(agoraCard());
+        if (precisaFecho) host.appendChild(fechoCard());
+        if (eChamada || apelidoBloqueia) {
+            host.appendChild(contactoCard(apelidoBloqueia));
         }
+        const tempo = timelineCard();
+        if (tempo) host.appendChild(tempo);
+        if (!precisaFecho) host.appendChild(fechoCard());
+        host.appendChild(aberturaCard());
         if (abrirFecho) {
             const node = host.querySelector('.lead-proc-fecho');
             if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });

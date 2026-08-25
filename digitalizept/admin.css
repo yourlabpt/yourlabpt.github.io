@@ -939,6 +939,37 @@
     margin-left: auto;
 }
 
+.dossier-controlo-hint {
+    flex: 1 1 100%;
+    margin: 0;
+    color: var(--admin-muted);
+    font-size: 0.9rem;
+}
+
+.dossier-vista-ficha .dossier-controlo-hint {
+    display: none;
+}
+
+.dossier-mais {
+    position: relative;
+}
+
+.dossier-mais > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.dossier-mais > summary::-webkit-details-marker {
+    display: none;
+}
+
+.dossier-mais[open] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+}
+
 .dossier-vista-ficha .dossier-page-controlo,
 .dossier-vista-controlo .dossier-page-ficha {
     display: none;
@@ -958,27 +989,6 @@
 
 .dossier-status .btn-primary {
     margin-top: 10px;
-}
-
-.dossier-abertura .lead-proc-abertura {
-    margin: 0 0 14px;
-    padding: 14px 16px;
-    border-radius: 14px;
-    background: var(--admin-surface, #fff);
-}
-
-.lead-proc > .lead-proc-agora,
-.lead-proc > .lead-proc-contacto,
-.lead-proc > .lead-proc-timeline,
-.lead-proc > .lead-proc-fecho {
-    counter-increment: procpasso;
-}
-
-.lead-proc > .lead-proc-agora > h4::before,
-.lead-proc > .lead-proc-contacto > h4::before,
-.lead-proc > .lead-proc-timeline > h4::before,
-.lead-proc-fecho > summary::before {
-    content: counter(procpasso) ". ";
 }
 
 .dossier-check {

@@ -3612,7 +3612,6 @@ a.btn-secondary {
     flex-direction: column;
     gap: 14px;
     margin-bottom: 20px;
-    counter-reset: procpasso;
 }
 
 .lead-proc > div,
@@ -3623,14 +3622,20 @@ a.btn-secondary {
     background: var(--surface-color, #fff);
 }
 
-.lead-proc-fecho > summary {
+.lead-proc-fecho > summary,
+.lead-proc-contacto > summary,
+.lead-proc-timeline > summary,
+.lead-proc-abertura > summary {
     cursor: pointer;
     font-weight: 700;
     font-size: 1rem;
     list-style: none;
 }
 
-.lead-proc-fecho > summary::-webkit-details-marker {
+.lead-proc-fecho > summary::-webkit-details-marker,
+.lead-proc-contacto > summary::-webkit-details-marker,
+.lead-proc-timeline > summary::-webkit-details-marker,
+.lead-proc-abertura > summary::-webkit-details-marker {
     display: none;
 }
 
@@ -3701,11 +3706,25 @@ a.btn-secondary {
     color: var(--text-muted, #5a5348);
 }
 
+.lead-proc-como {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
 .lead-proc-instrucoes {
     display: flex;
     flex-direction: column;
     gap: 6px;
     margin-bottom: 12px;
+}
+
+.lead-proc-instrucoes-mais > summary {
+    cursor: pointer;
+    font-weight: 650;
+    font-size: 0.88rem;
+    color: var(--text-muted, #5a5348);
 }
 
 .lead-proc-obj {

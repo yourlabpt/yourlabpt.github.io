@@ -907,7 +907,6 @@ async function openLeadDossier(leadId) {
                 api,
                 onToast: toast,
                 statusHost: slots.statusHost,
-                aberturaHost: slots.aberturaHost,
                 onChanged: () => { loadLeads().catch(() => {}); }
             });
         };
