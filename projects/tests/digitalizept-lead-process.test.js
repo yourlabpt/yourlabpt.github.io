@@ -43,7 +43,7 @@ describe('digitalizept lead process — schema', () => {
             assert.ok(cols.includes(c), `falta ${c}`);
         });
         const toque = db.prepare('PRAGMA table_info(lead_toque)').all().map((c) => c.name);
-        ['ordem', 'passo', 'canal', 'estado', 'destino', 'texto', 'lang'].forEach((c) => {
+        ['ordem', 'passo', 'canal', 'estado', 'destino', 'texto', 'lang', 'vendedor'].forEach((c) => {
             assert.ok(toque.includes(c), `falta lead_toque.${c}`);
         });
         const visita = db.prepare('PRAGMA table_info(demo_visita)').all().map((c) => c.name);
@@ -407,7 +407,7 @@ describe('digitalizept lead process — instruções e demo', () => {
             path.join(__dirname, '..', '..', 'digitalizept', 'sw.js'),
             'utf8'
         );
-        assert.match(sw, /digitalizept-v85/);
+        assert.match(sw, /digitalizept-v86/);
         assert.match(sw, /admin-lead-process\.js/);
         const adminHtml = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'admin.html'),
@@ -565,6 +565,51 @@ describe('digitalizept lead process — guião, objeções e métricas', () => {
         assert.equal(m.geral.respostas, 1);
         assert.equal(m.geral.respostaPct, 100);
         assert.equal(m.alertas.length, 0);
+        db.close();
+    });
+
+    it('stamps the seller on the touch and splits rates by seller, hook and signal origin', () => {
+        const db = openMemoryDb();
+        const a = seedLead(db, { email: 'a@x.pt', demo: 'loja-a' });
+        const b = seedLead(db, { email: 'b@x.pt', demo: 'loja-b' });
+        proc.registarToque(db, a, {
+            passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'enviado', vendedor: 'Túlio'
+        });
+        proc.registarToque(db, a, {
+            passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'respondeu'
+        });
+        proc.registarToque(db, b, {
+            passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'enviado', vendedor: 'Maria'
+        });
+        const herdado = proc.listToques(db, a).find((t) => t.resultado === 'respondeu');
+        assert.equal(herdado.vendedor, 'Túlio');
+        db.prepare('UPDATE lead SET followup_json = ? WHERE id = ?')
+            .run(JSON.stringify({ ganchoId: 'B' }), a);
+        const m = proc.computeMetricas(db);
+        assert.equal(m.porVendedor['Túlio'].respostaPct, 100);
+        assert.equal(m.porVendedor.Maria.respostaPct, 0);
+        assert.equal(m.porGancho.B.wa1, 1);
+        assert.equal(m.porOrigem.respondeu, 1);
+        assert.equal(m.nomes.ganchos.B, 'Só redes');
+        db.close();
+    });
+
+    it('diagnoses the hook when demos open and nobody replies', () => {
+        const db = openMemoryDb();
+        for (let i = 0; i < 10; i++) {
+            const id = seedLead(db, { email: `n${i}@x.pt`, demo: `n${i}` });
+            proc.registarToque(db, id, {
+                passo: 'WA1', canal: 'whatsapp', estado: 'feito', resultado: 'enviado', vendedor: 'Túlio'
+            });
+            proc.registarVisitaDemo(db, { leadId: id, userAgent: CHROME_UA });
+            proc.recomputeProcesso(db, id);
+        }
+        const m = proc.computeMetricas(db);
+        assert.equal(m.geral.wa1, 10);
+        assert.ok(m.geral.respostaPct < proc.LIMIAR_RESPOSTA_PCT);
+        assert.equal(m.porOrigem.visitou_demo, 10);
+        assert.ok(m.diagnostico.some((d) => d.id === 'gancho_ou_lista'));
+        assert.ok(m.alertas.some((d) => d.id === 'gancho_ou_lista'));
         db.close();
     });
 });

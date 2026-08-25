@@ -251,10 +251,12 @@ function migrate(db) {
         nota TEXT NOT NULL DEFAULT '',
         texto TEXT NOT NULL DEFAULT '',
         lang TEXT NOT NULL DEFAULT 'pt',
+        vendedor TEXT NOT NULL DEFAULT '',
         criado_em TEXT NOT NULL
     )`);
     addMissingColumns(db, 'lead_toque', {
-        destino: "TEXT NOT NULL DEFAULT ''"
+        destino: "TEXT NOT NULL DEFAULT ''",
+        vendedor: "TEXT NOT NULL DEFAULT ''"
     });
     db.exec(`CREATE INDEX IF NOT EXISTS idx_lead_toque_lead ON lead_toque(lead_id, criado_em)`);
 

@@ -265,22 +265,42 @@ function metricTable(titulo, rows) {
         wrap.appendChild(empty);
         return wrap;
     }
+    const scroller = document.createElement('div');
+    scroller.className = 'metric-table-wrap';
     const table = document.createElement('table');
     table.className = 'metric-table';
-    table.innerHTML = '<thead><tr><th></th><th>Leads</th><th>Sinal</th><th>Resposta</th><th>Visitas / resp.</th><th>Fechos / visita</th></tr></thead>';
+    const head = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    ['', 'Leads', 'Sinal', 'Resposta', 'Visitas / resp.', 'Fechos / visita', 'Ciclo D', 'Revisitas'].forEach((label) => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
     const body = document.createElement('tbody');
     rows.forEach((row) => {
         const tr = document.createElement('tr');
-        [row.label, String(row.leads), fmtPct(row.sinalPct), fmtPct(row.respostaPct), String(row.visitasPorResposta), String(row.fechosPorVisita)]
-            .forEach((cell) => {
-                const td = document.createElement(cell === row.label ? 'th' : 'td');
-                td.textContent = cell;
-                tr.appendChild(td);
-            });
+        const cells = [
+            row.label,
+            String(row.leads),
+            fmtPct(row.sinalPct),
+            fmtPct(row.respostaPct),
+            String(row.visitasPorResposta),
+            String(row.fechosPorVisita),
+            fmtPct(row.canalDiretoPct),
+            fmtPct(row.revisitasReabremPct)
+        ];
+        cells.forEach((cell, i) => {
+            const td = document.createElement(i === 0 ? 'th' : 'td');
+            td.textContent = cell;
+            tr.appendChild(td);
+        });
         body.appendChild(tr);
     });
     table.appendChild(body);
-    wrap.appendChild(table);
+    scroller.appendChild(table);
+    wrap.appendChild(scroller);
     return wrap;
 }
 
@@ -289,22 +309,36 @@ function categoriaNome(id) {
     return (hit && hit.nome) || id || '—';
 }
 
+function mapToRows(obj, labelOf) {
+    return Object.entries(obj || {})
+        .map(([id, b]) => ({ label: labelOf ? labelOf(id) : id, ...b }))
+        .sort((a, b) => b.leads - a.leads);
+}
+
 async function loadMetricas() {
     if (!el.metricasRoot) return;
-    el.metricasRoot.innerHTML = '<p class="admin-hint">A carregar…</p>';
+    el.metricasRoot.replaceChildren();
+    const loading = document.createElement('p');
+    loading.className = 'admin-hint';
+    loading.textContent = 'A carregar…';
+    el.metricasRoot.appendChild(loading);
     const { response, data } = await api('/api/digitalizept/process/metricas');
     if (!response.ok) {
         throw new Error((data && data.error) || 'Não foi possível carregar as métricas.');
     }
     const geral = data.geral || {};
+    const origem = data.porOrigem || {};
+    const nomes = (data.nomes && data.nomes.ganchos) || {};
     const host = el.metricasRoot;
-    host.innerHTML = '';
-    (data.alertas || []).forEach((a) => {
+    host.replaceChildren();
+
+    (data.diagnostico || []).forEach((item) => {
         const box = document.createElement('p');
-        box.className = 'metric-alerta';
-        box.textContent = a.texto;
+        box.className = item.id === 'ok' || item.id === 'ainda_cedo' ? 'metric-diagnostico' : 'metric-alerta';
+        box.textContent = item.texto;
         host.appendChild(box);
     });
+
     const grelha = document.createElement('div');
     grelha.className = 'metric-grelha';
     grelha.append(
@@ -316,13 +350,39 @@ async function loadMetricas() {
         metricCell('Revisitas que reabrem', fmtPct(geral.revisitasReabremPct), `${geral.revisitasReabrem || 0} de ${geral.revisitas || 0}`)
     );
     host.appendChild(grelha);
-    const cats = Object.entries(data.porCategoria || {})
-        .map(([id, b]) => ({ label: categoriaNome(id), ...b }))
-        .sort((a, b) => b.leads - a.leads);
-    const zonas = Object.entries(data.porZona || {})
-        .map(([id, b]) => ({ label: id, ...b }))
-        .sort((a, b) => b.leads - a.leads);
-    host.append(metricTable('Por categoria', cats), metricTable('Por zona', zonas));
+
+    const origens = document.createElement('section');
+    origens.className = 'metric-bloco';
+    const origTitle = document.createElement('h4');
+    origTitle.textContent = 'De onde vem o sinal';
+    origens.appendChild(origTitle);
+    const origHint = document.createElement('p');
+    origHint.className = 'meta';
+    origHint.textContent = 'Demo aberta = o artefacto funciona. Resposta = a abertura funciona. Chamada atendida = a ligação funciona.';
+    origens.appendChild(origHint);
+    const origGrelha = document.createElement('div');
+    origGrelha.className = 'metric-grelha';
+    origGrelha.append(
+        metricCell('Respondeu', String(origem.respondeu || 0), 'saúde da abertura'),
+        metricCell('Atendeu a chamada', String(origem.chamada_atendida || 0), 'saúde da ligação'),
+        metricCell('Abriu a demo', String(origem.visitou_demo || 0), 'saúde do artefacto'),
+        metricCell('Sem sinal', String(origem.nenhum || 0), 'ainda no escuro')
+    );
+    origens.appendChild(origGrelha);
+    host.appendChild(origens);
+
+    const ganchoLabel = (id) => {
+        if (id === 'sem gancho') return 'Sem gancho';
+        return nomes[id] ? `${id} · ${nomes[id]}` : id;
+    };
+    const vendedores = mapToRows(data.porVendedor);
+    const ganchos = mapToRows(data.porGancho, ganchoLabel);
+    host.append(
+        metricTable('Por categoria', mapToRows(data.porCategoria, categoriaNome)),
+        metricTable('Por zona', mapToRows(data.porZona))
+    );
+    if (vendedores.length) host.appendChild(metricTable('Por vendedor', vendedores));
+    if (ganchos.length) host.appendChild(metricTable('Por gancho', ganchos));
 }
 
 function estadoLabel(estado) {

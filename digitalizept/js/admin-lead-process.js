@@ -570,6 +570,10 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
     function timelineCard() {
         const box = el('div', 'lead-proc-timeline');
         box.appendChild(el('h4', '', 'Linha do tempo'));
+        if (view.processo && view.processo.sinal) {
+            const origem = SINAL_ORIGEM_LABEL[view.processo.sinalOrigem] || view.processo.sinalOrigem;
+            box.appendChild(el('p', 'meta', `Sinal: ${origem}. Se foste tu a abrir a demo, isto não conta — recarrega o painel depois de um cliente real.`));
+        }
         const toques = view.toques || [];
         if (!toques.length) {
             box.appendChild(el('p', 'meta', 'Ainda não houve nenhum toque.'));
@@ -585,7 +589,8 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
                 CANAL_LABEL[t.canal] || t.canal,
                 TOQUE_ESTADO_LABEL[t.estado] || t.estado,
                 RESULTADO_LABEL[t.resultado] || t.resultado,
-                t.destino === 'negocio' ? 'número da loja' : ''
+                t.destino === 'negocio' ? 'número da loja' : '',
+                t.vendedor || ''
             ].filter(Boolean);
             cabeca.textContent = `${quando} · ${partes.join(' · ')}`;
             li.appendChild(cabeca);

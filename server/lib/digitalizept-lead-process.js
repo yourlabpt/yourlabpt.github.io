@@ -927,7 +927,7 @@ function bloqueios({ estado, processo = {}, toques = [], passo = '', revisitarEm
 function listToques(db, leadId) {
     return db.prepare(`
         SELECT id, ordem, passo, canal, estado, agendado_para, executado_em,
-               resultado, destino, objecao, nota, texto, lang, criado_em
+               resultado, destino, objecao, nota, texto, lang, vendedor, criado_em
         FROM lead_toque WHERE lead_id = ? ORDER BY criado_em ASC
     `).all(leadId);
 }
@@ -1047,6 +1047,36 @@ function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = ''
     return snapshot;
 }
 
+function vendedorAtual(db) {
+    try {
+        const row = db.prepare("SELECT value FROM app_setting WHERE key = 'provider'").get();
+        const parsed = parseJsonSafe(row && row.value, {});
+        return cleanStr(parsed.responsavel, 80);
+    } catch (_) {
+        return '';
+    }
+}
+
+function resolverVendedor(db, leadId, patch = {}) {
+    const pedido = cleanStr(patch.vendedor, 80);
+    if (pedido) return pedido;
+    const ultimo = db.prepare(`
+        SELECT vendedor FROM lead_toque
+        WHERE lead_id = ? AND TRIM(vendedor) != ''
+        ORDER BY criado_em DESC LIMIT 1
+    `).get(leadId);
+    if (ultimo && ultimo.vendedor) return ultimo.vendedor;
+    return vendedorAtual(db);
+}
+
+function vendedorDoLead(toques = []) {
+    const named = toques.filter((t) => t.vendedor);
+    const wa1 = named.find((t) => t.passo === 'WA1');
+    if (wa1) return wa1.vendedor;
+    if (named.length) return named[named.length - 1].vendedor;
+    return '';
+}
+
 function registarToque(db, leadId, patch = {}) {
     const agora = patch.executadoEm || nowIso();
     const passo = cleanStr(patch.passo, 20).toUpperCase();
@@ -1055,11 +1085,12 @@ function registarToque(db, leadId, patch = {}) {
     const processoPatch = { ...(patch.processo || {}) };
     if (patch.resultado === 'canal_direto') processoPatch.canalDireto = true;
     const ordem = db.prepare('SELECT COUNT(*) AS n FROM lead_toque WHERE lead_id = ?').get(leadId);
+    const vendedor = resolverVendedor(db, leadId, patch);
     db.prepare(`
         INSERT INTO lead_toque (id, lead_id, ordem, passo, canal, estado, agendado_para,
-            executado_em, resultado, destino, objecao, nota, texto, lang, criado_em)
+            executado_em, resultado, destino, objecao, nota, texto, lang, vendedor, criado_em)
         VALUES (@id, @lead_id, @ordem, @passo, @canal, @estado, @agendado_para,
-            @executado_em, @resultado, @destino, @objecao, @nota, @texto, @lang, @criado_em)
+            @executado_em, @resultado, @destino, @objecao, @nota, @texto, @lang, @vendedor, @criado_em)
     `).run({
         id: crypto.randomUUID(),
         lead_id: leadId,
@@ -1075,6 +1106,7 @@ function registarToque(db, leadId, patch = {}) {
         nota: cleanStr(patch.nota, 2000),
         texto: cleanStr(patch.texto, 8000),
         lang: outreach.normalizeOutreachLang(patch.lang),
+        vendedor,
         criado_em: agora
     });
     return recomputeProcesso(db, leadId, {
@@ -1170,6 +1202,11 @@ function pct(num, den) {
     return Math.round((Number(num) || 0) * 1000 / den) / 10;
 }
 
+const LIMIAR_RESPOSTA_PCT = 8;
+const MIN_WA1_ALERTA = 10;
+const MIN_D_ALERTA = 8;
+const MIN_CORTE_ALERTA = 5;
+
 function bucketMetricas() {
     return {
         leads: 0,
@@ -1211,44 +1248,112 @@ function ratiosOf(b) {
     };
 }
 
+function packBucket(b) {
+    return { ...b, ...ratiosOf(b) };
+}
+
+function packMap(map) {
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, packBucket(v)]));
+}
+
+function flagsFromLead(row, toques, processo) {
+    const wa1 = toques.some((t) => t.passo === 'WA1' && t.estado === 'feito');
+    const respondeu = toques.some((t) => t.resultado === 'respondeu') || processo.sinalOrigem === 'respondeu';
+    const visita = toques.some((t) => ['VISITA', 'D3', 'WA3'].includes(t.passo) && t.estado === 'feito')
+        || row.processo_estado === 'VISITA';
+    const ganho = row.processo_estado === 'GANHO' || row.resultado === 'digitalizado';
+    const dCalls = toques.filter((t) => ['D1', 'D2'].includes(t.passo) && ['feito', 'falhado'].includes(t.estado));
+    const dAtendida = dCalls.some((t) => t.resultado !== 'nao_atendeu');
+    const dCanal = toques.some((t) => t.resultado === 'canal_direto') || processo.canalDireto === true;
+    const revisita = toques.some((t) => t.passo === 'REVISITA');
+    const reabre = revisita && ['EM_SEQUENCIA', 'RESPONDEU', 'VISITA', 'PROPOSTA', 'GANHO'].includes(row.processo_estado);
+    return {
+        sinal: processo.sinal === true,
+        wa1,
+        respondeu,
+        visita,
+        ganho,
+        dChamada: dCalls.length > 0,
+        dAtendida,
+        dCanal: dCanal && dAtendida,
+        revisita,
+        reabre
+    };
+}
+
+function diagnosticar({ geral, ratios, porOrigem, porCategoria }) {
+    const linhas = [];
+    if (!geral.wa1) {
+        linhas.push({
+            id: 'ainda_cedo',
+            texto: 'Ainda não há WhatsApp 1. A % de resposta só conta depois do primeiro envio.'
+        });
+        return linhas;
+    }
+    if (geral.wa1 >= MIN_WA1_ALERTA && ratios.respostaPct < LIMIAR_RESPOSTA_PCT) {
+        if (porOrigem.visitou_demo > porOrigem.respondeu) {
+            linhas.push({
+                id: 'gancho_ou_lista',
+                texto: `Resposta abaixo de ${LIMIAR_RESPOSTA_PCT}% e a demo está a ser aberta. O problema é o gancho ou a lista, não a ligação.`
+            });
+        } else if (porOrigem.visitou_demo === 0) {
+            linhas.push({
+                id: 'artefacto',
+                texto: `Resposta abaixo de ${LIMIAR_RESPOSTA_PCT}% e quase ninguém abre a demo. O problema é o WhatsApp — perfil, hora ou o link — não a proposta.`
+            });
+        } else {
+            linhas.push({
+                id: 'resposta_baixa',
+                texto: `Resposta abaixo de ${LIMIAR_RESPOSTA_PCT}% (${ratios.respostaPct}%). O problema é o gancho ou a lista, não a ligação.`
+            });
+        }
+    }
+    if (geral.chamadasDescobertaAtendidas >= MIN_D_ALERTA && ratios.canalDiretoPct < 50) {
+        linhas.push({
+            id: 'ciclo_d',
+            texto: `Menos de 50% das chamadas atendidas no Ciclo D saem com canal direto (${ratios.canalDiretoPct}%). O problema está na abertura, não na proposta.`
+        });
+    }
+    const pior = Object.entries(porCategoria)
+        .map(([id, b]) => ({ id, ...packBucket(b) }))
+        .filter((c) => c.wa1 >= MIN_CORTE_ALERTA)
+        .sort((a, b) => a.respostaPct - b.respostaPct)[0];
+    if (pior && pior.respostaPct < LIMIAR_RESPOSTA_PCT && !linhas.some((l) => l.id === 'gancho_ou_lista' || l.id === 'resposta_baixa')) {
+        linhas.push({
+            id: 'categoria_fraca',
+            texto: `A categoria ${pior.id} está abaixo de ${LIMIAR_RESPOSTA_PCT}% de resposta. Corta essa lista antes de mudar o guião.`
+        });
+    }
+    if (!linhas.length && geral.wa1 >= MIN_WA1_ALERTA) {
+        linhas.push({
+            id: 'ok',
+            texto: `Resposta a ${ratios.respostaPct}%. Não mexas no guião — o processo está a fazer o trabalho.`
+        });
+    }
+    return linhas.slice(0, 2);
+}
+
 function computeMetricas(db) {
     const leads = db.prepare(`
-        SELECT id, business_type, cidade, processo_estado, processo_json, resultado
+        SELECT id, business_type, cidade, processo_estado, processo_json, resultado, followup_json
         FROM lead
     `).all();
     const toquesPorLead = {};
-    db.prepare('SELECT lead_id, passo, canal, estado, resultado FROM lead_toque').all().forEach((t) => {
+    db.prepare('SELECT lead_id, passo, canal, estado, resultado, vendedor FROM lead_toque').all().forEach((t) => {
         if (!toquesPorLead[t.lead_id]) toquesPorLead[t.lead_id] = [];
         toquesPorLead[t.lead_id].push(t);
     });
     const geral = bucketMetricas();
     const porCategoria = {};
     const porZona = {};
+    const porVendedor = {};
+    const porGancho = {};
+    const porOrigem = { respondeu: 0, chamada_atendida: 0, visitou_demo: 0, nenhum: 0 };
     leads.forEach((row) => {
         const toques = toquesPorLead[row.id] || [];
         const processo = parseProcesso(row.processo_json);
-        const wa1 = toques.some((t) => t.passo === 'WA1' && t.estado === 'feito');
-        const respondeu = toques.some((t) => t.resultado === 'respondeu') || processo.sinalOrigem === 'respondeu';
-        const visita = toques.some((t) => ['VISITA', 'D3', 'WA3'].includes(t.passo) && t.estado === 'feito')
-            || row.processo_estado === 'VISITA';
-        const ganho = row.processo_estado === 'GANHO' || row.resultado === 'digitalizado';
-        const dCalls = toques.filter((t) => ['D1', 'D2'].includes(t.passo) && ['feito', 'falhado'].includes(t.estado));
-        const dAtendida = dCalls.some((t) => t.resultado !== 'nao_atendeu');
-        const dCanal = toques.some((t) => t.resultado === 'canal_direto') || processo.canalDireto === true;
-        const revisita = toques.some((t) => t.passo === 'REVISITA');
-        const reabre = revisita && ['EM_SEQUENCIA', 'RESPONDEU', 'VISITA', 'PROPOSTA', 'GANHO'].includes(row.processo_estado);
-        const flags = {
-            sinal: processo.sinal === true,
-            wa1,
-            respondeu,
-            visita,
-            ganho,
-            dChamada: dCalls.length > 0,
-            dAtendida,
-            dCanal: dCanal && dAtendida,
-            revisita,
-            reabre
-        };
+        const followup = outreach.parseFollowup(row.followup_json);
+        const flags = flagsFromLead(row, toques, processo);
         addLeadToBucket(geral, flags);
         const cat = row.business_type || 'generico';
         const zona = String(row.cidade || '').trim() || 'sem zona';
@@ -1256,27 +1361,36 @@ function computeMetricas(db) {
         if (!porZona[zona]) porZona[zona] = bucketMetricas();
         addLeadToBucket(porCategoria[cat], flags);
         addLeadToBucket(porZona[zona], flags);
+        if (toques.length) {
+            const vendedor = vendedorDoLead(toques) || 'sem vendedor';
+            if (!porVendedor[vendedor]) porVendedor[vendedor] = bucketMetricas();
+            addLeadToBucket(porVendedor[vendedor], flags);
+        }
+        const gancho = followup.ganchoId || 'sem gancho';
+        if (flags.wa1) {
+            if (!porGancho[gancho]) porGancho[gancho] = bucketMetricas();
+            addLeadToBucket(porGancho[gancho], flags);
+        }
+        if (processo.sinalOrigem && porOrigem[processo.sinalOrigem] != null) {
+            porOrigem[processo.sinalOrigem] += 1;
+        } else {
+            porOrigem.nenhum += 1;
+        }
     });
     const ratios = ratiosOf(geral);
-    const alertas = [];
-    if (geral.wa1 >= 10 && ratios.respostaPct < 8) {
-        alertas.push({
-            id: 'resposta_baixa',
-            texto: `Resposta abaixo de 8% (${ratios.respostaPct}%). O problema é o gancho ou a lista, não a ligação.`
-        });
-    }
-    if (geral.chamadasDescobertaAtendidas >= 8 && ratios.canalDiretoPct < 50) {
-        alertas.push({
-            id: 'ciclo_d',
-            texto: `Menos de 50% das chamadas atendidas no Ciclo D saem com canal direto (${ratios.canalDiretoPct}%). O problema está na abertura, não na proposta.`
-        });
-    }
-    const pack = (b) => ({ ...b, ...ratiosOf(b) });
+    const diagnostico = diagnosticar({ geral, ratios, porOrigem, porCategoria });
+    const alertas = diagnostico.filter((d) => d.id !== 'ok' && d.id !== 'ainda_cedo');
     return {
-        geral: pack(geral),
-        porCategoria: Object.fromEntries(Object.entries(porCategoria).map(([k, v]) => [k, pack(v)])),
-        porZona: Object.fromEntries(Object.entries(porZona).map(([k, v]) => [k, pack(v)])),
-        alertas
+        geral: packBucket(geral),
+        porCategoria: packMap(porCategoria),
+        porZona: packMap(porZona),
+        porVendedor: packMap(porVendedor),
+        porGancho: packMap(porGancho),
+        porOrigem,
+        diagnostico,
+        alertas,
+        limiar: { respostaPct: LIMIAR_RESPOSTA_PCT, wa1: MIN_WA1_ALERTA },
+        nomes: { ganchos: outreach.GANCHO_NOME_CURTO }
     };
 }
 
@@ -1330,5 +1444,7 @@ module.exports = {
     guiaoFor,
     filtrosAtendedor,
     computeMetricas,
-    ancoraDeMelhorHora
+    ancoraDeMelhorHora,
+    vendedorDoLead,
+    LIMIAR_RESPOSTA_PCT
 };

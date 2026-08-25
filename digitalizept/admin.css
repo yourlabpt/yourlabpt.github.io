@@ -939,6 +939,15 @@
     gap: 10px 14px;
 }
 
+.metric-diagnostico {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(160, 125, 58, 0.14);
+    color: #6c5220;
+    font-weight: 650;
+}
+
 .metric-alerta {
     margin: 0 0 12px;
     padding: 10px 12px;
@@ -946,6 +955,11 @@
     background: rgba(178, 58, 46, 0.1);
     color: #8c2c22;
     font-weight: 650;
+}
+
+.metric-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .metric-grelha {
