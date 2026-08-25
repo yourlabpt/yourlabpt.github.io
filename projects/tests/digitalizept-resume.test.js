@@ -73,6 +73,17 @@ describe('digitalizept resume merge', () => {
         assert.deepEqual(resumeWizardPosition({}), { suggestedStep: 0, suggestedSubstep: 0 });
     });
 
+    it('does not land on tipo de negócio when the lead already has a demo or ficha', () => {
+        const withDemo = resumeWizardPosition({ _wizardStep: 0, _wizardSubstep: 0 }, { hasDemo: true });
+        assert.equal(withDemo.suggestedStep, 4);
+        assert.equal(withDemo.suggestedSubstep, 1);
+        const withType = resumeWizardPosition({}, { hasType: true, hasDados: true, businessTypeId: 'cafe-pastelaria' });
+        assert.equal(withType.suggestedStep, 1);
+        assert.equal(withType.suggestedSubstep, 0);
+        const later = resumeWizardPosition({ _wizardStep: 5, _wizardSubstep: 0 }, { hasDemo: true });
+        assert.equal(later.suggestedStep, 5);
+    });
+
     it('does not let a boilerplate publish replace AI HTML', () => {
         const {
             pickCustomHtml,
@@ -118,6 +129,55 @@ describe('digitalizept resume merge', () => {
         assert.match(next.demoHtml, /<html>/);
         assert.match(next.demoRaw, /Novo/);
     });
+
+    it('keeps stored ficha fields when a draft posts blanks', () => {
+        const { mergeDadosPreserve } = require('../../server/lib/digitalizept-resume.js');
+        const merged = mergeDadosPreserve(
+            { nome_negocio: 'Thai Golden', horario: '12-15', instagram: '@thai', telefone: '210000000' },
+            { nome_negocio: 'Thai Golden', horario: '', telefone: '211111111' }
+        );
+        assert.equal(merged.horario, '12-15');
+        assert.equal(merged.instagram, '@thai');
+        assert.equal(merged.telefone, '211111111');
+    });
+
+    it('does not let an empty draft snapshot erase the demo HTML', () => {
+        const { mergeWizardSnapshot, mergeDemoIntoWizardJson } = require('../../server/lib/digitalizept-resume.js');
+        const existing = {
+            demoHtmlCustom: '<html><body>AI Thailander</body></html>',
+            demoHtml: '<html><body>AI Thailander</body></html>',
+            demoVisual: 'personalizada',
+            dados: { nome_negocio: 'Thai Golden', horario: '12-15' },
+            identidade: { cores: { base: '#111' } }
+        };
+        const next = mergeWizardSnapshot(existing, {
+            demoHtml: '',
+            demoHtmlCustom: '',
+            demo: undefined,
+            dados: { nome_negocio: 'Thai Golden', horario: '' },
+            _wizardStep: 0
+        });
+        assert.match(next.demoHtmlCustom, /AI Thailander/);
+        assert.match(next.demoHtml, /AI Thailander/);
+        assert.equal(next.dados.horario, '12-15');
+        assert.equal(next.identidade.cores.base, '#111');
+        assert.equal(next._wizardStep, 0);
+
+        const emptied = mergeDemoIntoWizardJson(existing, { demoHtml: '', demoHtmlSource: 'boilerplate' });
+        assert.match(emptied.demoHtmlCustom, /AI Thailander/);
+        assert.match(emptied.demoHtml, /AI Thailander/);
+    });
+
+    it('clears the demo when the seller confirms a category change', () => {
+        const { mergeWizardSnapshot } = require('../../server/lib/digitalizept-resume.js');
+        const next = mergeWizardSnapshot(
+            { demoHtmlCustom: '<html>keep</html>', identidade: { cores: { base: '#111' } } },
+            { _clearDemo: true, demoHtml: '', demoHtmlCustom: '', identidade: undefined }
+        );
+        assert.equal(next.demoHtmlCustom, undefined);
+        assert.equal(next.identidade, undefined);
+        assert.equal(next._clearDemo, undefined);
+    });
 });
 
 describe('digitalizept seed guard and wizard snapshot', () => {
@@ -134,6 +194,23 @@ describe('digitalizept seed guard and wizard snapshot', () => {
         assert.equal(result, null);
         assert.equal(state.data.demo, undefined);
         assert.notEqual(state.data.demoSeeded, true);
+    });
+
+    it('does not reseed when only demoHtmlCustom is set', async () => {
+        const seed = await import(pathToFileURL(path.join(appDir, 'demo', 'seed.js')).href);
+        const state = {
+            data: {
+                businessType: { id: 'cafe-pastelaria', nome: 'Café' },
+                dados: { nome_negocio: 'Café Central' },
+                demoHtml: '',
+                demoHtmlCustom: '<html>AI custom</html>',
+                demoVisual: 'fotos'
+            }
+        };
+        const result = seed.ensureSeededDemo(state);
+        assert.equal(result, null);
+        assert.equal(state.data.demo, undefined);
+        assert.equal(seed.isCustomDemo(state), true);
     });
 
     it('does not reseed when demoHtml is set', async () => {
@@ -192,5 +269,7 @@ describe('digitalizept seed guard and wizard snapshot', () => {
         assert.match(snap.demoRaw, /AI/);
         assert.equal(snap.demoSeeded, false);
         assert.equal(snap.demoIdentityStamp, 'abc');
+        assert.equal(snap.dados.nome_negocio, 'X');
+        assert.equal(snap._clearDemo, false);
     });
 });

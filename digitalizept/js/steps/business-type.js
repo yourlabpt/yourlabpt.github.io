@@ -14,8 +14,19 @@ function clearTypeBoundState() {
         demoIdentityStamp: '',
         colorPrompt: '',
         _googleChecklist: undefined,
-        googlePresence: undefined
+        googlePresence: undefined,
+        _clearDemo: true
     };
+}
+
+function hasSavedDemo(data) {
+    const d = data || {};
+    return Boolean(
+        (d.demo && d.demo.hero && d.demo.hero.titulo)
+        || String(d.demoHtml || '').trim()
+        || String(d.demoHtmlCustom || '').trim()
+        || String(d.demoRaw || '').trim()
+    );
 }
 
 function marca(type) {
@@ -75,9 +86,23 @@ async function render(body, ctx) {
             card.append(icon, name);
 
             card.addEventListener('click', () => {
+                const prevId = ctx.state.data.businessType && ctx.state.data.businessType.id;
+                if (prevId && prevId === type.id) {
+                    ctx.setValid(true);
+                    scheduleGoNext(ctx.goNext);
+                    return;
+                }
+                if (prevId && prevId !== type.id) {
+                    const destructive = hasSavedDemo(ctx.state.data)
+                        || Boolean(ctx.state.data.identidade)
+                        || Boolean(ctx.state.data.leadId);
+                    if (destructive
+                        && !window.confirm('Mudar de categoria apaga a demonstração deste negócio. Continuar?')) {
+                        return;
+                    }
+                }
                 grid.querySelectorAll('.type-card').forEach((c) => c.classList.remove('selected'));
                 card.classList.add('selected');
-                const prevId = ctx.state.data.businessType && ctx.state.data.businessType.id;
                 const patch = { businessType: type };
                 if (prevId && prevId !== type.id) Object.assign(patch, clearTypeBoundState());
                 ctx.update(patch);

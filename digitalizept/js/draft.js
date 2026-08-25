@@ -32,6 +32,13 @@ function wizardSnapshot(state) {
         demoGbp: d.demoGbp === true,
         demoUrl: d.demoUrl || '',
         demo: d.demo || undefined,
+        dados: d.dados && typeof d.dados === 'object' ? { ...d.dados } : undefined,
+        _clearDemo: d._clearDemo === true && !(
+            (d.demo && d.demo.hero && d.demo.hero.titulo)
+            || String(d.demoHtml || '').trim()
+            || String(d.demoHtmlCustom || '').trim()
+            || String(d.demoRaw || '').trim()
+        ),
         _wizardStep: Number.isFinite(step) && step >= 0 ? Math.floor(step) : 0,
         _wizardSubstep: Number.isFinite(substep) && substep >= 0 ? Math.floor(substep) : 0
     };

@@ -68,9 +68,45 @@ function clearResumeParam() {
     } catch (_) { /* ignore */ }
 }
 
+function isCustomHtmlValue(html) {
+    const text = String(html || '').trim();
+    return Boolean(text) && !/data-dp-boilerplate\s*=/i.test(text);
+}
+
+function fillBlankFields(base, overlay) {
+    const out = { ...(base && typeof base === 'object' ? base : {}) };
+    Object.entries(overlay && typeof overlay === 'object' ? overlay : {}).forEach(([key, value]) => {
+        if (value == null) return;
+        if (typeof value === 'string' && !value.trim()) return;
+        out[key] = value;
+    });
+    return out;
+}
+
+function keepRicherDemo(seed, local) {
+    if (!local || typeof local !== 'object') return seed;
+    if (!isCustomHtmlValue(seed.demoHtml) && !isCustomHtmlValue(seed.demoHtmlCustom)) {
+        if (isCustomHtmlValue(local.demoHtmlCustom) || isCustomHtmlValue(local.demoHtml)) {
+            seed.demoHtmlCustom = local.demoHtmlCustom || local.demoHtml;
+            seed.demoHtml = local.demoHtml || local.demoHtmlCustom;
+            seed.demoHtmlSource = local.demoHtmlSource && local.demoHtmlSource !== 'boilerplate'
+                ? local.demoHtmlSource
+                : 'ai';
+            seed.demoVisual = seed.demoVisual || local.demoVisual || 'personalizada';
+        }
+        if (local.demo && local.demo.hero && !(seed.demo && seed.demo.hero)) seed.demo = local.demo;
+        if (local.demoRaw && !seed.demoRaw) seed.demoRaw = local.demoRaw;
+    }
+    if (!seed.identidade && local.identidade) seed.identidade = local.identidade;
+    return seed;
+}
+
 async function applyResumeLead(leadId) {
     if (!leadId) return false;
-    if (hasWizardProgress()
+    const previous = getWizardState();
+    const prevLeadId = previous && previous.data && previous.data.leadId;
+    const sameLead = Boolean(prevLeadId && prevLeadId === leadId);
+    if (hasWizardProgress() && !sameLead
         && !window.confirm('Já há uma venda em curso neste telemóvel. Substituir pelos dados deste lead?')) {
         clearResumeParam();
         return false;
@@ -94,6 +130,11 @@ async function applyResumeLead(leadId) {
     if (wizard && typeof wizard.destroy === 'function') wizard.destroy();
     clearWizardState();
     const seed = { ...data.data };
+    // Admin ficha wins; fill any blank keys from this same lead still on the phone.
+    if (sameLead && previous.data && previous.data.dados) {
+        seed.dados = fillBlankFields(previous.data.dados, seed.dados);
+    }
+    if (sameLead && previous.data) keepRicherDemo(seed, previous.data);
     seed.leadBoundNome = seed.leadBoundNome
         || (seed.dados && seed.dados.nome_negocio)
         || '';

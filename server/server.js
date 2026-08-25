@@ -47,6 +47,8 @@ const {
     mergeDemoForResume,
     resumeWizardPosition,
     mergeDemoIntoWizardJson,
+    mergeDadosPreserve,
+    mergeWizardSnapshot,
     persistableCustomHtml,
     pickCustomHtml
 } = require('./lib/digitalizept-resume');
@@ -2324,43 +2326,81 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
     try {
         const body = req.body || {};
         const businessType = body.businessType || {};
-        const dados = body.dados || {};
-        const nome = cleanText(dados.nome_negocio, 200);
+        const incomingDados = body.dados || {};
+        const nome = cleanText(incomingDados.nome_negocio, 200);
         if (!nome) {
             return res.status(400).json({ error: 'Falta o nome do negócio.' });
         }
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
-        if (!cleanText(dados.whatsapp, 60)) {
-            const copied = whatsappIfMobile(cleanText(dados.telefone, 60));
-            if (copied) dados.whatsapp = copied;
-        }
-        const { obrigatorios, opcionais } = splitDados(dados, businessType);
         let leadId = cleanText(body.leadId, 80);
-        const morada = cleanText(dados.morada, 300);
-        const cidade = cleanText(dados.cidade, 120);
-        const telefone = cleanText(dados.telefone, 60);
-        const whatsapp = cleanText(dados.whatsapp, 60);
 
         const persist = db.transaction(() => {
+            let existing = null;
             if (leadId) {
-                const existing = db.prepare('SELECT id, nome FROM lead WHERE id = ?').get(leadId);
-                leadId = reusableLeadId(existing, nome, cidade);
+                const found = db.prepare(`
+                    SELECT id, nome, morada, cidade, telefone, whatsapp, business_type, wizard_json
+                    FROM lead WHERE id = ?
+                `).get(leadId);
+                if (reusableLeadId(found, nome, cleanText(incomingDados.cidade, 120))) {
+                    existing = found;
+                    leadId = found.id;
+                } else {
+                    leadId = '';
+                }
             }
+
+            let dados = incomingDados;
+            if (existing) {
+                const dadosRow = db.prepare(
+                    'SELECT id, obrigatorios_json, opcionais_json FROM dados_negocio WHERE lead_id = ?'
+                ).get(leadId);
+                const existingDados = dadosRow
+                    ? {
+                        ...parseJsonSafe(dadosRow.obrigatorios_json, {}),
+                        ...parseJsonSafe(dadosRow.opcionais_json, {})
+                    }
+                    : {};
+                dados = mergeDadosPreserve(existingDados, incomingDados);
+            }
+            if (!cleanText(dados.whatsapp, 60)) {
+                const copied = whatsappIfMobile(cleanText(dados.telefone, 60));
+                if (copied) dados.whatsapp = copied;
+            }
+            const { obrigatorios, opcionais } = splitDados(dados, businessType);
+            const morada = cleanText(dados.morada, 300);
+            const cidade = cleanText(dados.cidade, 120);
+            const telefone = cleanText(dados.telefone, 60);
+            const whatsapp = cleanText(dados.whatsapp, 60);
+            const typeId = cleanText(businessType.id, 80)
+                || (existing && existing.business_type)
+                || '';
+
             if (!leadId) {
                 leadId = crypto.randomUUID();
                 db.prepare(`INSERT INTO lead (id, business_type, nome, morada, cidade, telefone, whatsapp, estado, cobertura, criado_em)
                     VALUES (?, ?, ?, ?, ?, ?, ?, 'rascunho', 'contacto_remoto', ?)`).run(
-                    leadId, cleanText(businessType.id, 80), nome,
+                    leadId, typeId, nome,
                     morada, cidade, telefone, whatsapp, now);
                 db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
                     VALUES (?, ?, ?, ?, ?)`).run(
                     crypto.randomUUID(), leadId, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
             } else {
-                clearGeocodeIfAddressChanged(db, leadId, morada, cidade);
+                clearGeocodeIfAddressChanged(
+                    db,
+                    leadId,
+                    morada || existing.morada,
+                    cidade || existing.cidade
+                );
                 db.prepare(`UPDATE lead SET business_type = ?, nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?
                     WHERE id = ?`).run(
-                    cleanText(businessType.id, 80), nome, morada, cidade, telefone, whatsapp, leadId);
+                    typeId,
+                    nome,
+                    morada || existing.morada || '',
+                    cidade || existing.cidade || '',
+                    telefone || existing.telefone || '',
+                    whatsapp || existing.whatsapp || '',
+                    leadId);
                 const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(leadId);
                 if (dadosRow) {
                     db.prepare(`UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?`)
@@ -2372,8 +2412,12 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                 }
             }
             if (body.wizard && typeof body.wizard === 'object') {
+                const incomingWizard = { ...body.wizard, dados };
+                const wizardJson = existing
+                    ? mergeWizardSnapshot(parseJsonSafe(existing.wizard_json, {}), incomingWizard)
+                    : incomingWizard;
                 db.prepare('UPDATE lead SET wizard_json = ? WHERE id = ?')
-                    .run(JSON.stringify(body.wizard), leadId);
+                    .run(JSON.stringify(wizardJson), leadId);
             }
             digitalizeptLogEvento(db, 'lead', leadId, 'rascunho', { nome });
             return leadId;
@@ -3280,22 +3324,33 @@ app.get('/api/digitalizept/leads/:leadId/resume', requireDigitalizept, (req, res
         const types = loadBusinessTypes();
         const businessType = types.find((t) => t.id === row.business_type)
             || { id: row.business_type, nome: row.business_type || 'Negócio' };
-        const dados = dossier.mergeCanonicalDados(
+        const wizardExtra = parseJsonSafe(row.wizard_json, {});
+        const ficha = dossier.mergeCanonicalDados(
             row,
             parseJsonSafe(row.obrigatorios_json, {}),
             parseJsonSafe(row.opcionais_json, {})
         );
+        const dados = mergeDadosPreserve(wizardExtra.dados, ficha);
 
         const identidade = parseJsonSafe(row.identidade_json, {});
         const leadDemo = parseJsonSafe(row.demo_json, null);
         const googlePresence = parseJsonSafe(row.google_presence_json, null);
-        const wizardExtra = parseJsonSafe(row.wizard_json, {});
         const mergedDemo = mergeDemoForResume({
             leadDemo,
             leadDemoHtml: row.demo_html || '',
             wizard: wizardExtra
         });
-        const { suggestedStep, suggestedSubstep } = resumeWizardPosition(wizardExtra);
+        const { suggestedStep, suggestedSubstep } = resumeWizardPosition(wizardExtra, {
+            hasDemo: Boolean(
+                mergedDemo.demo
+                || mergedDemo.demoHtml
+                || mergedDemo.demoHtmlCustom
+                || mergedDemo.demoRaw
+            ),
+            hasType: Boolean(row.business_type),
+            hasDados: Boolean(dados.nome_negocio),
+            businessTypeId: row.business_type
+        });
 
         // Closed deals: load the latest proposta + legal + project so re-sign updates in place.
         let proposta = wizardExtra.proposta || undefined;

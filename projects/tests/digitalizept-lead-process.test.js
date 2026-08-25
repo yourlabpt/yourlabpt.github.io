@@ -455,7 +455,7 @@ describe('digitalizept lead process — instruções e demo', () => {
             'utf8'
         );
         assert.doesNotMatch(adminCss, /procpasso/);
-        assert.match(sw, /digitalizept-v90/);
+        assert.match(sw, /digitalizept-v91/);
     });
 });
 

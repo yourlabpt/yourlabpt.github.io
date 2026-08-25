@@ -175,6 +175,7 @@ function clearDemoState(state) {
     state.data.demoSeeded = false;
     state.data.demoUrl = '';
     state.data.demoIdentityStamp = '';
+    state.data._clearDemo = true;
 }
 
 export function invalidateDemoIfDriverField(state, fieldId) {

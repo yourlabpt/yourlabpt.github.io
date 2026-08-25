@@ -60,7 +60,7 @@ function isGbpSubstepValid(state) {
 function isWebsiteSubstepValid(state) {
     if (state.data.demoHtml) return true;
     if (state.data.demoVisual === VISUAL_SEM_FOTOS) return true;
-    if (state.data.demoVisual === VISUAL_CUSTOM && publishedCustomHtml(state)) return true;
+    if (publishedCustomHtml(state)) return true;
     ensureSeededDemo(state);
     return Boolean(state.data.demo && state.data.demo.hero && state.data.demo.hero.titulo);
 }

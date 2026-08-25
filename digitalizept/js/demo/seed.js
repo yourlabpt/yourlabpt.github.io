@@ -106,6 +106,8 @@ function seedReviews(businessType, dados) {
 
 export function isCustomDemo(state) {
     const d = (state && state.data) || {};
+    const custom = String(d.demoHtmlCustom || '').trim();
+    if (custom && !/data-dp-boilerplate\s*=/i.test(custom)) return true;
     if (String(d.demoHtml || '').trim() && d.demoHtmlSource !== 'boilerplate') return true;
     if (d.demoSeeded === true) return false;
     if (d.demo && d.demo.hero && d.demo.hero.titulo) return true;
