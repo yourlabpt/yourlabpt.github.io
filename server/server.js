@@ -4657,9 +4657,15 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         const passo = passoRaw === 'EMAIL2' || passoRaw === 'D4' ? passoRaw : 'EMAIL1';
         const subject = cleanText(body.subject, 240)
             || outreach.subjectForPasso(passo, packed.ctx, packed.followup.edits);
-        const text = String(body.text || outreach.textForPasso(passo, packed.ctx, packed.followup.edits));
-        // Email 2 and discovery D4 close in plain text; only Email 1 carries the layout.
-        const html = passo === 'EMAIL1' ? outreach.renderEmailHtml(packed.ctx) : '';
+        const outgoing = outreach.outgoingEmail(passo, {
+            text: body.text,
+            ctx: packed.ctx,
+            edits: packed.followup.edits
+        });
+        const text = outgoing.text;
+        // Email 2 and D4 stay plain. Email 1 keeps the designed layout only when
+        // the seller did not change the textarea — otherwise their words go out.
+        const html = outgoing.html;
         const result = await sendProjectNotificationEmail({
             to,
             subject,
@@ -4684,6 +4690,10 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         const now = digitalizeptNow();
         packed.followup.emailSentAt = now;
         if (body.subject) packed.followup.edits.emailSubject = subject;
+        if (outgoing.edited) {
+            if (passo === 'EMAIL1') packed.followup.edits.email1 = text;
+            if (passo === 'EMAIL2') packed.followup.edits.email2 = text;
+        }
         saveLeadFollowup(db, leadId, packed.followup);
         applyAutoEtapa(db, leadId, 'demo_criada');
         scheduleLeadGeocode(leadId, { force: false });

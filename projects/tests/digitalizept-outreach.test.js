@@ -25,7 +25,8 @@ const {
     offerCopy,
     emailSubjectFor,
     textForPasso,
-    subjectForPasso
+    subjectForPasso,
+    outgoingEmail
 } = require('../../server/lib/digitalizept-outreach.js');
 
 describe('digitalizept outreach', () => {
@@ -422,5 +423,29 @@ describe('digitalizept outreach', () => {
         assert.equal(stored.includePrices, false);
         assert.equal(stored.campanhaPct, 10);
         assert.equal(stored.campanhaShowPrices, false);
+    });
+
+    it('sends the seller’s Controlo edit instead of the EMAIL1 layout', () => {
+        const ctx = buildOutreachContext({
+            dados: { nome_negocio: 'Talho da Costa', cidade: 'Porto', email: 'costa@example.com' },
+            provider: { nome: 'YourLab', nif: '509000000', morada: 'Rua A 1, 4700-000 Braga' },
+            origin: 'https://yourlabpt.com',
+            demoSlug: 'talho-da-costa'
+        });
+        const canned = outgoingEmail('EMAIL1', { ctx });
+        assert.equal(canned.edited, false);
+        assert.match(canned.html, /Marcar conversa/);
+
+        const edited = outgoingEmail('EMAIL1', {
+            ctx,
+            text: 'Olá Costa,\n\nMudei o texto à mão. Vê a demo quando puderes.'
+        });
+        assert.equal(edited.edited, true);
+        assert.match(edited.html, /Mudei o texto à mão/);
+        assert.doesNotMatch(edited.html, /Marcar conversa/);
+        assert.equal(
+            textForPasso('EMAIL1', ctx, { email1: edited.text }),
+            edited.text
+        );
     });
 });

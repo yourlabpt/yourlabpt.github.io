@@ -965,6 +965,41 @@ function renderEmailHtml(ctx, templateHtml) {
     return fillHtmlTemplate(templateHtml || loadEmailTemplate(lang), ctx);
 }
 
+function normalizePlain(s) {
+    return String(s || '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+}
+
+function htmlFromPlainText(text) {
+    const esc = String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const blocks = esc.split(/\n{2,}/).map((block) => (
+        `<p style="margin:0 0 14px 0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.5;color:#1C1C1C;">${
+            block.replace(/\n/g, '<br>')
+        }</p>`
+    ));
+    return `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#fff;">${blocks.join('')}</body></html>`;
+}
+
+/**
+ * EMAIL1 ships a designed HTML layout. Recipients read that, not the plain-text
+ * part — so an edit in Controlo was being thrown away. If the seller changed
+ * the textarea, send their words instead of the template.
+ */
+function outgoingEmail(passo, { text, ctx, edits } = {}) {
+    const key = String(passo || '').trim().toUpperCase();
+    const canned = textForPasso(key, ctx, {});
+    const defaultText = textForPasso(key, ctx, edits);
+    const body = (text != null && String(text).trim() !== '') ? String(text) : defaultText;
+    const edited = normalizePlain(body) !== normalizePlain(canned);
+    let html = '';
+    if (key === 'EMAIL1') {
+        html = edited ? htmlFromPlainText(body) : renderEmailHtml(ctx);
+    }
+    return { text: body, html, edited };
+}
+
 function renderEmailText(ctx) {
     const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL_TEXT_EN : EMAIL_TEXT;
     return fillTemplate(pack, ctx);
@@ -994,10 +1029,15 @@ function textForPasso(passo, ctx, edits = {}) {
         if (editado && !String(editado).includes('{{')) return String(editado);
         return fillTemplate(editado || pack[lang] || pack.pt, ctx);
     }
-    if (key === 'EMAIL1') return renderEmailText(ctx);
+    if (key === 'EMAIL1') {
+        if (edits.email1 && !String(edits.email1).includes('{{')) return String(edits.email1);
+        return renderEmailText(ctx);
+    }
     if (key === 'EMAIL2' || key === 'D4') return key === 'D4'
         ? fillTemplate(PASSO_TEMPLATES.D4[normalizeOutreachLang(ctx && ctx.lang)] || PASSO_TEMPLATES.D4.pt, ctx)
-        : renderEmail2Text(ctx);
+        : (edits.email2 && !String(edits.email2).includes('{{')
+            ? String(edits.email2)
+            : renderEmail2Text(ctx));
     return '';
 }
 
@@ -1062,6 +1102,7 @@ module.exports = {
     emailSubjectFor,
     renderEmailHtml,
     renderEmailText,
+    outgoingEmail,
     loadEmailTemplate,
     loadNoticeTemplate,
     NOTICE_TEMPLATE_PATH,
