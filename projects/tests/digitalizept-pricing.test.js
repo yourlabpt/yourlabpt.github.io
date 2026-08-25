@@ -752,7 +752,7 @@ describe('digitalizept followup messages', () => {
         assert.doesNotMatch(wa, /Sr\./);
         assert.match(wa, /I'm Túlio Soares/);
         assert.match(wa, /Good morning|Good afternoon/);
-        assert.match(wa, /When someone recommends you/);
+        assert.match(wa, /We looked you up on Google/);
         assert.match(wa, /Café do Zé/);
         const wa3 = buildWhatsAppMessage(state, config, 3);
         assert.match(wa3, /tomorrow/);

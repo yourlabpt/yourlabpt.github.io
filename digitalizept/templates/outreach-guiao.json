@@ -1,6 +1,6 @@
 {
   "LIG1": {
-    "abertura": "Bom dia, Sr. {{clienteNome}}? Fala {{vendedorNome}}, da YourLab, aqui de {{zona}}. Fui eu que lhe mandei aquela mensagem com o exemplo do site. Apanhei-o em má altura?",
+    "abertura": "Bom dia, Sr. {{clienteNome}}? Fala {{vendedorNome}}, da YourLab, aqui de {{zona}}. {{diagnosticoResumo}} Fui eu que lhe mandei aquela mensagem com o exemplo. Apanhei-o em má altura?",
     "licenca": "Pedir licença é a técnica mais rentável da chamada. Se disser que sim, aceita-se de imediato: «Sem problema, quando é melhor — amanhã de manhã?» — e desliga-se. Isso já é uma marcação.",
     "pergunta": "Só lhe queria perguntar uma coisa: chegou a ver aquilo que lhe mandei?",
     "ramos": [
@@ -32,7 +32,7 @@
     ]
   },
   "LIG2": {
-    "abertura": "Bom dia, Sr. {{clienteNome}}, fala o {{vendedorNome}} da YourLab outra vez. Esta é a última vez que lhe ligo sobre isto, não quero estar a chatear. Só preciso de saber uma coisa para arrumar isto: é não, ou é não agora?",
+    "abertura": "Bom dia, Sr. {{clienteNome}}, fala o {{vendedorNome}} da YourLab outra vez. {{diagnosticoResumo}} Esta é a última vez que lhe ligo sobre isto, não quero estar a chatear. Só preciso de saber uma coisa para arrumar isto: é não, ou é não agora?",
     "licenca": "A pergunta oferece uma saída digna. Quase toda a gente escolhe «não agora» — que é uma data, não uma recusa.",
     "pergunta": "É não, ou é não agora?",
     "ramos": [

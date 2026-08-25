@@ -33,16 +33,26 @@ const GANCHOS_PATH = path.join(
     'outreach-ganchos.json'
 );
 
-const GANCHO_IDS = ['A', 'B', 'C', 'D', 'E'];
+const FALHAS_PATH = path.join(
+    __dirname,
+    '..',
+    '..',
+    'digitalizept',
+    'templates',
+    'outreach-falhas.json'
+);
 
-const GANCHO_NOME_CURTO = {
-    A: 'Sem nada',
-    B: 'Só redes',
-    C: 'Site velho',
-    D: 'Cheio de trabalho',
-    E: 'Ficha errada'
+const GANCHO_TO_FALHAS = {
+    A: ['sem_nada'],
+    B: ['redes_desligadas_maps', 'maps_sem_site'],
+    C: ['site_fraco'],
+    D: ['sem_nada'],
+    E: ['ficha_errada']
 };
 
+const GANCHO_IDS = ['A', 'B', 'C', 'D', 'E'];
+
+let falhasCache = null;
 let ganchosCache = null;
 
 const NOTICE_TEMPLATE_PATH = path.join(
@@ -67,7 +77,7 @@ Fiz duas coisas para a *{{negocioNome}}*, sem lhe pedir nada. São exemplos — 
 
 Gostou? Se fizer sentido, marcamos cinco minutos. Fazemos isto ao vosso lado — vocês não têm de gastar tempo a pensar nisto. Só precisamos de perceber o que querem. O valor é justo e ajusta-se ao momento do negócio.`,
 
-    2: `No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
+    2: `{{diagnosticoLinha}}No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
 
 {{link}}
 
@@ -116,7 +126,7 @@ I put two things together for *{{negocioNome}}*, without asking you for anything
 
 If it makes sense, we book five minutes. We do this alongside you — you don't have to spend time thinking about it. We just need to understand what you want. The price is fair and it adjusts to where the business is right now.`,
 
-    2: `In the email you can see how *{{negocioNome}}* would look when someone searches "{{oQueFaz}} in {{zona}}". And the page that holds the whole story.
+    2: `{{diagnosticoLinha}}In the email you can see how *{{negocioNome}}* would look when someone searches "{{oQueFaz}} in {{zona}}". And the page that holds the whole story.
 
 {{link}}
 
@@ -160,12 +170,12 @@ To leave the list, reply REMOVE.`;
  */
 const PASSO_TEMPLATES = {
     N1: {
-        pt: `Sr. {{clienteNome}}, não sei se viu a mensagem. Mando só a parte do Google, que é a que costuma surpreender — é assim que a *{{negocioNome}}* aparece a quem a procura no telemóvel.
+        pt: `Sr. {{clienteNome}}, não sei se viu a mensagem. {{diagnosticoLinha}}Mando só a parte do Google, que é a que costuma surpreender — é assim que a *{{negocioNome}}* aparece a quem a procura no telemóvel.
 
 {{link}}
 
 O exemplo continua guardado, não apago.`,
-        en: `{{clienteNome}}, I am not sure you saw my message. Here is just the Google part, which is usually the surprising one — this is how *{{negocioNome}}* shows up to someone searching on their phone.
+        en: `{{clienteNome}}, I am not sure you saw my message. {{diagnosticoLinha}}Here is just the Google part, which is usually the surprising one — this is how *{{negocioNome}}* shows up to someone searching on their phone.
 
 {{link}}
 
@@ -226,7 +236,7 @@ const EMAIL2_SUBJECT_EN = 'just for the record — {{negocioNome}}';
 
 const EMAIL2_TEXT = `Sr. {{clienteNome}},
 
-Não o incomodo mais com isto.
+{{diagnosticoLinha}}Não o incomodo mais com isto.
 
 Fica só o registo: o exemplo da {{negocioNome}} continua guardado do nosso lado, não apagamos. Se um dia for altura, é só responder a este email e retomamos onde ficámos — pelo mesmo valor.
 
@@ -241,7 +251,7 @@ Para sair da lista, responda REMOVER.`;
 
 const EMAIL2_TEXT_EN = `{{clienteNome}},
 
-I won't take up more of your time on this.
+{{diagnosticoLinha}}I won't take up more of your time on this.
 
 Just for the record: the example for {{negocioNome}} is still saved on our side — we don't delete it. If the timing ever works, just reply to this email and we pick up where we left off, at the same price.
 
@@ -536,6 +546,7 @@ function emptyFollowup() {
         unsubscribed: false,
         unsubToken: '',
         ganchoId: '',
+        falhas: [],
         sinaisDeMovimento: false,
         fichaComErro: false,
         siteVelho: false,
@@ -556,7 +567,8 @@ function parseFollowup(raw) {
         ...parsed,
         waStep: Math.min(3, Math.max(0, Number(parsed.waStep) || 0)),
         unsubscribed: parsed.unsubscribed === true,
-        ganchoId: normalizeGanchoId(parsed.ganchoId),
+        ganchoId: '',
+        falhas: normalizeFalhas(parsed.falhas),
         sinaisDeMovimento: parsed.sinaisDeMovimento === true,
         fichaComErro: parsed.fichaComErro === true,
         siteVelho: parsed.siteVelho === true,
@@ -568,6 +580,8 @@ function parseFollowup(raw) {
     merged.includePrices = offer.includePrices;
     merged.campanhaPct = offer.campanhaPct;
     merged.campanhaShowPrices = offer.campanhaShowPrices;
+    if (!merged.falhas.length) merged.falhas = migrateGanchoToFalhas(parsed.ganchoId);
+    merged.ganchoId = merged.falhas[0] || '';
     return merged;
 }
 
@@ -578,9 +592,47 @@ function loadGanchos() {
     return ganchosCache;
 }
 
+function loadFalhasCatalog() {
+    if (!falhasCache) {
+        falhasCache = JSON.parse(fs.readFileSync(FALHAS_PATH, 'utf8'));
+    }
+    return falhasCache;
+}
+
+function falhaIds() {
+    return loadFalhasCatalog().ordem.slice();
+}
+
+function normalizeFalhaId(id) {
+    const raw = String(id || '').trim();
+    if (!raw) return '';
+    if (falhaIds().includes(raw)) return raw;
+    const mapped = GANCHO_TO_FALHAS[raw.toUpperCase()];
+    return mapped ? mapped[0] : '';
+}
+
+function normalizeFalhas(raw) {
+    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    const seen = new Set();
+    const out = [];
+    list.forEach((id) => {
+        const n = normalizeFalhaId(id);
+        if (!n || seen.has(n)) return;
+        seen.add(n);
+        out.push(n);
+    });
+    return out;
+}
+
+function migrateGanchoToFalhas(ganchoId) {
+    const letter = String(ganchoId || '').trim().toUpperCase();
+    if (GANCHO_TO_FALHAS[letter]) return GANCHO_TO_FALHAS[letter].slice();
+    const falha = normalizeFalhaId(ganchoId);
+    return falha ? [falha] : [];
+}
+
 function normalizeGanchoId(id) {
-    const letter = String(id || '').trim().toUpperCase();
-    return GANCHO_IDS.includes(letter) ? letter : '';
+    return normalizeFalhaId(id);
 }
 
 function filledGanchoField(value) {
@@ -607,50 +659,149 @@ function hasSocial(sinais) {
     return filledGanchoField(sinais && sinais.instagram) || filledGanchoField(sinais && sinais.facebook);
 }
 
-function pickGancho({ override, sinais = {}, lang = 'pt' } = {}) {
-    const hooks = loadGanchos();
-    let id = normalizeGanchoId(override);
-    if (!id) {
-        if (sinais.sinaisDeMovimento === true) id = 'D';
-        else if (sinais.fichaComErro === true && filledGanchoField(sinais.problemaFicha)) id = 'E';
-        else if (siteIsOld(sinais)) id = 'C';
-        else if (!hasWebsite(sinais) && hasSocial(sinais)) id = 'B';
-        else id = 'A';
+function falhasParaCopy(ids) {
+    let list = ids.slice();
+    if (list.includes('maps_telefone_sem_wa')) {
+        list = list.filter((id) => id !== 'maps_sem_whatsapp');
     }
-    if (id === 'E' && !filledGanchoField(sinais.problemaFicha)) id = 'A';
-    const hook = hooks[id] || hooks.A;
-    const localized = normalizeOutreachLang(lang) === 'en' && hook.en
-        ? hook.en
-        : hook;
+    if (list.length > 1) list = list.filter((id) => id !== 'sem_nada');
+    const ordem = loadFalhasCatalog().ordem;
+    const max = Number(loadFalhasCatalog().maxFactos) || 3;
+    return ordem.filter((id) => list.includes(id)).slice(0, max);
+}
+
+function fraseFalha(id, lang, problemaFicha) {
+    const item = loadFalhasCatalog().falhas[id];
+    if (!item) return '';
+    const pack = normalizeOutreachLang(lang) === 'en' && item.en ? item.en : item;
+    return fillTemplate(pack.frase || '', { problemaFicha: problemaFicha || '' }).trim();
+}
+
+function nomeCurtoFalha(id) {
+    const item = loadFalhasCatalog().falhas[id];
+    return (item && item.chip) || id;
+}
+
+function ganchoNomeCurtoMap() {
+    const o = {};
+    falhaIds().forEach((id) => { o[id] = nomeCurtoFalha(id); });
+    return o;
+}
+
+const GANCHO_NOME_CURTO = new Proxy({}, {
+    get: (_t, prop) => (typeof prop === 'string' ? nomeCurtoFalha(prop) : undefined),
+    ownKeys: () => falhaIds(),
+    getOwnPropertyDescriptor: (_t, prop) => (
+        falhaIds().includes(String(prop))
+            ? { configurable: true, enumerable: true, value: nomeCurtoFalha(prop) }
+            : undefined
+    )
+});
+
+function suggestFalhas(sinais = {}) {
+    const out = [];
+    const phone = filledGanchoField(sinais.telefone);
+    const wa = filledGanchoField(sinais.whatsapp) || sinais.temWhatsapp === true;
+    if (phone && !wa) out.push('maps_telefone_sem_wa');
+    else if (!wa) out.push('maps_sem_whatsapp');
+    if (!hasWebsite(sinais)) out.push('maps_sem_site');
+    else if (siteIsOld(sinais)) out.push('site_fraco');
+    if (!filledGanchoField(sinais.email)) out.push('maps_sem_email');
+    if (hasSocial(sinais)) {
+        out.push('redes_desligadas_maps');
+        if (!filledGanchoField(sinais.morada)) out.push('redes_sem_morada');
+    }
+    if (sinais.fichaComErro === true && filledGanchoField(sinais.problemaFicha)) {
+        out.push('ficha_errada');
+    }
+    if (!out.length) out.push('sem_nada');
+    return normalizeFalhas(out);
+}
+
+function composeAbertura({ falhas, override, sinais = {}, lang = 'pt' } = {}) {
+    const catalog = loadFalhasCatalog();
+    const outreachLang = normalizeOutreachLang(lang);
+    let ids = normalizeFalhas(falhas);
+    if (!ids.length && override) ids = migrateGanchoToFalhas(override);
+    if (!ids.length) ids = suggestFalhas(sinais);
+    const copyIds = falhasParaCopy(ids);
+    const onlySemNada = copyIds.length === 1 && copyIds[0] === 'sem_nada';
+    const titulos = onlySemNada ? catalog.tituloSemNada : catalog.tituloMaps;
+    const ganchoTitulo = titulos[outreachLang] || titulos.pt;
+    const problemaFicha = String(sinais.problemaFicha || '').trim();
+    const factos = copyIds
+        .map((id) => {
+            if (id === 'ficha_errada' && !filledGanchoField(problemaFicha)) return '';
+            return fraseFalha(id, outreachLang, problemaFicha);
+        })
+        .filter(Boolean);
+    const fecho = (catalog.fecho && (catalog.fecho[outreachLang] || catalog.fecho.pt)) || '';
+    const ganchoTexto = [...factos, fecho].filter(Boolean).join('\n\n');
+    const diagnosticoResumo = factos.join(' ');
     return {
-        id,
-        nome: hook.nome,
-        nomeCurto: GANCHO_NOME_CURTO[id] || hook.nome,
-        ganchoTitulo: localized.ganchoTitulo,
-        ganchoTexto: localized.ganchoTexto
+        id: ids[0] || 'sem_nada',
+        falhas: ids,
+        sugeridas: suggestFalhas(sinais),
+        nome: nomeCurtoFalha(ids[0] || 'sem_nada'),
+        nomeCurto: nomeCurtoFalha(ids[0] || 'sem_nada'),
+        ganchoTitulo,
+        ganchoTexto,
+        diagnosticoResumo,
+        factos
     };
 }
 
+function pickGancho({ override, falhas, sinais = {}, lang = 'pt' } = {}) {
+    return composeAbertura({ falhas, override, sinais, lang });
+}
+
 function listGanchos() {
-    const hooks = loadGanchos();
-    return GANCHO_IDS.map((id) => ({
-        id,
-        nome: hooks[id].nome,
-        nomeCurto: GANCHO_NOME_CURTO[id] || hooks[id].nome,
-        ganchoTitulo: hooks[id].ganchoTitulo,
-        ganchoTexto: hooks[id].ganchoTexto
-    }));
+    return listFalhas();
+}
+
+function listFalhas() {
+    const catalog = loadFalhasCatalog();
+    return falhaIds().map((id) => {
+        const item = catalog.falhas[id];
+        return {
+            id,
+            nome: item.chip,
+            nomeCurto: item.chip,
+            ganchoTitulo: item.frase,
+            ganchoTexto: item.frase
+        };
+    });
 }
 
 function applyGanchoFields(followup, patch = {}) {
     const f = parseFollowup(followup);
     if (patch.lang != null) f.lang = normalizeOutreachLang(patch.lang);
-    if (patch.ganchoId != null) f.ganchoId = normalizeGanchoId(patch.ganchoId);
+    if (patch.falhas != null) {
+        f.falhas = normalizeFalhas(patch.falhas);
+        f.ganchoId = f.falhas[0] || '';
+    } else if (patch.ganchoId != null) {
+        const mapped = migrateGanchoToFalhas(patch.ganchoId);
+        if (mapped.length) {
+            f.falhas = mapped;
+            f.ganchoId = mapped[0];
+        }
+    }
     if (patch.sinaisDeMovimento != null) f.sinaisDeMovimento = patch.sinaisDeMovimento === true;
     if (patch.fichaComErro != null) f.fichaComErro = patch.fichaComErro === true;
     if (patch.siteVelho != null) f.siteVelho = patch.siteVelho === true;
     if (patch.problemaFicha != null) f.problemaFicha = String(patch.problemaFicha || '').trim();
+    if (f.falhas.includes('ficha_errada') && filledGanchoField(f.problemaFicha)) {
+        f.fichaComErro = true;
+    }
     return applyOfferFields(f, patch);
+}
+
+function aberturaEmFalta(passo, followup) {
+    const key = String(passo || '').trim().toUpperCase();
+    if (key !== 'EMAIL1' && key !== 'WA1') return '';
+    const f = parseFollowup(followup);
+    if (normalizeFalhas(f.falhas).length) return '';
+    return 'Marca em cima o que vamos resolver.';
 }
 
 function applyOfferFields(followup, patch = {}) {
@@ -666,12 +817,17 @@ function applyOfferFields(followup, patch = {}) {
     return f;
 }
 
-function sinaisFromLead({ dados = {}, diag = {}, presence = {}, followup = {} } = {}) {
+function sinaisFromLead({ dados = {}, diag = {}, presence = {}, followup = {}, processo = {} } = {}) {
     return {
         website: diag.website || dados.website || '',
         website_atual: dados.website_atual || presence.website || '',
         instagram: dados.instagram || presence.instagram || '',
         facebook: dados.facebook || presence.facebook || '',
+        telefone: dados.telefone || '',
+        whatsapp: dados.whatsapp || '',
+        email: dados.email || dados.mail || dados.legalEmail || '',
+        morada: dados.morada || '',
+        temWhatsapp: processo.temWhatsapp === true,
         sinaisDeMovimento: followup.sinaisDeMovimento === true,
         fichaComErro: followup.fichaComErro === true,
         siteVelho: followup.siteVelho === true,
@@ -682,7 +838,7 @@ function sinaisFromLead({ dados = {}, diag = {}, presence = {}, followup = {} } 
 function shortGanchoTexto(texto) {
     const t = String(texto || '').trim();
     if (!t) return '';
-    return t.length <= 220 ? t : '';
+    return t.length <= 480 ? t : '';
 }
 
 function nextSendableWaStep(followup) {
@@ -832,6 +988,7 @@ function buildOutreachContext({
     lat = null,
     lng = null,
     ganchoId = '',
+    falhas = [],
     sinais = {},
     lang = 'pt',
     offer = {}
@@ -859,7 +1016,8 @@ function buildOutreachContext({
     const vendedorEmail = String(provider.email || '').trim() || 'yourlabpt@gmail.com';
     const ctaBody = en ? 'I liked what I saw. Can we book a short meeting?' : 'Gostei do que vi. Podemos marcar uma conversa?';
     const problemaFicha = String(sinais.problemaFicha || dados.problemaFicha || '').trim();
-    const picked = pickGancho({
+    const picked = composeAbertura({
+        falhas,
         override: ganchoId,
         sinais: { ...sinais, problemaFicha },
         lang: outreachLang
@@ -911,6 +1069,9 @@ function buildOutreachContext({
         clienteWhatsApp: String(dados.whatsapp || dados.telefone || '').trim(),
         problemaFicha,
         ganchoId: picked.id,
+        falhas: picked.falhas,
+        diagnosticoResumo: picked.diagnosticoResumo || '',
+        diagnosticoLinha: '',
         ganchoTitulo: '',
         ganchoTexto: '',
         ganchoTextoCurto: '',
@@ -940,7 +1101,10 @@ function buildOutreachContext({
     Object.assign(ctx, offerCopy(offer, outreachLang));
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
     ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
-    ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto);
+    ctx.diagnosticoResumo = fillTemplate(picked.diagnosticoResumo || '', ctx);
+    ctx.diagnosticoLinha = ctx.diagnosticoResumo ? `${ctx.diagnosticoResumo}\n\n` : '';
+    ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto)
+        || shortGanchoTexto((picked.factos || []).join('\n\n'));
     ctx.ganchoTextoWa = ctx.ganchoTextoCurto ? `\n\n${ctx.ganchoTextoCurto}` : '';
     return ctx;
 }
@@ -1123,11 +1287,19 @@ module.exports = {
     leadEmailFromRows,
     GANCHO_IDS,
     GANCHO_NOME_CURTO,
+    ganchoNomeCurtoMap,
     loadGanchos,
+    loadFalhasCatalog,
     listGanchos,
+    listFalhas,
     pickGancho,
+    composeAbertura,
+    suggestFalhas,
+    normalizeFalhas,
     normalizeGanchoId,
+    migrateGanchoToFalhas,
     applyGanchoFields,
+    aberturaEmFalta,
     applyOfferFields,
     normalizeOffer,
     offerCopy,

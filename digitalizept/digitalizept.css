@@ -3639,6 +3639,10 @@ a.btn-secondary {
     display: none;
 }
 
+.lead-proc-abertura > h4 {
+    margin: 0 0 6px;
+}
+
 .lead-proc h4 {
     margin: 0 0 8px;
     font-size: 1rem;

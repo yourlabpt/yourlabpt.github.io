@@ -68,7 +68,9 @@ describe('digitalizept outreach', () => {
         assert.match(wa1, /Sr\. Costa/);
         assert.match(wa1, /Talho da Costa/);
         assert.match(wa1, /aqui de Porto/);
-        assert.match(wa1, /Quando alguém vos recomenda/);
+        assert.match(wa1, /Vimos-vos no Google Maps/);
+        assert.match(wa1, /Unir isto num só sítio/);
+        assert.doesNotMatch(wa1, /Quando alguém vos recomenda/);
         assert.doesNotMatch(wa1, /2026/);
         assert.match(wa1, /São exemplos/);
         assert.match(wa1, /ao vosso lado/);
@@ -161,7 +163,9 @@ describe('digitalizept outreach', () => {
         assert.match(html, /Loja X/);
         assert.match(html, /509000000/);
         assert.match(html, /yourlabpt.com\/d\/loja-x/);
-        assert.match(html, /Quando alguém vos recomenda/);
+        assert.match(html, /Vimos-vos no Google Maps/);
+        assert.match(html, /Unir isto num só sítio/);
+        assert.doesNotMatch(html, /Quando alguém vos recomenda/);
         assert.match(html, /São exemplos/);
         assert.match(html, /Feito à medida/);
         assert.match(html, /sou o/);
@@ -225,84 +229,87 @@ describe('digitalizept outreach', () => {
         assert.doesNotMatch(html, /\{\{\w+\}\}/);
     });
 
-    it('picks outreach hooks by rule order, override, and E fallback', () => {
-        assert.equal(pickGancho({ sinais: { sinaisDeMovimento: true } }).id, 'D');
-        assert.equal(pickGancho({
-            sinais: {
-                sinaisDeMovimento: true,
-                fichaComErro: true,
-                problemaFicha: 'que fecham às 18h',
-                website: 'sim_fraco',
-                instagram: '@loja'
-            }
-        }).id, 'D');
-        assert.equal(pickGancho({
-            sinais: { fichaComErro: true, problemaFicha: 'que fecham às 18h' }
-        }).id, 'E');
-        assert.equal(pickGancho({
-            sinais: { website: 'sim_fraco' }
-        }).id, 'C');
-        assert.equal(pickGancho({
-            sinais: { siteVelho: true, website: 'sim_ok' }
-        }).id, 'C');
-        assert.equal(pickGancho({
-            sinais: { website: 'nao', instagram: '@talho' }
-        }).id, 'B');
-        assert.equal(pickGancho({ sinais: {} }).id, 'A');
-        assert.equal(pickGancho({
-            override: 'B',
-            sinais: { sinaisDeMovimento: true }
-        }).id, 'B');
-        assert.equal(pickGancho({
-            override: 'E',
-            sinais: { fichaComErro: true }
-        }).id, 'A');
-        assert.equal(pickGancho({
-            sinais: { fichaComErro: true }
-        }).id, 'A');
+    it('composes digital-gap openings from selected falhas', () => {
+        const {
+            composeAbertura,
+            suggestFalhas,
+            applyGanchoFields,
+            parseFollowup,
+            aberturaEmFalta
+        } = require('../../server/lib/digitalizept-outreach.js');
+        const one = composeAbertura({ falhas: ['maps_sem_whatsapp'] });
+        assert.equal(one.id, 'maps_sem_whatsapp');
+        assert.match(one.ganchoTexto, /não há WhatsApp para marcar/);
+        assert.match(one.ganchoTexto, /Unir isto num só sítio/);
+        assert.equal(one.factos.length, 1);
+
+        const several = composeAbertura({
+            falhas: ['maps_sem_whatsapp', 'maps_telefone_sem_wa', 'maps_sem_site', 'maps_sem_email', 'site_fraco']
+        });
+        assert.equal(several.factos.length, 3);
+        assert.match(several.ganchoTexto, /está o telefone/);
+        assert.doesNotMatch(several.ganchoTexto, /Estão no Maps, mas não há WhatsApp/);
+
+        const suggested = suggestFalhas({
+            telefone: '910000000',
+            website: 'nao'
+        });
+        assert.ok(suggested.includes('maps_telefone_sem_wa'));
+        assert.ok(suggested.includes('maps_sem_site'));
+        assert.ok(!suggested.includes('maps_sem_whatsapp'));
+
         const stored = applyGanchoFields(parseFollowup({}), {
             ganchoId: 'C',
             siteVelho: true
         });
-        assert.equal(stored.ganchoId, 'C');
+        assert.deepEqual(stored.falhas, ['site_fraco']);
+        assert.equal(stored.ganchoId, 'site_fraco');
         assert.equal(stored.siteVelho, true);
+
+        const migrated = parseFollowup({ ganchoId: 'B' });
+        assert.ok(migrated.falhas.includes('redes_desligadas_maps'));
+        assert.ok(migrated.falhas.includes('maps_sem_site'));
+        assert.equal(aberturaEmFalta('EMAIL1', {}), 'Marca em cima o que vamos resolver.');
+        assert.equal(aberturaEmFalta('EMAIL1', migrated), '');
+        assert.equal(aberturaEmFalta('WA2', {}), '');
     });
 
-    it('fills the chosen hook into HTML and WhatsApp 1', () => {
+    it('fills the chosen falhas into HTML and WhatsApp 1', () => {
         const ctx = buildOutreachContext({
             dados: { nome_negocio: 'Farmácia Sol', cidade: 'Braga', o_que_faz: 'farmácia' },
             provider: { nome: 'YourLab', nif: '509000000', morada: 'Rua A 1, 4700-000 Braga' },
             origin: 'https://yourlabpt.com',
             demoSlug: 'farmacia-sol',
-            ganchoId: 'B',
+            falhas: ['redes_desligadas_maps', 'maps_sem_site'],
             sinais: { website: 'nao', instagram: '@farmaciasol' }
         });
-        assert.equal(ctx.ganchoId, 'B');
-        assert.match(ctx.ganchoTitulo, /Facebook não é nosso, e a vossa história também devia estar em um sítio vosso/);
-        assert.match(ctx.ganchoTexto, /farmácia em Braga/);
-        assert.doesNotMatch(ctx.ganchoTexto, /não estão na internet/);
+        assert.equal(ctx.ganchoId, 'redes_desligadas_maps');
+        assert.match(ctx.ganchoTitulo, /Vimos-vos no Google Maps/);
+        assert.match(ctx.ganchoTexto, /As redes aparecem no Google/);
+        assert.match(ctx.ganchoTexto, /não há um site vosso/);
+        assert.doesNotMatch(ctx.ganchoTexto, /Facebook não é nosso/);
         const html = renderEmailHtml(ctx);
-        assert.match(html, /sítio vosso/);
-        assert.match(html, /farmácia em Braga/);
+        assert.match(html, /perfil Google completo/);
+        assert.match(html, /não há um site vosso/);
         assert.doesNotMatch(html, /\{\{gancho/);
-        assert.doesNotMatch(html, /2026 e a vossa história/);
+        assert.doesNotMatch(html, /Quando alguém vos recomenda/);
         const wa1 = waTextForStep(1, ctx);
-        assert.match(wa1, /Facebook não é nosso/);
+        assert.match(wa1, /Vimos-vos no Google Maps/);
         assert.match(wa1, /marcamos cinco minutos/);
         assert.match(wa1, /ao vosso lado/);
         assert.doesNotMatch(wa1, /não volto a incomodar/);
-        assert.doesNotMatch(wa1, /2026/);
+        assert.doesNotMatch(wa1, /Facebook não é nosso/);
         const text = renderEmailText(ctx);
-        assert.match(text, /Facebook não é nosso/);
-        assert.doesNotMatch(text, /2026 e a vossa história/);
+        assert.match(text, /Unir isto num só sítio/);
+        assert.doesNotMatch(text, /Facebook não é nosso/);
 
         const eCtx = buildOutreachContext({
             dados: { nome_negocio: 'Talho da Costa', cidade: 'Porto' },
             provider: { nome: 'YourLab' },
-            ganchoId: 'E',
+            falhas: ['ficha_errada'],
             sinais: { problemaFicha: 'que fecham às 18h' }
         });
-        assert.equal(eCtx.ganchoId, 'E');
+        assert.equal(eCtx.ganchoId, 'ficha_errada');
         assert.match(eCtx.ganchoTexto, /que fecham às 18h/);
         assert.doesNotMatch(renderEmailHtml(eCtx), /\{\{problemaFicha\}\}/);
     });
@@ -341,7 +348,7 @@ describe('digitalizept outreach', () => {
         const wa1 = waTextForStep(1, ctx);
         assert.doesNotMatch(wa1, /Sr\./);
         assert.match(wa1, /I'm Túlio Soares/);
-        assert.match(wa1, /When someone recommends you/);
+        assert.match(wa1, /We found you on Google Maps/);
 
         const html = renderEmailHtml(ctx);
         assert.match(html, /lang="en"/);

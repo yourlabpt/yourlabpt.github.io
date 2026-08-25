@@ -2093,7 +2093,8 @@ function loadLeadOutreachRow(db, leadId) {
 function ganchoExtrasFromBody(body = {}) {
     const extras = {};
     if (body.lang != null) extras.lang = cleanText(body.lang, 8);
-    if (body.ganchoId != null) extras.ganchoId = cleanText(body.ganchoId, 4);
+    if (body.ganchoId != null) extras.ganchoId = cleanText(body.ganchoId, 40);
+    if (Array.isArray(body.falhas)) extras.falhas = body.falhas.map((id) => cleanText(id, 40)).filter(Boolean);
     if (body.sinaisDeMovimento != null) extras.sinaisDeMovimento = body.sinaisDeMovimento === true;
     if (body.fichaComErro != null) extras.fichaComErro = body.fichaComErro === true;
     if (body.siteVelho != null) extras.siteVelho = body.siteVelho === true;
@@ -2151,10 +2152,10 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
     const diag = wizard.googleDiagnostico && typeof wizard.googleDiagnostico === 'object'
         ? wizard.googleDiagnostico
         : {};
-    const sinais = outreach.sinaisFromLead({ dados, diag, presence, followup });
     const origin = digitalizeptPublicOrigin(req);
     const toques = leadProcess.listToques(db, leadId);
     const processo = leadProcess.parseProcesso(row.processo_json);
+    const sinais = outreach.sinaisFromLead({ dados, diag, presence, followup, processo });
     // Amounts stay off in cold outreach and come on by themselves once there is a
     // signal, or when the objection on the table is the price.
     const mostrarPrecos = followup.includePrices === true
@@ -2175,6 +2176,7 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         lat: row.lat,
         lng: row.lng,
         ganchoId: followup.ganchoId,
+        falhas: followup.falhas,
         sinais,
         lang: followup.lang,
         offer: {
@@ -4522,8 +4524,9 @@ app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, r
             whatsapp: packed.dados.whatsapp || packed.dados.telefone || '',
             hasDemo: Boolean(packed.row.demo_slug),
             ganchoId: ctx.ganchoId,
-            ganchoSugerido: outreach.pickGancho({ sinais: packed.sinais }).id,
-            ganchos: outreach.listGanchos(),
+            ganchoSugerido: outreach.suggestFalhas(packed.sinais)[0] || '',
+            falhas: ctx.falhas || packed.followup.falhas || [],
+            ganchos: outreach.listFalhas(),
             messages: {
                 1: outreach.waTextForStep(1, ctx, followup.edits),
                 2: outreach.waTextForStep(2, ctx, followup.edits),
@@ -4597,6 +4600,10 @@ app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizep
         const step = Number(body.step);
         if (![1, 2, 3].includes(step)) {
             return res.status(400).json({ error: 'Passo WhatsApp inválido.' });
+        }
+        const faltaWa = outreach.aberturaEmFalta(`WA${step}`, packed.followup);
+        if (faltaWa) {
+            return res.status(409).json({ error: faltaWa, followup: packed.followup });
         }
         const next = outreach.nextSendableWaStep(packed.followup);
         const processPasso = `WA${step}`;
@@ -4724,6 +4731,10 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         }
         const passoRaw = cleanText(body.passo, 20).toUpperCase();
         const passo = passoRaw === 'EMAIL2' || passoRaw === 'D4' ? passoRaw : 'EMAIL1';
+        const faltaEmail = outreach.aberturaEmFalta(passo, packed.followup);
+        if (faltaEmail) {
+            return res.status(409).json({ error: faltaEmail, followup: packed.followup });
+        }
         const subject = cleanText(body.subject, 240)
             || outreach.subjectForPasso(passo, packed.ctx, packed.followup.edits);
         const outgoing = outreach.outgoingEmail(passo, {
@@ -4944,9 +4955,11 @@ function buildProcessoView(db, leadId, req) {
         gancho: {
             id: packed.ctx.ganchoId,
             titulo: packed.ctx.ganchoTitulo,
+            texto: packed.ctx.ganchoTexto,
             nomeCurto: outreach.GANCHO_NOME_CURTO[packed.ctx.ganchoId] || '',
-            sugerido: outreach.pickGancho({ sinais: packed.sinais }).id,
-            lista: outreach.listGanchos()
+            falhas: packed.followup.falhas || [],
+            sugeridas: outreach.suggestFalhas(packed.sinais),
+            lista: outreach.listFalhas()
         },
         fecho: {
             mensagem: outreach.textForPasso('R1', packed.ctx, packed.followup.edits),
@@ -4996,6 +5009,7 @@ function buildProcessoView(db, leadId, req) {
             campanhaPct: packed.followup.campanhaPct,
             campanhaShowPrices: packed.followup.campanhaShowPrices,
             problemaFicha: packed.followup.problemaFicha || '',
+            falhas: packed.followup.falhas || [],
             sinaisDeMovimento: packed.followup.sinaisDeMovimento === true,
             siteVelho: packed.followup.siteVelho === true,
             unsubscribed: packed.followup.unsubscribed === true
@@ -5050,6 +5064,11 @@ app.post('/api/digitalizept/leads/:leadId/process/advance', requireDigitalizept,
         const saltar = body.saltar === true;
         if (travas.length && !saltar) {
             return res.status(409).json({ error: travas[0].motivo, bloqueios: travas });
+        }
+        const followupNow = snapshot.followup || outreach.parseFollowup((snapshot.row || {}).followup_json);
+        const faltaPasso = outreach.aberturaEmFalta(passo, followupNow);
+        if (faltaPasso && !saltar && (body.resultado === 'enviado' || !body.resultado)) {
+            return res.status(409).json({ error: faltaPasso });
         }
         const patchProcesso = {};
         if (body.melhorHora != null) patchProcesso.melhorHora = cleanText(body.melhorHora, 40);

@@ -25,7 +25,7 @@ Fiz duas coisas para a *{{negocioNome}}*, sem lhe pedir nada. São exemplos — 
 
 Gostou? Marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.`,
 
-    2: `No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
+    2: `{{diagnosticoLinha}}No email vê como ficaria a *{{negocioNome}}* quando alguém procura "{{oQueFaz}} em {{zona}}". E a página onde cabe a história toda.
 
 {{link}}
 
@@ -253,15 +253,19 @@ export function buildFollowupContext(state, config) {
     const sinais = sinaisFromWizardState(state);
     ctx.problemaFicha = sinais.problemaFicha;
     const picked = pickGancho({
+        falhas: state.data && state.data.followup && state.data.followup.falhas,
         override: state.data && state.data.followup && state.data.followup.ganchoId,
         sinais,
         lang
     });
     ctx.ganchoId = picked.id;
+    ctx.falhas = picked.falhas;
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
     ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
     ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto);
     ctx.ganchoTextoWa = ctx.ganchoTextoCurto ? `\n\n${ctx.ganchoTextoCurto}` : '';
+    ctx.diagnosticoResumo = picked.diagnosticoResumo || '';
+    ctx.diagnosticoLinha = ctx.diagnosticoResumo ? `${ctx.diagnosticoResumo}\n\n` : '';
     Object.assign(ctx, offerCopy(normalizeOffer(state.data && state.data.followup), lang));
     return ctx;
 }

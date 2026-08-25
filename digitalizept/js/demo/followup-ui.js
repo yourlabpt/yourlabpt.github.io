@@ -15,8 +15,9 @@ import {
     normalizeOutreachLang
 } from './outreach-lang.js';
 import {
-    listGanchos,
+    listFalhas,
     pickGancho,
+    suggestFalhas,
     sinaisFromWizardState
 } from './outreach-ganchos.js';
 import { CAMPANHA_PRESETS, normalizeOffer, showPriceBlock } from './outreach-offer.js';
@@ -148,11 +149,11 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     ganchoBox.className = 'followup-ganchos';
     const ganchoTitle = document.createElement('p');
     ganchoTitle.className = 'field-group-title';
-    ganchoTitle.textContent = 'Abertura desta lead';
+    ganchoTitle.textContent = 'O que vamos resolver';
     const ganchoList = document.createElement('div');
     ganchoList.className = 'followup-gancho-list';
     const ganchoButtons = {};
-    listGanchos().forEach((g) => {
+    listFalhas().forEach((g) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'followup-gancho';
@@ -160,7 +161,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         const name = document.createElement('span');
         name.className = 'followup-gancho-name';
         const label = document.createElement('span');
-        label.textContent = `${g.id} · ${g.nomeCurto}`;
+        label.textContent = g.nomeCurto;
         const badge = document.createElement('span');
         badge.className = 'followup-gancho-suggested hidden';
         badge.textContent = 'Sugerido';
@@ -182,23 +183,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     problemaInput.className = 'field-input';
     problemaInput.placeholder = 'Ex.: que fecham às 18h';
     problemaWrap.append(problemaSpan, problemaInput);
-    const flagsWrap = document.createElement('div');
-    flagsWrap.className = 'followup-gancho-flags';
-    function flagCheck(id, labelText) {
-        const lab = document.createElement('label');
-        lab.className = 'followup-gancho-flag';
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.dataset.flag = id;
-        const span = document.createElement('span');
-        span.textContent = labelText;
-        lab.append(box, span);
-        flagsWrap.appendChild(lab);
-        return box;
-    }
-    const movimentoCheck = flagCheck('sinaisDeMovimento', 'Cheio de trabalho');
-    const siteVelhoCheck = flagCheck('siteVelho', 'Site velho');
-    ganchoBox.append(ganchoTitle, ganchoList, problemaWrap, flagsWrap);
+    ganchoBox.append(ganchoTitle, ganchoList, problemaWrap);
 
     const offerBox = document.createElement('div');
     offerBox.className = 'followup-offer';
@@ -295,12 +280,16 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
         return ctx.state.data.followup || { waStep: 0 };
     }
 
-    function suggestedGanchoId() {
-        return pickGancho({ sinais: sinaisFromWizardState(ctx.state) }).id;
+    function suggestedFalhas() {
+        return suggestFalhas(sinaisFromWizardState(ctx.state));
     }
 
-    function selectedGanchoId() {
-        return followupOf().ganchoId || suggestedGanchoId();
+    function selectedFalhas() {
+        const saved = followupOf().falhas;
+        if (Array.isArray(saved) && saved.length) return saved.slice();
+        const migrated = followupOf().ganchoId;
+        if (migrated) return pickGancho({ override: migrated }).falhas;
+        return suggestedFalhas();
     }
 
     function currentLang() {
@@ -308,13 +297,13 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     }
 
     function ganchoPayload() {
-        const selected = selectedGanchoId();
+        const selected = selectedFalhas();
         const f = followupOf();
         return {
             lang: currentLang(),
-            ganchoId: selected,
-            sinaisDeMovimento: f.sinaisDeMovimento === true,
-            fichaComErro: selected === 'E' || f.fichaComErro === true,
+            falhas: selected,
+            ganchoId: selected[0] || '',
+            fichaComErro: selected.includes('ficha_errada') || f.fichaComErro === true,
             siteVelho: f.siteVelho === true,
             problemaFicha: String(f.problemaFicha || '').trim(),
             ...offerPayload()
@@ -425,22 +414,18 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     }
 
     function paintGanchos() {
-        const selected = selectedGanchoId();
-        const suggested = suggestedGanchoId();
-        const lang = currentLang();
-        const sinais = sinaisFromWizardState(ctx.state);
+        const selected = new Set(selectedFalhas());
+        const suggested = new Set(suggestedFalhas());
         Object.entries(ganchoButtons).forEach(([id, node]) => {
-            node.btn.classList.toggle('active', id === selected);
-            node.badge.classList.toggle('hidden', id !== suggested);
-            node.preview.textContent = pickGancho({ override: id, sinais, lang }).ganchoTitulo;
+            node.btn.classList.toggle('active', selected.has(id));
+            node.btn.classList.toggle('is-active', selected.has(id));
+            node.badge.classList.toggle('hidden', !suggested.has(id));
         });
-        problemaWrap.classList.toggle('hidden', selected !== 'E');
+        problemaWrap.classList.toggle('hidden', !selected.has('ficha_errada'));
         const f = followupOf();
         if (document.activeElement !== problemaInput) {
             problemaInput.value = f.problemaFicha || '';
         }
-        movimentoCheck.checked = f.sinaisDeMovimento === true;
-        siteVelhoCheck.checked = f.siteVelho === true;
     }
 
     function paintCall() {
@@ -598,24 +583,22 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
 
     Object.entries(ganchoButtons).forEach(([id, node]) => {
         node.btn.addEventListener('click', () => {
+            const next = new Set(selectedFalhas());
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
             persistGancho({
-                ganchoId: id,
-                fichaComErro: id === 'E' ? true : followupOf().fichaComErro
+                falhas: [...next],
+                ganchoId: [...next][0] || '',
+                fichaComErro: next.has('ficha_errada')
             });
         });
     });
     problemaInput.addEventListener('input', () => {
         persistGancho({
-            ganchoId: 'E',
+            falhas: selectedFalhas(),
             fichaComErro: true,
             problemaFicha: problemaInput.value.trim()
         });
-    });
-    movimentoCheck.addEventListener('change', () => {
-        persistGancho({ sinaisDeMovimento: movimentoCheck.checked });
-    });
-    siteVelhoCheck.addEventListener('change', () => {
-        persistGancho({ siteVelho: siteVelhoCheck.checked });
     });
 
     priceOnBtn.addEventListener('click', () => persistOffer({ includePrices: true }));

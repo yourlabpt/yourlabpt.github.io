@@ -1,0 +1,118 @@
+{
+  "ordem": [
+    "maps_sem_whatsapp",
+    "maps_telefone_sem_wa",
+    "maps_sem_site",
+    "maps_sem_email",
+    "site_link_errado",
+    "site_fraco",
+    "redes_desligadas_maps",
+    "redes_sem_morada",
+    "info_desencontrada",
+    "ficha_errada",
+    "sem_nada"
+  ],
+  "maxFactos": 3,
+  "tituloMaps": {
+    "pt": "Vimos-vos no Google Maps. Dá para ficar mais claro para quem vos procura.",
+    "en": "We found you on Google Maps. It can be clearer for the people looking for you."
+  },
+  "tituloSemNada": {
+    "pt": "Procurámos-vos no Google. Quase não há nada para o cliente perceber o que fazem.",
+    "en": "We looked you up on Google. There is almost nothing for a customer to understand what you do."
+  },
+  "fecho": {
+    "pt": "Unir isto num só sítio — perfil Google completo e uma página vossa. Quem é para vocês encontra-vos melhor. Quem não percebe o serviço vê logo e não vos tira tempo. Na YourLab tratamos disto ao vosso lado.",
+    "en": "Bring this into one place — a complete Google profile and a page of your own. The right people find you more easily. Anyone who does not understand the service sees that straight away and does not take your time. At YourLab we handle this alongside you."
+  },
+  "falhas": {
+    "maps_sem_whatsapp": {
+      "chip": "Sem WhatsApp no Maps",
+      "frase": "Estão no Maps, mas não há WhatsApp para marcar.",
+      "en": {
+        "chip": "No WhatsApp on Maps",
+        "frase": "You are on Maps, but there is no WhatsApp to book with."
+      }
+    },
+    "maps_telefone_sem_wa": {
+      "chip": "Telefone no Maps, sem WhatsApp",
+      "frase": "No Maps está o telefone. Não está o WhatsApp para marcar.",
+      "en": {
+        "chip": "Phone on Maps, no WhatsApp",
+        "frase": "Maps has the phone number. It does not have WhatsApp to book with."
+      }
+    },
+    "maps_sem_site": {
+      "chip": "Sem site no Maps",
+      "frase": "No Maps não há um site vosso.",
+      "en": {
+        "chip": "No website on Maps",
+        "frase": "There is no website of yours on Maps."
+      }
+    },
+    "maps_sem_email": {
+      "chip": "Sem email no Maps",
+      "frase": "Não há email no Maps para o cliente escrever.",
+      "en": {
+        "chip": "No email on Maps",
+        "frase": "There is no email on Maps for a customer to write to."
+      }
+    },
+    "site_link_errado": {
+      "chip": "Site no Maps errado",
+      "frase": "O link do site no Maps não leva a vocês.",
+      "en": {
+        "chip": "Wrong website on Maps",
+        "frase": "The website link on Maps does not take people to you."
+      }
+    },
+    "site_fraco": {
+      "chip": "Site mal feito",
+      "frase": "Há um site, mas a informação não chega para o cliente perceber o serviço.",
+      "en": {
+        "chip": "Weak website",
+        "frase": "There is a website, but it does not tell a customer enough about the service."
+      }
+    },
+    "redes_desligadas_maps": {
+      "chip": "Redes fora do Maps",
+      "frase": "As redes aparecem no Google; o Maps não as liga.",
+      "en": {
+        "chip": "Social not on Maps",
+        "frase": "The social accounts show up on Google; Maps does not connect them."
+      }
+    },
+    "redes_sem_morada": {
+      "chip": "Redes sem morada",
+      "frase": "Há redes. Não há morada para o cliente chegar.",
+      "en": {
+        "chip": "Social, no address",
+        "frase": "There are social accounts. There is no address for a customer to find you."
+      }
+    },
+    "info_desencontrada": {
+      "chip": "IG / FB / Maps diferentes",
+      "frase": "Instagram, Facebook e Maps não dizem a mesma coisa.",
+      "en": {
+        "chip": "IG / FB / Maps disagree",
+        "frase": "Instagram, Facebook and Maps do not say the same thing."
+      }
+    },
+    "ficha_errada": {
+      "chip": "Ficha com erro",
+      "frase": "A ficha no Google diz {{problemaFicha}}.",
+      "en": {
+        "chip": "Listing is wrong",
+        "frase": "The Google listing says {{problemaFicha}}."
+      }
+    },
+    "sem_nada": {
+      "chip": "Quase nada no Google",
+      "frase": "Quem vos procura no Google quase não encontra nada.",
+      "en": {
+        "chip": "Almost nothing on Google",
+        "frase": "Anyone who looks you up on Google finds almost nothing."
+      }
+    }
+  }
+}

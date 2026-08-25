@@ -1689,7 +1689,7 @@ function computeMetricas(db) {
         diagnostico,
         alertas,
         limiar: { respostaPct: LIMIAR_RESPOSTA_PCT, wa1: MIN_WA1_ALERTA },
-        nomes: { ganchos: outreach.GANCHO_NOME_CURTO }
+        nomes: { ganchos: outreach.ganchoNomeCurtoMap() }
     };
 }
 

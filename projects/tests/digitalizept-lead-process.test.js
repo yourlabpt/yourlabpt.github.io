@@ -508,7 +508,7 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(panel, /paintStatus/);
         assert.match(panel, /COMO_FAZER/);
         assert.match(panel, /Abre o email → envia → toca em Enviar email/);
-        assert.match(panel, /Abertura desta lead/);
+        assert.match(panel, /O que vamos resolver/);
         assert.doesNotMatch(panel, /aberturaHost/);
         const ficha = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin-lead.js'),
@@ -528,7 +528,7 @@ describe('digitalizept lead process — instruções e demo', () => {
             'utf8'
         );
         assert.doesNotMatch(adminCss, /procpasso/);
-        assert.match(sw, /digitalizept-v98/);
+        assert.match(sw, /digitalizept-v99/);
         assert.match(panel, /Como ficou/);
         assert.match(panel, /sem_interesse/);
         assert.match(panel, /canal === 'whatsapp'/);
@@ -764,9 +764,9 @@ describe('digitalizept lead process — guião, objeções e métricas', () => {
         const m = proc.computeMetricas(db);
         assert.equal(m.porVendedor['Túlio'].respostaPct, 100);
         assert.equal(m.porVendedor.Maria.respostaPct, 0);
-        assert.equal(m.porGancho.B.wa1, 1);
+        assert.equal(m.porGancho.redes_desligadas_maps.wa1, 1);
         assert.equal(m.porOrigem.respondeu, 1);
-        assert.equal(m.nomes.ganchos.B, 'Só redes');
+        assert.equal(m.nomes.ganchos.redes_desligadas_maps, 'Redes fora do Maps');
         db.close();
     });
 

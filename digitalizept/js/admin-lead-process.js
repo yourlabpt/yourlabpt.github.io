@@ -195,7 +195,7 @@ export function renderLeadProcess(host, {
         statusHost.appendChild(title);
 
         const lead = view.lead || {};
-        const linha = [lead.cidade, view.gancho && view.gancho.nomeCurto ? `gancho ${view.gancho.id} · ${view.gancho.nomeCurto}` : '']
+        const linha = [lead.cidade, view.gancho && view.gancho.nomeCurto ? view.gancho.nomeCurto : '']
             .filter(Boolean).join(' · ');
         if (linha) statusHost.appendChild(el('p', 'meta', linha));
         if (view.gancho && view.gancho.titulo) {
@@ -563,17 +563,20 @@ export function renderLeadProcess(host, {
             const enviar = el('button', 'btn-primary', 'Enviar email');
             enviar.type = 'button';
             enviar.disabled = travado || !(view.contacto && view.contacto.temEmail);
-            enviar.addEventListener('click', () => act(() => call(
-                `/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/email`,
-                {
-                    method: 'POST',
-                    body: {
-                        passo: detalhe.passo,
-                        subject: assuntoInput ? assuntoInput.value : '',
-                        text: texto.value
+            enviar.addEventListener('click', () => act(async () => {
+                await garantirFalhas(detalhe.passo);
+                await call(
+                    `/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/email`,
+                    {
+                        method: 'POST',
+                        body: {
+                            passo: detalhe.passo,
+                            subject: assuntoInput ? assuntoInput.value : '',
+                            text: texto.value
+                        }
                     }
-                }
-            ), enviar));
+                );
+            }, enviar));
             acoes.appendChild(enviar);
         }
 
@@ -609,10 +612,13 @@ export function renderLeadProcess(host, {
     }
 
     function marcarWhatsapp(detalhe, mensagem) {
-        return call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/advance`, {
-            method: 'POST',
-            body: { passo: detalhe.passo, resultado: 'enviado', texto: mensagem }
-        });
+        return garantirFalhas(detalhe.passo).then(() => call(
+            `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/advance`,
+            {
+                method: 'POST',
+                body: { passo: detalhe.passo, resultado: 'enviado', texto: mensagem }
+            }
+        ));
     }
 
     function registarChamada(detalhe, resultado, nota) {
@@ -647,37 +653,92 @@ export function renderLeadProcess(host, {
 
     /* ------------------------------------------------- abertura, idioma, valores */
 
+    function falhasActuais() {
+        const saved = (view.gancho && view.gancho.falhas)
+            || (view.followup && view.followup.falhas)
+            || [];
+        if (saved.length) return saved.slice();
+        return ((view.gancho && view.gancho.sugeridas) || []).slice();
+    }
+
+    function gravarFalhas(ids, extra = {}) {
+        const fu = view.followup || {};
+        return call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/lang`, {
+            method: 'POST',
+            body: {
+                lang: fu.lang || 'pt',
+                falhas: ids,
+                problemaFicha: extra.problemaFicha != null ? extra.problemaFicha : (fu.problemaFicha || '')
+            }
+        });
+    }
+
+    function garantirFalhas(passo) {
+        if (passo !== 'EMAIL1' && passo !== 'WA1') return Promise.resolve();
+        const saved = (view.followup && view.followup.falhas) || [];
+        if (saved.length) return Promise.resolve();
+        const shown = falhasActuais();
+        if (!shown.length) {
+            return Promise.reject(new Error('Marca em cima o que vamos resolver.'));
+        }
+        return gravarFalhas(shown);
+    }
+
     function aberturaCard() {
         const gancho = view.gancho || {};
         const fu = view.followup || {};
-        const box = document.createElement('details');
-        box.className = 'lead-proc-abertura';
-        box.appendChild(el('summary', '', 'Abertura desta lead'));
+        const box = el('div', 'lead-proc-abertura');
+        box.appendChild(el('h4', '', 'O que vamos resolver'));
+        box.appendChild(el('p', 'meta', 'Diagnóstico deste negócio — entra na abertura do email, do WhatsApp e da chamada. A sequência de contactos não muda.'));
 
+        const escolhidas = new Set(falhasActuais());
+        const sugeridas = new Set(gancho.sugeridas || []);
         const lista = el('div', 'lead-proc-ganchos');
-        let escolhido = gancho.id || gancho.sugerido || 'A';
         const botoes = {};
         (gancho.lista || []).forEach((g) => {
             const btn = el('button', 'followup-gancho');
             btn.type = 'button';
+            btn.setAttribute('data-falha', g.id);
+            const nome = `${g.nomeCurto || g.nome}${sugeridas.has(g.id) ? ' · sugerido' : ''}`;
             btn.append(
-                el('span', 'followup-gancho-name', `${g.id} · ${g.nomeCurto}${g.id === gancho.sugerido ? ' · sugerido' : ''}`),
-                el('span', 'followup-gancho-title', g.ganchoTitulo)
+                el('span', 'followup-gancho-name', nome),
+                el('span', 'followup-gancho-title', g.ganchoTitulo || '')
             );
             botoes[g.id] = btn;
             btn.addEventListener('click', () => {
-                escolhido = g.id;
-                Object.entries(botoes).forEach(([id, b]) => b.classList.toggle('is-active', id === escolhido));
+                if (escolhidas.has(g.id)) escolhidas.delete(g.id);
+                else escolhidas.add(g.id);
+                Object.entries(botoes).forEach(([id, b]) => b.classList.toggle('is-active', escolhidas.has(id)));
+                problemaWrap.classList.toggle('hidden', !escolhidas.has('ficha_errada'));
+                act(() => gravarFalhas([...escolhidas]), btn);
             });
             lista.appendChild(btn);
         });
-        Object.entries(botoes).forEach(([id, b]) => b.classList.toggle('is-active', id === escolhido));
+        Object.entries(botoes).forEach(([id, b]) => b.classList.toggle('is-active', escolhidas.has(id)));
         box.appendChild(lista);
 
+        const problemaWrap = el('div', escolhidas.has('ficha_errada') ? '' : 'hidden');
         const problema = el('input', 'field-input');
         problema.value = fu.problemaFicha || '';
         problema.placeholder = 'Ex.: que fecham às 18h';
-        box.appendChild(fieldWrap('O que está errado na ficha (gancho E)', problema));
+        problemaWrap.appendChild(fieldWrap('O que está errado na ficha', problema));
+        problema.addEventListener('change', () => {
+            act(() => gravarFalhas([...escolhidas], { problemaFicha: problema.value }), problema);
+        });
+        box.appendChild(problemaWrap);
+
+        if (gancho.titulo) {
+            box.appendChild(el('p', 'lead-proc-gancho', gancho.titulo));
+            if (gancho.texto) box.appendChild(el('p', 'meta', gancho.texto));
+        }
+        return box;
+    }
+
+    function idiomaCard() {
+        const fu = view.followup || {};
+        const box = document.createElement('details');
+        box.className = 'lead-proc-abertura';
+        box.appendChild(el('summary', '', 'Idioma e valores'));
 
         const linha = el('div', 'lead-proc-acoes');
         const idioma = el('select', 'field-input');
@@ -701,15 +762,15 @@ export function renderLeadProcess(host, {
             box.appendChild(el('p', 'meta', 'Os valores estão a sair porque já há sinal, ou porque a objeção é o preço.'));
         }
 
-        const guardar = el('button', 'btn-secondary', 'Guardar abertura');
+        const guardar = el('button', 'btn-secondary', 'Guardar idioma e valores');
         guardar.type = 'button';
         guardar.addEventListener('click', () => act(async () => {
             await call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/lang`, {
                 method: 'POST',
                 body: {
                     lang: idioma.value,
-                    ganchoId: escolhido,
-                    problemaFicha: problema.value
+                    falhas: falhasActuais(),
+                    problemaFicha: fu.problemaFicha || ''
                 }
             });
             await call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/offer`, {
@@ -1018,6 +1079,7 @@ export function renderLeadProcess(host, {
         const apelidoBloqueia = (view.bloqueios || []).some((b) => b.id === 'apelido');
         const eChamada = detalhe && detalhe.canal === 'ligacao';
 
+        host.appendChild(aberturaCard());
         host.appendChild(trilhoCard());
         host.appendChild(agoraCard());
         if (precisaFecho) host.appendChild(fechoCard());
@@ -1027,7 +1089,7 @@ export function renderLeadProcess(host, {
         const tempo = timelineCard();
         if (tempo) host.appendChild(tempo);
         if (!precisaFecho) host.appendChild(fechoCard());
-        host.appendChild(aberturaCard());
+        host.appendChild(idiomaCard());
         if (abrirFecho) {
             const node = host.querySelector('.lead-proc-fecho');
             if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
