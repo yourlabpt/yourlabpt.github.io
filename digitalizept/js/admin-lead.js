@@ -221,21 +221,78 @@ function appendField(grid, field, value, missing, attr, attrValue) {
 }
 
 export function renderLeadDossier(host, payload, {
-    onSave, onBack, onToast, onMapsLookup, onWebsiteZip, mountProcess
+    onSave, onBack, onToast, onMapsLookup, onWebsiteZip, mountProcess, initialVista
 } = {}) {
     host.innerHTML = '';
-    host.className = 'dossier';
+    host.className = 'dossier dossier-vista-controlo';
     if (!payload || !payload.lead) {
         host.appendChild(el('p', 'admin-empty', 'Lead não encontrado.'));
         return;
     }
 
-    // The guided process lives above the ficha and outside the form: it is the
-    // only place where email, WhatsApp and calls happen.
+    let vista = initialVista === 'ficha' ? 'ficha' : 'controlo';
+
+    const chrome = el('div', 'dossier-chrome');
+    const back = el('button', 'btn-secondary', '← Leads');
+    back.type = 'button';
+    back.addEventListener('click', () => { if (onBack) onBack(); });
+    const nome = el('h2', 'dossier-nome', payload.lead.nome || 'Lead');
+    const toggle = el('div', 'dossier-toggle');
+    const btnFicha = el('button', 'dossier-toggle-btn', 'Ficha');
+    btnFicha.type = 'button';
+    btnFicha.setAttribute('data-vista', 'ficha');
+    const btnControlo = el('button', 'dossier-toggle-btn', 'Controlo');
+    btnControlo.type = 'button';
+    btnControlo.setAttribute('data-vista', 'controlo');
+    toggle.append(btnFicha, btnControlo);
+    const extras = el('div', 'dossier-chrome-actions');
+    const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
+    resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
+    extras.appendChild(resume);
+    if (typeof onWebsiteZip === 'function') {
+        const zip = el('button', 'btn-secondary', 'Descarregar website (ZIP)');
+        zip.type = 'button';
+        zip.addEventListener('click', () => onWebsiteZip(payload.lead.id, zip));
+        extras.appendChild(zip);
+    }
+    if (payload.demo && payload.demo.url) {
+        const demoLink = el('a', 'btn-secondary', 'Abrir demo');
+        demoLink.href = payload.demo.url;
+        demoLink.target = '_blank';
+        demoLink.rel = 'noopener';
+        extras.appendChild(demoLink);
+    }
+    chrome.append(back, nome, toggle, extras);
+    host.appendChild(chrome);
+
+    const pageFicha = el('div', 'dossier-page dossier-page-ficha');
+    const statusHost = el('div', 'dossier-status');
+    statusHost.innerHTML = '<p class="meta">A carregar o estado…</p>';
+    pageFicha.appendChild(statusHost);
+    const aberturaHost = el('div', 'dossier-abertura');
+    pageFicha.appendChild(aberturaHost);
+
+    const pageControlo = el('div', 'dossier-page dossier-page-controlo');
+    const processHost = el('div', 'dossier-process');
+    pageControlo.appendChild(processHost);
+
+    function setVista(next) {
+        vista = next === 'ficha' ? 'ficha' : 'controlo';
+        host.classList.toggle('dossier-vista-ficha', vista === 'ficha');
+        host.classList.toggle('dossier-vista-controlo', vista === 'controlo');
+        btnFicha.classList.toggle('is-active', vista === 'ficha');
+        btnControlo.classList.toggle('is-active', vista === 'controlo');
+        btnFicha.setAttribute('aria-pressed', vista === 'ficha' ? 'true' : 'false');
+        btnControlo.setAttribute('aria-pressed', vista === 'controlo' ? 'true' : 'false');
+        host.dataset.vista = vista;
+        history.replaceState(null, '', dossierHash(payload.lead.id, vista));
+        window.scrollTo(0, 0);
+    }
+    btnFicha.addEventListener('click', () => setVista('ficha'));
+    btnControlo.addEventListener('click', () => setVista('controlo'));
+
     if (typeof mountProcess === 'function') {
-        const processHost = el('div', 'dossier-process');
-        host.appendChild(processHost);
-        mountProcess(processHost, payload.lead.id);
+        mountProcess(processHost, payload.lead.id, { statusHost, aberturaHost });
     }
 
     const miss = missingSet(payload.completeness);
@@ -244,27 +301,9 @@ export function renderLeadDossier(host, payload, {
     form.appendChild(checklist(payload.completeness));
 
     const toolbar = el('div', 'dossier-toolbar');
-    const back = el('button', 'btn-secondary', '← Leads');
-    back.type = 'button';
-    back.addEventListener('click', () => { if (onBack) onBack(); });
     const saveTop = el('button', 'btn-primary', 'Guardar');
     saveTop.type = 'submit';
-    const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
-    resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
-    toolbar.append(back, saveTop, resume);
-    if (typeof onWebsiteZip === 'function') {
-        const zip = el('button', 'btn-secondary', 'Descarregar website (ZIP)');
-        zip.type = 'button';
-        zip.addEventListener('click', () => onWebsiteZip(payload.lead.id, zip));
-        toolbar.appendChild(zip);
-    }
-    if (payload.demo && payload.demo.url) {
-        const demoLink = el('a', 'btn-secondary', 'Abrir demo');
-        demoLink.href = payload.demo.url;
-        demoLink.target = '_blank';
-        demoLink.rel = 'noopener';
-        toolbar.appendChild(demoLink);
-    }
+    toolbar.appendChild(saveTop);
     form.appendChild(toolbar);
 
     const meta = el('p', 'meta');
@@ -485,7 +524,7 @@ export function renderLeadDossier(host, payload, {
     }
     form.appendChild(notes);
 
-    const read = section('Estado (só leitura)', { open: false, className: 'dossier-readonly' });
+    const read = section('Identidade e demo', { open: false, className: 'dossier-readonly' });
     const idn = payload.identidade || {};
     const demo = payload.demo || {};
     const prop = payload.proposta || {};
@@ -512,7 +551,7 @@ export function renderLeadDossier(host, payload, {
         save.disabled = true;
         saveTop.disabled = true;
         try {
-            await onSave(collectForm(form));
+            await onSave(collectForm(form), { vista: 'ficha' });
         } catch (err) {
             if (onToast) onToast((err && err.message) || 'Não foi possível guardar.', true);
         } finally {
@@ -521,11 +560,19 @@ export function renderLeadDossier(host, payload, {
         }
     });
 
-    host.appendChild(form);
+    pageFicha.appendChild(form);
+    host.append(pageFicha, pageControlo);
+    setVista(vista);
 }
 
-export function dossierHash(leadId) {
-    return `#dossier=${encodeURIComponent(leadId)}`;
+export function dossierHash(leadId, vista = 'controlo') {
+    const view = vista === 'ficha' ? 'ficha' : 'controlo';
+    return `#dossier=${encodeURIComponent(leadId)}&vista=${view}`;
+}
+
+export function vistaFromHash(hash) {
+    const match = String(hash || '').match(/[#&]vista=([^&]+)/i);
+    return match && match[1] === 'ficha' ? 'ficha' : 'controlo';
 }
 
 export function leadIdFromHash(hash) {

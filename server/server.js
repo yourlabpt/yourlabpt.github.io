@@ -4479,7 +4479,13 @@ app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizep
             return res.status(400).json({ error: 'Passo WhatsApp inválido.' });
         }
         const next = outreach.nextSendableWaStep(packed.followup);
-        if (step !== next && packed.followup.waStep < step) {
+        const processPasso = `WA${step}`;
+        const snapshotNow = leadProcess.recomputeProcesso(db, leadId);
+        const processNext = snapshotNow && snapshotNow.proxima ? snapshotNow.proxima.passo : '';
+        // The guided process can schedule WA2 after a demo visit, or WA3 after a
+        // street visit, without the old waStep/reply ladder. That ladder only
+        // applies when the process is not already asking for this message.
+        if (step !== next && packed.followup.waStep < step && processNext !== processPasso) {
             return res.status(409).json({
                 error: step === 2 || step === 3
                     ? 'Marque que o cliente respondeu antes de enviar a mensagem seguinte.'
@@ -4494,7 +4500,6 @@ app.post('/api/digitalizept/leads/:leadId/outreach/whatsapp', requireDigitalizep
         if (body.text) {
             packed.followup.edits[`wa${step}`] = cleanText(body.text, 4000);
         }
-        packed.followup = outreach.scheduleConfirmCall(packed.followup, now);
         saveLeadFollowup(db, leadId, packed.followup);
         if (step === 1) {
             applyAutoEtapa(db, leadId, 'demo_criada');
@@ -4628,7 +4633,6 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         const now = digitalizeptNow();
         packed.followup.emailSentAt = now;
         if (body.subject) packed.followup.edits.emailSubject = subject;
-        packed.followup = outreach.scheduleConfirmCall(packed.followup, now);
         saveLeadFollowup(db, leadId, packed.followup);
         applyAutoEtapa(db, leadId, 'demo_criada');
         scheduleLeadGeocode(leadId, { force: false });
@@ -4708,7 +4712,6 @@ app.post('/api/digitalizept/outreach/email-demos', requireDigitalizept, async (r
                 continue;
             }
             packed.followup.emailSentAt = digitalizeptNow();
-            packed.followup = outreach.scheduleConfirmCall(packed.followup, packed.followup.emailSentAt);
             saveLeadFollowup(db, row.id, packed.followup);
             applyAutoEtapa(db, row.id, 'demo_criada');
             scheduleLeadGeocode(row.id, { force: false });
@@ -4907,6 +4910,9 @@ app.post('/api/digitalizept/leads/:leadId/process/advance', requireDigitalizept,
         if (body.canalDireto != null) patchProcesso.canalDireto = body.canalDireto === true;
         if (body.objecao != null) patchProcesso.objecao = cleanText(body.objecao, 60);
         if (body.canalPreferido != null) patchProcesso.canalPreferido = cleanText(body.canalPreferido, 20);
+        if (!saltar && passo === 'WA1') {
+            applyAutoEtapa(db, leadId, 'demo_criada');
+        }
         const feito = leadProcess.registarToque(db, leadId, {
             passo,
             canal: cleanText(body.canal, 20) || leadProcess.PASSO_CANAL[passo] || '',

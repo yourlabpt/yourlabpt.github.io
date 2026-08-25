@@ -819,7 +819,7 @@ export function setupCoverage({
                 const ficha = document.createElement('button');
                 ficha.type = 'button';
                 ficha.className = 'btn-primary';
-                ficha.textContent = 'Ficha';
+                ficha.textContent = 'Controlo da lead';
                 ficha.addEventListener('click', () => {
                     closeDrawer();
                     openDossier(pin.id);

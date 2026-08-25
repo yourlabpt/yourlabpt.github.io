@@ -471,9 +471,13 @@ function computeSinal({ followup = {}, toques = [], visitasDemo = 0 } = {}) {
     if (toques.some((t) => t.resultado === 'respondeu')) {
         return { sinal: true, origem: 'respondeu' };
     }
-    const atendida = toques.some((t) => (
-        t.canal === 'ligacao' && RESULTADOS_CHAMADA_ATENDIDA.includes(t.resultado)
-    ));
+    const atendida = toques.some((t) => {
+        if (t.canal !== 'ligacao' || !RESULTADOS_CHAMADA_ATENDIDA.includes(t.resultado)) return false;
+        // A receptionist on Ciclo D is not engagement with the demo sequence —
+        // otherwise LIG2 would always fire after discovery even with zero replies.
+        if (['D1', 'D2'].includes(t.passo) && t.resultado === 'funcionario') return false;
+        return true;
+    });
     if (atendida) return { sinal: true, origem: 'chamada_atendida' };
     if (Number(visitasDemo) > 0) return { sinal: true, origem: 'visitou_demo' };
     return { sinal: false, origem: '' };
@@ -1077,6 +1081,14 @@ function vendedorDoLead(toques = []) {
     return '';
 }
 
+function proximoEstadoDoToque(passo, resultado, pedido) {
+    const forced = cleanStr(pedido, 20);
+    if (forced) return forced;
+    if (passo === 'D3' && resultado === 'canal_direto') return 'VISITA';
+    if (passo === 'LIG2' && (resultado === 'e_nao' || resultado === 'nao_agora')) return 'RECUSADO';
+    return '';
+}
+
 function registarToque(db, leadId, patch = {}) {
     const agora = patch.executadoEm || nowIso();
     const passo = cleanStr(patch.passo, 20).toUpperCase();
@@ -1111,7 +1123,9 @@ function registarToque(db, leadId, patch = {}) {
     });
     return recomputeProcesso(db, leadId, {
         patchProcesso: Object.keys(processoPatch).length ? processoPatch : null,
-        forcarEstado: patch.estado === 'agendado' ? '' : cleanStr(patch.proximoEstado, 20),
+        forcarEstado: patch.estado === 'agendado'
+            ? ''
+            : proximoEstadoDoToque(passo, patch.resultado, patch.proximoEstado),
         revisitarEm: patch.revisitarEm != null ? patch.revisitarEm : null,
         agora,
         autoSaltar: Number(patch.autoSaltar) || 0
@@ -1275,7 +1289,8 @@ function flagsFromLead(row, toques, processo) {
         ganho,
         dChamada: dCalls.length > 0,
         dAtendida,
-        dCanal: dCanal && dAtendida,
+        dCanal: (dCanal && dAtendida)
+            || toques.some((t) => t.passo === 'D3' && t.resultado === 'canal_direto'),
         revisita,
         reabre
     };
@@ -1328,6 +1343,12 @@ function diagnosticar({ geral, ratios, porOrigem, porCategoria }) {
         linhas.push({
             id: 'ok',
             texto: `Resposta a ${ratios.respostaPct}%. Não mexas no guião — o processo está a fazer o trabalho.`
+        });
+    }
+    if (!linhas.length) {
+        linhas.push({
+            id: 'ainda_cedo',
+            texto: `Ainda cedo para diagnosticar (${geral.wa1} WA1 de ${MIN_WA1_ALERTA} necessários). Não mexas no guião com esta amostra.`
         });
     }
     return linhas.slice(0, 2);

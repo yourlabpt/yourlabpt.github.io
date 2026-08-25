@@ -889,11 +889,96 @@
     }
 }
 
-.dossier-toolbar {
+.dossier-chrome {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: 0 0 16px;
+    padding: 8px 0 12px;
+    background: var(--admin-bg, #f4f1ea);
+}
+
+.dossier-nome {
+    margin: 0;
+    flex: 1 1 160px;
+    font-size: 1.15rem;
+}
+
+.dossier-toggle {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--admin-fill, rgba(0, 0, 0, 0.06));
+}
+
+.dossier-toggle-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 650;
+    padding: 8px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.dossier-toggle-btn.is-active {
+    background: var(--admin-accent, #1c1c1c);
+    color: #fff;
+}
+
+.dossier-chrome-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 14px;
+    margin-left: auto;
+}
+
+.dossier-vista-ficha .dossier-page-controlo,
+.dossier-vista-controlo .dossier-page-ficha {
+    display: none;
+}
+
+.dossier-status {
+    margin: 0 0 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--admin-surface, #fff);
+}
+
+.dossier-status-passo {
+    margin: 6px 0 0;
+    font-weight: 650;
+}
+
+.dossier-status .btn-primary {
+    margin-top: 10px;
+}
+
+.dossier-abertura .lead-proc-abertura {
+    margin: 0 0 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--admin-surface, #fff);
+}
+
+.lead-proc > .lead-proc-agora,
+.lead-proc > .lead-proc-contacto,
+.lead-proc > .lead-proc-timeline,
+.lead-proc > .lead-proc-fecho {
+    counter-increment: procpasso;
+}
+
+.lead-proc > .lead-proc-agora > h4::before,
+.lead-proc > .lead-proc-contacto > h4::before,
+.lead-proc > .lead-proc-timeline > h4::before,
+.lead-proc-fecho > summary::before {
+    content: counter(procpasso) ". ";
 }
 
 .dossier-check {
@@ -1169,9 +1254,28 @@
         gap: 12px;
     }
 
+    .dossier-chrome {
+        top: env(safe-area-inset-top);
+    }
+
+    .dossier-toggle {
+        flex: 1 1 100%;
+        display: flex;
+    }
+
+    .dossier-toggle-btn {
+        flex: 1;
+        text-align: center;
+    }
+
+    .dossier-chrome-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
     .dossier-toolbar {
-        position: sticky;
-        top: 0;
+        position: static;
+        top: auto;
         z-index: 2;
         background: var(--admin-bg, #f7f4ee);
         padding: 8px 0;

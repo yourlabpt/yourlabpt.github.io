@@ -161,6 +161,19 @@ describe('digitalizept lead process — sinal', () => {
             proc.computeSinal({ toques: [{ canal: 'ligacao', resultado: 'nao_atendeu' }] }).sinal,
             false
         );
+        // A receptionist on Ciclo D is not engagement with the demo sequence.
+        assert.equal(
+            proc.computeSinal({
+                toques: [{ passo: 'D1', canal: 'ligacao', resultado: 'funcionario' }]
+            }).sinal,
+            false
+        );
+        assert.equal(
+            proc.computeSinal({
+                toques: [{ passo: 'LIG1', canal: 'ligacao', resultado: 'funcionario' }]
+            }).sinal,
+            true
+        );
     });
 
     it('does not count a WhatsApp link preview as a demo visit', () => {
@@ -407,7 +420,7 @@ describe('digitalizept lead process — instruções e demo', () => {
             path.join(__dirname, '..', '..', 'digitalizept', 'sw.js'),
             'utf8'
         );
-        assert.match(sw, /digitalizept-v86/);
+        assert.match(sw, /digitalizept-v\d+/);
         assert.match(sw, /admin-lead-process\.js/);
         const adminHtml = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'admin.html'),
@@ -420,6 +433,14 @@ describe('digitalizept lead process — instruções e demo', () => {
         );
         assert.match(panel, /lead-proc-guiao/);
         assert.match(panel, /filtrosAtendedor/);
+        assert.match(panel, /paintStatus/);
+        const ficha = fs.readFileSync(
+            path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin-lead.js'),
+            'utf8'
+        );
+        assert.match(ficha, /dossier-toggle/);
+        assert.match(ficha, /vista === 'ficha'/);
+        assert.match(ficha, /statusHost/);
     });
 });
 
@@ -540,6 +561,50 @@ describe('digitalizept lead process — ciclo D', () => {
         const snap = proc.registarVisitaRua(db, leadId, { experiencia: 'Mostrei no tablet' });
         assert.equal(snap.estado, 'VISITA');
         assert.equal(snap.proxima.passo, 'WA3');
+        db.close();
+    });
+
+    it('sends WA3 after discovery gets a direct channel on the visit', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db, { email: '', telefone: '222000111', demo: 'loja-wa3' });
+        proc.registarToque(db, leadId, {
+            passo: 'D1',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: 'funcionario',
+            destino: 'negocio'
+        });
+        const snap = proc.registarToque(db, leadId, {
+            passo: 'D3',
+            canal: 'visita',
+            estado: 'feito',
+            resultado: 'canal_direto'
+        });
+        assert.equal(snap.estado, 'VISITA');
+        assert.equal(snap.proxima.passo, 'WA3');
+        db.close();
+    });
+
+    it('opens the close step after LIG2 is a no', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db);
+        proc.registarToque(db, leadId, { passo: 'EMAIL1', canal: 'email', estado: 'feito' });
+        proc.registarToque(db, leadId, { passo: 'WA1', canal: 'whatsapp', estado: 'feito' });
+        proc.registarToque(db, leadId, {
+            passo: 'LIG1',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: 'viu'
+        });
+        proc.registarToque(db, leadId, { passo: 'WA2', canal: 'whatsapp', estado: 'feito' });
+        const snap = proc.registarToque(db, leadId, {
+            passo: 'LIG2',
+            canal: 'ligacao',
+            estado: 'feito',
+            resultado: 'e_nao'
+        });
+        assert.equal(snap.estado, 'RECUSADO');
+        assert.equal(snap.proxima.passo, 'R1');
         db.close();
     });
 });

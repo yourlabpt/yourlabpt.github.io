@@ -56,7 +56,6 @@ const SINAL_ORIGEM_LABEL = {
     visitou_demo: 'abriu a demo'
 };
 
-const PASSOS_WA_SEQUENCIA = { WA1: 1, WA2: 2, WA3: 3 };
 const PASSOS_EMAIL = ['EMAIL1', 'EMAIL2', 'D4'];
 
 function el(tag, className, text) {
@@ -103,9 +102,13 @@ function proximaSemana(meses = 3) {
     return d.toISOString().slice(0, 10);
 }
 
-export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}) {
+export function renderLeadProcess(host, {
+    leadId, api, onToast, onChanged, statusHost, aberturaHost
+} = {}) {
     let view = null;
     let timer = null;
+    let abrirFecho = false;
+    let fechoWhatsappAberto = false;
 
     const toast = (msg, bad) => { if (onToast) onToast(msg, bad); };
 
@@ -136,44 +139,68 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         }
     }
 
-    /* ------------------------------------------------------------- cabeçalho */
+    /* --------------------------------------------------------------- estado */
 
-    function header() {
-        const box = el('div', 'lead-proc-head');
-        const lead = view.lead || {};
+    function linhaCountdown(iso, prefixo = 'Próxima ação') {
+        if (!iso) return null;
+        const restante = new Date(iso).getTime() - Date.now();
+        const conta = el('p', 'lead-proc-conta');
+        conta.setAttribute('data-countdown', iso);
+        conta.textContent = restante > 0
+            ? `${prefixo} em ${formatCountdown(restante)} — ${formatCallDue(iso)}`
+            : `${prefixo} disponível desde ${formatCallDue(iso)}`;
+        if (restante <= 0) conta.classList.add('lead-proc-conta-due');
+        return conta;
+    }
+
+    function paintStatus() {
+        if (!statusHost) return;
+        statusHost.innerHTML = '';
+        statusHost.className = 'dossier-status';
+        if (!view) return;
+
         const title = el('div', 'lead-proc-title');
-        title.append(el('h3', '', lead.nome || 'Lead'));
         const badge = el('span', 'lead-proc-estado', view.estadoLabel || view.estado || '—');
         badge.setAttribute('data-estado', view.estado || '');
         title.appendChild(badge);
-        box.appendChild(title);
+        statusHost.appendChild(title);
 
+        const lead = view.lead || {};
         const linha = [lead.cidade, view.gancho && view.gancho.nomeCurto ? `gancho ${view.gancho.id} · ${view.gancho.nomeCurto}` : '']
             .filter(Boolean).join(' · ');
-        if (linha) box.appendChild(el('p', 'meta', linha));
+        if (linha) statusHost.appendChild(el('p', 'meta', linha));
         if (view.gancho && view.gancho.titulo) {
-            box.appendChild(el('p', 'lead-proc-gancho', view.gancho.titulo));
+            statusHost.appendChild(el('p', 'lead-proc-gancho', view.gancho.titulo));
         }
 
-        const proxima = view.proximaAcao;
-        if (proxima && proxima.agendadoPara) {
-            const restante = new Date(proxima.agendadoPara).getTime() - Date.now();
-            const conta = el('p', 'lead-proc-conta');
-            conta.setAttribute('data-countdown', proxima.agendadoPara);
-            conta.textContent = restante > 0
-                ? `Próxima ação em ${formatCountdown(restante)} — ${formatCallDue(proxima.agendadoPara)}`
-                : `Próxima ação disponível desde ${formatCallDue(proxima.agendadoPara)}`;
-            if (restante <= 0) conta.classList.add('lead-proc-conta-due');
-            box.appendChild(conta);
+        const detalhe = view.proximaAcaoDetalhe;
+        const passoTitulo = (detalhe && detalhe.instrucoes && detalhe.instrucoes.titulo)
+            || (view.proximaAcao && view.proximaAcao.passo)
+            || '';
+        if (passoTitulo) {
+            statusHost.appendChild(el('p', 'dossier-status-passo', passoTitulo));
+        } else {
+            statusHost.appendChild(el('p', 'meta', 'Nada pendente neste ciclo.'));
         }
+        const conta = linhaCountdown(view.proximaAcao && view.proximaAcao.agendadoPara);
+        if (conta) statusHost.appendChild(conta);
         if (view.processo && view.processo.sinal) {
             const origem = SINAL_ORIGEM_LABEL[view.processo.sinalOrigem] || view.processo.sinalOrigem;
-            box.appendChild(el('p', 'meta', `Há sinal: ${origem}.`));
+            statusHost.appendChild(el('p', 'meta', `Há sinal: ${origem}.`));
         }
         if (view.revisitarEm) {
-            box.appendChild(el('p', 'meta', `Revisita marcada para ${formatCallDue(view.revisitarEm) || view.revisitarEm}.`));
+            statusHost.appendChild(el('p', 'meta', `Revisita marcada para ${formatCallDue(view.revisitarEm) || view.revisitarEm}.`));
         }
-        return box;
+        if (view.proximaAcaoDetalhe) {
+            const ir = el('button', 'btn-primary', 'Fazer agora');
+            ir.type = 'button';
+            ir.addEventListener('click', () => {
+                const shell = statusHost.closest('.dossier');
+                const btn = shell && shell.querySelector('[data-vista="controlo"]');
+                if (btn) btn.click();
+            });
+            statusHost.appendChild(ir);
+        }
     }
 
     /* ------------------------------------------------------------ cartão agora */
@@ -183,6 +210,17 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         const box = el('div', 'lead-proc-bloqueios');
         box.appendChild(el('p', 'lead-proc-bloqueio-titulo', 'Antes de avançar'));
         view.bloqueios.forEach((b) => box.appendChild(el('p', 'lead-proc-bloqueio', b.motivo)));
+        if (view.bloqueios.some((b) => b.id === 'apelido')) {
+            const hint = el('p', 'meta', 'Confirma o apelido na ficha de contacto, em baixo, e toca em Guardar contacto.');
+            box.appendChild(hint);
+            const ir = el('button', 'btn-secondary', 'Ir à ficha de contacto');
+            ir.type = 'button';
+            ir.addEventListener('click', () => {
+                const alvo = host.querySelector('[data-contacto]');
+                if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            box.appendChild(ir);
+        }
         return box;
     }
 
@@ -246,6 +284,16 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         const instrucoes = detalhe.instrucoes || {};
         box.appendChild(el('h4', '', instrucoes.titulo || detalhe.passo));
         box.appendChild(el('p', 'lead-proc-canal', `${CANAL_LABEL[detalhe.canal] || 'Passo'} · ${detalhe.passo}`));
+        const quando = linhaCountdown(view.proximaAcao && view.proximaAcao.agendadoPara, 'Este passo');
+        if (quando) box.appendChild(quando);
+
+        if (detalhe.passo === 'R1') {
+            const guia = instrucoesBox(instrucoes);
+            if (guia) box.appendChild(guia);
+            box.appendChild(el('p', 'meta', 'Os três movimentos estão no passo Encerrar, a seguir. Abre o WhatsApp de lá, envia, e confirma.'));
+            return box;
+        }
+
         const guia = instrucoesBox(instrucoes);
         if (guia) box.appendChild(guia);
         const script = guiaoBox(detalhe);
@@ -261,7 +309,18 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
                     ? 'O Ciclo D não chegou a um canal direto. O lead adormece três meses.'
                     : 'Este passo não se envia (não há email). Grava-se como saltado e o ciclo segue.';
             box.appendChild(el('p', 'lead-proc-saltar', motivo));
-            box.appendChild(el('p', 'meta', 'O sistema avança sozinho — se ficou parado, recarrega o painel.'));
+            const avancar = el('button', 'btn-primary', 'Avançar');
+            avancar.type = 'button';
+            avancar.addEventListener('click', () => act(() => call(
+                `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/advance`,
+                {
+                    method: 'POST',
+                    body: { passo: detalhe.passo, saltar: true, resultado: proxima.motivo || 'saltado' }
+                }
+            ), avancar));
+            const acoesSkip = el('div', 'lead-proc-acoes');
+            acoesSkip.appendChild(avancar);
+            box.appendChild(acoesSkip);
             return box;
         }
 
@@ -357,7 +416,8 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         }
 
         (detalhe.resultados || []).forEach((r) => {
-            if (detalhe.canal !== 'ligacao' && detalhe.canal !== 'visita') return;
+            if (r.id === 'enviado' && (detalhe.canal === 'whatsapp' || PASSOS_EMAIL.includes(detalhe.passo))) return;
+            if (detalhe.canal !== 'ligacao' && detalhe.canal !== 'visita' && r.id !== 'respondeu') return;
             const btn = el('button', 'btn-secondary', r.label);
             btn.type = 'button';
             btn.disabled = travado;
@@ -387,13 +447,6 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
     }
 
     function marcarWhatsapp(detalhe, mensagem) {
-        const step = PASSOS_WA_SEQUENCIA[detalhe.passo];
-        if (step) {
-            return call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/outreach/whatsapp`, {
-                method: 'POST',
-                body: { step, text: mensagem }
-            });
-        }
         return call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/advance`, {
             method: 'POST',
             body: { passo: detalhe.passo, resultado: 'enviado', texto: mensagem }
@@ -401,6 +454,9 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
     }
 
     function registarChamada(detalhe, resultado, nota) {
+        if (detalhe.passo === 'LIG2' && (resultado === 'e_nao' || resultado === 'nao_agora')) {
+            abrirFecho = true;
+        }
         return call(`/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/advance`, {
             method: 'POST',
             body: {
@@ -512,7 +568,8 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         const proc = view.processo || {};
         const contacto = view.contacto || {};
         const box = el('div', 'lead-proc-contacto');
-        box.appendChild(el('h4', '', 'Ficha de contacto'));
+        box.setAttribute('data-contacto', '1');
+        box.appendChild(el('h4', '', 'Antes de ligar'));
         box.appendChild(el('p', 'meta', [
             contacto.tipoNumero === '9x' ? 'Número 9x — telemóvel, provável do dono' : '',
             contacto.tipoNumero === '2x' ? 'Número 2x — fixo, atendedor quase certo' : '',
@@ -524,7 +581,6 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
         const apelido = checkbox('Apelido do dono confirmado', proc.apelidoConfirmado);
         const whats = checkbox('Tem WhatsApp', proc.temWhatsapp);
         const direto = checkbox('Tenho canal direto', proc.canalDireto);
-        const precos = checkbox('Mostrar valores no email', proc.emailPrecosLigado);
         const atendedor = el('input', 'field-input');
         atendedor.value = proc.nomeAtendedor || '';
         atendedor.placeholder = 'Quem atendeu (D. Maria…)';
@@ -536,7 +592,7 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
             fieldWrap('Melhor hora', hora)
         );
         const flags = el('div', 'lead-proc-flags');
-        flags.append(apelido.label, whats.label, direto.label, precos.label);
+        flags.append(apelido.label, whats.label, direto.label);
         box.append(grid, flags);
 
         if (!proc.apelidoConfirmado) {
@@ -553,7 +609,6 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
                     apelidoConfirmado: apelido.input.checked,
                     temWhatsapp: whats.input.checked,
                     canalDireto: direto.input.checked,
-                    emailPrecosLigado: precos.input.checked,
                     nomeAtendedor: atendedor.value,
                     melhorHora: hora.value
                 }
@@ -569,7 +624,7 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
 
     function timelineCard() {
         const box = el('div', 'lead-proc-timeline');
-        box.appendChild(el('h4', '', 'Linha do tempo'));
+        box.appendChild(el('h4', '', 'O que já aconteceu'));
         if (view.processo && view.processo.sinal) {
             const origem = SINAL_ORIGEM_LABEL[view.processo.sinalOrigem] || view.processo.sinalOrigem;
             box.appendChild(el('p', 'meta', `Sinal: ${origem}. Se foste tu a abrir a demo, isto não conta — recarrega o painel depois de um cliente real.`));
@@ -610,8 +665,13 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
     /* ------------------------------------------------------------------ fecho */
 
     function fechoCard() {
-        const box = el('div', 'lead-proc-fecho');
-        box.appendChild(el('h4', '', 'Encerrar'));
+        const box = document.createElement('details');
+        box.className = 'lead-proc-fecho';
+        const passo = view.proximaAcao && view.proximaAcao.passo;
+        box.open = abrirFecho
+            || passo === 'R1'
+            || view.estado === 'RECUSADO';
+        box.appendChild(el('summary', '', 'Encerrar'));
         if (view.estado === 'REMOVIDO') {
             box.appendChild(el('p', 'meta', 'Já está removido. Nada mais sai daqui.'));
             return box;
@@ -648,26 +708,32 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
             abrir.href = view.fecho.url;
             abrir.target = '_blank';
             abrir.rel = 'noopener';
+            abrir.addEventListener('click', () => { fechoWhatsappAberto = true; });
             acoes.appendChild(abrir);
         }
         const fechar = (estado, resultado, label, classe) => {
             const btn = el('button', classe, label);
             btn.type = 'button';
-            btn.addEventListener('click', () => act(() => call(
-                `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/close`,
-                {
-                    method: 'POST',
-                    body: {
-                        estado,
-                        resultado,
-                        revisitarEm: data.value ? new Date(data.value).toISOString() : '',
-                        ofertaFinal: oferta.value,
-                        referenciaPedida: referencia.value,
-                        objecao: view._objecao || '',
-                        texto: (view.fecho && view.fecho.mensagem) || ''
-                    }
+            btn.addEventListener('click', () => {
+                if (view.fecho && view.fecho.url && !fechoWhatsappAberto) {
+                    if (!window.confirm('A oferta ainda não saiu no WhatsApp. Abriste a mensagem? Sem isso o fecho não chega ao cliente.')) return;
                 }
-            ), btn));
+                act(() => call(
+                    `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/close`,
+                    {
+                        method: 'POST',
+                        body: {
+                            estado,
+                            resultado,
+                            revisitarEm: data.value ? new Date(data.value).toISOString() : '',
+                            ofertaFinal: oferta.value,
+                            referenciaPedida: referencia.value,
+                            objecao: view._objecao || '',
+                            texto: (view.fecho && view.fecho.mensagem) || ''
+                        }
+                    }
+                ), btn);
+            });
             acoes.appendChild(btn);
         };
         fechar('ADORMECIDO', 'nao_agora', 'Não agora', 'btn-secondary');
@@ -689,21 +755,46 @@ export function renderLeadProcess(host, { leadId, api, onToast, onChanged } = {}
     /* ------------------------------------------------------------------ paint */
 
     function tick() {
-        const node = host.querySelector('[data-countdown]');
-        if (!node) return;
-        const alvo = new Date(node.getAttribute('data-countdown')).getTime();
-        const restante = alvo - Date.now();
-        node.textContent = restante > 0
-            ? `Próxima ação em ${formatCountdown(restante)} — ${formatCallDue(node.getAttribute('data-countdown'))}`
-            : `Próxima ação disponível desde ${formatCallDue(node.getAttribute('data-countdown'))}`;
-        if (restante <= 0) node.classList.add('lead-proc-conta-due');
+        const nodes = [
+            ...host.querySelectorAll('[data-countdown]'),
+            ...(statusHost ? [...statusHost.querySelectorAll('[data-countdown]')] : [])
+        ];
+        nodes.forEach((node) => {
+            const alvo = new Date(node.getAttribute('data-countdown')).getTime();
+            const restante = alvo - Date.now();
+            const prefixo = node.textContent.startsWith('Este passo') ? 'Este passo' : 'Próxima ação';
+            node.textContent = restante > 0
+                ? `${prefixo} em ${formatCountdown(restante)} — ${formatCallDue(node.getAttribute('data-countdown'))}`
+                : `${prefixo} disponível desde ${formatCallDue(node.getAttribute('data-countdown'))}`;
+            if (restante <= 0) node.classList.add('lead-proc-conta-due');
+        });
     }
 
     function paint() {
         host.innerHTML = '';
         host.className = 'lead-proc';
         if (!view) return;
-        host.append(header(), agoraCard(), aberturaCard(), contactoCard(), timelineCard(), fechoCard());
+        paintStatus();
+        if (aberturaHost) {
+            aberturaHost.innerHTML = '';
+            aberturaHost.appendChild(aberturaCard());
+        }
+        const passo = view.proximaAcao && view.proximaAcao.passo;
+        const precisaFecho = abrirFecho || passo === 'R1' || view.estado === 'RECUSADO';
+        const agora = agoraCard();
+        const contacto = contactoCard();
+        const tempo = timelineCard();
+        const fecho = fechoCard();
+        if (precisaFecho) {
+            host.append(agora, fecho, contacto, tempo);
+        } else {
+            host.append(agora, contacto, tempo, fecho);
+        }
+        if (abrirFecho) {
+            const node = host.querySelector('.lead-proc-fecho');
+            if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            abrirFecho = false;
+        }
         if (timer) clearInterval(timer);
         timer = setInterval(tick, 1000);
     }

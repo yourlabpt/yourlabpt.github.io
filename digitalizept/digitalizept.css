@@ -3612,13 +3612,26 @@ a.btn-secondary {
     flex-direction: column;
     gap: 14px;
     margin-bottom: 20px;
+    counter-reset: procpasso;
 }
 
-.lead-proc > div {
+.lead-proc > div,
+.lead-proc > details {
     padding: 14px 16px;
     border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
     border-radius: 10px;
     background: var(--surface-color, #fff);
+}
+
+.lead-proc-fecho > summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1rem;
+    list-style: none;
+}
+
+.lead-proc-fecho > summary::-webkit-details-marker {
+    display: none;
 }
 
 .lead-proc h4 {
