@@ -4549,7 +4549,15 @@ app.post('/api/digitalizept/leads/:leadId/outreach/lang', requireDigitalizept, (
         const packed = buildLeadOutreach(db, leadId, req, ganchoExtrasFromBody(req.body || {}));
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
         saveLeadFollowup(db, leadId, packed.followup);
-        return res.json({ ok: true, followup: packed.followup });
+        return res.json({
+            ok: true,
+            followup: packed.followup,
+            gancho: {
+                titulo: packed.ctx.ganchoTitulo,
+                texto: packed.ctx.ganchoTexto,
+                falhas: packed.followup.falhas || []
+            }
+        });
     } catch (err) {
         console.error('digitalizept outreach lang error:', err.message);
         return res.status(500).json({ error: 'Não foi possível guardar o idioma.' });

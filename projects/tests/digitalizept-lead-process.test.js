@@ -509,6 +509,9 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(panel, /COMO_FAZER/);
         assert.match(panel, /Abre o email → envia → toca em Enviar email/);
         assert.match(panel, /O que vamos resolver/);
+        assert.match(panel, /Podes escolher várias ao mesmo tempo/);
+        assert.match(panel, /aria-pressed/);
+        assert.match(panel, /classList.toggle\('active'/);
         assert.doesNotMatch(panel, /aberturaHost/);
         const ficha = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin-lead.js'),
@@ -528,7 +531,9 @@ describe('digitalizept lead process — instruções e demo', () => {
             'utf8'
         );
         assert.doesNotMatch(adminCss, /procpasso/);
-        assert.match(sw, /digitalizept-v99/);
+        assert.match(adminCss, /--accent-dark: var\(--admin-press\)/);
+        assert.match(adminCss, /lead-proc-ganchos \.followup-gancho\.active/);
+        assert.match(sw, /digitalizept-v101/);
         assert.match(panel, /Como ficou/);
         assert.match(panel, /sem_interesse/);
         assert.match(panel, /canal === 'whatsapp'/);

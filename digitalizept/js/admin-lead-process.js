@@ -131,6 +131,8 @@ export function renderLeadProcess(host, {
     let view = null;
     let timer = null;
     let abrirFecho = false;
+    let escolhidasFalhas = null;
+    let falhasSaveChain = Promise.resolve();
 
     const toast = (msg, bad) => { if (onToast) onToast(msg, bad); };
 
@@ -152,6 +154,7 @@ export function renderLeadProcess(host, {
     async function act(fn, botao) {
         if (botao) botao.disabled = true;
         try {
+            await falhasSaveChain;
             await fn();
             await load();
         } catch (err) {
@@ -653,12 +656,50 @@ export function renderLeadProcess(host, {
 
     /* ------------------------------------------------- abertura, idioma, valores */
 
-    function falhasActuais() {
+    function falhasGuardadas() {
         const saved = (view.gancho && view.gancho.falhas)
             || (view.followup && view.followup.falhas)
             || [];
         if (saved.length) return saved.slice();
         return ((view.gancho && view.gancho.sugeridas) || []).slice();
+    }
+
+    function idsMarcados() {
+        if (escolhidasFalhas) return [...escolhidasFalhas];
+        return falhasGuardadas();
+    }
+
+    function pintarChipsFalhas(botoes, problemaWrap) {
+        const marcadas = new Set(idsMarcados());
+        Object.entries(botoes || {}).forEach(([id, b]) => {
+            const on = marcadas.has(id);
+            b.classList.toggle('active', on);
+            b.classList.toggle('is-active', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (problemaWrap) problemaWrap.classList.toggle('hidden', !marcadas.has('ficha_errada'));
+    }
+
+    function aplicarAberturaGuardada(data) {
+        if (!data) return;
+        if (data.followup) {
+            view.followup = { ...(view.followup || {}), ...data.followup };
+            if (view.gancho && Array.isArray(data.followup.falhas)) {
+                view.gancho.falhas = data.followup.falhas.slice();
+            }
+        }
+        if (data.gancho && view.gancho) {
+            if (data.gancho.titulo != null) view.gancho.titulo = data.gancho.titulo;
+            if (data.gancho.texto != null) view.gancho.texto = data.gancho.texto;
+        }
+        const tituloNode = host.querySelector('[data-abertura-titulo]');
+        const textoNode = host.querySelector('[data-abertura-texto]');
+        if (tituloNode) tituloNode.textContent = (view.gancho && view.gancho.titulo) || '';
+        if (textoNode) {
+            const texto = (view.gancho && view.gancho.texto) || '';
+            textoNode.textContent = texto;
+            textoNode.classList.toggle('hidden', !texto);
+        }
     }
 
     function gravarFalhas(ids, extra = {}) {
@@ -673,15 +714,28 @@ export function renderLeadProcess(host, {
         });
     }
 
+    function gravarFalhasVivas(extra = {}) {
+        falhasSaveChain = falhasSaveChain.then(async () => {
+            const data = await gravarFalhas(idsMarcados(), extra);
+            aplicarAberturaGuardada(data);
+            return data;
+        }).catch((err) => {
+            toast((err && err.message) || 'Não foi possível guardar o diagnóstico.', true);
+        });
+        return falhasSaveChain;
+    }
+
     function garantirFalhas(passo) {
         if (passo !== 'EMAIL1' && passo !== 'WA1') return Promise.resolve();
-        const saved = (view.followup && view.followup.falhas) || [];
-        if (saved.length) return Promise.resolve();
-        const shown = falhasActuais();
-        if (!shown.length) {
-            return Promise.reject(new Error('Marca em cima o que vamos resolver.'));
-        }
-        return gravarFalhas(shown);
+        return falhasSaveChain.then(() => {
+            const saved = (view.followup && view.followup.falhas) || [];
+            if (saved.length) return undefined;
+            const shown = idsMarcados();
+            if (!shown.length) {
+                throw new Error('Marca em cima o que vamos resolver.');
+            }
+            return gravarFalhas(shown);
+        });
     }
 
     function aberturaCard() {
@@ -689,9 +743,9 @@ export function renderLeadProcess(host, {
         const fu = view.followup || {};
         const box = el('div', 'lead-proc-abertura');
         box.appendChild(el('h4', '', 'O que vamos resolver'));
-        box.appendChild(el('p', 'meta', 'Diagnóstico deste negócio — entra na abertura do email, do WhatsApp e da chamada. A sequência de contactos não muda.'));
+        box.appendChild(el('p', 'meta', 'Marca tudo o que este negócio precisa de resolver. Podes escolher várias ao mesmo tempo — não se desmarcam umas às outras. Entra na abertura do email, do WhatsApp e da chamada. A sequência de contactos não muda.'));
 
-        const escolhidas = new Set(falhasActuais());
+        escolhidasFalhas = new Set(falhasGuardadas());
         const sugeridas = new Set(gancho.sugeridas || []);
         const lista = el('div', 'lead-proc-ganchos');
         const botoes = {};
@@ -699,38 +753,38 @@ export function renderLeadProcess(host, {
             const btn = el('button', 'followup-gancho');
             btn.type = 'button';
             btn.setAttribute('data-falha', g.id);
-            const nome = `${g.nomeCurto || g.nome}${sugeridas.has(g.id) ? ' · sugerido' : ''}`;
-            btn.append(
-                el('span', 'followup-gancho-name', nome),
-                el('span', 'followup-gancho-title', g.ganchoTitulo || '')
-            );
+            btn.setAttribute('aria-pressed', 'false');
+            btn.append(el('span', 'followup-gancho-name', `${g.nomeCurto || g.nome}${sugeridas.has(g.id) ? ' · sugerido' : ''}`));
             botoes[g.id] = btn;
             btn.addEventListener('click', () => {
-                if (escolhidas.has(g.id)) escolhidas.delete(g.id);
-                else escolhidas.add(g.id);
-                Object.entries(botoes).forEach(([id, b]) => b.classList.toggle('is-active', escolhidas.has(id)));
-                problemaWrap.classList.toggle('hidden', !escolhidas.has('ficha_errada'));
-                act(() => gravarFalhas([...escolhidas]), btn);
+                if (escolhidasFalhas.has(g.id)) escolhidasFalhas.delete(g.id);
+                else escolhidasFalhas.add(g.id);
+                pintarChipsFalhas(botoes, problemaWrap);
+                gravarFalhasVivas();
             });
             lista.appendChild(btn);
         });
-        Object.entries(botoes).forEach(([id, b]) => b.classList.toggle('is-active', escolhidas.has(id)));
         box.appendChild(lista);
 
-        const problemaWrap = el('div', escolhidas.has('ficha_errada') ? '' : 'hidden');
+        const problemaWrap = el('div', escolhidasFalhas.has('ficha_errada') ? '' : 'hidden');
         const problema = el('input', 'field-input');
         problema.value = fu.problemaFicha || '';
         problema.placeholder = 'Ex.: que fecham às 18h';
         problemaWrap.appendChild(fieldWrap('O que está errado na ficha', problema));
         problema.addEventListener('change', () => {
-            act(() => gravarFalhas([...escolhidas], { problemaFicha: problema.value }), problema);
+            gravarFalhasVivas({ problemaFicha: problema.value });
         });
         box.appendChild(problemaWrap);
+        pintarChipsFalhas(botoes, problemaWrap);
 
-        if (gancho.titulo) {
-            box.appendChild(el('p', 'lead-proc-gancho', gancho.titulo));
-            if (gancho.texto) box.appendChild(el('p', 'meta', gancho.texto));
-        }
+        const titulo = el('p', 'lead-proc-gancho');
+        titulo.setAttribute('data-abertura-titulo', '1');
+        titulo.textContent = gancho.titulo || '';
+        box.appendChild(titulo);
+        const texto = el('p', gancho.texto ? 'meta' : 'meta hidden');
+        texto.setAttribute('data-abertura-texto', '1');
+        texto.textContent = gancho.texto || '';
+        box.appendChild(texto);
         return box;
     }
 
@@ -769,7 +823,7 @@ export function renderLeadProcess(host, {
                 method: 'POST',
                 body: {
                     lang: idioma.value,
-                    falhas: falhasActuais(),
+                    falhas: idsMarcados(),
                     problemaFicha: fu.problemaFicha || ''
                 }
             });

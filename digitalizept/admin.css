@@ -11,6 +11,7 @@
     --admin-fill: #e0dbd0;
     --admin-press: #d6cfc2;
     --admin-accent: #1b1b1b;
+    --accent-dark: var(--admin-press);
 
     --surface-color: var(--admin-surface);
     --surface-muted: var(--admin-fill);
@@ -894,10 +895,49 @@
     margin-bottom: 2px;
 }
 
+.admin-body .followup-gancho,
+.admin-body .followup-gancho:hover,
+.admin-body .followup-gancho.active,
+.admin-body .followup-gancho.is-active,
+.admin-drawer-panel .followup-gancho,
+.admin-drawer-panel .followup-gancho:hover,
+.admin-drawer-panel .followup-gancho.active,
+.admin-drawer-panel .followup-gancho.is-active {
+    color: var(--admin-ink);
+}
+
+.admin-body .followup-gancho:hover,
+.admin-drawer-panel .followup-gancho:hover {
+    background: var(--admin-press);
+}
+
 .admin-body .followup-lang-btn.active,
 .admin-body .followup-gancho.active,
-.admin-drawer-panel .followup-gancho.active {
-    background: var(--admin-surface);
+.admin-body .followup-gancho.is-active,
+.admin-drawer-panel .followup-gancho.active,
+.admin-drawer-panel .followup-gancho.is-active {
+    background: var(--admin-fill);
+    color: var(--admin-ink);
+    box-shadow: inset 0 0 0 1.5px var(--admin-ink);
+}
+
+.admin-body .lead-proc-ganchos .followup-gancho {
+    width: auto;
+    max-width: 100%;
+    border: 1px solid var(--admin-border);
+    background: transparent;
+    color: var(--admin-ink);
+}
+
+.admin-body .lead-proc-ganchos .followup-gancho:hover {
+    background: var(--admin-press);
+    color: var(--admin-ink);
+}
+
+.admin-body .lead-proc-ganchos .followup-gancho.active,
+.admin-body .lead-proc-ganchos .followup-gancho.is-active {
+    background: var(--admin-fill);
+    color: var(--admin-ink);
     box-shadow: inset 0 0 0 1.5px var(--admin-ink);
 }
 

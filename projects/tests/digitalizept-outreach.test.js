@@ -266,6 +266,12 @@ describe('digitalizept outreach', () => {
         assert.equal(stored.ganchoId, 'site_fraco');
         assert.equal(stored.siteVelho, true);
 
+        const severalSaved = applyGanchoFields(parseFollowup({ ganchoId: 'C' }), {
+            falhas: ['maps_sem_site', 'site_fraco', 'maps_sem_whatsapp']
+        });
+        assert.deepEqual(severalSaved.falhas, ['maps_sem_site', 'site_fraco', 'maps_sem_whatsapp']);
+        assert.equal(severalSaved.ganchoId, 'maps_sem_site');
+
         const migrated = parseFollowup({ ganchoId: 'B' });
         assert.ok(migrated.falhas.includes('redes_desligadas_maps'));
         assert.ok(migrated.falhas.includes('maps_sem_site'));
