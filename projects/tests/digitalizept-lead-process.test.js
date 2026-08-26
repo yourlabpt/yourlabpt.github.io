@@ -509,7 +509,10 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(panel, /COMO_FAZER/);
         assert.match(panel, /Abre o email → envia → toca em Enviar email/);
         assert.match(panel, /O que vamos resolver/);
-        assert.match(panel, /Podes escolher várias ao mesmo tempo/);
+        assert.match(panel, /Combinações rápidas/);
+        assert.match(panel, /dor primeiro, depois o exemplo/);
+        assert.match(panel, /gancho\.combinacoes/);
+        assert.match(panel, /gancho\.grupos/);
         assert.match(panel, /aria-pressed/);
         assert.match(panel, /classList.toggle\('active'/);
         assert.doesNotMatch(panel, /aberturaHost/);
@@ -538,7 +541,7 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(adminCss, /--accent-dark: var\(--admin-press\)/);
         assert.match(adminCss, /lead-proc-ganchos \.followup-gancho\.active/);
         assert.match(adminCss, /dossier-vista-demo/);
-        assert.match(sw, /digitalizept-v107/);
+        assert.match(sw, /digitalizept-v110/);
         assert.match(sw, /admin-lead-demo\.js/);
         assert.match(sw, /admin-redirects\.js/);
         assert.match(panel, /Como ficou/);
@@ -779,7 +782,7 @@ describe('digitalizept lead process — guião, objeções e métricas', () => {
         assert.equal(m.porVendedor.Maria.respostaPct, 0);
         assert.equal(m.porGancho.redes_desligadas_maps.wa1, 1);
         assert.equal(m.porOrigem.respondeu, 1);
-        assert.equal(m.nomes.ganchos.redes_desligadas_maps, 'Redes fora do Maps');
+        assert.equal(m.nomes.ganchos.redes_desligadas_maps, 'IG/FB fora do pin');
         db.close();
     });
 

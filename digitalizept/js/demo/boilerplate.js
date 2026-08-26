@@ -55,7 +55,7 @@ export function telHref(dados) {
 export function instagramHref(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
     const handle = raw.replace(/^@/, '');
     return handle ? `https://www.instagram.com/${handle}` : '';
 }
@@ -63,7 +63,7 @@ export function instagramHref(value) {
 export function facebookHref(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
     const handle = raw
         .replace(/^@/, '')
         .replace(/^https?:\/\/(www\.)?facebook\.com\//i, '')
@@ -74,8 +74,14 @@ export function facebookHref(value) {
 export function websiteHref(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
     return `https://${raw.replace(/^\/+/, '')}`;
+}
+
+export function mapsDirectionsHref(morada) {
+    const q = String(morada || '').trim();
+    if (!q) return '';
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
 }
 
 export function trustChips(dados, businessType) {

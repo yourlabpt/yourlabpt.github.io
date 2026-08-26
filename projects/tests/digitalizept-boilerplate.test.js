@@ -7,6 +7,7 @@ describe('digitalizept landing boilerplate', async () => {
         instagramHref,
         facebookHref,
         websiteHref,
+        mapsDirectionsHref,
         isYes,
         splitItems,
         trustChips,
@@ -42,8 +43,11 @@ describe('digitalizept landing boilerplate', async () => {
         assert.equal(facebookHref('@loja'), 'https://www.facebook.com/loja');
         assert.equal(facebookHref('https://www.facebook.com/loja'), 'https://www.facebook.com/loja');
         assert.equal(facebookHref(''), '');
+        assert.equal(facebookHref('/digitalizept/samples/cafe-da-praca.html#facebook'), '/digitalizept/samples/cafe-da-praca.html#facebook');
         assert.equal(websiteHref('cafedapraca.pt'), 'https://cafedapraca.pt');
         assert.equal(websiteHref('https://cafedapraca.pt'), 'https://cafedapraca.pt');
+        assert.equal(websiteHref('/digitalizept/samples/cafe-da-praca.html'), '/digitalizept/samples/cafe-da-praca.html');
+        assert.match(mapsDirectionsHref('Praça da Liberdade 12, Porto'), /google\.com\/maps\/dir/);
     });
 
     it('renders a complete Maps pin with WhatsApp, site, IG, FB and serviços', () => {
@@ -54,6 +58,16 @@ describe('digitalizept landing boilerplate', async () => {
         assert.ok(GBP_SAMPLE.instagram);
         assert.ok(GBP_SAMPLE.facebook);
         assert.ok(GBP_SAMPLE.servicos.length >= 3);
+        assert.ok(GBP_SAMPLE.fotos.length >= 3);
+        assert.ok(GBP_SAMPLE.logoUrl);
+        GBP_SAMPLE.fotos.forEach((rel) => {
+            const file = path.join(__dirname, '../..', rel.replace(/^\//, ''));
+            assert.equal(fs.existsSync(file), true, file);
+        });
+        assert.equal(
+            fs.existsSync(path.join(__dirname, '../../digitalizept/samples/cafe-da-praca.html')),
+            true
+        );
         const src = fs.readFileSync(
             path.join(__dirname, '../../digitalizept/js/demo/gbp-example.js'),
             'utf8'
@@ -64,6 +78,7 @@ describe('digitalizept landing boilerplate', async () => {
         assert.match(src, /actionBtn\('Facebook'/);
         assert.match(src, /Serviços/);
         assert.match(src, /WhatsApp, telefone, site e redes/);
+        assert.match(src, /mapsDirectionsHref/);
         const fromState = gbpDataFromState({
             data: {
                 dados: {

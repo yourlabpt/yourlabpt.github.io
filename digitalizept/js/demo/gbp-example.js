@@ -1,7 +1,15 @@
 // Public-profile style mockup for Google Business (educação + demo do cliente).
-// Offline-first: sample data is local; optional link opens a real example when online.
+// Offline-first sample assets live under /digitalizept/assets/gbp-sample/.
 
-import { facebookHref, instagramHref, websiteHref } from './boilerplate.js';
+import {
+    facebookHref,
+    instagramHref,
+    mapsDirectionsHref,
+    websiteHref
+} from './boilerplate.js';
+
+const SAMPLE_BASE = '/digitalizept/assets/gbp-sample';
+const SAMPLE_SITE = '/digitalizept/samples/cafe-da-praca.html';
 
 export const GBP_SAMPLE = {
     nome: 'Café da Praça',
@@ -10,11 +18,11 @@ export const GBP_SAMPLE = {
     reviews: '128',
     aberto: true,
     horarioResumo: 'Aberto agora · Fecha às 19:00',
-    telefone: '220 000 000',
+    telefone: '+351 220 000 000',
     whatsapp: '912345678',
-    website: 'https://cafedapraca.pt',
-    instagram: '@cafedapraca',
-    facebook: 'cafedapraca',
+    website: SAMPLE_SITE,
+    instagram: `${SAMPLE_SITE}#instagram`,
+    facebook: `${SAMPLE_SITE}#facebook`,
     morada: 'Praça da Liberdade 12, Porto',
     sobre: 'Café de bairro com pastelaria fresca, esplanada e Wi-Fi. Ideal para um café rápido ou uma pausa a meio da tarde.',
     horario: [
@@ -28,6 +36,12 @@ export const GBP_SAMPLE = {
         'Esplanada',
         'Wi-Fi',
         'Take-away'
+    ],
+    logoUrl: `${SAMPLE_BASE}/logo.jpg`,
+    fotos: [
+        `${SAMPLE_BASE}/fachada.jpg`,
+        `${SAMPLE_BASE}/interior.jpg`,
+        `${SAMPLE_BASE}/produto.jpg`
     ],
     realExampleUrl: 'https://business.google.com/v/the-house-of-brazilian-food/015206574844160642768/e068/_'
 };
@@ -57,7 +71,14 @@ function serviceLabels(itens) {
 
 function actionBtn(label, href) {
     if (href) {
-        return `<a class="gbp-action" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+        const external = /^https?:\/\//i.test(href)
+            || href.startsWith('tel:')
+            || href.startsWith('mailto:')
+            || href.startsWith('/');
+        const blank = (href.startsWith('http') || href.startsWith('/'))
+            ? ' target="_blank" rel="noopener"'
+            : '';
+        return `<a class="gbp-action" href="${escapeHtml(href)}"${blank}>${escapeHtml(label)}</a>`;
     }
     return `<span class="gbp-action gbp-action-muted">${escapeHtml(label)}</span>`;
 }
@@ -121,9 +142,8 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false, uni
         ? `<div class="gbp-avatar gbp-avatar-photo"><img src="${escapeHtml(d.logoUrl)}" alt=""></div>`
         : `<div class="gbp-avatar" aria-hidden="true">${escapeHtml((d.nome || '?').charAt(0).toUpperCase())}</div>`;
 
-    const phoneHref = d.telefone
-        ? `tel:${String(d.telefone).replace(/\s/g, '')}`
-        : '';
+    const phoneRaw = String(d.telefone || '').replace(/[^\d+]/g, '');
+    const phoneHref = phoneRaw ? `tel:${phoneRaw}` : '';
     const waDigits = String(d.whatsapp || '').replace(/\D/g, '');
     const waHref = waDigits
         ? `https://wa.me/${waDigits.length === 9 ? `351${waDigits}` : waDigits}`
@@ -131,6 +151,7 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false, uni
     const siteHref = websiteHref(d.website);
     const igHref = instagramHref(d.instagram);
     const fbHref = facebookHref(d.facebook);
+    const directionsHref = mapsDirectionsHref(d.morada);
 
     const fotos = (Array.isArray(d.fotos) && d.fotos.length)
         ? d.fotos.map((url) => `<div class="gbp-photo gbp-photo-real"><img src="${escapeHtml(url)}" alt=""></div>`).join('')
@@ -145,6 +166,11 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false, uni
             <h4>Serviços</h4>
             <ul class="gbp-list">${servicos.map((s) => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
         </div>`
+        : '';
+
+    const mapsEmbed = d.morada
+        ? `<iframe class="gbp-map-frame" loading="lazy" title="Mapa"
+            src="https://maps.google.com/maps?q=${encodeURIComponent(d.morada)}&output=embed"></iframe>`
         : '';
 
     wrap.innerHTML = `
@@ -169,7 +195,7 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false, uni
             ${actionBtn('Website', siteHref)}
             ${actionBtn('Instagram', igHref)}
             ${actionBtn('Facebook', fbHref)}
-            ${actionBtn('Direções', '')}
+            ${actionBtn('Direções', directionsHref)}
         </div>
         <div class="gbp-section">
             <h4>Acerca de</h4>
@@ -187,6 +213,7 @@ export function renderGbpCard(data, { showPitch = false, clientMode = false, uni
         <div class="gbp-section">
             <h4>Localização</h4>
             <p class="gbp-map-placeholder">${escapeHtml(d.morada)}</p>
+            ${mapsEmbed}
         </div>
     `;
 

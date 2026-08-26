@@ -781,13 +781,20 @@ export function renderLeadProcess(host, {
         return falhasGuardadas();
     }
 
-    function pintarChipsFalhas(botoes, problemaWrap) {
+    function pintarChipsFalhas(botoes, problemaWrap, comboBotoes) {
         const marcadas = new Set(idsMarcados());
         Object.entries(botoes || {}).forEach(([id, b]) => {
             const on = marcadas.has(id);
             b.classList.toggle('active', on);
             b.classList.toggle('is-active', on);
             b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        (comboBotoes || []).forEach(({ btn, falhas }) => {
+            const ids = Array.isArray(falhas) ? falhas : [];
+            const on = ids.length > 0 && ids.every((id) => marcadas.has(id));
+            btn.classList.toggle('active', on);
+            btn.classList.toggle('is-active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
         if (problemaWrap) problemaWrap.classList.toggle('hidden', !marcadas.has('ficha_errada'));
     }
@@ -855,13 +862,46 @@ export function renderLeadProcess(host, {
         const fu = view.followup || {};
         const box = el('div', 'lead-proc-abertura');
         box.appendChild(el('h4', '', 'O que vamos resolver'));
-        box.appendChild(el('p', 'meta', 'Marca tudo o que este negócio precisa de resolver. Podes escolher várias ao mesmo tempo — não se desmarcam umas às outras. Entra na abertura do email, do WhatsApp e da chamada. A sequência de contactos não muda.'));
+        box.appendChild(el('p', 'meta', 'Marca o que falta no pin, no site e nas redes. Combinações rápidas em cima; detalhe por grupo em baixo. Entra na abertura do email e do WhatsApp — dor primeiro, depois o exemplo. A sequência de contactos não muda.'));
 
         escolhidasFalhas = new Set(falhasGuardadas());
         const sugeridas = new Set(gancho.sugeridas || []);
-        const lista = el('div', 'lead-proc-ganchos');
         const botoes = {};
-        (gancho.lista || []).forEach((g) => {
+        const comboBotoes = [];
+        let problemaWrap = null;
+
+        const paint = () => pintarChipsFalhas(botoes, problemaWrap, comboBotoes);
+
+        const combos = el('div', 'lead-proc-combos');
+        combos.appendChild(el('p', 'lead-proc-grupo-label', 'Combinações rápidas'));
+        const comboRow = el('div', 'lead-proc-ganchos lead-proc-ganchos-combos');
+        (gancho.combinacoes || []).forEach((c) => {
+            const btn = el('button', 'followup-gancho followup-gancho-combo');
+            btn.type = 'button';
+            btn.title = c.hint || '';
+            btn.setAttribute('aria-pressed', 'false');
+            btn.append(el('span', 'followup-gancho-name', c.chip || c.id));
+            comboBotoes.push({ btn, falhas: c.falhas || [] });
+            btn.addEventListener('click', () => {
+                const ids = Array.isArray(c.falhas) ? c.falhas : [];
+                const allOn = ids.length && ids.every((id) => escolhidasFalhas.has(id));
+                if (allOn) ids.forEach((id) => escolhidasFalhas.delete(id));
+                else ids.forEach((id) => escolhidasFalhas.add(id));
+                paint();
+                gravarFalhasVivas();
+            });
+            comboRow.appendChild(btn);
+        });
+        if ((gancho.combinacoes || []).length) {
+            combos.appendChild(comboRow);
+            box.appendChild(combos);
+        }
+
+        const grupos = (gancho.grupos || []).length
+            ? gancho.grupos
+            : [{ id: 'geral', label: 'Problemas' }];
+
+        function addFalhaChip(lista, g) {
             const btn = el('button', 'followup-gancho');
             btn.type = 'button';
             btn.setAttribute('data-falha', g.id);
@@ -871,24 +911,51 @@ export function renderLeadProcess(host, {
             btn.addEventListener('click', () => {
                 if (escolhidasFalhas.has(g.id)) escolhidasFalhas.delete(g.id);
                 else escolhidasFalhas.add(g.id);
-                pintarChipsFalhas(botoes, problemaWrap);
+                paint();
                 gravarFalhasVivas();
             });
             lista.appendChild(btn);
-        });
-        box.appendChild(lista);
+        }
 
-        const problemaWrap = el('div', escolhidasFalhas.has('ficha_errada') ? '' : 'hidden');
+        grupos.forEach((grupo) => {
+            const items = (gancho.lista || []).filter((g) => (g.grupo || 'geral') === grupo.id);
+            if (!items.length) return;
+            const block = el('div', 'lead-proc-falha-grupo');
+            block.appendChild(el('p', 'lead-proc-grupo-label', grupo.label || grupo.id));
+            const lista = el('div', 'lead-proc-ganchos');
+            items.forEach((g) => addFalhaChip(lista, g));
+            block.appendChild(lista);
+            box.appendChild(block);
+        });
+
+        const groupedIds = new Set();
+        grupos.forEach((grupo) => {
+            (gancho.lista || []).forEach((g) => {
+                if ((g.grupo || 'geral') === grupo.id) groupedIds.add(g.id);
+            });
+        });
+        const orphan = (gancho.lista || []).filter((g) => !groupedIds.has(g.id));
+        if (orphan.length) {
+            const block = el('div', 'lead-proc-falha-grupo');
+            block.appendChild(el('p', 'lead-proc-grupo-label', 'Outros'));
+            const lista = el('div', 'lead-proc-ganchos');
+            orphan.forEach((g) => addFalhaChip(lista, g));
+            block.appendChild(lista);
+            box.appendChild(block);
+        }
+
+        problemaWrap = el('div', escolhidasFalhas.has('ficha_errada') ? '' : 'hidden');
         const problema = el('input', 'field-input');
         problema.value = fu.problemaFicha || '';
         problema.placeholder = 'Ex.: que fecham às 18h';
-        problemaWrap.appendChild(fieldWrap('O que está errado na ficha', problema));
+        problemaWrap.appendChild(fieldWrap('O que está errado na ficha / Perfil', problema));
         problema.addEventListener('change', () => {
             gravarFalhasVivas({ problemaFicha: problema.value });
         });
         box.appendChild(problemaWrap);
-        pintarChipsFalhas(botoes, problemaWrap);
+        paint();
 
+        box.appendChild(el('p', 'lead-proc-grupo-label', 'Abertura que o cliente lê (antes do exemplo)'));
         const titulo = el('p', 'lead-proc-gancho');
         titulo.setAttribute('data-abertura-titulo', '1');
         titulo.textContent = gancho.titulo || '';

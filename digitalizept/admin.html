@@ -63,7 +63,18 @@
 
             <section id="tab-leads" class="admin-panel hidden">
                 <div class="admin-toolbar">
-                    <input id="leads-filter" class="field-input" type="search" placeholder="Filtrar leads…">
+                    <input id="leads-filter" class="field-input" type="search" placeholder="Filtrar por nome, morada…">
+                    <select id="leads-segmento" class="field-input admin-toolbar-filtro" aria-label="Segmento do negócio">
+                        <option value="">Todos os segmentos</option>
+                    </select>
+                    <select id="leads-situacao" class="field-input admin-toolbar-filtro" aria-label="Situação da lead">
+                        <option value="">Todas as situações</option>
+                        <option value="novos">Novos a completar</option>
+                        <option value="enviar">Prontas a enviar</option>
+                        <option value="sequencia">Em sequência</option>
+                        <option value="sem_demo">Sem demo</option>
+                        <option value="falta_ficha">Ficha incompleta</option>
+                    </select>
                     <select id="leads-ordem" class="field-input admin-toolbar-ordem" aria-label="Ordenar leads">
                         <option value="proximo">Próximo passo</option>
                         <option value="tipo">Tipo de loja</option>
@@ -73,7 +84,8 @@
                     <button id="leads-add-btn" type="button" class="btn-primary">Novo negócio</button>
                     <button id="leads-email-demos-btn" type="button" class="btn-secondary">Email HTML às demos</button>
                 </div>
-                <p class="admin-hint">Ordena pelo próximo passo, pelo tipo, pela data em que o negócio entrou no sistema (criação, estável), ou pela última alteração (atualização). Controlo = enviar. Demo = logo e fotos. Dados da loja = ficha completa.</p>
+                <p class="admin-hint">Segmento = tipo de loja. «Novos a completar» = negócio acabado de criar (Novo negócio / rascunho) para fechar ficha, demo e Controlo (email, WhatsApp ou chamada). Controlo = enviar. Demo = logo e fotos. Dados da loja = ficha completa.</p>
+                <p id="leads-filter-summary" class="admin-hint leads-filter-summary" hidden></p>
                 <div id="leads-list" class="admin-list"></div>
             </section>
 

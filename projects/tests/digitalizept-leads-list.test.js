@@ -48,6 +48,10 @@ describe('digitalizept leads list order', () => {
         assert.match(html, /value="tipo"/);
         assert.match(html, /value="criado"/);
         assert.match(html, /value="atualizado"/);
+        assert.match(html, /id="leads-segmento"/);
+        assert.match(html, /id="leads-situacao"/);
+        assert.match(html, /Novos a completar/);
+        assert.match(html, /Prontas a enviar/);
         const admin = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin.js'),
             'utf8'
@@ -55,7 +59,13 @@ describe('digitalizept leads list order', () => {
         assert.match(admin, /leads\?\$\{qs\}/);
         assert.match(admin, /fila', 'hoje'/);
         assert.match(admin, /LEADS_ORDEM_KEY/);
+        assert.match(admin, /LEADS_SEGMENTO_KEY/);
+        assert.match(admin, /LEADS_SITUACAO_KEY/);
+        assert.match(admin, /isLeadNovoACompletar/);
+        assert.match(admin, /leadMatchesSituacao/);
+        assert.match(admin, /syncLeadsSegmentoOptions/);
         assert.match(admin, /'atualizado'/);
+        assert.match(admin, /lead-badge-novo/);
     });
 
     it('stamps atualizado_em on edit without moving criado_em', () => {

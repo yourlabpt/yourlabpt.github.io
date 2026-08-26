@@ -386,6 +386,33 @@
     max-width: 14rem;
 }
 
+.admin-toolbar-filtro {
+    flex: 0 1 12rem;
+    min-width: 9.5rem;
+    max-width: 16rem;
+}
+
+.leads-filter-summary {
+    margin: -4px 0 12px;
+}
+
+.admin-card.lead-novo {
+    box-shadow: inset 3px 0 0 var(--admin-ink);
+}
+
+.lead-badge-novo {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-fill);
+    color: var(--admin-ink);
+}
+
 .admin-toolbar .btn-primary {
     flex-shrink: 0;
 }
@@ -1002,6 +1029,32 @@
     box-shadow: inset 0 0 0 1.5px var(--admin-ink);
 }
 
+.admin-body .lead-proc-grupo-label {
+    margin: 0.85rem 0 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--admin-muted, #5c5a55);
+}
+
+.admin-body .lead-proc-combos .lead-proc-grupo-label,
+.admin-body .lead-proc-falha-grupo:first-of-type .lead-proc-grupo-label {
+    margin-top: 0.35rem;
+}
+
+.admin-body .lead-proc-falha-grupo + .lead-proc-falha-grupo {
+    margin-top: 0.15rem;
+}
+
+.admin-body .lead-proc-ganchos-combos .followup-gancho-combo {
+    border-style: dashed;
+    font-weight: 650;
+}
+
+.admin-body .lead-proc-abertura [data-abertura-titulo] {
+    margin-top: 0.35rem;
+}
+
 .admin-body .toast {
     color: #f5f5f7;
     display: inline-flex;
@@ -1498,7 +1551,8 @@
         padding: 12px 14px;
     }
 
-    .admin-toolbar-ordem {
+    .admin-toolbar-ordem,
+    .admin-toolbar-filtro {
         flex: 1 1 100%;
         max-width: none;
     }

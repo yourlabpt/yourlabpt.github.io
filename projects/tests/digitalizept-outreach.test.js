@@ -239,7 +239,7 @@ describe('digitalizept outreach', () => {
         } = require('../../server/lib/digitalizept-outreach.js');
         const one = composeAbertura({ falhas: ['maps_sem_whatsapp'] });
         assert.equal(one.id, 'maps_sem_whatsapp');
-        assert.match(one.ganchoTexto, /não há WhatsApp para marcar/);
+        assert.match(one.ganchoTexto, /não há WhatsApp/);
         assert.match(one.ganchoTexto, /Unir isto num só sítio/);
         assert.equal(one.factos.length, 1);
 
@@ -249,6 +249,25 @@ describe('digitalizept outreach', () => {
         assert.equal(several.factos.length, 3);
         assert.match(several.ganchoTexto, /está o telefone/);
         assert.doesNotMatch(several.ganchoTexto, /Estão no Maps, mas não há WhatsApp/);
+
+        const scattered = composeAbertura({
+            falhas: ['info_desencontrada', 'redes_desligadas_maps', 'maps_sem_site']
+        });
+        assert.equal(scattered.factos.length, 2);
+        assert.match(scattered.ganchoTexto, /não dizem a mesma coisa/);
+        assert.doesNotMatch(scattered.ganchoTexto, /não os liga/);
+
+        const {
+            listGrupos,
+            listCombinacoes
+        } = require('../../server/lib/digitalizept-outreach.js');
+        const grupos = listGrupos('pt');
+        assert.ok(grupos.some((g) => g.id === 'pin' && /Pin no Maps/.test(g.label)));
+        const combos = listCombinacoes('pt');
+        const central = combos.find((c) => c.id === 'centralizacao');
+        assert.ok(central);
+        assert.deepEqual(central.falhas, ['info_desencontrada', 'maps_sem_site', 'maps_sem_whatsapp']);
+        assert.match(central.chip, /Centralizar/);
 
         const suggested = suggestFalhas({
             telefone: '910000000',
@@ -291,13 +310,21 @@ describe('digitalizept outreach', () => {
         });
         assert.equal(ctx.ganchoId, 'redes_desligadas_maps');
         assert.match(ctx.ganchoTitulo, /Vimos-vos no Google Maps/);
-        assert.match(ctx.ganchoTexto, /As redes aparecem no Google/);
+        assert.match(ctx.ganchoTexto, /não os liga/);
         assert.match(ctx.ganchoTexto, /não há um site vosso/);
         assert.doesNotMatch(ctx.ganchoTexto, /Facebook não é nosso/);
         const html = renderEmailHtml(ctx);
-        assert.match(html, /perfil Google completo/);
+        assert.match(html, /perfil Google completo|Perfil da Empresa|pin no Maps|tudo num só sítio/);
         assert.match(html, /não há um site vosso/);
+        assert.match(html, />Ligar</);
+        assert.match(html, />WhatsApp</);
+        assert.match(html, />Website</);
+        assert.match(html, />Instagram</);
+        assert.match(html, />Facebook</);
+        assert.match(html, />Direções</);
+        assert.match(html, /Website \(com Instagram e Facebook ligados\)/);
         assert.doesNotMatch(html, /\{\{gancho/);
+        assert.doesNotMatch(html, /\{\{fichaGoogleAcoesHtml\}\}/);
         assert.doesNotMatch(html, /Quando alguém vos recomenda/);
         const wa1 = waTextForStep(1, ctx);
         assert.match(wa1, /Vimos-vos no Google Maps/);
@@ -362,6 +389,13 @@ describe('digitalizept outreach', () => {
         assert.match(html, /Open the example/);
         assert.match(html, /Book a meeting/);
         assert.match(html, /Digitize your business/);
+        assert.match(html, />Call</);
+        assert.match(html, />WhatsApp</);
+        assert.match(html, />Website</);
+        assert.match(html, />Instagram</);
+        assert.match(html, />Facebook</);
+        assert.match(html, />Directions</);
+        assert.match(html, /everything in one place/);
         assert.doesNotMatch(html, /Sr\./);
         assert.doesNotMatch(html, /Digitalize a sua empresa/);
         assert.doesNotMatch(html, /Abrir o exemplo/);

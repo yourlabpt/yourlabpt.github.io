@@ -25,75 +25,121 @@ const GANCHO_TO_FALHAS = {
 };
 
 const TITULO_MAPS = {
-    pt: 'Vimos-vos no Google Maps. Dá para ficar mais claro para quem vos procura.',
-    en: 'We found you on Google Maps. It can be clearer for the people looking for you.'
+    pt: 'Vimos-vos no Google Maps. Quem vos procura no Maps ou no Instagram ainda não vê o negócio completo num só sítio.',
+    en: 'We found you on Google Maps. People who look for you on Maps or Instagram still do not see the full business in one place.'
 };
 
 const TITULO_SEM_NADA = {
-    pt: 'Procurámos-vos no Google. Quase não há nada para o cliente perceber o que fazem.',
-    en: 'We looked you up on Google. There is almost nothing for a customer to understand what you do.'
+    pt: 'Procurámos-vos no Google e nas redes. Quase não há nada para o cliente perceber o que fazem nem como vos contactar.',
+    en: 'We looked you up on Google and on social. There is almost nothing for a customer to understand what you do or how to reach you.'
 };
 
 const FECHO = {
-    pt: 'Unir isto num só sítio — perfil Google completo e uma página vossa. Quem é para vocês encontra-vos melhor. Quem não percebe o serviço vê logo e não vos tira tempo. Na YourLab tratamos disto ao vosso lado.',
-    en: 'Bring this into one place — a complete Google profile and a page of your own. The right people find you more easily. Anyone who does not understand the service sees that straight away and does not take your time. At YourLab we handle this alongside you.'
+    pt: 'Unir isto num só sítio — pin no Maps com WhatsApp, telefone e site, Perfil da Empresa a gerir, Instagram e Facebook ligados, e uma página vossa. Quem vos procura encontra-vos e percebe o serviço; quem não é para vocês vê logo e não vos tira tempo. Fizemos um exemplo para verem como fica. Na YourLab tratamos disto ao vosso lado.',
+    en: 'Bring this into one place — a Maps pin with WhatsApp, phone and website, a managed Business Profile, Instagram and Facebook linked, and a page of your own. People looking for you find you and understand the service; anyone who is not a fit sees that straight away and does not take your time. We made an example so you can see how it looks. At YourLab we handle this alongside you.'
 };
+
+export const GRUPOS = [
+    { id: 'pin', label: { pt: 'Pin no Maps — o que falta no contacto público', en: 'Maps pin — what is missing on the public contact' } },
+    { id: 'site', label: { pt: 'Site próprio — ligado ao pin', en: 'Own website — linked from the pin' } },
+    { id: 'redes', label: { pt: 'Instagram e Facebook — ligados ao Maps', en: 'Instagram and Facebook — linked to Maps' } },
+    { id: 'perfil', label: { pt: 'Perfil da Empresa — a ficha gerível', en: 'Business Profile — the managed listing' } },
+    { id: 'geral', label: { pt: 'Quase invisível', en: 'Almost invisible' } }
+];
+
+export const COMBINACOES = [
+    {
+        id: 'centralizacao',
+        chip: { pt: 'Combo · Centralizar tudo', en: 'Pack · Centralise everything' },
+        hint: { pt: 'Pin incompleto + redes desligadas + falta um sítio só', en: 'Incomplete pin + social off Maps + no single place' },
+        falhas: ['info_desencontrada', 'maps_sem_site', 'maps_sem_whatsapp']
+    },
+    {
+        id: 'pin_contacto',
+        chip: { pt: 'Combo · Pin sem contacto fácil', en: 'Pack · Pin without easy contact' },
+        hint: { pt: 'WhatsApp e site em falta no pin', en: 'WhatsApp and website missing on the pin' },
+        falhas: ['maps_sem_whatsapp', 'maps_sem_site', 'maps_sem_email']
+    },
+    {
+        id: 'redes_maps',
+        chip: { pt: 'Combo · Redes ≠ Maps', en: 'Pack · Social ≠ Maps' },
+        hint: { pt: 'IG/FB e o pin não contam a mesma história', en: 'IG/FB and the pin do not tell the same story' },
+        falhas: ['info_desencontrada', 'redes_desligadas_maps']
+    },
+    {
+        id: 'site_fraco_pack',
+        chip: { pt: 'Combo · Site fraco ou errado', en: 'Pack · Weak or wrong website' },
+        hint: { pt: 'Há link ou site, mas não ajuda o cliente', en: 'There is a link or site, but it does not help the customer' },
+        falhas: ['site_fraco', 'maps_sem_whatsapp']
+    }
+];
 
 const FALHAS = {
     maps_sem_whatsapp: {
-        chip: 'Sem WhatsApp no Maps',
-        frase: 'Estão no Maps, mas não há WhatsApp para marcar.',
-        en: { chip: 'No WhatsApp on Maps', frase: 'You are on Maps, but there is no WhatsApp to book with.' }
+        grupo: 'pin',
+        chip: 'Sem WhatsApp no pin',
+        frase: 'No pin do Maps não há WhatsApp — quem vos encontra não marca em dois toques.',
+        en: { chip: 'No WhatsApp on the pin', frase: 'The Maps pin has no WhatsApp — people who find you cannot book in two taps.' }
     },
     maps_telefone_sem_wa: {
-        chip: 'Telefone no Maps, sem WhatsApp',
-        frase: 'No Maps está o telefone. Não está o WhatsApp para marcar.',
-        en: { chip: 'Phone on Maps, no WhatsApp', frase: 'Maps has the phone number. It does not have WhatsApp to book with.' }
+        grupo: 'pin',
+        chip: 'Só telefone no pin, sem WhatsApp',
+        frase: 'No pin está o telefone. Falta o WhatsApp — o canal que a maior parte usa para marcar.',
+        en: { chip: 'Phone on the pin, no WhatsApp', frase: 'The pin has the phone. WhatsApp is missing — the channel most people use to book.' }
     },
     maps_sem_site: {
-        chip: 'Sem site no Maps',
-        frase: 'No Maps não há um site vosso.',
-        en: { chip: 'No website on Maps', frase: 'There is no website of yours on Maps.' }
+        grupo: 'pin',
+        chip: 'Sem site no pin',
+        frase: 'No pin do Maps não há um site vosso — o cliente não tem um sítio só vosso para perceber o serviço.',
+        en: { chip: 'No website on the pin', frase: 'The Maps pin has no website of yours — the customer has nowhere that is only yours to understand the service.' }
     },
     maps_sem_email: {
-        chip: 'Sem email no Maps',
-        frase: 'Não há email no Maps para o cliente escrever.',
-        en: { chip: 'No email on Maps', frase: 'There is no email on Maps for a customer to write to.' }
+        grupo: 'pin',
+        chip: 'Sem email no pin',
+        frase: 'No pin não há email — quem quer escrever fica sem caminho.',
+        en: { chip: 'No email on the pin', frase: 'The pin has no email — anyone who wants to write has no path.' }
     },
     site_link_errado: {
-        chip: 'Site no Maps errado',
-        frase: 'O link do site no Maps não leva a vocês.',
-        en: { chip: 'Wrong website on Maps', frase: 'The website link on Maps does not take people to you.' }
+        grupo: 'site',
+        chip: 'Link do site no pin errado',
+        frase: 'O link do site no pin do Maps não leva a vocês — perde-se a confiança na primeira abertura.',
+        en: { chip: 'Wrong website link on the pin', frase: 'The website link on the Maps pin does not take people to you — trust is lost on the first open.' }
     },
     site_fraco: {
-        chip: 'Site mal feito',
-        frase: 'Há um site, mas a informação não chega para o cliente perceber o serviço.',
-        en: { chip: 'Weak website', frase: 'There is a website, but it does not tell a customer enough about the service.' }
+        grupo: 'site',
+        chip: 'Site fraco ou pouco claro',
+        frase: 'Há um site, mas a informação não chega para o cliente perceber o serviço num olhar.',
+        en: { chip: 'Weak or unclear website', frase: 'There is a website, but it does not tell a customer enough about the service at a glance.' }
     },
     redes_desligadas_maps: {
-        chip: 'Redes fora do Maps',
-        frase: 'As redes aparecem no Google; o Maps não as liga.',
-        en: { chip: 'Social not on Maps', frase: 'The social accounts show up on Google; Maps does not connect them.' }
+        grupo: 'redes',
+        chip: 'IG/FB fora do pin',
+        frase: 'O Instagram e o Facebook existem, mas o pin do Maps não os liga — quem chega pelo Google não vê as redes.',
+        en: { chip: 'IG/FB off the pin', frase: 'Instagram and Facebook exist, but the Maps pin does not link them — people arriving via Google never see the social accounts.' }
     },
     redes_sem_morada: {
+        grupo: 'redes',
         chip: 'Redes sem morada',
-        frase: 'Há redes. Não há morada para o cliente chegar.',
-        en: { chip: 'Social, no address', frase: 'There are social accounts. There is no address for a customer to find you.' }
+        frase: 'Há redes. Não há morada clara para o cliente chegar ao sítio.',
+        en: { chip: 'Social, no address', frase: 'There are social accounts. There is no clear address for a customer to find the place.' }
     },
     info_desencontrada: {
-        chip: 'IG / FB / Maps diferentes',
-        frase: 'Instagram, Facebook, WhatsApp e o pin no Maps não dizem a mesma coisa — falta um sítio só.',
-        en: { chip: 'IG / FB / Maps disagree', frase: 'Instagram, Facebook, WhatsApp and the Maps pin do not say the same thing — there is no single place.' }
+        grupo: 'redes',
+        chip: 'IG / FB / pin diferentes',
+        frase: 'Instagram, Facebook e o pin no Maps não dizem a mesma coisa — horário, contacto ou serviço desencontrados. Falta um sítio só.',
+        en: { chip: 'IG / FB / pin disagree', frase: 'Instagram, Facebook and the Maps pin do not say the same thing — hours, contact or service disagree. There is no single place.' }
     },
     ficha_errada: {
-        chip: 'Ficha com erro',
-        frase: 'A ficha no Google diz {{problemaFicha}}.',
-        en: { chip: 'Listing is wrong', frase: 'The Google listing says {{problemaFicha}}.' }
+        grupo: 'perfil',
+        chip: 'Perfil / ficha com erro',
+        frase: 'A ficha no Google (Perfil da Empresa) diz {{problemaFicha}} — o pin público fica a mentir ao cliente.',
+        en: { chip: 'Profile / listing error', frase: 'The Google Business Profile says {{problemaFicha}} — the public pin misleads the customer.' }
     },
     sem_nada: {
+        grupo: 'geral',
         chip: 'Quase nada no Google',
-        frase: 'Quem vos procura no Google quase não encontra nada.',
-        en: { chip: 'Almost nothing on Google', frase: 'Anyone who looks you up on Google finds almost nothing.' }
+        frase: 'Quem vos procura no Google ou no Instagram quase não encontra nada para perceber o negócio.',
+        en: { chip: 'Almost nothing on Google', frase: 'Anyone who looks you up on Google or Instagram finds almost nothing to understand the business.' }
     }
 };
 
@@ -161,6 +207,9 @@ function falhasParaCopy(ids) {
     if (list.includes('maps_telefone_sem_wa')) {
         list = list.filter((id) => id !== 'maps_sem_whatsapp');
     }
+    if (list.includes('info_desencontrada')) {
+        list = list.filter((id) => id !== 'redes_desligadas_maps' && id !== 'redes_sem_morada');
+    }
     if (list.length > 1) list = list.filter((id) => id !== 'sem_nada');
     return FALHA_IDS.filter((id) => list.includes(id)).slice(0, 3);
 }
@@ -179,6 +228,7 @@ export function suggestFalhas(sinais = {}) {
     else if (siteIsOld(sinais)) out.push('site_fraco');
     if (!filled(sinais.email)) out.push('maps_sem_email');
     if (hasSocial(sinais)) {
+        out.push('info_desencontrada');
         out.push('redes_desligadas_maps');
         if (!filled(sinais.morada)) out.push('redes_sem_morada');
     }
@@ -228,10 +278,29 @@ export function listGanchos() {
 export function listFalhas() {
     return FALHA_IDS.map((id) => ({
         id,
+        grupo: FALHAS[id].grupo || 'geral',
         nome: FALHAS[id].chip,
         nomeCurto: FALHAS[id].chip,
         ganchoTitulo: FALHAS[id].frase,
         ganchoTexto: FALHAS[id].frase
+    }));
+}
+
+export function listGrupos(lang = 'pt') {
+    const outreachLang = normalizeOutreachLang(lang);
+    return GRUPOS.map((g) => ({
+        id: g.id,
+        label: (g.label && (g.label[outreachLang] || g.label.pt)) || g.id
+    }));
+}
+
+export function listCombinacoes(lang = 'pt') {
+    const outreachLang = normalizeOutreachLang(lang);
+    return COMBINACOES.map((c) => ({
+        id: c.id,
+        chip: (c.chip && (c.chip[outreachLang] || c.chip.pt)) || c.id,
+        hint: (c.hint && (c.hint[outreachLang] || c.hint.pt)) || '',
+        falhas: c.falhas.slice()
     }));
 }
 
@@ -257,8 +326,23 @@ export function sinaisFromWizardState(state) {
     };
 }
 
-export function shortGanchoTexto(texto) {
-    const t = String(texto || '').trim();
-    if (!t) return '';
-    return t.length <= 480 ? t : '';
+export function shortGanchoTexto(texto, opts = {}) {
+    const full = String(texto || '').trim();
+    const limit = Number(opts.limit) > 0 ? Number(opts.limit) : 520;
+    if (full && full.length <= limit) return full;
+    const factos = Array.isArray(opts.factos)
+        ? opts.factos.map((f) => String(f || '').trim()).filter(Boolean)
+        : [];
+    const fecho = String(opts.fecho || '').trim();
+    for (let n = Math.min(2, factos.length); n >= 0; n -= 1) {
+        const parts = factos.slice(0, n);
+        if (fecho) parts.push(fecho);
+        const candidate = parts.join('\n\n').trim();
+        if (candidate && candidate.length <= limit) return candidate;
+    }
+    if (fecho && fecho.length <= limit) return fecho;
+    if (factos[0]) {
+        return factos[0].length <= limit ? factos[0] : `${factos[0].slice(0, Math.max(0, limit - 1))}…`;
+    }
+    return full ? `${full.slice(0, Math.max(0, limit - 1))}…` : '';
 }

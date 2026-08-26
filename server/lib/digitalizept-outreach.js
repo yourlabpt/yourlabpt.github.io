@@ -304,6 +304,45 @@ function formatSellerPhone(raw) {
     return { display: fallback, tel: fallback.replace(/\s/g, '') };
 }
 
+function waMeUrl(raw) {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (!digits) return '';
+    const withCc = digits.length === 9 ? `351${digits}` : digits;
+    return `https://wa.me/${withCc}`;
+}
+
+function websiteHref(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
+    return `https://${raw.replace(/^\/+/, '')}`;
+}
+
+function instagramHref(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
+    const handle = raw.replace(/^@/, '');
+    return handle ? `https://www.instagram.com/${handle}` : '';
+}
+
+function facebookHref(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
+    const handle = raw
+        .replace(/^@/, '')
+        .replace(/^https?:\/\/(www\.)?facebook\.com\//i, '')
+        .replace(/\/$/, '');
+    return handle ? `https://www.facebook.com/${handle}` : '';
+}
+
+function mapsDirectionsHref(morada) {
+    const q = String(morada || '').trim();
+    if (!q) return '';
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+}
+
 function unsubResultadoFor(current) {
     return String(current || '').trim() === 'digitalizado' ? 'digitalizado' : 'sem_interesse';
 }
@@ -347,7 +386,7 @@ function applyOptionalBlocks(html, ctx) {
         .replace(/<!--IF_MENSAGEM_PADRAO-->([\s\S]*?)<!--\/IF_MENSAGEM_PADRAO-->/g, ctx.showMensagemEditada ? '' : '$1');
 }
 
-const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto', 'emailMensagemHtml']);
+const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto', 'emailMensagemHtml', 'fichaGoogleAcoesHtml']);
 
 function fillHtmlTemplate(template, ctx) {
     const escaped = {};
@@ -357,6 +396,32 @@ function fillHtmlTemplate(template, ctx) {
             : escapeHtml(ctx[key]);
     });
     return fillTemplate(applyOptionalBlocks(template, ctx), escaped);
+}
+
+function fichaGoogleAcoesHtml(links = {}, lang = 'pt') {
+    const en = normalizeOutreachLang(lang) === 'en';
+    const chip = (label, href, primary) => {
+        const color = primary ? '#1A73E8' : '#5F6368';
+        const style = `display:inline-block; padding:7px 12px; border:1px solid #DADCE0; font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:16px; color:${color}; text-decoration:none;`;
+        if (href) {
+            return `<a href="${escapeHtml(href)}" target="_blank" style="${style}">${escapeHtml(label)}</a>`;
+        }
+        return `<span style="${style}">${escapeHtml(label)}</span>`;
+    };
+    const cell = (html, padTop = false) => (
+        `<td style="padding:${padTop ? '8px' : '0'} 8px 0 0;">${html}</td>`
+    );
+    const row1 = [
+        chip(en ? 'Call' : 'Ligar', links.tel, true),
+        chip('WhatsApp', links.whatsapp, false),
+        chip('Website', links.website, false)
+    ].map((html) => cell(html)).join('');
+    const row2 = [
+        chip('Instagram', links.instagram, false),
+        chip('Facebook', links.facebook, false),
+        chip(en ? 'Directions' : 'Direções', links.direcoes, false)
+    ].map((html) => cell(html, true)).join('');
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;"><tr>${row1}</tr><tr>${row2}</tr></table>`;
 }
 
 function stripSite(value) {
@@ -664,6 +729,9 @@ function falhasParaCopy(ids) {
     if (list.includes('maps_telefone_sem_wa')) {
         list = list.filter((id) => id !== 'maps_sem_whatsapp');
     }
+    if (list.includes('info_desencontrada')) {
+        list = list.filter((id) => id !== 'redes_desligadas_maps' && id !== 'redes_sem_morada');
+    }
     if (list.length > 1) list = list.filter((id) => id !== 'sem_nada');
     const ordem = loadFalhasCatalog().ordem;
     const max = Number(loadFalhasCatalog().maxFactos) || 3;
@@ -708,6 +776,7 @@ function suggestFalhas(sinais = {}) {
     else if (siteIsOld(sinais)) out.push('site_fraco');
     if (!filledGanchoField(sinais.email)) out.push('maps_sem_email');
     if (hasSocial(sinais)) {
+        out.push('info_desencontrada');
         out.push('redes_desligadas_maps');
         if (!filledGanchoField(sinais.morada)) out.push('redes_sem_morada');
     }
@@ -765,12 +834,33 @@ function listFalhas() {
         const item = catalog.falhas[id];
         return {
             id,
+            grupo: item.grupo || 'geral',
             nome: item.chip,
             nomeCurto: item.chip,
             ganchoTitulo: item.frase,
             ganchoTexto: item.frase
         };
     });
+}
+
+function listGrupos(lang = 'pt') {
+    const catalog = loadFalhasCatalog();
+    const outreachLang = normalizeOutreachLang(lang);
+    return (catalog.grupos || []).map((g) => ({
+        id: g.id,
+        label: (g.label && (g.label[outreachLang] || g.label.pt)) || g.id
+    }));
+}
+
+function listCombinacoes(lang = 'pt') {
+    const catalog = loadFalhasCatalog();
+    const outreachLang = normalizeOutreachLang(lang);
+    return (catalog.combinacoes || []).map((c) => ({
+        id: c.id,
+        chip: (c.chip && (c.chip[outreachLang] || c.chip.pt)) || c.id,
+        hint: (c.hint && (c.hint[outreachLang] || c.hint.pt)) || '',
+        falhas: Array.isArray(c.falhas) ? c.falhas.slice() : []
+    }));
 }
 
 function applyGanchoFields(followup, patch = {}) {
@@ -835,10 +925,26 @@ function sinaisFromLead({ dados = {}, diag = {}, presence = {}, followup = {}, p
     };
 }
 
-function shortGanchoTexto(texto) {
-    const t = String(texto || '').trim();
-    if (!t) return '';
-    return t.length <= 480 ? t : '';
+function shortGanchoTexto(texto, opts = {}) {
+    const full = String(texto || '').trim();
+    const limit = Number(opts.limit) > 0 ? Number(opts.limit) : 520;
+    if (full && full.length <= limit) return full;
+    const factos = Array.isArray(opts.factos)
+        ? opts.factos.map((f) => String(f || '').trim()).filter(Boolean)
+        : [];
+    const fecho = String(opts.fecho || '').trim();
+    // Keep the unify close on WhatsApp even when three long facts would blow the limit.
+    for (let n = Math.min(2, factos.length); n >= 0; n -= 1) {
+        const parts = factos.slice(0, n);
+        if (fecho) parts.push(fecho);
+        const candidate = parts.join('\n\n').trim();
+        if (candidate && candidate.length <= limit) return candidate;
+    }
+    if (fecho && fecho.length <= limit) return fecho;
+    if (factos[0]) {
+        return factos[0].length <= limit ? factos[0] : `${factos[0].slice(0, Math.max(0, limit - 1))}…`;
+    }
+    return full ? `${full.slice(0, Math.max(0, limit - 1))}…` : '';
 }
 
 function nextSendableWaStep(followup) {
@@ -1056,6 +1162,18 @@ function buildOutreachContext({
         linkGoogle: '',
         imagemGoogle: '',
         imagemSite: '',
+        linkFichaTel: (() => {
+            const raw = String(dados.telefone || dados.whatsapp || '').trim();
+            if (!raw) return '';
+            const tel = formatSellerPhone(raw).tel;
+            return tel ? `tel:${tel}` : '';
+        })(),
+        linkFichaWhatsApp: waMeUrl(dados.whatsapp || dados.telefone),
+        linkFichaWebsite: link || websiteHref(dados.website_atual || dados.website || ''),
+        linkFichaInstagram: instagramHref(dados.instagram) || (link ? `${link}#instagram` : ''),
+        linkFichaFacebook: facebookHref(dados.facebook) || (link ? `${link}#facebook` : ''),
+        linkFichaDirecoes: mapsDirectionsHref([morada, zona].filter(Boolean).join(', ')),
+        fichaGoogleAcoesHtml: '',
         empresaNome: String(provider.nome || 'YourLab').trim() || 'YourLab',
         empresaNif: String(provider.nif || '—').trim() || '—',
         empresaMorada,
@@ -1099,12 +1217,26 @@ function buildOutreachContext({
         mesAnterior: ''
     };
     Object.assign(ctx, offerCopy(offer, outreachLang));
+    ctx.fichaGoogleAcoesHtml = fichaGoogleAcoesHtml({
+        tel: ctx.linkFichaTel,
+        whatsapp: ctx.linkFichaWhatsApp,
+        website: ctx.linkFichaWebsite,
+        instagram: ctx.linkFichaInstagram,
+        facebook: ctx.linkFichaFacebook,
+        // Visual only — cold email should not send people out to Google Maps.
+        direcoes: ''
+    }, outreachLang);
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
     ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
     ctx.diagnosticoResumo = fillTemplate(picked.diagnosticoResumo || '', ctx);
     ctx.diagnosticoLinha = ctx.diagnosticoResumo ? `${ctx.diagnosticoResumo}\n\n` : '';
-    ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto)
-        || shortGanchoTexto((picked.factos || []).join('\n\n'));
+    const catalog = loadFalhasCatalog();
+    const fechoRaw = (catalog.fecho && (catalog.fecho[outreachLang] || catalog.fecho.pt)) || '';
+    const factosFilled = (picked.factos || []).map((f) => fillTemplate(f, ctx)).filter(Boolean);
+    ctx.ganchoTextoCurto = shortGanchoTexto(ctx.ganchoTexto, {
+        factos: factosFilled,
+        fecho: fillTemplate(fechoRaw, ctx)
+    });
     ctx.ganchoTextoWa = ctx.ganchoTextoCurto ? `\n\n${ctx.ganchoTextoCurto}` : '';
     return ctx;
 }
@@ -1292,6 +1424,8 @@ module.exports = {
     loadFalhasCatalog,
     listGanchos,
     listFalhas,
+    listGrupos,
+    listCombinacoes,
     pickGancho,
     composeAbertura,
     suggestFalhas,

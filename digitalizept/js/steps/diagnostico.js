@@ -120,7 +120,8 @@ async function render(body, ctx) {
         mountGbpExample(sampleBlock, {
             data: GBP_SAMPLE,
             clientMode: false,
-            unifyPitch: true
+            unifyPitch: true,
+            showRealLink: true
         });
         host.appendChild(sampleBlock);
 

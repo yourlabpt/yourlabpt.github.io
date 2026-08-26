@@ -54,7 +54,10 @@ const el = {
     dealsList: document.getElementById('deals-list'),
     catalogFilter: document.getElementById('catalog-filter'),
     demosFilter: document.getElementById('leads-filter'),
+    leadsSegmento: document.getElementById('leads-segmento'),
+    leadsSituacao: document.getElementById('leads-situacao'),
     leadsOrdem: document.getElementById('leads-ordem'),
+    leadsFilterSummary: document.getElementById('leads-filter-summary'),
     dealsFilter: document.getElementById('deals-filter'),
     catalogAddBtn: document.getElementById('catalog-add-btn'),
     leadsEmailDemosBtn: document.getElementById('leads-email-demos-btn'),
@@ -419,7 +422,10 @@ function isParked(item) {
 }
 
 const LEADS_ORDEM_KEY = 'digitalizept_leads_ordem';
+const LEADS_SEGMENTO_KEY = 'digitalizept_leads_segmento';
+const LEADS_SITUACAO_KEY = 'digitalizept_leads_situacao';
 const LEADS_ORDEM = ['proximo', 'tipo', 'criado', 'atualizado'];
+const LEADS_SITUACOES = ['', 'novos', 'enviar', 'sequencia', 'sem_demo', 'falta_ficha'];
 
 function storedLeadsOrdem() {
     try {
@@ -438,6 +444,123 @@ function leadsOrdem() {
 function syncLeadsOrdemControl() {
     if (!el.leadsOrdem) return;
     el.leadsOrdem.value = storedLeadsOrdem();
+}
+
+function storedLeadsSegmento() {
+    try {
+        return String(localStorage.getItem(LEADS_SEGMENTO_KEY) || '').trim();
+    } catch (_) {
+        return '';
+    }
+}
+
+function leadsSegmento() {
+    return String((el.leadsSegmento && el.leadsSegmento.value) || '').trim();
+}
+
+function storedLeadsSituacao() {
+    try {
+        const v = String(localStorage.getItem(LEADS_SITUACAO_KEY) || '').trim();
+        return LEADS_SITUACOES.includes(v) ? v : '';
+    } catch (_) {
+        return '';
+    }
+}
+
+function leadsSituacao() {
+    const fromUi = el.leadsSituacao && el.leadsSituacao.value;
+    return LEADS_SITUACOES.includes(fromUi) ? fromUi : storedLeadsSituacao();
+}
+
+function syncLeadsFilterControls() {
+    syncLeadsOrdemControl();
+    if (el.leadsSituacao) el.leadsSituacao.value = storedLeadsSituacao();
+}
+
+function leadProcessKey(lead) {
+    return String((lead && lead.processoEstado) || '').trim().toUpperCase();
+}
+
+function isLeadNovoACompletar(lead) {
+    if (!lead || lead.estado === 'fechado') return false;
+    const pe = leadProcessKey(lead);
+    if (pe === 'NOVO') return true;
+    const estado = String(lead.estado || '').toLowerCase();
+    return estado === 'rascunho' || estado === 'novo';
+}
+
+function leadMatchesSituacao(lead, situacao) {
+    if (!situacao) return true;
+    const pe = leadProcessKey(lead);
+    if (situacao === 'novos') return isLeadNovoACompletar(lead);
+    if (situacao === 'enviar') return pe === 'DEMO_PRONTO';
+    if (situacao === 'sequencia') {
+        return pe === 'EM_SEQUENCIA' || pe === 'RESPONDEU' || pe === 'VISITA' || pe === 'PROPOSTA';
+    }
+    if (situacao === 'sem_demo') return !String(lead.demo_slug || '').trim();
+    if (situacao === 'falta_ficha') return Number(lead.fichaMissing) > 0;
+    return true;
+}
+
+function syncLeadsSegmentoOptions() {
+    if (!el.leadsSegmento) return;
+    const prev = leadsSegmento() || storedLeadsSegmento();
+    const byId = new Map();
+    businessTypes.forEach((t) => {
+        if (t && t.id) byId.set(t.id, t.nome || t.id);
+    });
+    leads.forEach((l) => {
+        const id = String((l && l.business_type) || '').trim();
+        if (id && !byId.has(id)) byId.set(id, id);
+    });
+    const options = [...byId.entries()]
+        .map(([id, nome]) => ({ id, nome }))
+        .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt'));
+    el.leadsSegmento.replaceChildren();
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'Todos os segmentos';
+    el.leadsSegmento.appendChild(all);
+    options.forEach((t) => {
+        const o = document.createElement('option');
+        o.value = t.id;
+        o.textContent = t.nome;
+        el.leadsSegmento.appendChild(o);
+    });
+    if (prev && [...el.leadsSegmento.options].some((o) => o.value === prev)) {
+        el.leadsSegmento.value = prev;
+    } else {
+        el.leadsSegmento.value = '';
+    }
+}
+
+function situacaoLabel(id) {
+    if (id === 'novos') return 'Novos a completar';
+    if (id === 'enviar') return 'Prontas a enviar';
+    if (id === 'sequencia') return 'Em sequência';
+    if (id === 'sem_demo') return 'Sem demo';
+    if (id === 'falta_ficha') return 'Ficha incompleta';
+    return '';
+}
+
+function updateLeadsFilterSummary(shown, totalOpen) {
+    if (!el.leadsFilterSummary) return;
+    const parts = [];
+    const seg = leadsSegmento();
+    const sit = leadsSituacao();
+    if (seg) parts.push(categoriaNome(seg));
+    if (sit) parts.push(situacaoLabel(sit));
+    const q = (el.demosFilter && el.demosFilter.value) || '';
+    if (String(q).trim()) parts.push(`«${String(q).trim()}»`);
+    if (!parts.length && shown === totalOpen) {
+        el.leadsFilterSummary.hidden = true;
+        el.leadsFilterSummary.textContent = '';
+        return;
+    }
+    el.leadsFilterSummary.hidden = false;
+    el.leadsFilterSummary.textContent = parts.length
+        ? `A mostrar ${shown} de ${totalOpen} · ${parts.join(' · ')}`
+        : `A mostrar ${shown} de ${totalOpen}`;
 }
 
 function activeFirst(items) {
@@ -663,27 +786,41 @@ function addControloLeadButton(actions, leadId, { primary = true } = {}) {
 
 function renderDemos() {
     const q = (el.demosFilter.value || '').trim().toLowerCase();
-    const filtered = leads.filter((l) => l.estado !== 'fechado').filter((l) => {
+    const segmento = leadsSegmento();
+    const situacao = leadsSituacao();
+    const open = leads.filter((l) => l.estado !== 'fechado');
+    const filtered = open.filter((l) => {
+        if (segmento && String(l.business_type || '') !== segmento) return false;
+        if (!leadMatchesSituacao(l, situacao)) return false;
         if (!q) return true;
-        return `${l.nome} ${l.business_type} ${l.demo_slug || ''} ${l.morada || ''} ${l.estado || ''} ${l.processoEstado || ''} ${l.processoEstadoLabel || ''}`
+        const tipoNome = categoriaNome(l.business_type);
+        return `${l.nome} ${l.business_type} ${tipoNome} ${l.demo_slug || ''} ${l.morada || ''} ${l.cidade || ''} ${l.estado || ''} ${l.processoEstado || ''} ${l.processoEstadoLabel || ''}`
             .toLowerCase()
             .includes(q);
     });
-    const items = leadsOrdem() === 'proximo' ? activeFirst(filtered) : filtered;
+    let items = leadsOrdem() === 'proximo' ? activeFirst(filtered) : filtered;
+    if (situacao === 'novos') {
+        items = [...items].sort((a, b) => String(b.criado_em || '').localeCompare(String(a.criado_em || '')));
+    }
+    updateLeadsFilterSummary(items.length, open.length);
     el.demosList.innerHTML = '';
     if (!items.length) {
-        el.demosList.innerHTML = '<p class="admin-empty">Sem leads em aberto.</p>';
+        el.demosList.innerHTML = '<p class="admin-empty">Sem leads neste filtro.</p>';
         return;
     }
     items.forEach((l) => {
         const card = document.createElement('article');
         const parked = isParked(l);
-        card.className = parked ? 'admin-card parked' : 'admin-card';
+        const novo = isLeadNovoACompletar(l);
+        card.className = parked ? 'admin-card parked' : (novo ? 'admin-card lead-novo' : 'admin-card');
+        const tipo = categoriaNome(l.business_type);
+        const situacaoTxt = l.processoEstadoLabel
+            || (novo ? 'Novo a completar' : estadoLabel(l.estado));
         card.innerHTML = `
-            <h3>${leadMapPinHtml(l)}${l.nome || 'Sem nome'}</h3>
-            <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · criado ${new Date(l.criado_em).toLocaleDateString('pt-PT')}${l.atualizado_em && l.atualizado_em !== l.criado_em ? ` · act. ${new Date(l.atualizado_em).toLocaleDateString('pt-PT')}` : ''}</p>
+            <h3>${leadMapPinHtml(l)}${l.nome || 'Sem nome'}${novo ? ' <span class="lead-badge-novo">Novo</span>' : ''}</h3>
+            <p class="meta">${tipo || '—'} · ${situacaoTxt} · criado ${new Date(l.criado_em).toLocaleDateString('pt-PT')}${l.atualizado_em && l.atualizado_em !== l.criado_em ? ` · act. ${new Date(l.atualizado_em).toLocaleDateString('pt-PT')}` : ''}</p>
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
-            ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
+            ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : '<p class="meta">Sem demo ainda</p>'}
             ${processoMetaHtml(l)}
             ${parked ? '<p class="meta">Sem interesse</p>' : ''}
             ${Number(l.fichaMissing) > 0 ? `<p class="meta">Ficha: ${l.fichaMissing} campo(s) em falta</p>` : '<p class="meta">Ficha: mínimo de contacto ok</p>'}
@@ -1244,12 +1381,14 @@ async function loadCatalog() {
 }
 
 async function loadLeads() {
+    await loadBusinessTypes().catch(() => businessTypes);
     const ordem = leadsOrdem();
     const qs = new URLSearchParams({ ordem });
     if (ordem === 'proximo') qs.set('fila', 'hoje');
     const { response, data } = await api(`/api/digitalizept/leads?${qs}`);
     if (!response.ok) throw new Error('leads');
     leads = data.leads || [];
+    syncLeadsSegmentoOptions();
     renderDemos();
 }
 
@@ -1342,8 +1481,8 @@ document.querySelectorAll('.admin-tab').forEach((btn) => {
 });
 el.catalogFilter.addEventListener('input', renderCatalog);
 el.demosFilter.addEventListener('input', renderDemos);
+syncLeadsFilterControls();
 if (el.leadsOrdem) {
-    syncLeadsOrdemControl();
     el.leadsOrdem.addEventListener('change', async () => {
         try { localStorage.setItem(LEADS_ORDEM_KEY, leadsOrdem()); } catch (_) { /* ignore */ }
         try {
@@ -1351,6 +1490,18 @@ if (el.leadsOrdem) {
         } catch (_) {
             toast('Não foi possível ordenar a lista.', true);
         }
+    });
+}
+if (el.leadsSegmento) {
+    el.leadsSegmento.addEventListener('change', () => {
+        try { localStorage.setItem(LEADS_SEGMENTO_KEY, leadsSegmento()); } catch (_) { /* ignore */ }
+        renderDemos();
+    });
+}
+if (el.leadsSituacao) {
+    el.leadsSituacao.addEventListener('change', () => {
+        try { localStorage.setItem(LEADS_SITUACAO_KEY, leadsSituacao()); } catch (_) { /* ignore */ }
+        renderDemos();
     });
 }
 el.dealsFilter.addEventListener('input', renderDeals);

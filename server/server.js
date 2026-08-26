@@ -5053,7 +5053,9 @@ function buildProcessoView(db, leadId, req) {
             nomeCurto: outreach.GANCHO_NOME_CURTO[packed.ctx.ganchoId] || '',
             falhas: packed.followup.falhas || [],
             sugeridas: outreach.suggestFalhas(packed.sinais),
-            lista: outreach.listFalhas()
+            lista: outreach.listFalhas(),
+            grupos: outreach.listGrupos(packed.followup.lang),
+            combinacoes: outreach.listCombinacoes(packed.followup.lang)
         },
         fecho: {
             mensagem: outreach.textForPasso('R1', packed.ctx, packed.followup.edits),
