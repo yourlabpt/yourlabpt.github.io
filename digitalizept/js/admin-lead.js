@@ -250,10 +250,13 @@ export function renderLeadDossier(host, payload, {
     toggle.append(btnControlo, btnDemo, btnFicha);
     const extras = el('div', 'dossier-chrome-actions');
     if (payload.demo && payload.demo.url) {
-        const demoLink = el('a', 'btn-secondary', 'Abrir demo');
+        const shop = String(payload.lead.nome || '').trim();
+        const short = shop.length > 28 ? `${shop.slice(0, 26)}…` : shop;
+        const demoLink = el('a', 'btn-demo-open', short ? `Ver demo · ${short}` : 'Abrir demo');
         demoLink.href = payload.demo.url;
         demoLink.target = '_blank';
         demoLink.rel = 'noopener';
+        demoLink.title = payload.demo.url;
         extras.appendChild(demoLink);
     }
     const mais = document.createElement('details');

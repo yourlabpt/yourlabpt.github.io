@@ -701,11 +701,14 @@ function renderDemos() {
 
         if (l.demo_slug) {
             const open = document.createElement('a');
-            open.className = 'btn-secondary';
+            open.className = 'btn-demo-open';
             open.href = `/d/${l.demo_slug}`;
             open.target = '_blank';
             open.rel = 'noopener';
-            open.textContent = 'Abrir demo';
+            const shop = String(l.nome || '').trim();
+            const short = shop.length > 28 ? `${shop.slice(0, 26)}…` : shop;
+            open.textContent = short ? `Ver demo · ${short}` : 'Abrir demo';
+            open.title = `/${l.demo_slug}`;
             actions.appendChild(open);
         }
 

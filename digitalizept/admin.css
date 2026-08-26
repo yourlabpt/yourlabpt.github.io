@@ -13,6 +13,14 @@
     --admin-accent: #1b1b1b;
     --accent-dark: var(--admin-press);
 
+    /* Sales widgets (palette / ask / logo) reuse these — keep them light here. */
+    --primary-dark: var(--admin-bg);
+    --secondary-dark: var(--admin-fill);
+    --text-light: var(--admin-ink);
+    --text-muted: var(--admin-muted);
+    --accent-soft: rgba(28, 28, 28, 0.08);
+    --accent-color: #8a6a3a;
+
     --surface-color: var(--admin-surface);
     --surface-muted: var(--admin-fill);
     --border-color: var(--admin-border);
@@ -193,11 +201,13 @@
 
 .admin-body .btn-primary,
 .admin-body .btn-secondary,
+.admin-body .btn-demo-open,
 .admin-body .btn-logout,
 .admin-body .btn-danger,
 .admin-body .btn-refresh-app,
 .admin-body a.btn-primary,
-.admin-body a.btn-secondary {
+.admin-body a.btn-secondary,
+.admin-body a.btn-demo-open {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -236,6 +246,56 @@
 
 .admin-body .btn-secondary:hover {
     background: var(--admin-press);
+}
+
+/* Personalized open-demo CTA (shop name in the label). */
+.admin-body .btn-demo-open,
+.admin-body a.btn-demo-open {
+    border: none;
+    background: #2c2418;
+    color: #f7f1e6;
+    gap: 8px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-body .btn-demo-open:hover,
+.admin-body a.btn-demo-open:hover {
+    background: #1c1c1c;
+    color: #fff;
+}
+
+.admin-body .btn-demo-open::before,
+.admin-body a.btn-demo-open::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #c4a574;
+    flex-shrink: 0;
+}
+
+.admin-body .ask-next-btn {
+    background: var(--admin-fill);
+    color: var(--admin-ink);
+}
+
+.admin-body .ask-next-btn:hover {
+    background: var(--admin-press);
+}
+
+.admin-body .ask-choice.selected {
+    background: var(--admin-press);
+    box-shadow: inset 0 0 0 1.5px rgba(28, 28, 28, 0.35);
+}
+
+.admin-body .palette-card.selected {
+    border-color: var(--admin-ink);
+}
+
+.admin-body .palette-chip {
+    border-color: rgba(28, 28, 28, 0.18);
 }
 
 .admin-body .btn-logout,
@@ -404,7 +464,8 @@
 
 .admin-card .actions .btn-secondary,
 .admin-card .actions .btn-primary,
-.admin-card .actions .btn-danger {
+.admin-card .actions .btn-danger,
+.admin-card .actions .btn-demo-open {
     height: 38px;
     padding: 0 12px;
     font-size: 0.88rem;
@@ -1071,20 +1132,94 @@
 .dossier-demo {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 28px;
+    padding-bottom: 28px;
 }
 
 .dossier-demo-intro {
     margin: 0;
     color: var(--admin-muted);
+    line-height: 1.45;
 }
 
-.dossier-demo-identity .ask,
+.dossier-demo-open {
+    align-self: flex-start;
+    min-height: 46px;
+    padding: 0 18px;
+    font-size: 0.95rem;
+}
+
+.dossier-demo-phase {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 18px 26px;
+    background: #f7f3eb;
+    border-radius: 16px;
+    box-shadow: inset 0 0 0 1px rgba(28, 28, 28, 0.06);
+}
+
+.dossier-demo-phase-label {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--admin-muted);
+}
+
+.dossier-demo-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.dossier-demo-identity .ask {
+    background: transparent;
+    border-radius: 0;
+    padding: 10px 0 22px;
+    margin: 0;
+    max-width: none;
+    box-shadow: none;
+    border-bottom: 1px solid rgba(28, 28, 28, 0.08);
+}
+
+.dossier-demo-identity .ask:last-child {
+    border-bottom: none;
+    padding-bottom: 4px;
+}
+
+.dossier-demo-identity .ask-index {
+    margin-bottom: 10px;
+}
+
+.dossier-demo-identity .ask-title {
+    font-size: 1.35rem;
+    margin-bottom: 10px;
+}
+
+.dossier-demo-identity .ask-hint {
+    margin-bottom: 18px;
+}
+
 .dossier-demo-gbp,
 .dossier-demo-site {
-    background: var(--admin-surface, #fff);
-    border-radius: 14px;
-    padding: 14px 16px;
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+}
+
+.dossier-demo-gbp .field-group-title,
+.dossier-demo-site .field-group-title,
+.dossier-demo-site .id-section {
+    margin-bottom: 14px;
+}
+
+.dossier-demo-site .id-section + .id-section {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(28, 28, 28, 0.08);
 }
 
 .dossier-status {
@@ -1443,7 +1578,8 @@
     }
 
     .admin-card .actions .btn-primary,
-    .admin-card .actions .btn-secondary {
+    .admin-card .actions .btn-secondary,
+    .admin-card .actions .btn-demo-open {
         flex: 1 1 calc(50% - 8px);
     }
 }

@@ -352,7 +352,18 @@ export function renderLeadProcess(host, {
         addLink('Ligar', telDigits ? `tel:+${telDigits}` : '');
         addLink('WhatsApp', waHref(waNumber, waMsg));
         addLink('Email', email ? `mailto:${encodeURIComponent(email)}` : '');
-        addLink('Demo', lead.demoUrl || '');
+        if (lead.demoUrl) {
+            const shop = String(lead.nome || '').trim();
+            const short = shop.length > 22 ? `${shop.slice(0, 20)}…` : shop;
+            const demo = el('a', 'btn-demo-open', short ? `Ver demo · ${short}` : 'Ver demo');
+            demo.href = lead.demoUrl;
+            demo.target = '_blank';
+            demo.rel = 'noopener';
+            demo.title = lead.demoUrl;
+            row.appendChild(demo);
+        } else {
+            addLink('Demo', '');
+        }
 
         const vcf = el('button', 'btn-secondary', 'Guardar no telemóvel');
         vcf.type = 'button';

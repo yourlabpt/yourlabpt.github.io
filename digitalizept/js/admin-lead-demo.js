@@ -8,6 +8,17 @@ function el(tag, className, text) {
     return node;
 }
 
+function shopLabel(nome) {
+    const n = String(nome || '').trim();
+    if (!n) return '';
+    return n.length > 32 ? `${n.slice(0, 30)}…` : n;
+}
+
+function abrirDemoLabel(nome) {
+    const shop = shopLabel(nome);
+    return shop ? `Ver demo · ${shop}` : 'Abrir demo publicada';
+}
+
 function wizardStateFromPayload(leadId, payload) {
     const data = payload && payload.data && typeof payload.data === 'object'
         ? payload.data
@@ -106,27 +117,39 @@ export function renderLeadDemo(host, {
         host.innerHTML = '';
         host.className = 'dossier-demo';
 
-        const intro = el('p', 'dossier-demo-intro', 'Logo, paleta e fotos — sem passar pela venda. Publica a demo daqui; o email e o WhatsApp ficam no Controlo.');
+        const shopNome = (state.data.dados && (state.data.dados.nome_negocio || state.data.dados.nome)) || '';
+
+        const intro = el('p', 'dossier-demo-intro', 'Cada bloco é uma fase. Logo e fotos primeiro; o Google e o site vêm a seguir. Email e WhatsApp ficam no Controlo.');
         host.appendChild(intro);
 
         if (state.data.demoUrl) {
-            const live = el('a', 'btn-secondary', 'Abrir demo publicada');
+            const live = el('a', 'btn-demo-open dossier-demo-open', abrirDemoLabel(shopNome));
             live.href = state.data.demoUrl;
             live.target = '_blank';
             live.rel = 'noopener';
+            live.title = state.data.demoUrl;
             host.appendChild(live);
         }
 
+        const identityPhase = el('div', 'dossier-demo-phase');
+        identityPhase.appendChild(el('p', 'dossier-demo-phase-label', 'Fase 1 · Identidade'));
         const identityHost = el('div', 'dossier-demo-identity');
-        host.appendChild(identityHost);
+        identityPhase.appendChild(identityHost);
+        host.appendChild(identityPhase);
         renderIdentityEditors(identityHost, ctx);
 
+        const gbpPhase = el('div', 'dossier-demo-phase');
+        gbpPhase.appendChild(el('p', 'dossier-demo-phase-label', 'Fase 2 · Google Maps'));
         const gbp = el('div', 'dossier-demo-gbp');
-        host.appendChild(gbp);
+        gbpPhase.appendChild(gbp);
+        host.appendChild(gbpPhase);
         renderGbpDemo(gbp, ctx);
 
+        const sitePhase = el('div', 'dossier-demo-phase');
+        sitePhase.appendChild(el('p', 'dossier-demo-phase-label', 'Fase 3 · Website'));
         const site = el('div', 'dossier-demo-site');
-        host.appendChild(site);
+        sitePhase.appendChild(site);
+        host.appendChild(sitePhase);
         renderWebsiteDemo(site, ctx);
     }
 
