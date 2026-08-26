@@ -541,7 +541,9 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(adminCss, /--accent-dark: var\(--admin-press\)/);
         assert.match(adminCss, /lead-proc-ganchos \.followup-gancho\.active/);
         assert.match(adminCss, /dossier-vista-demo/);
-        assert.match(sw, /digitalizept-v110/);
+        assert.match(sw, /digitalizept-v111/);
+        assert.match(panel, /Edite só a carta/);
+        assert.match(panel, /não volte a colar o link/);
         assert.match(sw, /admin-lead-demo\.js/);
         assert.match(sw, /admin-redirects\.js/);
         assert.match(panel, /Como ficou/);

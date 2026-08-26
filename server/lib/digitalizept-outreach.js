@@ -96,6 +96,17 @@ Marcamos {{followupDia}} de manhã? Fazemos isto ao vosso lado — vocês não t
 // Lower case, no selling verb: it reads like a note, not a campaign.
 const EMAIL_SUBJECT = 'exemplo que fizemos para a {{negocioNome}}';
 
+/** Controlo edit surface — letter only. Demo link and ficha live in the HTML template. */
+const EMAIL_LETTER = `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
+
+{{ganchoTitulo}}
+
+{{ganchoTexto}}
+
+Para lhe mostrar do que estou a falar, fiz duas coisas para a {{negocioNome}}, sem lhe pedir nada. São exemplos — não estão publicados.
+
+Gostou? Responda a este email e marcamos uma conversa. Tratamos de tudo — vocês só precisam de estar satisfeitos antes da entrega final.{{fechoPreco}}`;
+
 const EMAIL_TEXT = `{{saudacao}} Sr. {{clienteNome}} — sou {{vendedorArtigo}} {{vendedorNome}}, da YourLab, aqui de {{zona}}.
 
 {{ganchoTitulo}}
@@ -143,6 +154,16 @@ Shall we meet {{followupDia}} in the morning? We do this alongside you — you d
 };
 
 const EMAIL_SUBJECT_EN = 'an example we made for {{negocioNome}}';
+
+const EMAIL_LETTER_EN = `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
+
+{{ganchoTitulo}}
+
+{{ganchoTexto}}
+
+To show you what I mean, I put two things together for {{negocioNome}}, without asking you for anything. They are examples — they are not published.
+
+If it makes sense, reply to this email and we book a short meeting. We take care of everything — you just need to be happy with it before final delivery.{{fechoPreco}}`;
 
 const EMAIL_TEXT_EN = `{{saudacao}} {{clienteNome}} — I'm {{vendedorNome}}, from YourLab, here in {{zona}}.
 
@@ -386,7 +407,14 @@ function applyOptionalBlocks(html, ctx) {
         .replace(/<!--IF_MENSAGEM_PADRAO-->([\s\S]*?)<!--\/IF_MENSAGEM_PADRAO-->/g, ctx.showMensagemEditada ? '' : '$1');
 }
 
-const HTML_RAW_KEYS = new Set(['negocioNomeMailto', 'ctaBodyMailto', 'emailMensagemHtml', 'fichaGoogleAcoesHtml']);
+const HTML_RAW_KEYS = new Set([
+    'negocioNomeMailto',
+    'ctaBodyMailto',
+    'emailMensagemHtml',
+    'fichaGoogleAcoesHtml',
+    'fichaGoogleAvatarHtml',
+    'fichaGoogleFotosHtml'
+]);
 
 function fillHtmlTemplate(template, ctx) {
     const escaped = {};
@@ -402,14 +430,14 @@ function fichaGoogleAcoesHtml(links = {}, lang = 'pt') {
     const en = normalizeOutreachLang(lang) === 'en';
     const chip = (label, href, primary) => {
         const color = primary ? '#1A73E8' : '#5F6368';
-        const style = `display:inline-block; padding:7px 12px; border:1px solid #DADCE0; font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:16px; color:${color}; text-decoration:none;`;
+        const style = `display:inline-block; padding:7px 11px; border:1px solid #DADCE0; border-radius:16px; font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:16px; color:${color}; text-decoration:none;`;
         if (href) {
             return `<a href="${escapeHtml(href)}" target="_blank" style="${style}">${escapeHtml(label)}</a>`;
         }
         return `<span style="${style}">${escapeHtml(label)}</span>`;
     };
     const cell = (html, padTop = false) => (
-        `<td style="padding:${padTop ? '8px' : '0'} 8px 0 0;">${html}</td>`
+        `<td style="padding:${padTop ? '8px' : '0'} 6px 0 0;">${html}</td>`
     );
     const row1 = [
         chip(en ? 'Call' : 'Ligar', links.tel, true),
@@ -421,7 +449,52 @@ function fichaGoogleAcoesHtml(links = {}, lang = 'pt') {
         chip('Facebook', links.facebook, false),
         chip(en ? 'Directions' : 'Direções', links.direcoes, false)
     ].map((html) => cell(html, true)).join('');
-    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;"><tr>${row1}</tr><tr>${row2}</tr></table>`;
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;"><tr>${row1}</tr><tr>${row2}</tr></table>`;
+}
+
+function fichaGoogleAvatarHtml({ logoUrl, inicial } = {}) {
+    if (logoUrl) {
+        return `<img src="${escapeHtml(logoUrl)}" width="52" height="52" alt="" style="display:block; width:52px; height:52px; border-radius:4px; object-fit:cover; border:0;" />`;
+    }
+    const letter = String(inicial || 'G').charAt(0).toUpperCase();
+    return `<div style="width:52px; height:52px; background-color:#E8F0FE; color:#1A73E8; font-family:Helvetica,Arial,sans-serif; font-size:22px; line-height:52px; font-weight:bold; text-align:center; border-radius:4px;">${escapeHtml(letter)}</div>`;
+}
+
+function fichaGoogleFotosHtml(urls = []) {
+    const list = (Array.isArray(urls) ? urls : []).filter(Boolean).slice(0, 3);
+    if (!list.length) return '';
+    const cells = list.map((url, i) => (
+        `<td style="padding:${i ? '0 0 0 6px' : '0'}; width:33%;">`
+        + `<img src="${escapeHtml(url)}" width="150" alt="" style="display:block; width:100%; max-width:150px; height:72px; object-fit:cover; border-radius:4px; border:0;" />`
+        + '</td>'
+    )).join('');
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;"><tr>${cells}</tr></table>`;
+}
+
+function stripOutreachDemoLinks(text, link) {
+    let out = String(text || '').replace(/\r\n/g, '\n');
+    const targets = [];
+    const full = String(link || '').trim();
+    if (full) {
+        targets.push(full);
+        targets.push(full.replace(/\/$/, ''));
+        if (/^https?:\/\//i.test(full)) {
+            targets.push(full.replace(/^https?:\/\//i, ''));
+            targets.push(full.replace(/^https?:\/\//i, '').replace(/\/$/, ''));
+        }
+    }
+    // Any /d/slug demo path — Controlo must not keep a second copy of the example link.
+    targets.push(...(out.match(/https?:\/\/[^\s<>"]+\/d\/[A-Za-z0-9._~-]+\/?/g) || []));
+    targets.push(...(out.match(/(?:^|\s)(?:https?:\/\/)?[^\s<>"]+\/d\/[A-Za-z0-9._~-]+\/?/g) || [])
+        .map((m) => m.trim()));
+    const unique = [...new Set(targets.map((t) => String(t || '').trim()).filter(Boolean))]
+        .sort((a, b) => b.length - a.length);
+    unique.forEach((t) => {
+        const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        out = out.replace(new RegExp(`^\\s*${escaped}\\s*$`, 'gmi'), '');
+        out = out.replace(new RegExp(escaped, 'gi'), '');
+    });
+    return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function stripSite(value) {
@@ -1097,7 +1170,8 @@ function buildOutreachContext({
     falhas = [],
     sinais = {},
     lang = 'pt',
-    offer = {}
+    offer = {},
+    identidade = null
 } = {}) {
     const outreachLang = normalizeOutreachLang(lang);
     const en = outreachLang === 'en';
@@ -1106,6 +1180,20 @@ function buildOutreachContext({
     const demoPath = demoSlug
         ? `${site}/d/${demoSlug}`
         : (link.replace(/^https?:\/\//i, '') || `${site}/d/…`);
+    const baseOrigin = String(origin || '').replace(/\/$/, '');
+    const slug = String(demoSlug || '').trim();
+    const idn = identidade && typeof identidade === 'object' ? identidade : {};
+    const logo = idn.logo && typeof idn.logo === 'object' ? idn.logo : {};
+    const hasLogo = logo.tipo === 'upload' && Boolean(logo.dataUrl);
+    const fotoCount = Array.isArray(idn.fotos)
+        ? idn.fotos.filter(Boolean).length
+        : 0;
+    const linkFichaLogo = (slug && hasLogo) ? `${baseOrigin}/d/${encodeURIComponent(slug)}/logo` : '';
+    const linkFichaFotos = (slug && fotoCount)
+        ? Array.from({ length: Math.min(3, fotoCount) }, (_, i) => (
+            `${baseOrigin}/d/${encodeURIComponent(slug)}/photo/${i}`
+        ))
+        : [];
     const zona = String(dados.cidade || dados.zona || '').trim() || 'Portugal';
     const negocioNome = String(dados.nome_negocio || (en ? 'your business' : 'o seu negócio')).trim()
         || (en ? 'your business' : 'o seu negócio');
@@ -1173,7 +1261,10 @@ function buildOutreachContext({
         linkFichaInstagram: instagramHref(dados.instagram) || (link ? `${link}#instagram` : ''),
         linkFichaFacebook: facebookHref(dados.facebook) || (link ? `${link}#facebook` : ''),
         linkFichaDirecoes: mapsDirectionsHref([morada, zona].filter(Boolean).join(', ')),
+        linkFichaLogo,
         fichaGoogleAcoesHtml: '',
+        fichaGoogleAvatarHtml: '',
+        fichaGoogleFotosHtml: '',
         empresaNome: String(provider.nome || 'YourLab').trim() || 'YourLab',
         empresaNif: String(provider.nif || '—').trim() || '—',
         empresaMorada,
@@ -1226,6 +1317,11 @@ function buildOutreachContext({
         // Visual only — cold email should not send people out to Google Maps.
         direcoes: ''
     }, outreachLang);
+    ctx.fichaGoogleAvatarHtml = fichaGoogleAvatarHtml({
+        logoUrl: linkFichaLogo,
+        inicial: ctx.inicial
+    });
+    ctx.fichaGoogleFotosHtml = fichaGoogleFotosHtml(linkFichaFotos);
     ctx.ganchoTitulo = fillTemplate(picked.ganchoTitulo, ctx);
     ctx.ganchoTexto = fillTemplate(picked.ganchoTexto, ctx);
     ctx.diagnosticoResumo = fillTemplate(picked.diagnosticoResumo || '', ctx);
@@ -1286,27 +1382,43 @@ function emailBodyHtml(text) {
 
 /**
  * EMAIL1 always ships the designed HTML template (banner, exemplo, botões).
- * Controlo edits the letter; the template wraps it. Email 2 / D4 stay plain.
+ * Controlo edits the letter only; the demo link and ficha stay in the template.
  */
 function outgoingEmail(passo, { text, ctx, edits } = {}) {
     const key = String(passo || '').trim().toUpperCase();
-    const canned = textForPasso(key, ctx, {});
-    const defaultText = textForPasso(key, ctx, edits);
-    const body = (text != null && String(text).trim() !== '') ? String(text) : defaultText;
+    const canned = key === 'EMAIL1'
+        ? renderEmailLetter(ctx)
+        : textForPasso(key, ctx, {});
+    let body = (text != null && String(text).trim() !== '')
+        ? String(text)
+        : textForPasso(key, ctx, edits);
+    if (key === 'EMAIL1') {
+        body = stripOutreachDemoLinks(body, ctx && ctx.link);
+    }
     const edited = normalizePlain(body) !== normalizePlain(canned);
     let html = '';
+    let textPlain = body;
     if (key === 'EMAIL1') {
         html = renderEmailHtml({
             ...(ctx || {}),
             showMensagemEditada: edited,
             emailMensagemHtml: edited ? emailBodyHtml(body) : ''
         });
+        // SMTP plain-text fallback: one demo link. Controlo storage stays link-free.
+        textPlain = edited
+            ? (ctx && ctx.link ? `${body}\n\n${ctx.link}` : body)
+            : renderEmailText(ctx);
     }
-    return { text: body, html, edited };
+    return { text: body, textPlain, html, edited };
 }
 
 function renderEmailText(ctx) {
     const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL_TEXT_EN : EMAIL_TEXT;
+    return fillTemplate(pack, ctx);
+}
+
+function renderEmailLetter(ctx) {
+    const pack = normalizeOutreachLang(ctx && ctx.lang) === 'en' ? EMAIL_LETTER_EN : EMAIL_LETTER;
     return fillTemplate(pack, ctx);
 }
 
@@ -1335,8 +1447,10 @@ function textForPasso(passo, ctx, edits = {}) {
         return fillTemplate(editado || pack[lang] || pack.pt, ctx);
     }
     if (key === 'EMAIL1') {
-        if (edits.email1 && !String(edits.email1).includes('{{')) return String(edits.email1);
-        return renderEmailText(ctx);
+        if (edits.email1 && !String(edits.email1).includes('{{')) {
+            return stripOutreachDemoLinks(String(edits.email1), ctx && ctx.link);
+        }
+        return renderEmailLetter(ctx);
     }
     if (key === 'EMAIL2' || key === 'D4') return key === 'D4'
         ? fillTemplate(PASSO_TEMPLATES.D4[normalizeOutreachLang(ctx && ctx.lang)] || PASSO_TEMPLATES.D4.pt, ctx)
@@ -1407,6 +1521,8 @@ module.exports = {
     emailSubjectFor,
     renderEmailHtml,
     renderEmailText,
+    renderEmailLetter,
+    stripOutreachDemoLinks,
     outgoingEmail,
     loadEmailTemplate,
     loadNoticeTemplate,

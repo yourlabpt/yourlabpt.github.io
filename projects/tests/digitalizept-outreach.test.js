@@ -493,6 +493,7 @@ describe('digitalizept outreach', () => {
         assert.equal(canned.edited, false);
         assert.match(canned.html, /Marcar conversa/);
         assert.match(canned.html, /Digitalize a sua empresa/);
+        assert.doesNotMatch(textForPasso('EMAIL1', ctx), /https:\/\/yourlabpt.com\/d\/talho-da-costa/);
 
         const edited = outgoingEmail('EMAIL1', {
             ctx,
@@ -500,14 +501,41 @@ describe('digitalizept outreach', () => {
         });
         assert.equal(edited.edited, true);
         assert.match(edited.html, /Mudei o texto à mão/);
+        // Edited letter must not re-embed the demo URL; the HTML template keeps Website + Abrir o exemplo.
+        assert.match(edited.html, /CARTA EDITADA NO CONTROLO[\s\S]*Vê a demo quando puderes\.<\/p>\s*<\/td>/);
+        assert.doesNotMatch(
+            edited.html,
+            /CARTA EDITADA NO CONTROLO[\s\S]*href="https:\/\/yourlabpt.com\/d\/talho-da-costa"[\s\S]*01 · GOOGLE/
+        );
         assert.match(edited.html, /Marcar conversa/);
         assert.match(edited.html, /Digitalize a sua empresa/);
         assert.match(edited.html, /Abrir o exemplo/);
         assert.match(edited.html, /href="https:\/\/yourlabpt.com\/d\/talho-da-costa"/);
+        assert.equal(edited.text.includes('https://yourlabpt.com/d/talho-da-costa'), false);
+        assert.match(edited.textPlain, /https:\/\/yourlabpt.com\/d\/talho-da-costa/);
+        assert.equal(
+            (edited.textPlain.match(/\/d\/talho-da-costa/g) || []).length,
+            1
+        );
         assert.doesNotMatch(edited.html, /padding:24px;background:#fff/);
         assert.equal(
             textForPasso('EMAIL1', ctx, { email1: edited.text }),
             edited.text
         );
+
+        const withLogo = buildOutreachContext({
+            dados: { nome_negocio: 'Talho da Costa', cidade: 'Porto' },
+            provider: { nome: 'YourLab' },
+            origin: 'https://yourlabpt.com',
+            demoSlug: 'talho-da-costa',
+            identidade: {
+                logo: { tipo: 'upload', dataUrl: 'data:image/png;base64,aaa' },
+                fotos: ['data:image/jpeg;base64,bbb', 'data:image/jpeg;base64,ccc']
+            }
+        });
+        assert.match(withLogo.linkFichaLogo, /\/d\/talho-da-costa\/logo/);
+        assert.match(withLogo.fichaGoogleAvatarHtml, /\/d\/talho-da-costa\/logo/);
+        assert.match(withLogo.fichaGoogleFotosHtml, /\/d\/talho-da-costa\/photo\/0/);
+        assert.match(renderEmailHtml(withLogo), /\/d\/talho-da-costa\/logo/);
     });
 });

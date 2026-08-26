@@ -578,7 +578,7 @@ export function renderLeadProcess(host, {
             box.appendChild(el(
                 'p',
                 'meta',
-                'Pode editar o texto. O envio usa sempre o email HTML da YourLab — banner, exemplo e botões ficam no sítio.'
+                'Edite só a carta. O link da demo, a ficha Google (logo, WhatsApp, site, redes) e os botões ficam no email HTML — não volte a colar o link aqui.'
             ));
         }
 

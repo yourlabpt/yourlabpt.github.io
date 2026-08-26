@@ -2081,7 +2081,7 @@ function loadLeadOutreachRow(db, leadId) {
     return db.prepare(`
         SELECT l.id, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.business_type,
                l.demo_slug, l.lat, l.lng, l.followup_json, l.estado, l.cobertura, l.resultado,
-               l.wizard_json, l.google_presence_json,
+               l.wizard_json, l.google_presence_json, l.identidade_json,
                d.obrigatorios_json, d.opcionais_json,
                cl.email AS legal_email, cl.nome AS legal_nome
         FROM lead l
@@ -2146,6 +2146,8 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         : followup.lang;
     if (!followup.unsubToken) followup.unsubToken = outreach.newUnsubToken();
     const wizard = parseJsonSafe(row.wizard_json, {});
+    const identidade = parseJsonSafe(row.identidade_json, {})
+        || (wizard.identidade && typeof wizard.identidade === 'object' ? wizard.identidade : {});
     const presence = {
         ...parseJsonSafe(row.google_presence_json, {}),
         ...(wizard.googlePresence && typeof wizard.googlePresence === 'object' ? wizard.googlePresence : {})
@@ -2180,6 +2182,7 @@ function buildLeadOutreach(db, leadId, req, extras = {}) {
         falhas: followup.falhas,
         sinais,
         lang: followup.lang,
+        identidade,
         offer: {
             includePrices: mostrarPrecos,
             campanhaPct: followup.campanhaPct,
@@ -4618,7 +4621,7 @@ app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, r
                 3: outreach.waTextForStep(3, ctx, followup.edits)
             },
             emailSubject: outreach.emailSubjectFor(ctx, followup.edits),
-            emailText: outreach.renderEmailText(ctx),
+            emailText: outreach.textForPasso('EMAIL1', ctx, followup.edits),
             nextWaStep: outreach.nextSendableWaStep(followup)
         });
     } catch (err) {
@@ -4835,7 +4838,7 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
             ctx: packed.ctx,
             edits: packed.followup.edits
         });
-        const text = outgoing.text;
+        const text = outgoing.textPlain || outgoing.text;
         // Email 1 always uses the HTML template; an edit only replaces the letter.
         // Email 2 and D4 stay plain on purpose.
         const html = outgoing.html;
@@ -4864,8 +4867,9 @@ app.post('/api/digitalizept/leads/:leadId/outreach/email', requireDigitalizept, 
         packed.followup.emailSentAt = now;
         if (body.subject) packed.followup.edits.emailSubject = subject;
         if (outgoing.edited) {
-            if (passo === 'EMAIL1') packed.followup.edits.email1 = text;
-            if (passo === 'EMAIL2') packed.followup.edits.email2 = text;
+            // Store Controlo letter without the demo link (HTML template already has it).
+            if (passo === 'EMAIL1') packed.followup.edits.email1 = outgoing.text;
+            if (passo === 'EMAIL2') packed.followup.edits.email2 = outgoing.text;
         }
         saveLeadFollowup(db, leadId, packed.followup);
         applyAutoEtapa(db, leadId, 'demo_criada');
@@ -6021,6 +6025,68 @@ app.get('/digitalizept/', (req, res) => {
 app.get('/d/:slug', (req, res) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     res.sendFile(path.join(__dirname, '..', 'digitalizept', 'public.html'));
+});
+
+function parseDataImageUrl(raw) {
+    const m = String(raw || '').match(/^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i);
+    if (!m) return null;
+    try {
+        return { contentType: m[1].toLowerCase(), buffer: Buffer.from(m[2].replace(/\s+/g, ''), 'base64') };
+    } catch (_) {
+        return null;
+    }
+}
+
+function leadIdentidadeByDemoSlug(db, slug) {
+    const row = db.prepare(`
+        SELECT identidade_json, wizard_json FROM lead WHERE demo_slug = ? LIMIT 1
+    `).get(slug);
+    if (!row) return null;
+    const fromCol = parseJsonSafe(row.identidade_json, null);
+    if (fromCol && typeof fromCol === 'object') return fromCol;
+    const wizard = parseJsonSafe(row.wizard_json, {});
+    return (wizard.identidade && typeof wizard.identidade === 'object') ? wizard.identidade : null;
+}
+
+app.get('/d/:slug/logo', (req, res) => {
+    try {
+        const slug = cleanText(req.params.slug, 80);
+        if (!slug) return res.status(404).end();
+        const db = getDigitalizeptDb();
+        const idn = leadIdentidadeByDemoSlug(db, slug);
+        const logo = idn && idn.logo && typeof idn.logo === 'object' ? idn.logo : null;
+        const parsed = logo && logo.tipo === 'upload' ? parseDataImageUrl(logo.dataUrl) : null;
+        if (!parsed) return res.status(404).end();
+        res.setHeader('Content-Type', parsed.contentType);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        return res.send(parsed.buffer);
+    } catch (err) {
+        console.error('digitalizept demo logo error:', err.message);
+        return res.status(500).end();
+    }
+});
+
+app.get('/d/:slug/photo/:index', (req, res) => {
+    try {
+        const slug = cleanText(req.params.slug, 80);
+        const index = Number(req.params.index);
+        if (!slug || !Number.isInteger(index) || index < 0 || index > 11) {
+            return res.status(404).end();
+        }
+        const db = getDigitalizeptDb();
+        const idn = leadIdentidadeByDemoSlug(db, slug);
+        const fotos = idn && Array.isArray(idn.fotos) ? idn.fotos.filter(Boolean) : [];
+        const parsed = parseDataImageUrl(fotos[index]);
+        if (!parsed) return res.status(404).end();
+        res.setHeader('Content-Type', parsed.contentType);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        return res.send(parsed.buffer);
+    } catch (err) {
+        console.error('digitalizept demo photo error:', err.message);
+        return res.status(500).end();
+    }
 });
 
 // Serve index.html for any unmatched routes
