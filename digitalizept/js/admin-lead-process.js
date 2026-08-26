@@ -5,6 +5,8 @@
  * walk the trail back or skip ahead, and the server keeps the cadence in sync.
  */
 import { formatCountdown, formatCallDue } from './demo/confirm-call.js';
+import { whatsappIfMobile } from './format.js';
+import { buildVcard, downloadVcard, vcardFilename } from './vcard.js';
 
 const CANAL_LABEL = {
     email: 'Email',
@@ -126,7 +128,7 @@ const COMO_FAZER = {
 };
 
 export function renderLeadProcess(host, {
-    leadId, api, onToast, onChanged, statusHost
+    leadId, api, onToast, onChanged, statusHost, onSwitchVista
 } = {}) {
     let view = null;
     let timer = null;
@@ -308,6 +310,104 @@ export function renderLeadProcess(host, {
         return box;
     }
 
+    function waHref(phone, message) {
+        const digits = digitsPhone(phone);
+        if (!digits) return '';
+        const base = `https://wa.me/${digits}`;
+        return message ? `${base}?text=${encodeURIComponent(message)}` : base;
+    }
+
+    function contactStrip() {
+        const strip = el('div', 'lead-proc-strip');
+        const contacto = view.contacto || {};
+        const lead = view.lead || {};
+        const detalhe = view.proximaAcaoDetalhe;
+        const telRaw = contacto.telefone || '';
+        const waRaw = contacto.whatsapp || '';
+        const email = contacto.email || '';
+        const telDigits = digitsPhone(telRaw || waRaw);
+        const waNumber = waRaw;
+        const waStep = detalhe && detalhe.canal === 'whatsapp';
+        const waMsg = waStep ? (detalhe.mensagem || '') : '';
+
+        const row = el('div', 'lead-proc-strip-acoes');
+
+        function addLink(label, href) {
+            if (!href) {
+                const btn = el('button', 'btn-secondary lead-proc-off', label);
+                btn.type = 'button';
+                btn.disabled = true;
+                row.appendChild(btn);
+                return;
+            }
+            const a = el('a', 'btn-secondary', label);
+            a.href = href;
+            if (/^https?:/i.test(href) || href.startsWith('/')) {
+                a.target = '_blank';
+                a.rel = 'noopener';
+            }
+            row.appendChild(a);
+        }
+
+        addLink('Ligar', telDigits ? `tel:+${telDigits}` : '');
+        addLink('WhatsApp', waHref(waNumber, waMsg));
+        addLink('Email', email ? `mailto:${encodeURIComponent(email)}` : '');
+        addLink('Demo', lead.demoUrl || '');
+
+        const vcf = el('button', 'btn-secondary', 'Guardar no telemóvel');
+        vcf.type = 'button';
+        vcf.addEventListener('click', () => {
+            downloadVcard(buildVcard({
+                fn: lead.nome || '',
+                tel: waNumber || telRaw,
+                email,
+                street: lead.morada || '',
+                city: lead.cidade || ''
+            }), vcardFilename(lead.nome));
+        });
+        row.appendChild(vcf);
+
+        const fotos = el('button', 'btn-secondary', 'Fotos e logo');
+        fotos.type = 'button';
+        fotos.addEventListener('click', () => {
+            if (typeof onSwitchVista === 'function') onSwitchVista('demo');
+        });
+        row.appendChild(fotos);
+        strip.appendChild(row);
+
+        if (!digitsPhone(waNumber)) {
+            const miss = el('div', 'lead-proc-strip-wa');
+            miss.appendChild(el('p', 'meta', 'Sem WhatsApp neste lead. Mete o número aqui — não precisas da Ficha.'));
+            const input = el('input', 'field-input');
+            input.type = 'tel';
+            input.inputMode = 'tel';
+            input.placeholder = 'WhatsApp';
+            input.value = waRaw;
+            const usar = el('button', 'btn-secondary', 'Usar o telemóvel');
+            usar.type = 'button';
+            usar.addEventListener('click', () => {
+                const copied = whatsappIfMobile(telRaw);
+                if (!copied) {
+                    toast('O telefone da loja não é um 9x.', true);
+                    return;
+                }
+                input.value = copied;
+            });
+            const guardar = el('button', 'btn-primary', 'Guardar WhatsApp');
+            guardar.type = 'button';
+            guardar.addEventListener('click', () => act(() => call(
+                `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/contact`,
+                {
+                    method: 'POST',
+                    body: { whatsapp: String(input.value || '').trim() || whatsappIfMobile(telRaw) }
+                }
+            ), guardar));
+            miss.append(input, usar, guardar);
+            strip.appendChild(miss);
+        }
+        return strip;
+    }
+
     /* ------------------------------------------------------------ cartão agora */
 
     function bloqueiosBox() {
@@ -316,7 +416,7 @@ export function renderLeadProcess(host, {
         box.appendChild(el('p', 'lead-proc-bloqueio-titulo', 'Antes de avançar'));
         view.bloqueios.forEach((b) => box.appendChild(el('p', 'lead-proc-bloqueio', b.motivo)));
         if (view.bloqueios.some((b) => b.id === 'apelido')) {
-            const hint = el('p', 'meta', 'Confirma o apelido em Antes de ligar, em baixo, e toca em Guardar contacto.');
+            const hint = el('p', 'meta', 'Confirma o apelido em Antes de ligar, em baixo, e toca em Guardar notas da chamada.');
             box.appendChild(hint);
             const ir = el('button', 'btn-secondary', 'Ir a Antes de ligar');
             ir.type = 'button';
@@ -392,6 +492,7 @@ export function renderLeadProcess(host, {
     function agoraCard() {
         const detalhe = view.proximaAcaoDetalhe;
         const box = el('div', 'lead-proc-agora');
+        box.appendChild(contactStrip());
         if (!detalhe) {
             box.appendChild(el('h4', '', 'Nada pendente'));
             box.appendChild(el('p', 'meta', view.estado === 'REMOVIDO'
@@ -879,7 +980,7 @@ export function renderLeadProcess(host, {
             box.appendChild(el('p', 'lead-proc-nao', 'Os 3 minutos antes de ligar: o número é 9x ou 2x, grava o contacto e vê se tem WhatsApp, e procura o apelido do dono nas respostas do Maps, nas avaliações e na bio do Instagram. Sem isto, o botão de ligar fica fechado.'));
         }
 
-        const guardar = el('button', 'btn-secondary', 'Guardar contacto');
+        const guardar = el('button', 'btn-secondary', 'Guardar notas da chamada');
         guardar.type = 'button';
         guardar.addEventListener('click', () => act(() => call(
             `/api/digitalizept/leads/${encodeURIComponent(leadId)}/process/contact`,

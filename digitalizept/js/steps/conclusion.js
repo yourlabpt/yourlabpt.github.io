@@ -8,6 +8,7 @@ import { enqueueDeal } from '../offline-queue.js';
 import { googlePresenceFromWizard } from '../google-presence.js';
 import { createWebsiteZipButton } from '../demo/site-zip.js';
 import { currentDemoHtml } from '../demo/html.js';
+import { ADMIN_HINTS, appendAdminHint } from '../admin-redirects.js';
 
 const PROJECT_STATES = [
     'Demonstração criada', 'Proposta enviada', 'Contrato assinado', 'Entrada recebida',
@@ -63,6 +64,56 @@ async function render(body, ctx) {
         catalog = await fetchCatalog(ctx) || [];
         config = await fetchConfig(ctx);
     } catch (_) { /* ignore */ }
+
+    if (ctx.state.data._vendaAgoraNao === true) {
+        const ok = document.createElement('div');
+        ok.className = 'demo-status demo-status-ok';
+        ok.style.marginBottom = '14px';
+        ok.textContent = 'Demo gravada. Não há contrato nesta visita.';
+        body.appendChild(ok);
+        const script = document.createElement('p');
+        script.className = 'diag-ownership-line';
+        script.textContent = `Diga: «${ADMIN_HINTS.ownershipClose}»`;
+        body.appendChild(script);
+        appendAdminHint(body, 'agoraNao');
+        appendAdminHint(body, 'demo');
+        const demoUrl = ctx.state.data.demoUrl;
+        if (demoUrl) {
+            const link = document.createElement('a');
+            link.className = 'id-disclaimer';
+            link.href = demoUrl;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.style.display = 'block';
+            link.style.marginTop = '10px';
+            link.textContent = `Demonstração: ${demoUrl}`;
+            body.appendChild(link);
+        }
+        const admin = document.createElement('a');
+        admin.className = 'btn-primary';
+        admin.href = './admin.html';
+        admin.style.display = 'block';
+        admin.style.width = '100%';
+        admin.style.marginTop = '12px';
+        admin.style.textAlign = 'center';
+        admin.style.boxSizing = 'border-box';
+        admin.textContent = 'Abrir Controlo no admin';
+        body.appendChild(admin);
+        const novo = document.createElement('button');
+        novo.type = 'button';
+        novo.className = 'btn-secondary';
+        novo.style.width = '100%';
+        novo.style.marginTop = '10px';
+        novo.textContent = 'Novo negócio';
+        novo.addEventListener('click', () => {
+            if (window.confirm('Começar um negócio novo? Este lead já está gravado.')) {
+                ctx.reset();
+            }
+        });
+        body.appendChild(novo);
+        ctx.setValid(true);
+        return;
+    }
 
     // Deliberately no refreshCalc here: this screen reproduces the signed deal.
     const signed = bothSigned(ctx.state);
@@ -214,6 +265,11 @@ async function render(body, ctx) {
         : 'Projeto criado. Email não enviado (configure o SMTP para envio automático).';
     ok.textContent = emailMsg;
     body.appendChild(ok);
+
+    const script = document.createElement('p');
+    script.className = 'diag-ownership-line';
+    script.textContent = `Diga: «${ADMIN_HINTS.ownershipClose}»`;
+    body.appendChild(script);
 
     const project = document.createElement('div');
     project.className = 'id-section';

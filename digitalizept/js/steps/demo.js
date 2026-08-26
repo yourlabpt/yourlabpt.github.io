@@ -5,6 +5,7 @@ import { parseDemoOutput } from '../demo/parse.js';
 import { renderLanding } from '../demo/landing.js';
 import { mountGbpExample, gbpDataFromState } from '../demo/gbp-example.js';
 import { ensureSeededDemo } from '../demo/seed.js';
+import { publishDemo } from '../demo/publish-demo.js';
 import {
     buildHtmlChangePrompt,
     clipDemoHtml,
@@ -40,7 +41,6 @@ import {
 } from '../optional-ai.js';
 import { includesWebsite } from '../deal/packages.js';
 import { ensureProposta } from '../proposal-calc.js';
-import { bindLeadToNome } from '../demo/business-identity.js';
 import { currentSubstep, renderAsk } from '../substep.js';
 import { scheduleSaveDraftLead } from '../draft.js';
 
@@ -82,60 +82,6 @@ function copyText(ctx, text, okMessage) {
     return navigator.clipboard.writeText(text)
         .then(() => ctx.showToast(okMessage))
         .catch(() => ctx.showToast('Não foi possível copiar.', true));
-}
-
-async function publishDemo(ctx) {
-    const epoch = ctx.getDealEpoch ? ctx.getDealEpoch() : null;
-    try {
-        const demo = ctx.state.data.demo;
-        const demoHtml = publishedCustomHtml(ctx.state) || (
-            ctx.state.data.demoHtmlSource === 'boilerplate' ? '' : (ctx.state.data.demoHtml || '')
-        );
-        if ((!demo || !demo.hero || !demo.hero.titulo) && !demoHtml) return '';
-        const nome = (ctx.state.data.dados && ctx.state.data.dados.nome_negocio) || '';
-        const sentId = ctx.state.data.leadId || '';
-        const { response, data } = await apiRequest('/api/digitalizept/demos', {
-            method: 'POST',
-            token: getToken(),
-            body: {
-                leadId: sentId,
-                resumeBound: ctx.state.data.resumeBound === true,
-                businessType: ctx.state.data.businessType,
-                dados: ctx.state.data.dados,
-                identidade: ctx.state.data.identidade,
-                demo,
-                demoHtml,
-                demoHtmlCustom: publishedCustomHtml(ctx.state),
-                demoRaw: ctx.state.data.demoRaw || '',
-                demoVisual: publishedCustomHtml(ctx.state)
-                    ? VISUAL_CUSTOM
-                    : (ctx.state.data.demoVisual || ''),
-                demoHtmlSource: publishedCustomHtml(ctx.state)
-                    ? 'ai'
-                    : (ctx.state.data.demoHtmlSource || '')
-            }
-        });
-        if (response.ok && data.url) {
-            if (epoch != null && ctx.getDealEpoch && ctx.getDealEpoch() !== epoch) return '';
-            ctx.update(bindLeadToNome({
-                leadId: data.leadId || ctx.state.data.leadId,
-                demoUrl: data.url
-            }, nome), epoch);
-            if (sentId && data.leadId && data.leadId !== sentId) {
-                ctx.showToast('Nome diferente — gravado como negócio novo. O lead anterior não foi mexido.');
-            }
-            scheduleSaveDraftLead(ctx.state, ctx);
-            return data.url;
-        }
-        if (ctx && typeof ctx.showToast === 'function') {
-            ctx.showToast((data && data.error) || 'Não foi possível guardar a demonstração.', true);
-        }
-    } catch (_) {
-        if (ctx && typeof ctx.showToast === 'function') {
-            ctx.showToast('Não foi possível guardar a demonstração.', true);
-        }
-    }
-    return '';
 }
 
 function paintWebsitePreview(host, state) {
@@ -387,7 +333,7 @@ function renderWebsiteDemo(body, ctx) {
     previewTitle.textContent = 'Mostre ao cliente';
     const previewHint = document.createElement('p');
     previewHint.className = 'id-disclaimer';
-    previewHint.textContent = 'Se mudou cores, logo ou fotos no passo anterior, a demo actualiza ao voltar aqui — ou toque em Atualizar demo.';
+    previewHint.textContent = 'Mostre já — a prova vem antes do resto. Polir logo/fotos: admin → Demo.';
 
     const identityChanged = refreshDemoFromIdentity(ctx);
 
@@ -481,12 +427,36 @@ function renderWebsiteDemo(body, ctx) {
     previewGroup.append(previewTitle, previewHint, stack, previewBtnWrap, zipHint, status);
     body.appendChild(previewGroup);
 
-    // Sending lives in the lead's control panel, in the admin, and nowhere else.
-    // This page only builds and publishes the demo.
     const controloHint = document.createElement('p');
     controloHint.className = 'id-disclaimer';
-    controloHint.textContent = 'Email, WhatsApp e ligações fazem-se no controlo da lead, no admin. Aqui só se constrói e publica a demo.';
+    controloHint.textContent = 'Email, WhatsApp e ligações fazem-se no Controlo da lead, no admin. Aqui só se mostra e publica a demo.';
     body.appendChild(controloHint);
+
+    const exitRow = document.createElement('div');
+    exitRow.className = 'demo-actions';
+    const agoraNao = document.createElement('button');
+    agoraNao.type = 'button';
+    agoraNao.className = 'btn-secondary';
+    agoraNao.textContent = 'Agora não — Controlo no admin';
+    agoraNao.addEventListener('click', async () => {
+        agoraNao.disabled = true;
+        showStatus('A gravar a demo…', 'ok');
+        try {
+            await publishDemo(ctx);
+            scheduleSaveDraftLead(ctx.state, ctx);
+            ctx.state.data._vendaAgoraNao = true;
+            ctx.update({ _vendaAgoraNao: true });
+            if (typeof ctx.goToConclusion === 'function') ctx.goToConclusion();
+            else {
+                showStatus('Demo gravada. Abra o Controlo desta lead no admin.', 'ok');
+                ctx.showToast('Segue no Controlo — EMAIL1 e WhatsApp.');
+            }
+        } finally {
+            agoraNao.disabled = false;
+        }
+    });
+    exitRow.appendChild(agoraNao);
+    body.appendChild(exitRow);
 
     if (identityChanged) {
         showStatus('Demo actualizada com as cores, logo e fotos do passo anterior.', 'ok');
@@ -655,6 +625,8 @@ function render(body, ctx) {
     });
     renderWebsiteDemo(control, ctx);
 }
+
+export { publishDemo, renderGbpDemo, renderWebsiteDemo };
 
 export const demoStep = {
     name: 'Demonstração',

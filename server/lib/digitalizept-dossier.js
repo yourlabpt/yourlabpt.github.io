@@ -250,6 +250,80 @@ function mergeCanonicalDados(row, obrigatorios = {}, opcionais = {}) {
     };
 }
 
+function parseJsonObject(raw, fallback = {}) {
+    try {
+        const parsed = JSON.parse(raw || '');
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : fallback;
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function isDataImage(value) {
+    return typeof value === 'string' && value.startsWith('data:image/');
+}
+
+function sanitizeIdentidade(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const logoSrc = src.logo && typeof src.logo === 'object' ? src.logo : {};
+    const coresSrc = src.cores && typeof src.cores === 'object' ? src.cores : {};
+    const fotos = Array.isArray(src.fotos)
+        ? src.fotos.filter(isDataImage).slice(0, 6)
+        : [];
+    const logo = { tipo: String(logoSrc.tipo || 'nenhum').slice(0, 20) };
+    if (logo.tipo === 'upload' && isDataImage(logoSrc.dataUrl)) {
+        logo.dataUrl = logoSrc.dataUrl;
+        if (logoSrc.nome) logo.nome = String(logoSrc.nome).slice(0, 200);
+        if (logoSrc.mat) logo.mat = String(logoSrc.mat).slice(0, 40);
+    }
+    if (logoSrc.texto) logo.texto = String(logoSrc.texto).slice(0, 80);
+    return {
+        logo,
+        estilo: String(src.estilo || '').slice(0, 40),
+        paleta: String(src.paleta || '').slice(0, 40),
+        cores: {
+            base: String(coresSrc.base || '').slice(0, 20),
+            destaque: String(coresSrc.destaque || '').slice(0, 20),
+            secundaria: String(coresSrc.secundaria || '').slice(0, 20)
+        },
+        fotos
+    };
+}
+
+function saveLeadIdentidade(db, leadId, identidade) {
+    const row = db.prepare('SELECT id, wizard_json FROM lead WHERE id = ?').get(leadId);
+    if (!row) return null;
+    const clean = sanitizeIdentidade(identidade);
+    const wizard = parseJsonObject(row.wizard_json, {});
+    wizard.identidade = clean;
+    db.prepare('UPDATE lead SET identidade_json = ?, wizard_json = ? WHERE id = ?')
+        .run(JSON.stringify(clean), JSON.stringify(wizard), leadId);
+    return clean;
+}
+
+function patchLeadWhatsapp(db, leadId, whatsapp) {
+    const row = db.prepare(`
+        SELECT l.id, l.wizard_json, d.id AS dados_id, d.obrigatorios_json, d.opcionais_json
+        FROM lead l LEFT JOIN dados_negocio d ON d.lead_id = l.id WHERE l.id = ?
+    `).get(leadId);
+    if (!row) return null;
+    const wa = String(whatsapp || '').trim();
+    db.prepare('UPDATE lead SET whatsapp = ? WHERE id = ?').run(wa, leadId);
+    if (row.dados_id) {
+        const obr = parseJsonObject(row.obrigatorios_json, {});
+        const opc = parseJsonObject(row.opcionais_json, {});
+        if (Object.prototype.hasOwnProperty.call(obr, 'whatsapp')) obr.whatsapp = wa;
+        else opc.whatsapp = wa;
+        db.prepare('UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?')
+            .run(JSON.stringify(obr), JSON.stringify(opc), row.dados_id);
+    }
+    const wizard = parseJsonObject(row.wizard_json, {});
+    if (!wizard.dados || typeof wizard.dados !== 'object') wizard.dados = {};
+    wizard.dados.whatsapp = wa;
+    db.prepare('UPDATE lead SET wizard_json = ? WHERE id = ?').run(JSON.stringify(wizard), leadId);
+    return wa;
+}
+
 function sanitizeDados(dados, cleanText) {
     const out = {};
     Object.entries(dados || {}).forEach(([key, value]) => {
@@ -281,5 +355,8 @@ module.exports = {
     demoSummary,
     propostaSummary,
     mergeCanonicalDados,
-    sanitizeDados
+    sanitizeDados,
+    sanitizeIdentidade,
+    saveLeadIdentidade,
+    patchLeadWhatsapp
 };

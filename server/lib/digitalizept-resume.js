@@ -1,6 +1,7 @@
 // Merge lead columns + wizard_json so resume keeps AI/HTML edits over stale publishes.
 
-const DEMO_STEP_INDEX = 4;
+// Wizard order: type(0) → data(1) → demo(2) → identity → diagnostico → …
+const DEMO_STEP_INDEX = 2;
 const DEMO_WEBSITE_SUBSTEP = 1;
 
 const DEMO_CLEAR_KEYS = [

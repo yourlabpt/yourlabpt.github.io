@@ -75,7 +75,7 @@ describe('digitalizept resume merge', () => {
 
     it('does not land on tipo de negócio when the lead already has a demo or ficha', () => {
         const withDemo = resumeWizardPosition({ _wizardStep: 0, _wizardSubstep: 0 }, { hasDemo: true });
-        assert.equal(withDemo.suggestedStep, 4);
+        assert.equal(withDemo.suggestedStep, 2);
         assert.equal(withDemo.suggestedSubstep, 1);
         const withType = resumeWizardPosition({}, { hasType: true, hasDados: true, businessTypeId: 'cafe-pastelaria' });
         assert.equal(withType.suggestedStep, 1);

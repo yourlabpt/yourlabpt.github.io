@@ -3554,6 +3554,77 @@ function pickKnown(source, keys) {
     return out;
 }
 
+function loadLeadIdentidade(db, leadId) {
+    const row = db.prepare(`
+        SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp,
+               l.demo_slug, l.demo_json, l.identidade_json, l.google_presence_json,
+               l.wizard_json, l.demo_html,
+               d.obrigatorios_json, d.opcionais_json
+        FROM lead l
+        LEFT JOIN dados_negocio d ON d.lead_id = l.id
+        WHERE l.id = ?
+    `).get(leadId);
+    if (!row) return null;
+
+    const types = loadBusinessTypes();
+    const businessType = types.find((t) => t.id === row.business_type)
+        || { id: row.business_type, nome: row.business_type || 'Negócio' };
+    const wizardExtra = parseJsonSafe(row.wizard_json, {});
+    const ficha = dossier.mergeCanonicalDados(
+        row,
+        parseJsonSafe(row.obrigatorios_json, {}),
+        parseJsonSafe(row.opcionais_json, {})
+    );
+    const identidade = parseJsonSafe(row.identidade_json, {}) || wizardExtra.identidade || {};
+    const googlePresence = parseJsonSafe(row.google_presence_json, null)
+        || wizardExtra.googlePresence
+        || {};
+    const leadDemo = parseJsonSafe(row.demo_json, null);
+    const mergedDemo = mergeDemoForResume({
+        leadDemo,
+        leadDemoHtml: row.demo_html || '',
+        wizard: wizardExtra
+    });
+    const dados = hydrateResumeDados({
+        ficha,
+        wizardDados: wizardExtra.dados,
+        presence: googlePresence,
+        demo: mergedDemo.demo || leadDemo,
+        demoHtml: mergedDemo.demoHtml || row.demo_html || '',
+        slug: row.demo_slug || ''
+    });
+    const demoHtml = mergedDemo.demoHtml
+        ? sanitizeDemoHtml(mergedDemo.demoHtml)
+        : '';
+    const demoHtmlCustom = mergedDemo.demoHtmlCustom
+        ? sanitizeDemoHtml(mergedDemo.demoHtmlCustom)
+        : '';
+    return {
+        data: {
+            leadId: row.id,
+            resumeBound: true,
+            businessType,
+            dados,
+            identidade,
+            demo: mergedDemo.demo,
+            demoHtml,
+            demoHtmlCustom,
+            demoRaw: mergedDemo.demoRaw || wizardExtra.demoRaw || '',
+            demoVisual: mergedDemo.demoVisual || wizardExtra.demoVisual || '',
+            demoHtmlSource: mergedDemo.demoHtmlSource || wizardExtra.demoHtmlSource || '',
+            demoUrl: row.demo_slug ? `/d/${row.demo_slug}` : (wizardExtra.demoUrl || ''),
+            demoPrompt: mergedDemo.demoPrompt || wizardExtra.demoPrompt || '',
+            colorPrompt: wizardExtra.colorPrompt || '',
+            gbpSobre: wizardExtra.gbpSobre || '',
+            gbpSobrePrompt: wizardExtra.gbpSobrePrompt || '',
+            demoIdentityStamp: mergedDemo.demoIdentityStamp || wizardExtra.demoIdentityStamp || '',
+            htmlChangeNote: mergedDemo.htmlChangeNote || wizardExtra.htmlChangeNote || '',
+            demoSeeded: mergedDemo.demoSeeded === true,
+            demoGbp: wizardExtra.demoGbp === true
+        }
+    };
+}
+
 function loadLeadDossier(db, leadId) {
     const row = db.prepare(`
         SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
@@ -3693,6 +3764,33 @@ app.get('/api/digitalizept/leads/:leadId/dossier', requireDigitalizept, (req, re
     } catch (err) {
         console.error('digitalizept dossier get error:', err.message);
         return res.status(500).json({ error: 'Não foi possível carregar a ficha.' });
+    }
+});
+
+app.get('/api/digitalizept/leads/:leadId/identidade', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const payload = loadLeadIdentidade(db, leadId);
+        if (!payload) return res.status(404).json({ error: 'Lead não encontrado.' });
+        return res.json({ ok: true, ...payload });
+    } catch (err) {
+        console.error('digitalizept identidade get error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível carregar a identidade.' });
+    }
+});
+
+app.put('/api/digitalizept/leads/:leadId/identidade', requireDigitalizept, (req, res) => {
+    try {
+        const leadId = cleanText(req.params.leadId, 80);
+        const db = getDigitalizeptDb();
+        const saved = dossier.saveLeadIdentidade(db, leadId, (req.body || {}).identidade);
+        if (!saved) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const payload = loadLeadIdentidade(db, leadId);
+        return res.json({ ok: true, identidade: saved, ...(payload || {}) });
+    } catch (err) {
+        console.error('digitalizept identidade put error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível guardar a identidade.' });
     }
 });
 
@@ -4938,6 +5036,7 @@ function buildProcessoView(db, leadId, req) {
             id: leadId,
             nome: snapshot.row.nome || '',
             cidade: snapshot.row.cidade || '',
+            morada: snapshot.row.morada || '',
             businessType: snapshot.row.business_type || '',
             demoSlug: snapshot.row.demo_slug || '',
             demoUrl: snapshot.row.demo_slug ? `/d/${snapshot.row.demo_slug}` : ''
@@ -5108,6 +5207,11 @@ app.post('/api/digitalizept/leads/:leadId/process/contact', requireDigitalizept,
         if (body.canalPreferido != null) patch.canalPreferido = cleanText(body.canalPreferido, 20);
         if (body.canalDireto != null) patch.canalDireto = body.canalDireto === true;
         if (body.emailPrecosLigado != null) patch.emailPrecosLigado = body.emailPrecosLigado === true;
+        if (body.whatsapp != null) {
+            const wa = cleanText(body.whatsapp, 60) || whatsappIfMobile(cleanText(body.telefone, 60));
+            dossier.patchLeadWhatsapp(db, leadId, wa);
+            if (wa) patch.temWhatsapp = true;
+        }
         const snapshot = leadProcess.recomputeProcesso(db, leadId, { patchProcesso: patch });
         if (!snapshot) return res.status(404).json({ error: 'Lead não encontrado.' });
         return res.json({ ok: true, ...processoPayload(snapshot) });

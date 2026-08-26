@@ -9,6 +9,7 @@ import { fetchConfig } from './settings.js';
 import { renderProviderEditor } from './provider-editor.js';
 import { renderLeadDossier, dossierHash, leadIdFromHash, vistaFromHash } from './admin-lead.js';
 import { renderLeadProcess } from './admin-lead-process.js';
+import { renderLeadDemo } from './admin-lead-demo.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
 import {
     formatCallDue,
@@ -81,6 +82,7 @@ let leads = [];
 let deals = [];
 let coverageUi = null;
 let leadProcessUi = null;
+let leadDemoUi = null;
 let businessTypes = [];
 
 function toast(message, isError = false, options = {}) {
@@ -965,7 +967,17 @@ async function openLeadDossier(leadId) {
                 api,
                 onToast: toast,
                 statusHost: slots.statusHost,
+                onSwitchVista: slots.onSwitchVista,
                 onChanged: () => { loadLeads().catch(() => {}); }
+            });
+        };
+        handlers.mountDemo = (node, id) => {
+            if (leadDemoUi && typeof leadDemoUi.destroy === 'function') leadDemoUi.destroy();
+            leadDemoUi = renderLeadDemo(node, {
+                leadId: id,
+                api,
+                onToast: toast,
+                onUnauthorized
             });
         };
         handlers.initialVista = vistaFromHash(window.location.hash);

@@ -2,9 +2,8 @@ import { fetchCatalog } from '../catalog.js';
 import { fetchConfig } from '../settings.js';
 import { formatEuros } from '../format.js';
 import { ensureProposta, computeProposta, resolveIvaRate } from '../proposal-calc.js';
-import { currentSubstep, renderAsk, askChoices, scheduleGoNext } from '../substep.js';
-
-const DISCOUNT_PRESETS = [0, 5, 10, 15, 20];
+import { renderAsk } from '../substep.js';
+import { appendAdminHint } from '../admin-redirects.js';
 
 function isValid(state) {
     return Boolean(state.data.proposta && state.data.proposta.pacote);
@@ -15,7 +14,7 @@ function isSubstepValid(state) {
 }
 
 function substepCount() {
-    return 3;
+    return 1;
 }
 
 function summaryLine(label, value, opts = {}) {
@@ -76,8 +75,6 @@ async function render(body, ctx) {
         loading.remove();
     }
 
-    const idx = currentSubstep(ctx.state);
-
     function recompute() {
         const rate = resolveIvaRate(proposta, config.ivaRate);
         const c = computeProposta(proposta, catalog, businessType, rate);
@@ -86,113 +83,22 @@ async function render(body, ctx) {
         return c;
     }
 
-    if (idx === 0) {
-        const { control } = renderAsk(body, {
-            title: 'Fatura com IVA?',
-            hint: 'Enquanto não houver empresa aberta, deixe sem IVA.',
-            index: 0,
-            total: 3
-        });
-        const ivaOnLabel = config.ivaRate > 0
-            ? `Com IVA (${Math.round(config.ivaRate * 100)}%)`
-            : 'Com IVA';
-        askChoices(control, [
-            { id: 'off', name: 'Sem IVA', desc: 'Sem fatura com IVA neste momento' },
-            { id: 'on', name: ivaOnLabel, desc: config.ivaRate > 0 ? 'Só quando for emitir fatura' : 'A taxa está desligada no servidor' }
-        ], {
-            selected: proposta.cobrarIva === true ? 'on' : 'off',
-            goNext: ctx.goNext,
-            onSelect: (item) => {
-                if (item.id === 'on' && config.ivaRate <= 0) return false;
-                proposta.cobrarIva = item.id === 'on';
-                recompute();
-            }
-        });
-        recompute();
-        return;
-    }
-
-    if (idx === 1) {
-        const { control } = renderAsk(body, {
-            title: 'Há desconto?',
-            hint: 'O valor de tabela nunca desaparece.',
-            index: 1,
-            total: 3
-        });
-        const chips = document.createElement('div');
-        chips.className = 'disc-chips';
-        const customWrap = document.createElement('div');
-        customWrap.className = `disc-custom${DISCOUNT_PRESETS.includes(proposta.descontoPct) ? ' hidden' : ''}`;
-        const customInput = document.createElement('input');
-        customInput.type = 'number';
-        customInput.min = '0';
-        customInput.max = '100';
-        customInput.className = 'field-input';
-        customInput.placeholder = '%';
-        customInput.value = DISCOUNT_PRESETS.includes(proposta.descontoPct) ? '' : String(proposta.descontoPct);
-
-        function paintChips() {
-            chips.querySelectorAll('.disc-chip').forEach((chip) => {
-                const pct = chip.dataset.pct;
-                chip.classList.toggle('active', pct !== 'outro' && Number(pct) === proposta.descontoPct);
-            });
-            const outro = chips.querySelector('[data-pct="outro"]');
-            if (outro) outro.classList.toggle('active', !DISCOUNT_PRESETS.includes(proposta.descontoPct));
-        }
-
-        DISCOUNT_PRESETS.forEach((pct) => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'disc-chip';
-            chip.dataset.pct = String(pct);
-            chip.textContent = `${pct}%`;
-            chip.addEventListener('click', () => {
-                proposta.descontoPct = pct;
-                customWrap.classList.add('hidden');
-                paintChips();
-                recompute();
-                scheduleGoNext(ctx.goNext);
-            });
-            chips.appendChild(chip);
-        });
-        const outroChip = document.createElement('button');
-        outroChip.type = 'button';
-        outroChip.className = 'disc-chip';
-        outroChip.dataset.pct = 'outro';
-        outroChip.textContent = 'Outro';
-        outroChip.addEventListener('click', () => {
-            customWrap.classList.remove('hidden');
-            customInput.focus();
-            paintChips();
-        });
-        chips.appendChild(outroChip);
-        customInput.addEventListener('input', () => {
-            proposta.descontoPct = Math.max(0, Math.min(100, Number(customInput.value) || 0));
-            paintChips();
-            recompute();
-        });
-        customWrap.appendChild(customInput);
-        control.append(chips, customWrap);
-        paintChips();
-        recompute();
-        return;
-    }
-
     const { control } = renderAsk(body, {
         title: 'Resumo para o cliente',
-        hint: 'Mostre o total e a entrada. Sem valor-hora no ecrã.',
-        index: 2,
-        total: 3
+        hint: 'Mostre o total e a entrada. IVA e desconto: no admin → Continuar venda.',
+        index: 0,
+        total: 1
     });
     const wrap = document.createElement('div');
     control.appendChild(wrap);
     fillSummary(wrap, recompute());
+    appendAdminHint(control, 'extras');
 }
 
 export const proposalStep = {
     name: 'Proposta',
     title: 'Resumo financeiro',
-    subtitle: 'O valor de tabela nunca desaparece. Mostre serviços → desconto → total → entrada.',
+    subtitle: 'Um ecrã. IVA e desconto no admin se precisar.',
     isValid,
     isSubstepValid,
     substepCount,

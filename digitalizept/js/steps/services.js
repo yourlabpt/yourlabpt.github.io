@@ -66,16 +66,12 @@ function manutencaoPlans(catalog, proposta) {
 function pagesFor(state) {
     const catalog = catalogOf(state);
     const proposta = state.data.proposta || {};
-    const { beginner, rest } = extrasByGroup(catalog, proposta);
+    const { beginner } = extrasByGroup(catalog, proposta);
     const pages = [];
-    // Pacote escolhido depois das demonstrações; diagnóstico só sugere.
     pages.push({ kind: 'pacote' });
     if (includesWebsite(proposta)) pages.push({ kind: 'dominio' });
-    beginner.forEach((servico) => pages.push({ kind: 'extra', servico }));
-    if (rest.length) pages.push({ kind: 'extrasGate' });
-    if (state.data.extrasMore && rest.length) {
-        rest.forEach((servico) => pages.push({ kind: 'extra', servico }));
-    }
+    // Live: at most 3 extras. Full catalog → Admin Continuar venda.
+    beginner.slice(0, 3).forEach((servico) => pages.push({ kind: 'extra', servico }));
     pages.push({ kind: 'urgencia' }, { kind: 'manutencao' }, { kind: 'contrapartida' });
     return pages;
 }
@@ -139,7 +135,7 @@ async function render(body, ctx) {
     const catalog = catalogOf(ctx.state);
 
     function persist() {
-        ctx.update({ proposta, extrasMore: ctx.state.data.extrasMore === true, _catalog: catalog });
+        ctx.update({ proposta, _catalog: catalog });
         ctx.setValid(isSubstepValid(ctx.state));
     }
 
@@ -152,10 +148,10 @@ async function render(body, ctx) {
         const suggested = diag.pacoteSugerido || proposta.pacote;
         const suggestedLabel = PACKAGE_LABELS[suggested] || suggested;
         const { control } = renderAsk(body, {
-            title: 'Escolher pacote',
+            title: 'Isto?',
             hint: diag.pacoteSugerido
-                ? `Depois das demonstrações — sugestão do diagnóstico: ${suggestedLabel}. Agora sim, fale de preços.`
-                : 'Depois de mostrar Google Maps e site — escolha com o cliente.',
+                ? `Sugestão: ${suggestedLabel}. Mais extras e IVA: no admin → Continuar venda.`
+                : 'Um pacote. Mais extras: no admin → Continuar venda.',
             index: idx,
             total: pages.length
         });
@@ -173,6 +169,22 @@ async function render(body, ctx) {
                 persist();
             }
         });
+        const exit = document.createElement('button');
+        exit.type = 'button';
+        exit.className = 'btn-secondary logo-actions-wide';
+        exit.textContent = 'Agora não — Controlo no admin';
+        exit.addEventListener('click', () => {
+            ctx.state.data._vendaAgoraNao = true;
+            ctx.update({ _vendaAgoraNao: true });
+            ctx.showToast('Segue no Controlo desta lead.');
+            // Jump to conclusion without signature by skipping remaining sale steps via flag.
+            if (typeof ctx.goToConclusion === 'function') ctx.goToConclusion();
+            else if (ctx.goNext) {
+                // Fallback: leave package empty and toast — seller uses Controlo.
+                ctx.showToast('Abra o Controlo no admin para EMAIL1 / WhatsApp.');
+            }
+        });
+        control.appendChild(exit);
         if (ctx.state.data.packagePitch) {
             const pitch = document.createElement('p');
             pitch.className = 'ask-hint';
@@ -291,28 +303,6 @@ async function render(body, ctx) {
         return;
     }
 
-    if (page.kind === 'extrasGate') {
-        const { control } = renderAsk(body, {
-            title: 'Quer ver mais extras?',
-            hint: 'Páginas extra, catálogo, email no domínio, marcações… Pode saltar.',
-            index: idx,
-            total: pages.length
-        });
-        askChoices(control, [
-            { id: 'no', name: 'Agora não' },
-            { id: 'yes', name: 'Sim, ver o resto' }
-        ], {
-            selected: ctx.state.data.extrasMore === true ? 'yes' : 'no',
-            goNext: ctx.goNext,
-            onSelect: (item) => {
-                ctx.state.data.extrasMore = item.id === 'yes';
-                persist();
-            }
-        });
-        persist();
-        return;
-    }
-
     if (page.kind === 'urgencia') {
         const urgencia = catalog.find((s) => s.codigo === 'urgencia');
         const { control } = renderAsk(body, {
@@ -402,7 +392,7 @@ async function render(body, ctx) {
 export const servicesStep = {
     name: 'Serviços',
     title: 'Pacotes e extras',
-    subtitle: 'Escolha o pacote, domínio (se houver site), extras e manutenção — depois das demonstrações.',
+    subtitle: 'Um pacote e até 3 extras. O resto no admin → Continuar venda.',
     isValid,
     isSubstepValid,
     substepCount,

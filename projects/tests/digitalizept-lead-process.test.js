@@ -522,9 +522,13 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(ficha, /statusHost/);
         assert.match(ficha, /Dados da loja/);
         assert.match(ficha, /O que fazer agora/);
+        assert.match(ficha, /data-vista', 'demo'/);
         assert.match(ficha, /dossier-mais/);
         assert.match(ficha, /Faz o passo de baixo/);
         assert.match(panel, /lead-proc-trilho/);
+        assert.match(panel, /Guardar no telemóvel/);
+        assert.match(panel, /Fotos e logo/);
+        assert.match(panel, /Guardar notas da chamada/);
         assert.doesNotMatch(ficha, /aberturaHost/);
         const adminCss = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'admin.css'),
@@ -533,7 +537,10 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.doesNotMatch(adminCss, /procpasso/);
         assert.match(adminCss, /--accent-dark: var\(--admin-press\)/);
         assert.match(adminCss, /lead-proc-ganchos \.followup-gancho\.active/);
-        assert.match(sw, /digitalizept-v102/);
+        assert.match(adminCss, /dossier-vista-demo/);
+        assert.match(sw, /digitalizept-v104/);
+        assert.match(sw, /admin-lead-demo\.js/);
+        assert.match(sw, /admin-redirects\.js/);
         assert.match(panel, /Como ficou/);
         assert.match(panel, /sem_interesse/);
         assert.match(panel, /canal === 'whatsapp'/);

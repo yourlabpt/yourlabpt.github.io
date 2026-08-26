@@ -1,9 +1,10 @@
 import { fetchSettings } from '../settings.js';
-import { PUBLIC_REQUIRED, PUBLIC_EXTRA, isDataStepValid } from './data-valid.js';
-import { currentSubstep, renderAsk, askText, askToggle, askChoices } from '../substep.js';
-import { renderHoursPicker } from '../horario.js';
-import { buildDadosCopyPrompt, plainAiText, renderOptionalAi } from '../optional-ai.js';
+import { isDataStepValid } from './data-valid.js';
+import { currentSubstep, renderAsk, askText, scheduleGoNext } from '../substep.js';
+import { apiRequest } from '../api.js';
+import { getToken } from '../auth.js';
 import { isCustomDemo } from '../demo/seed.js';
+import { appendAdminHint } from '../admin-redirects.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -20,39 +21,15 @@ function isValid(state) {
     return isDataStepValid(state);
 }
 
-function speechAvailable() {
-    return typeof window !== 'undefined'
-        && (window.SpeechRecognition || window.webkitSpeechRecognition);
-}
-
-function attachDictation(inputEl, micBtn) {
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognizer = null;
-    let listening = false;
-
-    micBtn.addEventListener('click', () => {
-        if (listening && recognizer) {
-            recognizer.stop();
-            return;
-        }
-        recognizer = new Recognition();
-        recognizer.lang = 'pt-PT';
-        recognizer.interimResults = false;
-        recognizer.continuous = false;
-
-        recognizer.onstart = () => { listening = true; micBtn.classList.add('listening'); };
-        recognizer.onend = () => { listening = false; micBtn.classList.remove('listening'); };
-        recognizer.onerror = () => { listening = false; micBtn.classList.remove('listening'); };
-        recognizer.onresult = (event) => {
-            const text = Array.from(event.results).map((r) => r[0].transcript).join(' ').trim();
-            inputEl.value = inputEl.value ? `${inputEl.value} ${text}` : text;
-            inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        };
-        recognizer.start();
-    });
-}
-
+/** Live venda: Maps link + four public fields. Rest stays on Admin Ficha. */
 const CORE_PAGES = [
+    {
+        id: '_maps',
+        kind: 'maps',
+        title: 'Tem o link do Google Maps?',
+        hint: 'Cole o link — preenche nome, morada e telefone. Se não tiver, avance e escreva à mão.',
+        required: false
+    },
     {
         id: 'nome_negocio',
         title: 'Qual é o nome do negócio?',
@@ -62,7 +39,7 @@ const CORE_PAGES = [
     {
         id: 'morada',
         title: 'Qual é a morada?',
-        hint: 'Rua e número, como o cliente diria a um cliente.',
+        hint: 'Rua e número.',
         required: true
     },
     {
@@ -73,74 +50,19 @@ const CORE_PAGES = [
     {
         id: 'telefone',
         title: 'Qual é o telefone do negócio?',
-        hint: 'O número público, não o telemóvel pessoal.',
+        hint: 'O número público. WhatsApp e o resto da ficha ficam no admin.',
         required: true
-    },
-    {
-        id: 'horario',
-        title: 'Quando está aberto?',
-        hint: 'Toque nos dias, a hora de abrir e de fechar. Se fecha ao almoço, preencha a pausa.',
-        required: false
-    },
-    {
-        id: 'whatsapp',
-        title: 'Tem WhatsApp do negócio?',
-        hint: 'Opcional. Se for o mesmo que o telefone, pode saltar.',
-        required: false
     }
 ];
 
-function extraPages(state, standardFields) {
-    const businessType = getBusinessType(state) || {};
-    const used = new Set([...PUBLIC_REQUIRED, ...PUBLIC_EXTRA]);
-    const pages = [];
-
-    function addId(id, extra = {}) {
-        if (!id || used.has(id)) return;
-        used.add(id);
-        const def = (standardFields && standardFields[id]) || { label: id, tipo: 'texto' };
-        pages.push({
-            id,
-            title: extra.title || def.label || id,
-            hint: extra.hint || 'Opcional — Continuar sem preencher está bem.',
-            required: false,
-            def: { ...def, ...extra.def }
-        });
-    }
-
-    (Array.isArray(businessType.perguntas_especificas) ? businessType.perguntas_especificas : []).forEach((q) => {
-        if (!q || !q.id || used.has(q.id)) return;
-        used.add(q.id);
-        pages.push({
-            id: q.id,
-            title: q.title || q.label || q.id,
-            hint: q.hint || 'Opcional — se não souber agora, avance.',
-            required: false,
-            def: q
-        });
-    });
-    (businessType.campos_obrigatorios || []).forEach((id) => addId(id));
-    (businessType.campos_opcionais || []).forEach((id) => addId(id));
-    return pages;
-}
-
 function pagesFor(state, standardFields) {
-    const core = CORE_PAGES.map((p) => ({
+    return CORE_PAGES.map((p) => ({
         ...p,
         def: (standardFields && standardFields[p.id]) || {
             label: p.id,
-            tipo: p.id === 'telefone' || p.id === 'whatsapp' ? 'telefone' : p.id === 'horario' ? 'horario' : 'texto'
+            tipo: p.id === 'telefone' ? 'telefone' : p.id === 'maps_url' || p.kind === 'maps' ? 'url' : 'texto'
         }
     }));
-    const gate = {
-        id: '_more',
-        title: (getBusinessType(state) && getBusinessType(state).gate_mais)
-            || 'Quer acrescentar mais agora?',
-        hint: 'Perguntas deste tipo de negócio (pratos, marcas, marcações…). Pode ficar para depois.',
-        kind: 'gate'
-    };
-    if (!state.data.dadosMore) return [...core, gate];
-    return [...core, gate, ...extraPages(state, standardFields)];
 }
 
 function substepCount(state) {
@@ -151,7 +73,7 @@ function isSubstepValid(state) {
     const pages = pagesFor(state, state.data._standardFields || null);
     const page = pages[currentSubstep(state)];
     if (!page) return isDataStepValid(state);
-    if (page.kind === 'gate') return true;
+    if (page.kind === 'maps') return true;
     if (!page.required) return true;
     const dados = (state.data && state.data.dados) || {};
     return String(dados[page.id] || '').trim().length > 0;
@@ -185,32 +107,17 @@ export function invalidateDemoIfDriverField(state, fieldId) {
     return true;
 }
 
-function fieldControl(control, def, value, onChange, onEnter, goNext) {
-    const tipo = (def && def.tipo) || 'texto';
-    if (tipo === 'sim_nao') {
-        askToggle(control, { value, onChange, goNext });
-        return;
-    }
-    const isLong = tipo === 'texto_longo';
-    const input = askText(control, {
-        value,
-        type: tipo === 'telefone' ? 'tel' : tipo === 'email' ? 'email' : tipo === 'url' ? 'url' : 'text',
-        placeholder: def && def.placeholder,
-        rows: isLong ? 4 : 1,
-        onChange,
-        onEnter,
-        showNextButton: !isLong,
-        nextLabel: 'Seguinte'
+function applyLookupToDados(dados, result) {
+    const d = (result && result.dados) || {};
+    [
+        'nome_negocio', 'morada', 'cidade', 'telefone', 'whatsapp', 'email',
+        'horario', 'maps_url', 'instagram', 'facebook', 'website_atual'
+    ].forEach((key) => {
+        const next = String(d[key] || '').trim();
+        if (!next) return;
+        if (!String(dados[key] || '').trim()) dados[key] = next;
     });
-    if (isLong && speechAvailable()) {
-        const mic = document.createElement('button');
-        mic.type = 'button';
-        mic.className = 'mic-btn';
-        mic.setAttribute('aria-label', 'Ditar por voz');
-        mic.textContent = 'voz';
-        attachDictation(input, mic);
-        control.appendChild(mic);
-    }
+    if (d.maps_url) dados.maps_url = d.maps_url;
 }
 
 async function render(body, ctx) {
@@ -250,83 +157,103 @@ async function render(body, ctx) {
     });
 
     function persist() {
-        ctx.update({ dados, dadosMore: ctx.state.data.dadosMore === true });
+        ctx.update({ dados });
         ctx.setValid(isSubstepValid(ctx.state));
     }
 
-    if (page.kind === 'gate') {
-        askChoices(control, [
-            { id: 'no', name: 'Agora não', desc: 'Seguir para o diagnóstico' },
-            { id: 'yes', name: 'Sim', desc: 'Perguntas deste ofício e o resto da ficha' }
-        ], {
-            selected: ctx.state.data.dadosMore === true ? 'yes' : 'no',
-            goNext: ctx.goNext,
-            onSelect: (item) => {
-                ctx.state.data.dadosMore = item.id === 'yes';
-                persist();
-            }
-        });
-        ctx.setValid(true);
-        return;
-    }
-
-    if (page.id === 'horario') {
-        renderHoursPicker(control, {
-            text: dados.horario || '',
+    if (page.kind === 'maps') {
+        const input = askText(control, {
+            value: dados.maps_url || '',
+            type: 'url',
+            placeholder: 'https://maps.app.goo.gl/…',
+            showNextButton: false,
             onChange: (val) => {
-                dados.horario = val;
+                dados.maps_url = val;
                 persist();
-            },
-            showNext: true,
-            onNext: () => {
-                if (ctx.goNext) ctx.goNext();
             }
         });
-        ctx.setValid(isSubstepValid(ctx.state));
+        const actions = document.createElement('div');
+        actions.className = 'demo-actions';
+        const fillBtn = document.createElement('button');
+        fillBtn.type = 'button';
+        fillBtn.className = 'btn-primary';
+        fillBtn.textContent = 'Preencher pelo link';
+        fillBtn.addEventListener('click', async () => {
+            const url = String(dados.maps_url || input.value || '').trim();
+            if (!url) {
+                ctx.showToast('Cole o link do Google Maps.', true);
+                return;
+            }
+            fillBtn.disabled = true;
+            try {
+                const { response, data } = await apiRequest('/api/digitalizept/maps-lookup', {
+                    method: 'POST',
+                    token: getToken(),
+                    body: { url, nome: dados.nome_negocio }
+                });
+                if (response.status === 401) {
+                    ctx.onUnauthorized();
+                    return;
+                }
+                if (!response.ok || !data.ok) {
+                    ctx.showToast((data && data.error) || 'Não consegui ler o link.', true);
+                    return;
+                }
+                applyLookupToDados(dados, data);
+                if (data.businessTypeId && (!businessType.id || businessType.id === 'generico')) {
+                    /* type already chosen on street; keep it */
+                }
+                if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
+                    ctx.state.data._mapsLat = data.lat;
+                    ctx.state.data._mapsLng = data.lng;
+                }
+                persist();
+                ctx.showToast('Dados do Maps aplicados.');
+                scheduleGoNext(ctx.goNext);
+            } catch (_) {
+                ctx.showToast('Sem rede para ler o Maps.', true);
+            } finally {
+                fillBtn.disabled = false;
+            }
+        });
+        const skipBtn = document.createElement('button');
+        skipBtn.type = 'button';
+        skipBtn.className = 'btn-secondary';
+        skipBtn.textContent = 'Escrever à mão';
+        skipBtn.addEventListener('click', () => {
+            persist();
+            if (ctx.goNext) ctx.goNext();
+        });
+        actions.append(fillBtn, skipBtn);
+        control.appendChild(actions);
+        appendAdminHint(control, 'ficha');
+        persist();
         return;
     }
 
-    fieldControl(control, page.def, dados[page.id], (val) => {
-        dados[page.id] = val;
-        invalidateDemoIfDriverField(ctx.state, page.id);
-        persist();
-    }, () => {
-        if (isSubstepValid(ctx.state) && ctx.goNext) ctx.goNext();
-    }, ctx.goNext);
-
-    if (['o_que_faz', 'principais_servicos', 'diferencial'].includes(page.id)) {
-        const promptKey = `dadosAiPrompt_${page.id}`;
-        if (!ctx.state.data[promptKey]) {
-            ctx.state.data[promptKey] = buildDadosCopyPrompt(ctx.state, page.id);
-        }
-        renderOptionalAi(control, {
-            title: 'Sugerir com AI (opcional)',
-            hint: 'Pode deixar em branco e avançar. O tipo de negócio já sugere o tom.',
-            prompt: ctx.state.data[promptKey],
-            placeholder: 'Cole o texto…',
-            ctx,
-            onPromptChange: (value) => {
-                ctx.state.data[promptKey] = value;
-                ctx.update({ [promptKey]: value });
-            },
-            onApply: (raw) => {
-                const texto = plainAiText(raw);
-                dados[page.id] = texto;
-                persist();
-                const input = control.querySelector('.ask-input');
-                if (input) input.value = texto;
-                ctx.showToast('Texto aplicado.');
-            }
-        });
-    }
-
+    askText(control, {
+        value: dados[page.id] || '',
+        type: page.id === 'telefone' ? 'tel' : 'text',
+        placeholder: page.def && page.def.placeholder,
+        onChange: (val) => {
+            dados[page.id] = val;
+            invalidateDemoIfDriverField(ctx.state, page.id);
+            persist();
+        },
+        onEnter: () => {
+            if (isSubstepValid(ctx.state) && ctx.goNext) ctx.goNext();
+        },
+        showNextButton: true,
+        nextLabel: 'Seguinte'
+    });
+    if (page.id === 'telefone') appendAdminHint(control, 'ficha');
     ctx.setValid(isSubstepValid(ctx.state));
 }
 
 export const dataStep = {
     name: 'Dados do estabelecimento',
     title: 'Dados do estabelecimento',
-    subtitle: 'Nome, morada e contacto do negócio chegam para avançar. O resto pode ficar para depois do fecho.',
+    subtitle: 'Link do Maps ou nome, morada e telefone. O resto da ficha fica no admin.',
     isValid,
     isSubstepValid,
     substepCount,

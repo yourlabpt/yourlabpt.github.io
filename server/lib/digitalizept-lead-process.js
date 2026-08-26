@@ -1053,7 +1053,7 @@ function resumoDemoAberturas(visitas = [], toques = []) {
 
 function loadContext(db, leadId) {
     const row = db.prepare(`
-        SELECT id, business_type, nome, telefone, whatsapp, cidade, estado, resultado, cobertura,
+        SELECT id, business_type, nome, telefone, whatsapp, morada, cidade, estado, resultado, cobertura,
                demo_slug, followup_json, processo_json, processo_estado, proxima_acao_em, revisitar_em
         FROM lead WHERE id = ?
     `).get(leadId);

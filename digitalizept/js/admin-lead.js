@@ -221,7 +221,7 @@ function appendField(grid, field, value, missing, attr, attrValue) {
 }
 
 export function renderLeadDossier(host, payload, {
-    onSave, onBack, onToast, onMapsLookup, onWebsiteZip, mountProcess, initialVista
+    onSave, onBack, onToast, onMapsLookup, onWebsiteZip, mountProcess, mountDemo, initialVista
 } = {}) {
     host.innerHTML = '';
     host.className = 'dossier dossier-vista-controlo';
@@ -230,7 +230,7 @@ export function renderLeadDossier(host, payload, {
         return;
     }
 
-    let vista = initialVista === 'ficha' ? 'ficha' : 'controlo';
+    let vista = normalizeVista(initialVista);
 
     const chrome = el('div', 'dossier-chrome');
     const back = el('button', 'btn-secondary', '← Leads');
@@ -238,13 +238,16 @@ export function renderLeadDossier(host, payload, {
     back.addEventListener('click', () => { if (onBack) onBack(); });
     const nome = el('h2', 'dossier-nome', payload.lead.nome || 'Lead');
     const toggle = el('div', 'dossier-toggle');
-    const btnFicha = el('button', 'dossier-toggle-btn', 'Dados da loja');
-    btnFicha.type = 'button';
-    btnFicha.setAttribute('data-vista', 'ficha');
     const btnControlo = el('button', 'dossier-toggle-btn', 'O que fazer agora');
     btnControlo.type = 'button';
     btnControlo.setAttribute('data-vista', 'controlo');
-    toggle.append(btnFicha, btnControlo);
+    const btnDemo = el('button', 'dossier-toggle-btn', 'Demo');
+    btnDemo.type = 'button';
+    btnDemo.setAttribute('data-vista', 'demo');
+    const btnFicha = el('button', 'dossier-toggle-btn', 'Dados da loja');
+    btnFicha.type = 'button';
+    btnFicha.setAttribute('data-vista', 'ficha');
+    toggle.append(btnControlo, btnDemo, btnFicha);
     const extras = el('div', 'dossier-chrome-actions');
     if (payload.demo && payload.demo.url) {
         const demoLink = el('a', 'btn-secondary', 'Abrir demo');
@@ -258,6 +261,7 @@ export function renderLeadDossier(host, payload, {
     mais.appendChild(el('summary', 'btn-secondary', 'Mais'));
     const resume = el('a', 'btn-secondary', payload.lead.estado === 'fechado' ? 'Editar proposta' : 'Continuar venda');
     resume.href = `./?resume=${encodeURIComponent(payload.lead.id)}`;
+    resume.title = 'Pacotes e contrato — fotos e logo ficam no separador Demo';
     mais.appendChild(resume);
     if (typeof onWebsiteZip === 'function') {
         const zip = el('button', 'btn-secondary', 'Descarregar website (ZIP)');
@@ -266,7 +270,7 @@ export function renderLeadDossier(host, payload, {
         mais.appendChild(zip);
     }
     extras.appendChild(mais);
-    const hint = el('p', 'dossier-controlo-hint', 'Faz o passo de baixo. Podes voltar atrás, saltar, ou tocar noutro passo no trilho.');
+    const hint = el('p', 'dossier-controlo-hint');
     chrome.append(back, nome, toggle, extras, hint);
     host.appendChild(chrome);
 
@@ -279,23 +283,44 @@ export function renderLeadDossier(host, payload, {
     const processHost = el('div', 'dossier-process');
     pageControlo.appendChild(processHost);
 
+    const pageDemo = el('div', 'dossier-page dossier-page-demo');
+    const demoHost = el('div', 'dossier-demo-host');
+    pageDemo.appendChild(demoHost);
+
+    const HINTS = {
+        controlo: 'Faz o passo de baixo. Podes voltar atrás, saltar, ou tocar noutro passo no trilho.',
+        demo: 'Logo, fotos e paleta. Publica a demo daqui — o envio fica no Controlo.',
+        ficha: ''
+    };
+
     function setVista(next) {
-        vista = next === 'ficha' ? 'ficha' : 'controlo';
+        vista = normalizeVista(next);
         host.classList.toggle('dossier-vista-ficha', vista === 'ficha');
         host.classList.toggle('dossier-vista-controlo', vista === 'controlo');
+        host.classList.toggle('dossier-vista-demo', vista === 'demo');
         btnFicha.classList.toggle('is-active', vista === 'ficha');
         btnControlo.classList.toggle('is-active', vista === 'controlo');
+        btnDemo.classList.toggle('is-active', vista === 'demo');
         btnFicha.setAttribute('aria-pressed', vista === 'ficha' ? 'true' : 'false');
         btnControlo.setAttribute('aria-pressed', vista === 'controlo' ? 'true' : 'false');
+        btnDemo.setAttribute('aria-pressed', vista === 'demo' ? 'true' : 'false');
         host.dataset.vista = vista;
+        hint.textContent = HINTS[vista] || '';
         history.replaceState(null, '', dossierHash(payload.lead.id, vista));
         window.scrollTo(0, 0);
     }
     btnFicha.addEventListener('click', () => setVista('ficha'));
     btnControlo.addEventListener('click', () => setVista('controlo'));
+    btnDemo.addEventListener('click', () => setVista('demo'));
 
     if (typeof mountProcess === 'function') {
-        mountProcess(processHost, payload.lead.id, { statusHost });
+        mountProcess(processHost, payload.lead.id, {
+            statusHost,
+            onSwitchVista: setVista
+        });
+    }
+    if (typeof mountDemo === 'function') {
+        mountDemo(demoHost, payload.lead.id);
     }
 
     const miss = missingSet(payload.completeness);
@@ -537,6 +562,10 @@ export function renderLeadDossier(host, payload, {
         prop.pacote ? `Proposta: ${prop.pacote}${prop.extras.length ? ` + ${prop.extras.join(', ')}` : ''}` : 'Proposta: ainda não fechada'
     ];
     lines.forEach((line) => read.appendChild(el('p', 'meta', line)));
+    const irDemo = el('button', 'btn-secondary', 'Fotos e logo');
+    irDemo.type = 'button';
+    irDemo.addEventListener('click', () => setVista('demo'));
+    read.appendChild(irDemo);
     if ((payload.visits || []).length) {
         read.appendChild(el('p', 'meta', `${payload.visits.length} visita(s) de rua ligadas`));
     }
@@ -564,18 +593,23 @@ export function renderLeadDossier(host, payload, {
     });
 
     pageFicha.appendChild(form);
-    host.append(pageFicha, pageControlo);
+    host.append(pageFicha, pageControlo, pageDemo);
     setVista(vista);
 }
 
+function normalizeVista(value) {
+    if (value === 'ficha' || value === 'demo') return value;
+    return 'controlo';
+}
+
 export function dossierHash(leadId, vista = 'controlo') {
-    const view = vista === 'ficha' ? 'ficha' : 'controlo';
+    const view = normalizeVista(vista);
     return `#dossier=${encodeURIComponent(leadId)}&vista=${view}`;
 }
 
 export function vistaFromHash(hash) {
     const match = String(hash || '').match(/[#&]vista=([^&]+)/i);
-    return match && match[1] === 'ficha' ? 'ficha' : 'controlo';
+    return normalizeVista(match ? decodeURIComponent(match[1]) : '');
 }
 
 export function leadIdFromHash(hash) {

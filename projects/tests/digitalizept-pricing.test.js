@@ -483,24 +483,26 @@ describe('digitalizept one-question substeps', () => {
         }
     };
 
-    it('asks the public shopfront as seven screens until the client wants more', () => {
-        assert.equal(dataStep.substepCount(empty), 7);
+    it('asks Maps link then four public fields — no Sim/Não ficha cliff', () => {
+        assert.equal(dataStep.substepCount(empty), 5);
+        assert.equal(dataStep.isSubstepValid(empty), true);
+        empty.substep = 1;
         assert.equal(dataStep.isSubstepValid(empty), false);
         empty.data.dados.nome_negocio = 'Café Central';
         assert.equal(dataStep.isSubstepValid(empty), true);
     });
 
-    it('opens extra screens only after Sim on the more-now gate', () => {
+    it('does not open craft extras from the live data step', () => {
         const state = {
-            substep: 6,
+            substep: 0,
             data: { ...empty.data, dadosMore: true, dados: { nome_negocio: 'Café Central' } }
         };
-        assert.ok(dataStep.substepCount(state) > 7);
+        assert.equal(dataStep.substepCount(state), 5);
     });
 
-    it('keeps identity as three skippable screens', () => {
-        const state = { substep: 0, data: { businessType: { id: 'restaurante' } } };
-        assert.equal(identityStep.substepCount(state), 3);
+    it('keeps identity middle-tier skippable (horário / logo / foto / sobre)', () => {
+        const state = { substep: 0, data: { businessType: { id: 'restaurante' }, dados: {} } };
+        assert.ok(identityStep.substepCount(state) >= 3);
         assert.equal(identityStep.isSubstepValid(state), true);
     });
 
@@ -529,7 +531,7 @@ describe('digitalizept one-question substeps', () => {
         assert.equal(servicesStep.isSubstepValid(state), false);
     });
 
-    it('lists café extras in a stable order after the more-now gate', () => {
+    it('keeps live data step at five screens even with craft fields on the type', () => {
         const cafe = {
             id: 'cafe-pastelaria',
             campos_obrigatorios: ['nome_negocio', 'responsavel', 'telefone', 'o_que_faz'],
@@ -540,10 +542,10 @@ describe('digitalizept one-question substeps', () => {
             campos_opcionais: ['estacionamento', 'mbway', 'wifi', 'reservas', 'entregas']
         };
         const state = {
-            substep: 6,
+            substep: 0,
             data: { businessType: cafe, dadosMore: true, dados: { nome_negocio: 'Café Central' } }
         };
-        assert.ok(dataStep.substepCount(state) > 7);
+        assert.equal(dataStep.substepCount(state), 5);
         assert.equal(dataStep.isSubstepValid(state), true);
     });
 
@@ -608,14 +610,14 @@ describe('digitalizept one-question substeps', () => {
 });
 
 describe('digitalizept demo flow', () => {
-    it('diagnóstico ends before pacotes — only understanding questions', () => {
-        assert.equal(diagnosticoStep.substepCount(), 6);
+    it('diagnóstico is a live listing tap — speakable choices, same enum ids', () => {
+        const empty = { substep: 0, data: { dados: {} } };
+        assert.equal(diagnosticoStep.substepCount(empty), 2);
         const state = {
-            substep: 5,
+            substep: 0,
             data: {
+                dados: { nome_negocio: 'Café' },
                 googleDiagnostico: {
-                    exemploVisto: true,
-                    diferencaVista: true,
                     maps: 'sim_acesso',
                     validado: 'sim',
                     website: 'nao',

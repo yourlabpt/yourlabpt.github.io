@@ -3579,6 +3579,20 @@ a.btn-secondary {
     margin-bottom: 16px;
 }
 
+.diag-ownership-line {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--accent-strong, #1b1b1b);
+    background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+    font-size: 1.05rem;
+    line-height: 1.45;
+    font-weight: 600;
+}
+
+.admin-redirect-hint {
+    margin-top: 10px;
+}
+
 .diag-layer {
     padding: 12px 14px;
     border-left: 3px solid var(--accent-color, #a07d3a);
@@ -3905,6 +3919,36 @@ a.btn-secondary {
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+}
+
+.lead-proc-strip {
+    margin: 0 0 14px;
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
+.lead-proc-strip-acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.lead-proc-strip-wa {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.lead-proc-strip-wa .meta {
+    flex: 1 1 100%;
+    margin: 0;
+}
+
+.lead-proc-strip-wa .field-input {
+    flex: 1 1 140px;
+    min-width: 120px;
 }
 
 .lead-proc-off {

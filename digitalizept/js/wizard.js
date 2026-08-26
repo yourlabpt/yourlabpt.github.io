@@ -96,12 +96,14 @@ export function hasWizardProgress() {
     }
 }
 
+// Live script: type → loja (min) → demo → identity (optional) → diag → packages → close.
+// google.js stays skipped; deep ficha / extras / polish live in Admin.
 const STEPS = [
     businessTypeStep,
     dataStep,
-    diagnosticoStep,
-    identityStep,
     demoStep,
+    identityStep,
+    diagnosticoStep,
     servicesStep,
     googleStep,
     proposalStep,
@@ -254,7 +256,24 @@ export function createWizard({ onUnauthorized, showToast }) {
         }
         syncNav();
 
-        const ctx = { state, update, setValid, onUnauthorized, showToast, reset, goNext, getDealEpoch };
+        const ctx = {
+            state,
+            update,
+            setValid,
+            onUnauthorized,
+            showToast,
+            reset,
+            goNext,
+            getDealEpoch,
+            goToConclusion() {
+                cancelScheduledGoNext();
+                state.data._vendaAgoraNao = true;
+                state.step = STEPS.length - 1;
+                state.substep = 0;
+                persist();
+                render();
+            }
+        };
         Promise.resolve(step.render(body, ctx)).catch(() => {
             showToast('Ocorreu um erro neste passo.', true);
         });
