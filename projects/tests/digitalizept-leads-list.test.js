@@ -2,6 +2,9 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const Database = require('better-sqlite3');
+const { SCHEMA, migrate } = require('../../server/lib/digitalizept-db.js');
 const { leadsListOrderKey, leadsListOrderSql } = require('../../server/lib/digitalizept-leads-list.js');
 
 describe('digitalizept leads list order', () => {
@@ -17,9 +20,15 @@ describe('digitalizept leads list order', () => {
         assert.match(sql, /proxima_acao_em ASC/);
     });
 
-    it('orders newest first by creation date', () => {
+    it('orders by first insert (criação) ascending — never by later edits', () => {
         assert.equal(leadsListOrderKey({ ordem: 'criado' }), 'criado');
-        assert.equal(leadsListOrderSql({ ordem: 'criado' }), 'l.criado_em DESC');
+        assert.equal(leadsListOrderSql({ ordem: 'criado' }), 'l.criado_em ASC, l.id ASC');
+        assert.doesNotMatch(leadsListOrderSql({ ordem: 'criado' }), /atualizado_em/);
+    });
+
+    it('orders by last update descending', () => {
+        assert.equal(leadsListOrderKey({ ordem: 'atualizado' }), 'atualizado');
+        assert.match(leadsListOrderSql({ ordem: 'atualizado' }), /atualizado_em DESC/);
     });
 
     it('lets ordem win over the old fila=hoje flag, and ignores unknown keys', () => {
@@ -38,6 +47,7 @@ describe('digitalizept leads list order', () => {
         assert.match(html, /value="proximo"/);
         assert.match(html, /value="tipo"/);
         assert.match(html, /value="criado"/);
+        assert.match(html, /value="atualizado"/);
         const admin = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'js', 'admin.js'),
             'utf8'
@@ -45,5 +55,27 @@ describe('digitalizept leads list order', () => {
         assert.match(admin, /leads\?\$\{qs\}/);
         assert.match(admin, /fila', 'hoje'/);
         assert.match(admin, /LEADS_ORDEM_KEY/);
+        assert.match(admin, /'atualizado'/);
+    });
+
+    it('stamps atualizado_em on edit without moving criado_em', () => {
+        const db = new Database(':memory:');
+        db.exec(SCHEMA);
+        migrate(db);
+        const id = crypto.randomUUID();
+        const created = '2026-01-10T10:00:00.000Z';
+        db.prepare(`
+            INSERT INTO lead (id, business_type, nome, morada, telefone, whatsapp, estado, criado_em)
+            VALUES (?, 'cafe-pastelaria', 'Café A', 'Rua 1', '912345678', '', 'novo', ?)
+        `).run(id, created);
+        const afterInsert = db.prepare('SELECT criado_em, atualizado_em FROM lead WHERE id = ?').get(id);
+        assert.equal(afterInsert.criado_em, created);
+        assert.equal(afterInsert.atualizado_em, created);
+
+        db.prepare('UPDATE lead SET nome = ? WHERE id = ?').run('Café A Renovado', id);
+        const afterEdit = db.prepare('SELECT criado_em, atualizado_em FROM lead WHERE id = ?').get(id);
+        assert.equal(afterEdit.criado_em, created);
+        assert.notEqual(afterEdit.atualizado_em, created);
+        assert.ok(String(afterEdit.atualizado_em) > created);
     });
 });

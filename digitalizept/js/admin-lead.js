@@ -293,7 +293,7 @@ export function renderLeadDossier(host, payload, {
     const HINTS = {
         controlo: 'Faz o passo de baixo. Podes voltar atrás, saltar, ou tocar noutro passo no trilho.',
         demo: 'Logo, fotos e paleta. Publica a demo daqui — o envio fica no Controlo.',
-        ficha: ''
+        ficha: 'Pin no Maps ≠ Perfil da Empresa ≠ site próprio. Preenche WhatsApp, telefone, website, Instagram e Facebook para o pin público e as demos baterem certo.'
     };
 
     function setVista(next) {
@@ -492,6 +492,7 @@ export function renderLeadDossier(host, payload, {
         {
             title: 'Diagnóstico Google',
             open: !mobile,
+            intro: 'Pin = o que o público vê. Perfil da Empresa = painel do dono (WhatsApp, site, serviços, redes). Site próprio fecha a história. Não mistures os três.',
             build(grid) {
                 (payload.diagFields || []).forEach((field) => {
                     const control = selectFor(field.options, payload.googleDiagnostico[field.id]);
@@ -516,6 +517,7 @@ export function renderLeadDossier(host, payload, {
     ];
     extraBlocks.forEach((block) => {
         const set = section(block.title, { open: block.open });
+        if (block.intro) set.appendChild(el('p', 'admin-hint', block.intro));
         const grid = el('div', 'dossier-grid');
         block.build(grid);
         set.appendChild(grid);

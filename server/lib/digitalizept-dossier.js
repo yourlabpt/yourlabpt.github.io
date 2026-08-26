@@ -24,27 +24,27 @@ const SECTION_LABELS = {
 const DIAG_FIELDS = [
     {
         id: 'maps',
-        label: 'Como está no Maps?',
+        label: 'Pin no Maps (público)',
         options: [
-            { id: 'nao', label: 'Não aparece' },
-            { id: 'sim_sem_dono', label: 'Aparece, sem dono' },
-            { id: 'sim_acesso', label: 'Aparece e o cliente gere' },
+            { id: 'nao', label: 'Sem pin no Maps' },
+            { id: 'sim_sem_dono', label: 'Há pin, sem Perfil a gerir' },
+            { id: 'sim_acesso', label: 'Há pin e Perfil da Empresa' },
             { id: 'nao_sei', label: 'Não sei' }
         ]
     },
     {
         id: 'validado',
-        label: 'Perfil da Empresa validado?',
+        label: 'Perfil da Empresa (painel do dono)',
         options: [
-            { id: 'nao', label: 'Não' },
+            { id: 'nao', label: 'Não / sem acesso' },
             { id: 'em_curso', label: 'Em curso' },
-            { id: 'sim', label: 'Sim' },
-            { id: 'na', label: 'N/A' }
+            { id: 'sim', label: 'Validado / a gerir' },
+            { id: 'na', label: 'N/A (sem pin)' }
         ]
     },
     {
         id: 'website',
-        label: 'Tem website?',
+        label: 'Site próprio?',
         options: [
             { id: 'nao', label: 'Não' },
             { id: 'sim_fraco', label: 'Sim, fraco' },

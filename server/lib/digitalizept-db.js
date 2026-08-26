@@ -197,8 +197,34 @@ function migrate(db) {
         processo_estado: "TEXT NOT NULL DEFAULT ''",
         proxima_acao_em: "TEXT NOT NULL DEFAULT ''",
         revisitar_em: "TEXT NOT NULL DEFAULT ''",
-        processo_json: "TEXT NOT NULL DEFAULT '{}'"
+        processo_json: "TEXT NOT NULL DEFAULT '{}'",
+        atualizado_em: "TEXT NOT NULL DEFAULT ''"
     });
+    // First insert stays on criado_em forever; atualizado_em tracks later edits.
+    db.prepare(`
+        UPDATE lead SET atualizado_em = criado_em
+        WHERE atualizado_em = '' OR atualizado_em IS NULL
+    `).run();
+    db.exec(`
+        CREATE TRIGGER IF NOT EXISTS lead_stamp_atualizado
+        AFTER UPDATE ON lead
+        FOR EACH ROW
+        WHEN NEW.atualizado_em IS OLD.atualizado_em
+        BEGIN
+            UPDATE lead SET atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = NEW.id;
+        END;
+    `);
+    db.exec(`
+        CREATE TRIGGER IF NOT EXISTS lead_stamp_atualizado_insert
+        AFTER INSERT ON lead
+        FOR EACH ROW
+        WHEN NEW.atualizado_em IS NULL OR NEW.atualizado_em = ''
+        BEGIN
+            UPDATE lead SET atualizado_em = COALESCE(NULLIF(NEW.criado_em, ''), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            WHERE id = NEW.id;
+        END;
+    `);
     addMissingColumns(db, 'contrato', {
         html_path: "TEXT NOT NULL DEFAULT ''"
     });

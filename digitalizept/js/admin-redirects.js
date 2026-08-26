@@ -9,7 +9,7 @@ export const ADMIN_HINTS = {
     controlo: 'Email, WhatsApp e ligações: no admin → O que fazer agora (Controlo).',
     agoraNao: 'Demo gravada. Segue no Controlo desta lead — EMAIL1 e WhatsApp.',
     extras: 'Mais extras e IVA: no admin → Mais → Continuar venda.',
-    ownershipClose: 'A partir de agora isto é vosso — não está no Facebook de ninguém.'
+    ownershipClose: 'A partir de agora isto é vosso — WhatsApp, site e redes no mesmo sítio, não espalhados no Facebook de ninguém.'
 };
 
 export function appendAdminHint(host, key) {

@@ -251,7 +251,7 @@ function renderGbpDemo(container, ctx) {
 
     const hint = document.createElement('p');
     hint.className = 'id-disclaimer';
-    hint.textContent = 'Com os dados deste negócio — ainda sem falar de preços.';
+    hint.textContent = 'Pin completo: WhatsApp, telefone, site e redes — mais os serviços do Perfil.';
 
     const host = document.createElement('div');
     function paintCard() {

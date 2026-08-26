@@ -82,8 +82,8 @@ const FALHAS = {
     },
     info_desencontrada: {
         chip: 'IG / FB / Maps diferentes',
-        frase: 'Instagram, Facebook e Maps não dizem a mesma coisa.',
-        en: { chip: 'IG / FB / Maps disagree', frase: 'Instagram, Facebook and Maps do not say the same thing.' }
+        frase: 'Instagram, Facebook, WhatsApp e o pin no Maps não dizem a mesma coisa — falta um sítio só.',
+        en: { chip: 'IG / FB / Maps disagree', frase: 'Instagram, Facebook, WhatsApp and the Maps pin do not say the same thing — there is no single place.' }
     },
     ficha_errada: {
         chip: 'Ficha com erro',

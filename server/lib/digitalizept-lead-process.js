@@ -185,9 +185,9 @@ const INSTRUCOES = {
     },
     WA2: {
         titulo: 'WhatsApp 2 — depois da resposta',
-        objetivo: 'Mostrar a pesquisa no Google e a página, dizer que o site fica dele, e só então falar de valores.',
-        naoFazer: 'Não repetir a mensagem 1. Não prometer ranking.',
-        registar: 'Envia e marca como enviado.'
+        objetivo: 'Mostrar o pin completo (WhatsApp, telefone, site e redes no mesmo sítio) e a página própria. Centralização + controlo — só então valores.',
+        naoFazer: 'Não misturar pin no Maps com Perfil da Empresa. Não repetir a mensagem 1. Não prometer ranking.',
+        registar: 'Envia e marca como enviado. Na Ficha confirma WhatsApp, website, Instagram e Facebook.'
     },
     N1: {
         titulo: 'Não respondeu — só a parte do Google',
@@ -251,9 +251,9 @@ const INSTRUCOES = {
     },
     DEMO: {
         titulo: 'Construir os dois artefactos',
-        objetivo: 'A aparência no Google e a página com a história. Sem os dois, não há nada para enviar.',
-        naoFazer: 'Não enviar nada antes de a demo estar publicada e revista.',
-        registar: 'Publica a demo nas vendas; o processo avança sozinho.'
+        objetivo: 'Pin/ficha Google com contacto centralizado (WhatsApp, telefone, site, redes, serviços) e a página com a história. Sem os dois, não há nada para enviar.',
+        naoFazer: 'Não enviar nada antes de a demo estar publicada e revista. Não confundir pin público com o painel do Perfil.',
+        registar: 'Publica a demo; na Ficha grava WhatsApp, website, Instagram e Facebook. O processo avança sozinho.'
     },
     ACOMPANHAR: {
         titulo: 'Proposta apresentada',

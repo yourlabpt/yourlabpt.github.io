@@ -3,6 +3,7 @@
 
 import {
     destaqueItems,
+    facebookHref,
     instagramHref,
     isYes,
     mapsHref,
@@ -464,6 +465,8 @@ function buildContactos(dados, businessType) {
     if (dados.email) actions.appendChild(contactButton('Email', `mailto:${dados.email}`, 'dpl-btn-email'));
     const ig = instagramHref(dados.instagram);
     if (ig) actions.appendChild(contactButton('Instagram', ig, 'dpl-btn-ig'));
+    const fb = facebookHref(dados.facebook);
+    if (fb) actions.appendChild(contactButton('Facebook', fb, 'dpl-btn-fb'));
     s.appendChild(actions);
 
     return s;
@@ -500,13 +503,24 @@ function buildRodape(dados, demo) {
     s.appendChild(el('div', 'dpl-rodape-name', dados.nome_negocio || ''));
     if (demo.rodape && demo.rodape.texto) s.appendChild(el('p', 'dpl-rodape-text', demo.rodape.texto));
     const ig = instagramHref(dados.instagram);
-    if (ig) {
+    const fb = facebookHref(dados.facebook);
+    if (ig || fb) {
         const social = el('p', 'dpl-rodape-social');
-        const a = el('a', 'dpl-rodape-ig', 'Instagram');
-        a.href = ig;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        social.appendChild(a);
+        if (ig) {
+            const a = el('a', 'dpl-rodape-ig', 'Instagram');
+            a.href = ig;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            social.appendChild(a);
+        }
+        if (fb) {
+            if (ig) social.appendChild(document.createTextNode(' · '));
+            const a = el('a', 'dpl-rodape-fb', 'Facebook');
+            a.href = fb;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            social.appendChild(a);
+        }
         s.appendChild(social);
     }
     s.appendChild(el('p', 'dpl-rodape-meta', `© ${new Date().getFullYear()} ${dados.nome_negocio || ''}`));

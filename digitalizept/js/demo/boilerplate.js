@@ -60,6 +60,24 @@ export function instagramHref(value) {
     return handle ? `https://www.instagram.com/${handle}` : '';
 }
 
+export function facebookHref(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const handle = raw
+        .replace(/^@/, '')
+        .replace(/^https?:\/\/(www\.)?facebook\.com\//i, '')
+        .replace(/\/$/, '');
+    return handle ? `https://www.facebook.com/${handle}` : '';
+}
+
+export function websiteHref(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `https://${raw.replace(/^\/+/, '')}`;
+}
+
 export function trustChips(dados, businessType) {
     const chips = [];
     const years = String((dados && dados.anos_experiencia) || '').trim();

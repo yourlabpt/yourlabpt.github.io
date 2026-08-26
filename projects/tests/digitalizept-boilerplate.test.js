@@ -5,6 +5,8 @@ describe('digitalizept landing boilerplate', async () => {
     const {
         mapsHref,
         instagramHref,
+        facebookHref,
+        websiteHref,
         isYes,
         splitItems,
         trustChips,
@@ -14,6 +16,7 @@ describe('digitalizept landing boilerplate', async () => {
         telHref
     } = await import('../../digitalizept/js/demo/boilerplate.js');
     const { seedDemoFromType, ensureSeededDemo } = await import('../../digitalizept/js/demo/seed.js');
+    const { GBP_SAMPLE, gbpDataFromState } = await import('../../digitalizept/js/demo/gbp-example.js');
 
     it('prefers a pasted Maps URL over a search query', () => {
         assert.equal(
@@ -32,6 +35,52 @@ describe('digitalizept landing boilerplate', async () => {
         assert.equal(instagramHref('@loja'), 'https://www.instagram.com/loja');
         assert.equal(instagramHref('https://instagram.com/loja'), 'https://instagram.com/loja');
         assert.equal(instagramHref(''), '');
+    });
+
+    it('builds Facebook and website links for the pin and landing', () => {
+        assert.equal(facebookHref('loja'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref('@loja'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref('https://www.facebook.com/loja'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref(''), '');
+        assert.equal(websiteHref('cafedapraca.pt'), 'https://cafedapraca.pt');
+        assert.equal(websiteHref('https://cafedapraca.pt'), 'https://cafedapraca.pt');
+    });
+
+    it('renders a complete Maps pin with WhatsApp, site, IG, FB and serviços', () => {
+        const fs = require('node:fs');
+        const path = require('node:path');
+        assert.ok(GBP_SAMPLE.whatsapp);
+        assert.ok(GBP_SAMPLE.website);
+        assert.ok(GBP_SAMPLE.instagram);
+        assert.ok(GBP_SAMPLE.facebook);
+        assert.ok(GBP_SAMPLE.servicos.length >= 3);
+        const src = fs.readFileSync(
+            path.join(__dirname, '../../digitalizept/js/demo/gbp-example.js'),
+            'utf8'
+        );
+        assert.match(src, /actionBtn\('WhatsApp'/);
+        assert.match(src, /actionBtn\('Website'/);
+        assert.match(src, /actionBtn\('Instagram'/);
+        assert.match(src, /actionBtn\('Facebook'/);
+        assert.match(src, /Serviços/);
+        assert.match(src, /WhatsApp, telefone, site e redes/);
+        const fromState = gbpDataFromState({
+            data: {
+                dados: {
+                    nome_negocio: 'Talho X',
+                    telefone: '220111222',
+                    whatsapp: '912345678',
+                    website_atual: 'https://talho.pt',
+                    instagram: '@talhox',
+                    facebook: 'talhox',
+                    principais_servicos: 'Cortes, Encomendas'
+                },
+                demo: { servicos: { itens: [{ nome: 'Cortes' }, { nome: 'Encomendas' }] } }
+            }
+        });
+        assert.equal(fromState.whatsapp, '912345678');
+        assert.equal(fromState.website, 'https://talho.pt');
+        assert.deepEqual(fromState.servicos, ['Cortes', 'Encomendas']);
     });
 
     it('turns sim/nao and lists into page chips', () => {

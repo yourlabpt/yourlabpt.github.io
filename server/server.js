@@ -2662,7 +2662,7 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
         const ordem = leadsListOrderSql(req.query);
         const rows = db.prepare(`
             SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
-                   l.cobertura, l.resultado, l.demo_slug, l.notas_admin, l.criado_em, l.lat, l.lng, l.followup_json,
+                   l.cobertura, l.resultado, l.demo_slug, l.notas_admin, l.criado_em, l.atualizado_em, l.lat, l.lng, l.followup_json,
                    l.processo_estado, l.proxima_acao_em, l.revisitar_em,
                    d.obrigatorios_json, d.opcionais_json, cl.email AS legal_email,
                    p.total_com_iva_centimos, p.iva_rate
@@ -2696,6 +2696,7 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     demo_slug: r.demo_slug,
                     notas_admin: r.notas_admin,
                     criado_em: r.criado_em,
+                    atualizado_em: r.atualizado_em || r.criado_em || '',
                     lat: r.lat,
                     lng: r.lng,
                     total_com_iva_centimos: r.total_com_iva_centimos,

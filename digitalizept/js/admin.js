@@ -419,7 +419,7 @@ function isParked(item) {
 }
 
 const LEADS_ORDEM_KEY = 'digitalizept_leads_ordem';
-const LEADS_ORDEM = ['proximo', 'tipo', 'criado'];
+const LEADS_ORDEM = ['proximo', 'tipo', 'criado', 'atualizado'];
 
 function storedLeadsOrdem() {
     try {
@@ -681,7 +681,7 @@ function renderDemos() {
         card.className = parked ? 'admin-card parked' : 'admin-card';
         card.innerHTML = `
             <h3>${leadMapPinHtml(l)}${l.nome || 'Sem nome'}</h3>
-            <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
+            <p class="meta">${l.business_type || '—'} · ${estadoLabel(l.estado)} · criado ${new Date(l.criado_em).toLocaleDateString('pt-PT')}${l.atualizado_em && l.atualizado_em !== l.criado_em ? ` · act. ${new Date(l.atualizado_em).toLocaleDateString('pt-PT')}` : ''}</p>
             <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
             ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : ''}
             ${processoMetaHtml(l)}

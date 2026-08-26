@@ -3489,7 +3489,7 @@ a.btn-secondary {
 }
 
 .gbp-action {
-    flex: 1;
+    flex: 1 1 calc(33.333% - 8px);
     min-width: 88px;
     text-align: center;
     padding: 10px 8px;
@@ -3587,6 +3587,28 @@ a.btn-secondary {
     font-size: 1.05rem;
     line-height: 1.45;
     font-weight: 600;
+}
+
+.diag-listing {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.diag-listing-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.diag-listing-label {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted, #5a5348);
 }
 
 .admin-redirect-hint {

@@ -73,7 +73,7 @@ async function render(body, ctx) {
         body.appendChild(ok);
         const script = document.createElement('p');
         script.className = 'diag-ownership-line';
-        script.textContent = `Diga: «${ADMIN_HINTS.ownershipClose}»`;
+        script.textContent = `«${ADMIN_HINTS.ownershipClose}»`;
         body.appendChild(script);
         appendAdminHint(body, 'agoraNao');
         appendAdminHint(body, 'demo');
@@ -268,7 +268,7 @@ async function render(body, ctx) {
 
     const script = document.createElement('p');
     script.className = 'diag-ownership-line';
-    script.textContent = `Diga: «${ADMIN_HINTS.ownershipClose}»`;
+    script.textContent = `«${ADMIN_HINTS.ownershipClose}»`;
     body.appendChild(script);
 
     const project = document.createElement('div');

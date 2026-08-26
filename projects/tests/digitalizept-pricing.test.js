@@ -613,6 +613,7 @@ describe('digitalizept demo flow', () => {
     it('diagnóstico is a live listing tap — speakable choices, same enum ids', () => {
         const empty = { substep: 0, data: { dados: {} } };
         assert.equal(diagnosticoStep.substepCount(empty), 2);
+        assert.equal(diagnosticoStep.title, 'Tudo no mesmo sítio');
         const state = {
             substep: 0,
             data: {
@@ -627,6 +628,14 @@ describe('digitalizept demo flow', () => {
         };
         assert.equal(diagnosticoStep.isSubstepValid(state), true);
         assert.equal(diagnosticoStep.isValid(state), true);
+        const fs = require('node:fs');
+        const path = require('node:path');
+        const src = fs.readFileSync(path.join(appDir, 'steps', 'diagnostico.js'), 'utf8');
+        assert.match(src, /Sem pin no Maps/);
+        assert.match(src, /Há pin, sem Perfil a gerir/);
+        assert.match(src, /Já têm o Perfil da Empresa/);
+        assert.doesNotMatch(src, /Mostre o Maps/);
+        assert.doesNotMatch(src, /appendAdminHint/);
     });
 
     it('demonstração shows Google Maps and website as two substeps', () => {
