@@ -867,7 +867,7 @@ function renderDeals() {
         del.className = 'btn-danger';
         del.textContent = 'Apagar';
         del.addEventListener('click', async () => {
-            if (!window.confirm(`Apagar a proposta de "${d.nome || d.cliente_nome || 'negócio'}"? Contrato e assinaturas serão eliminados. Esta ação é irreversível.`)) return;
+            if (!window.confirm(`Apagar a proposta de "${d.nome || d.cliente_nome || 'negócio'}"? O contrato sai. O negócio fica no mapa como sem interesse.`)) return;
             try {
                 const { response, data } = await api(`/api/digitalizept/deals/${encodeURIComponent(d.projectId)}`, {
                     method: 'DELETE'
@@ -876,8 +876,13 @@ function renderDeals() {
                     toast(data.error || 'Não foi possível apagar.', true);
                     return;
                 }
-                toast('Proposta apagada.');
-                await loadDeals();
+                toast(data.parked === false
+                    ? 'Proposta apagada.'
+                    : 'Proposta apagada. O negócio ficou no mapa como sem interesse.');
+                await Promise.all([loadLeads(), loadDeals()]);
+                if (coverageUi && typeof coverageUi.refresh === 'function') {
+                    coverageUi.refresh().catch(() => {});
+                }
             } catch (_) {
                 toast('Erro de rede.', true);
             }

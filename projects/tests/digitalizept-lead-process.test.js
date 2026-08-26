@@ -533,7 +533,7 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.doesNotMatch(adminCss, /procpasso/);
         assert.match(adminCss, /--accent-dark: var\(--admin-press\)/);
         assert.match(adminCss, /lead-proc-ganchos \.followup-gancho\.active/);
-        assert.match(sw, /digitalizept-v101/);
+        assert.match(sw, /digitalizept-v102/);
         assert.match(panel, /Como ficou/);
         assert.match(panel, /sem_interesse/);
         assert.match(panel, /canal === 'whatsapp'/);
@@ -543,6 +543,7 @@ describe('digitalizept lead process — instruções e demo', () => {
             'utf8'
         );
         assert.match(metricasUi, /Demo — o cliente abriu/);
+        assert.match(metricasUi, /fica no mapa como sem interesse/);
         const auth = fs.readFileSync(
             path.join(__dirname, '..', '..', 'digitalizept', 'js', 'auth.js'),
             'utf8'

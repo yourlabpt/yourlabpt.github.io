@@ -12,6 +12,7 @@ const { createProjectShowcaseStore } = require('./lib/project-showcase-store');
 const { getDb: getDigitalizeptDb, nowIso: digitalizeptNow, logEvento: digitalizeptLogEvento } = require('./lib/digitalizept-db');
 const { renderContractPdf, renderContractPdfBuffer } = require('./lib/digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./lib/digitalizept-work');
+const { deleteClosedDeal } = require('./lib/digitalizept-deals');
 const { writeDemoFolder } = require('./lib/digitalizept-demos');
 const {
     reusableLeadId,
@@ -4085,24 +4086,9 @@ app.delete('/api/digitalizept/deals/:projectId', requireDigitalizept, (req, res)
     try {
         const projectId = cleanText(req.params.projectId, 80);
         const db = getDigitalizeptDb();
-        const row = db.prepare(`
-            SELECT pr.id, pr.contrato_id, c.proposta_id, p.lead_id
-            FROM projeto pr
-            JOIN contrato c ON c.id = pr.contrato_id
-            JOIN proposta p ON p.id = c.proposta_id
-            WHERE pr.id = ?
-        `).get(projectId);
-        if (!row) return res.status(404).json({ error: 'Proposta não encontrada.' });
-        const del = db.transaction(() => {
-            db.prepare('DELETE FROM assinatura WHERE contrato_id = ?').run(row.contrato_id);
-            db.prepare('DELETE FROM evento WHERE entidade = ? AND entidade_id = ?').run('projeto', projectId);
-            db.prepare('DELETE FROM projeto WHERE id = ?').run(projectId);
-            db.prepare('DELETE FROM contrato WHERE id = ?').run(row.contrato_id);
-            db.prepare('DELETE FROM cliente_legal WHERE lead_id = ?').run(row.lead_id);
-            db.prepare('DELETE FROM proposta WHERE id = ?').run(row.proposta_id);
-        });
-        del();
-        return res.json({ ok: true });
+        const done = deleteClosedDeal(db, projectId);
+        if (done.error) return res.status(done.status || 400).json({ error: done.error });
+        return res.json({ ok: true, leadId: done.leadId, parked: done.parked === true });
     } catch (err) {
         console.error('digitalizept delete deal error:', err.message);
         return res.status(500).json({ error: 'Não foi possível apagar a proposta.' });
