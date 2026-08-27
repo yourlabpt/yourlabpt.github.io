@@ -199,6 +199,50 @@ export function renderQuickLeadForm(panel, {
     nome.addEventListener('input', syncAssist);
     syncAssist();
 
+    let dupHint = el('p', 'meta porto-finder-dup-hint');
+    dupHint.hidden = true;
+    async function checkDuplicateContacts() {
+        if (!api) return;
+        const tel = telefone.value.trim();
+        const mail = email.value.trim();
+        if (!tel && !mail) {
+            dupHint.hidden = true;
+            dupHint.textContent = '';
+            return;
+        }
+        try {
+            const { response, data } = await api('/api/digitalizept/leads/check-duplicate', {
+                method: 'POST',
+                body: {
+                    telefone: tel,
+                    email: mail,
+                    nome: nome.value.trim(),
+                    cidade: cidade.value.trim()
+                }
+            });
+            if (!response.ok || !data.duplicate) {
+                dupHint.hidden = true;
+                dupHint.textContent = '';
+                return;
+            }
+            const reason = data.matchReason === 'telefone'
+                ? 'telefone'
+                : data.matchReason === 'whatsapp'
+                    ? 'WhatsApp'
+                    : data.matchReason === 'email'
+                        ? 'email'
+                        : 'nome/local';
+            const who = (data.lead && data.lead.nome) || 'outra ficha';
+            dupHint.hidden = false;
+            dupHint.textContent = `Atenção: já existe ficha com o mesmo ${reason} — «${who}». Ao criar, atualiza essa ficha em vez de duplicar.`;
+        } catch (_) {
+            /* ignore preflight errors */
+        }
+    }
+    telefone.addEventListener('change', checkDuplicateContacts);
+    email.addEventListener('change', checkDuplicateContacts);
+    nome.addEventListener('change', checkDuplicateContacts);
+
     btnGoogle.addEventListener('click', () => {
         const { nome: n, cidade: c } = contextFromFields(nome, cidade);
         if (!n) {
@@ -292,6 +336,7 @@ export function renderQuickLeadForm(panel, {
             }
             showLookupNotes(data.notes);
             syncAssist();
+            checkDuplicateContacts();
             toast('Pré-preenchido. Confirma telefone, morada e redes — ou abre Facebook para o email.');
         } catch (_) {
             toast('Erro de rede.', true);
@@ -313,6 +358,7 @@ export function renderQuickLeadForm(panel, {
         field('Categoria', typeSelect),
         field('Telefone', telefone),
         field('Email', email),
+        dupHint,
         field('Morada (opcional)', morada),
         field('Cidade (opcional)', cidade),
         coordHint,
@@ -380,7 +426,13 @@ export function renderQuickLeadForm(panel, {
                 return;
             }
             toast(data.created === false
-                ? 'Já existia esta ficha — atualizada. Pode criar o seguinte.'
+                ? (data.matchReason === 'telefone'
+                    ? `Já existe ficha com este telefone (${(data.lead && data.lead.nome) || 'lead'}) — atualizada.`
+                    : data.matchReason === 'whatsapp'
+                        ? `Já existe ficha com este WhatsApp (${(data.lead && data.lead.nome) || 'lead'}) — atualizada.`
+                        : data.matchReason === 'email'
+                            ? `Já existe ficha com este email (${(data.lead && data.lead.nome) || 'lead'}) — atualizada.`
+                            : 'Já existia esta ficha — atualizada. Pode criar o seguinte.')
                 : 'Negócio criado. Pode criar o seguinte.');
             resetForm();
             if (typeof onCreated === 'function') await onCreated(data);

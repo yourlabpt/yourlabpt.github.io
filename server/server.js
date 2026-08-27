@@ -69,7 +69,7 @@ const dossier = require('./lib/digitalizept-dossier');
 const { leadsListOrderSql } = require('./lib/digitalizept-leads-list');
 const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
 const { fetchImageAsDataUrl } = require('./lib/digitalizept-fetch-image');
-const { ensureLeadFromVisit, findReusableLead, reconcileVisitLeadPair, syncLinkedVisitsIdentity } = require('./lib/digitalizept-visit-lead');
+const { ensureLeadFromVisit, findReusableLead, findLeadByContact, reconcileVisitLeadPair, syncLinkedVisitsIdentity } = require('./lib/digitalizept-visit-lead');
 const {
     currentProvider,
     sanitizeSender,
@@ -2386,6 +2386,22 @@ app.post('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                 }
             }
 
+            if (!leadId) {
+                const contactHit = findLeadByContact(db, {
+                    telefone: cleanText(incomingDados.telefone, 60),
+                    whatsapp: cleanText(incomingDados.whatsapp, 60)
+                        || whatsappIfMobile(cleanText(incomingDados.telefone, 60)),
+                    email: cleanText(incomingDados.email, 160)
+                });
+                if (contactHit && contactHit.lead) {
+                    existing = db.prepare(`
+                        SELECT id, nome, morada, cidade, telefone, whatsapp, business_type, wizard_json
+                        FROM lead WHERE id = ?
+                    `).get(contactHit.lead.id) || contactHit.lead;
+                    leadId = existing.id;
+                }
+            }
+
             let dados = incomingDados;
             if (existing) {
                 const dadosRow = db.prepare(
@@ -2522,6 +2538,73 @@ app.post('/api/digitalizept/fetch-image', requireDigitalizept, async (req, res) 
     }
 });
 
+app.post('/api/digitalizept/leads/check-duplicate', requireDigitalizept, (req, res) => {
+    try {
+        const body = req.body || {};
+        const db = getDigitalizeptDb();
+        const excludeLeadId = cleanText(body.excludeLeadId || body.leadId, 80);
+        const telefone = cleanText(body.telefone || (body.dados && body.dados.telefone), 60);
+        const whatsapp = cleanText(body.whatsapp || (body.dados && body.dados.whatsapp), 60)
+            || whatsappIfMobile(telefone);
+        const email = cleanText(body.email || (body.dados && body.dados.email), 160);
+        const nome = cleanText(body.nome || (body.dados && body.dados.nome_negocio), 200);
+        const cidade = cleanText(body.cidade || (body.dados && body.dados.cidade), 120);
+        const lat = body.lat;
+        const lng = body.lng;
+
+        const byContact = findLeadByContact(db, {
+            telefone,
+            whatsapp,
+            email,
+            excludeLeadId
+        });
+        if (byContact && byContact.lead) {
+            return res.json({
+                ok: true,
+                duplicate: true,
+                matchReason: byContact.matchReason,
+                lead: {
+                    id: byContact.lead.id,
+                    nome: byContact.lead.nome || '',
+                    cidade: byContact.lead.cidade || '',
+                    telefone: byContact.lead.telefone || '',
+                    whatsapp: byContact.lead.whatsapp || ''
+                }
+            });
+        }
+
+        if (nome) {
+            const byPlace = findReusableLead(db, {
+                nome,
+                cidade,
+                lat,
+                lng,
+                excludeLeadId
+            });
+            // findReusableLead also checks contact; without contact it may still match name+coords
+            if (byPlace && byPlace.matchReason === 'nome_coords') {
+                return res.json({
+                    ok: true,
+                    duplicate: true,
+                    matchReason: 'nome_coords',
+                    lead: {
+                        id: byPlace.id,
+                        nome: byPlace.nome || '',
+                        cidade: byPlace.cidade || '',
+                        telefone: byPlace.telefone || '',
+                        whatsapp: byPlace.whatsapp || ''
+                    }
+                });
+            }
+        }
+
+        return res.json({ ok: true, duplicate: false });
+    } catch (err) {
+        console.error('digitalizept check-duplicate error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível verificar duplicados.' });
+    }
+});
+
 app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) => {
     try {
         const body = req.body || {};
@@ -2608,13 +2691,22 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
         const etapa = defaultEtapaForQuickLead();
         const db = getDigitalizeptDb();
         const now = digitalizeptNow();
-        const match = findReusableLead(db, { nome, cidade, lat, lng });
+        const match = findReusableLead(db, {
+            nome,
+            cidade,
+            lat,
+            lng,
+            telefone,
+            whatsapp,
+            email
+        });
         if (match) {
             const nextNome = match.nome || nome;
             const nextMorada = match.morada || morada;
             const nextCidade = match.cidade || cidade;
             const nextTel = match.telefone || telefone;
             const nextWa = match.whatsapp || whatsapp;
+            const matchReason = match.matchReason || 'nome_coords';
             db.transaction(() => {
                 db.prepare(`
                     UPDATE lead SET nome = ?, morada = ?, cidade = ?, telefone = ?, whatsapp = ?
@@ -2623,13 +2715,34 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
                 if (hasCoords && !(Number.isFinite(match.lat) && Number.isFinite(match.lng))) {
                     applyLeadCoords(db, match.id, lat, lng, mapsUrl ? 'maps' : 'manual');
                 }
-                const dadosRow = db.prepare('SELECT id FROM dados_negocio WHERE lead_id = ?').get(match.id);
+                const dadosRow = db.prepare(
+                    'SELECT id, obrigatorios_json, opcionais_json FROM dados_negocio WHERE lead_id = ?'
+                ).get(match.id);
                 if (!dadosRow) {
                     db.prepare(`INSERT INTO dados_negocio (id, lead_id, obrigatorios_json, opcionais_json, criado_em)
                         VALUES (?, ?, ?, ?, ?)`).run(
                         crypto.randomUUID(), match.id, JSON.stringify(obrigatorios), JSON.stringify(opcionais), now);
+                } else {
+                    const prevObrig = parseJsonSafe(dadosRow.obrigatorios_json, {});
+                    const prevOp = parseJsonSafe(dadosRow.opcionais_json, {});
+                    const merged = { ...prevOp, ...prevObrig };
+                    if (!cleanText(merged.email, 160) && email) merged.email = email;
+                    if (!cleanText(merged.telefone, 60) && telefone) merged.telefone = telefone;
+                    if (!cleanText(merged.whatsapp, 60) && whatsapp) merged.whatsapp = whatsapp;
+                    if (!cleanText(merged.maps_url, 800) && mapsUrl) merged.maps_url = mapsUrl;
+                    if (!cleanText(merged.instagram, 300) && instagram) merged.instagram = instagram;
+                    if (!cleanText(merged.facebook, 300) && facebook) merged.facebook = facebook;
+                    if (!cleanText(merged.website_atual, 300) && website) merged.website_atual = website;
+                    const split = splitDados(merged, businessType);
+                    db.prepare(`UPDATE dados_negocio SET obrigatorios_json = ?, opcionais_json = ? WHERE id = ?`)
+                        .run(JSON.stringify(split.obrigatorios), JSON.stringify(split.opcionais), dadosRow.id);
                 }
-                digitalizeptLogEvento(db, 'lead', match.id, 'rascunho', { nome: nextNome, origem: 'quick', reused: true });
+                digitalizeptLogEvento(db, 'lead', match.id, 'rascunho', {
+                    nome: nextNome,
+                    origem: 'quick',
+                    reused: true,
+                    matchReason
+                });
             })();
             syncLinkedVisitsIdentity(db, match.id, { nome: nextNome, morada: nextMorada, cidade: nextCidade });
             if (!hasCoords && !(Number.isFinite(match.lat) && Number.isFinite(match.lng))) {
@@ -2638,6 +2751,7 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
             return res.json({
                 ok: true,
                 created: false,
+                matchReason,
                 leadId: match.id,
                 notes: lookupNotes,
                 lead: {

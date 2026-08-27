@@ -86,6 +86,120 @@ function pickIdentity(primary, fallback) {
     return String(fallback || '').trim();
 }
 
+/** National PT digits for comparison (9-digit mobile/landline after stripping 351). */
+function normalizePhoneDigits(phone) {
+    let digits = String(phone || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('00351')) digits = digits.slice(5);
+    if (digits.startsWith('351') && digits.length >= 12) digits = digits.slice(3);
+    if (digits.length > 9 && digits.startsWith('351')) digits = digits.slice(3);
+    return digits;
+}
+
+function phoneKeys(phone) {
+    const digits = normalizePhoneDigits(phone);
+    if (!digits || digits.length < 9) return [];
+    const national = digits.length === 9 ? digits : digits.slice(-9);
+    if (national.length !== 9) return [];
+    return [national, `351${national}`];
+}
+
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function parseJsonObject(raw) {
+    try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {});
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function emailsFromLeadRow(row) {
+    const out = new Set();
+    const a = parseJsonObject(row.obrigatorios_json);
+    const b = parseJsonObject(row.opcionais_json);
+    [a.email, a.mail, b.email, b.mail, row.legal_email].forEach((value) => {
+        const n = normalizeEmail(value);
+        if (n && n.includes('@')) out.add(n);
+    });
+    return out;
+}
+
+function phoneSetFromLeadRow(row) {
+    const keys = new Set();
+    phoneKeys(row.telefone).forEach((k) => keys.add(k));
+    phoneKeys(row.whatsapp).forEach((k) => keys.add(k));
+    const a = parseJsonObject(row.obrigatorios_json);
+    const b = parseJsonObject(row.opcionais_json);
+    phoneKeys(a.telefone).forEach((k) => keys.add(k));
+    phoneKeys(a.whatsapp).forEach((k) => keys.add(k));
+    phoneKeys(b.telefone).forEach((k) => keys.add(k));
+    phoneKeys(b.whatsapp).forEach((k) => keys.add(k));
+    phoneKeys(row.legal_telefone).forEach((k) => keys.add(k));
+    return keys;
+}
+
+function loadLeadsWithContacts(db) {
+    return db.prepare(`
+        SELECT l.id, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado, l.cobertura,
+               l.resultado, l.cobertura_locked, l.lat, l.lng, l.geocode_status, l.business_type,
+               d.obrigatorios_json, d.opcionais_json,
+               cl.email AS legal_email, cl.telefone AS legal_telefone
+        FROM lead l
+        LEFT JOIN dados_negocio d ON d.lead_id = l.id
+        LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
+    `).all();
+}
+
+/**
+ * Match an existing ficha by telefone, WhatsApp or email (any channel).
+ * Phone comparison uses national 9-digit PT form so +351 and local formats collide.
+ */
+function findLeadByContact(db, {
+    telefone = '',
+    whatsapp = '',
+    email = '',
+    excludeLeadId = ''
+} = {}) {
+    const incomingPhones = new Set([
+        ...phoneKeys(telefone),
+        ...phoneKeys(whatsapp)
+    ]);
+    const incomingEmail = normalizeEmail(email);
+    if (!incomingPhones.size && !incomingEmail) return null;
+
+    const rows = loadLeadsWithContacts(db);
+    for (const row of rows) {
+        if (excludeLeadId && row.id === excludeLeadId) continue;
+        const storedPhones = phoneSetFromLeadRow(row);
+        for (const key of incomingPhones) {
+            if (storedPhones.has(key)) {
+                const viaWhatsapp = phoneKeys(whatsapp).includes(key)
+                    || phoneKeys(row.whatsapp).includes(key);
+                return {
+                    lead: row,
+                    matchReason: viaWhatsapp ? 'whatsapp' : 'telefone',
+                    matchValue: key
+                };
+            }
+        }
+        if (incomingEmail) {
+            const emails = emailsFromLeadRow(row);
+            if (emails.has(incomingEmail)) {
+                return {
+                    lead: row,
+                    matchReason: 'email',
+                    matchValue: incomingEmail
+                };
+            }
+        }
+    }
+    return null;
+}
+
 /**
  * After a visit is linked, identity and pin live on the lead.
  * Visits keep experiência / visitado_em as the street log.
@@ -155,7 +269,23 @@ function reconcileVisitLeadPair(db, visitId, {
     return { ok: true, leadId: lead.id };
 }
 
-function findReusableLead(db, { nome, cidade, lat, lng, excludeLeadId = '' } = {}) {
+function findReusableLead(db, {
+    nome,
+    cidade,
+    lat,
+    lng,
+    telefone = '',
+    whatsapp = '',
+    email = '',
+    excludeLeadId = ''
+} = {}) {
+    const byContact = findLeadByContact(db, { telefone, whatsapp, email, excludeLeadId });
+    if (byContact && byContact.lead) {
+        byContact.lead.matchReason = byContact.matchReason;
+        byContact.lead.matchValue = byContact.matchValue;
+        return byContact.lead;
+    }
+
     const incomingNome = String(nome || '').trim();
     if (!incomingNome) return null;
     const visitLat = finiteCoord(lat);
@@ -197,7 +327,9 @@ function findReusableLead(db, { nome, cidade, lat, lng, excludeLeadId = '' } = {
     });
 
     scored.sort((a, b) => a.meters - b.meters);
-    return scored[0] ? scored[0].lead : null;
+    if (!scored[0]) return null;
+    scored[0].lead.matchReason = 'nome_coords';
+    return scored[0].lead;
 }
 
 function attachVisitToLead(db, visit, lead, { now } = {}) {
@@ -297,6 +429,10 @@ module.exports = {
     MATCH_RADIUS_M,
     STUB_RADIUS_M,
     metersBetween,
+    normalizePhoneDigits,
+    normalizeEmail,
+    phoneKeys,
+    findLeadByContact,
     findReusableLead,
     ensureLeadFromVisit,
     reconcileVisitLeadPair,
