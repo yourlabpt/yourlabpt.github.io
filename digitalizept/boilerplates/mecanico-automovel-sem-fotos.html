@@ -21,14 +21,14 @@
     <nav id="menu" class="dpl-nav" aria-label="Secções">
             <a class="dpl-nav-link" href="#topo">Início</a>
             <a class="dpl-nav-link" href="#dpl-servicos">Serviços</a>
+            <a class="dpl-nav-link" href="#dpl-redes">Redes</a>
             <a class="dpl-nav-link" href="#dpl-contactos">Marcações</a>
-            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
             <a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Marcar revisão</a>
     </nav>
     <a class="dpl-nav-link" data-dp-copy="telefone" data-dp-href="tel" href="#dpl-contactos">{{telefone}}</a>
 </header>
 <main id="topo">
-<section class="dpl-hero">
+<section class="dpl-hero dpl-hero--atmosphere">
     <div class="dpl-wrap">
         
         <p class="dpl-kicker" data-dp-copy="cidade"></p>
@@ -62,7 +62,7 @@
             <p>{{sobre}}</p>
             
         </div>
-        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 16 / 9" data-fallback-icon="ME"></div>
+        <div class="dpl-mark " style="--dp-ratio: 16 / 9" aria-hidden="true"><span class="dpl-mark-mono" data-fallback-icon="ME">ME</span></div>
     </div>
 </section>
 <section class="dpl-section dpl-section--muted" id="dpl-avaliacoes">
@@ -73,19 +73,47 @@
         </div>
     </div>
 </section>
+<section class="dpl-section dpl-social" id="dpl-redes" data-dp-social>
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <p class="dpl-kicker">Tudo num sítio</p>
+            <h2 class="dpl-h2">Facebook e Instagram</h2>
+            <p class="dpl-lede">O dia a dia, as novidades e o contacto rápido estão nas redes. Este site junta horário, morada e caminhos — um lugar para começar.</p>
+        </div>
+        <div class="dpl-social-row">
+            <a class="dpl-social-card" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>
+                <span class="dpl-social-kind">Facebook</span>
+                <span class="dpl-social-action">Ver página</span>
+            </a>
+            <a class="dpl-social-card" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>
+                <span class="dpl-social-kind">Instagram</span>
+                <span class="dpl-social-action">Ver perfil</span>
+            </a>
+        </div>
+    </div>
+</section>
 <section class="dpl-section dpl-section--muted" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
             <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
             <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
         </div>
-        <p><a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Marcar / WhatsApp</a></p>
+        <div class="dpl-contact-actions">
+            <a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Marcar / WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp">WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="tel">Ligar</a>
+        </div>
     </div>
 </section>
 <section class="dpl-cta-band" id="dpl-cta">
     <div class="dpl-wrap">
         <h2 class="dpl-h2">Marque a revisão</h2>
-        <p class="dpl-cta-band-action"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Ligar ou WhatsApp</a></p>
+        <p class="dpl-cta-band-lede">Horário, morada e redes — num só sítio. Depois siga-nos no Facebook e no Instagram.</p>
+        <p class="dpl-cta-band-action">
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Ligar ou WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
     </div>
 </section>
 </main>
@@ -94,6 +122,10 @@
         <strong class="dpl-topbar-brand" data-dp-copy="nome">A sua oficina</strong>
         <p>Marcações de manhã rendem lugar no mesmo dia.</p>
         <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+        <p class="dpl-rodape-social" data-dp-social>
+            <a href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
     </div>
 </footer>
 <script data-dp-inpage-nav>

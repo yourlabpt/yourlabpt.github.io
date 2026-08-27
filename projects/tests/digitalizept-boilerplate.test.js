@@ -226,18 +226,22 @@ describe('digitalizept no-image boilerplates', async () => {
     ];
     const visual = await import(pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/demo-visual.js')).href);
 
-    it('ships all 13 sem-fotos HTML files with pt-PT and photo hooks', () => {
+    it('ships all 13 sem-fotos HTML files with pt-PT and no photo slots', () => {
         slugs.forEach((slug) => {
             const file = path.join(root, `${slug}-sem-fotos.html`);
             assert.equal(fs.existsSync(file), true, file);
             const html = fs.readFileSync(file, 'utf8');
             assert.match(html, /lang="pt-PT"/);
             assert.match(html, /data-dp-boilerplate="/);
-            assert.match(html, /data-dp-photo|dpl-topbar-brand/);
+            assert.match(html, /dpl-topbar-brand/);
+            assert.doesNotMatch(html, /data-dp-photo/);
             assert.doesNotMatch(html, /dpl-topbar-logo|data-dp-logo/);
             assert.doesNotMatch(html, /lorem/i);
             assert.match(html, /<h1[\s>]/);
             assert.match(html, /<meta name="description"/);
+            assert.match(html, /id="dpl-redes"/);
+            assert.match(html, /data-dp-href="facebook"/);
+            assert.match(html, /data-dp-href="instagram"/);
         });
     });
 
@@ -329,13 +333,50 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.match(out, /dpl-topbar-brand/);
     });
 
-    it('keeps identity photo hooks that applyIdentityToHtml can fill', () => {
+    it('keeps Sem fotos typographic — no photo hooks, social redirects ready', () => {
         const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
-        assert.match(html, /data-dp-photo="0"/);
+        assert.doesNotMatch(html, /data-dp-photo/);
         assert.doesNotMatch(html, /dpl-topbar-logo|data-dp-logo/);
-        assert.match(html, /class="dpl-visual/);
+        assert.match(html, /class="dpl-mark/);
+        assert.match(html, /data-dp-href="instagram"/);
         assert.equal(visual.isBoilerplateHtml(html), true);
         assert.match(visual.stripDemoSwitch('<div class="dpl-demo-switch"><button>x</button></div><p>ok</p>'), />ok</);
+    });
+
+    it('fills Facebook and Instagram hrefs on Sem fotos and reveals cards', () => {
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, {
+            nome_negocio: 'Casa da Vila',
+            cidade: 'Braga',
+            telefone: '912345678',
+            whatsapp: '912345678',
+            instagram: '@casadavila',
+            facebook: 'casadavila.braga'
+        }, {});
+        assert.match(out, /href="https:\/\/www\.instagram\.com\/casadavila"/);
+        assert.match(out, /href="https:\/\/www\.facebook\.com\/casadavila\.braga"/);
+        assert.doesNotMatch(out, /data-dp-href="instagram"[^>]*\bhidden\b/);
+        assert.doesNotMatch(out, /data-dp-href="facebook"[^>]*\bhidden\b/);
+    });
+
+    it('hides social block when Instagram and Facebook are empty', () => {
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, {
+            nome_negocio: 'Casa da Vila',
+            cidade: 'Braga'
+        }, {});
+        assert.match(out, /data-dp-social[^>]*\bhidden\b/);
+    });
+
+    it('does not inject uploaded photos into Sem fotos boilerplates', async () => {
+        const htmlMod = await import(pathToFileURL(path.join(__dirname, '../../digitalizept/js/demo/html.js')).href);
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        const out = htmlMod.applyIdentityToHtml(html, {
+            fotos: ['data:image/jpeg;base64,/9j/4AAQ'],
+            cores: { base: '#111111', destaque: '#cc0000', secundaria: '#f5f0e6' }
+        }, { nome_negocio: 'Casa da Vila' });
+        assert.doesNotMatch(out, /data:image\/jpeg/);
+        assert.doesNotMatch(out, /data-dp-photos/);
     });
 
     it('labels the client switch as Demonstração / Opção 1 / Opção 2, plus Personalizada when AI HTML exists', () => {

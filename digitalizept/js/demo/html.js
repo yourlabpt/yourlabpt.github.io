@@ -454,6 +454,11 @@ function applyLogo(doc, identidade, dados) {
 }
 
 function applyFotos(doc, identidade) {
+    // Sem fotos boilerplates: never inject photos — typography / marks only.
+    if (doc.querySelector('[data-dp-boilerplate]') || doc.documentElement?.hasAttribute?.('data-dp-boilerplate')) {
+        doc.querySelectorAll('[data-dp-photos]').forEach((node) => node.remove());
+        return;
+    }
     const fotos = fotosOf(identidade);
     const hero = doc.querySelector('.dpl-hero-visual');
     if (hero && fotos[0]) fillVisual(hero, fotos[0]);

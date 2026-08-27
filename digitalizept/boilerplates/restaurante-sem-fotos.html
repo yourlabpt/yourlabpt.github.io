@@ -22,13 +22,14 @@
             <a class="dpl-nav-link" href="#topo">Início</a>
             <a class="dpl-nav-link" href="#dpl-servicos">Menu</a>
             <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
+            <a class="dpl-nav-link" href="#dpl-redes">Redes</a>
             <a class="dpl-nav-link" href="#dpl-contactos">Reservas</a>
             <a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Reservar</a>
     </nav>
     
 </header>
 <main id="topo">
-<section class="dpl-hero dpl-hero--centered">
+<section class="dpl-hero dpl-hero--atmosphere dpl-hero--centered">
     <div class="dpl-wrap">
         
         <p class="dpl-kicker" data-dp-copy="cidade"></p>
@@ -44,7 +45,7 @@
             <p>{{sobre}}</p>
             <p><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3v7M12 3v7M16 3v7M6 10h12v2a6 6 0 01-12 0z"/><path d="M12 18v4"/></svg></span> <span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3h8l-1 8a5 5 0 11-6 0z"/><path d="M12 16v5M9 21h6"/></svg></span></p>
         </div>
-        <div class="dpl-visual " data-dp-photo="0" style="--dp-ratio: 3 / 4" data-fallback-icon="RE"></div>
+        <div class="dpl-mark " style="--dp-ratio: 3 / 4" aria-hidden="true"><span class="dpl-mark-mono" data-fallback-icon="RE">RE</span></div>
     </div>
 </section>
 <section class="dpl-section" id="dpl-servicos">
@@ -73,19 +74,47 @@
         </div>
     </div>
 </section>
+<section class="dpl-section dpl-social" id="dpl-redes" data-dp-social>
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <p class="dpl-kicker">Tudo num sítio</p>
+            <h2 class="dpl-h2">Facebook e Instagram</h2>
+            <p class="dpl-lede">O dia a dia, as novidades e o contacto rápido estão nas redes. Este site junta horário, morada e caminhos — um lugar para começar.</p>
+        </div>
+        <div class="dpl-social-row">
+            <a class="dpl-social-card" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>
+                <span class="dpl-social-kind">Facebook</span>
+                <span class="dpl-social-action">Ver página</span>
+            </a>
+            <a class="dpl-social-card" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>
+                <span class="dpl-social-kind">Instagram</span>
+                <span class="dpl-social-action">Ver perfil</span>
+            </a>
+        </div>
+    </div>
+</section>
 <section class="dpl-section dpl-section--muted" id="dpl-contactos">
     <div class="dpl-wrap">
         <div class="dpl-section-head">
             <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
             <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
         </div>
-        <p><a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Reservar mesa</a></p>
+        <div class="dpl-contact-actions">
+            <a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">Reservar mesa</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp">WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="tel">Ligar</a>
+        </div>
     </div>
 </section>
 <section class="dpl-cta-band" id="dpl-cta">
     <div class="dpl-wrap">
         <h2 class="dpl-h2">Reserve a sua mesa</h2>
-        <p class="dpl-cta-band-action"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Reservar / WhatsApp</a></p>
+        <p class="dpl-cta-band-lede">Horário, morada e redes — num só sítio. Depois siga-nos no Facebook e no Instagram.</p>
+        <p class="dpl-cta-band-action">
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Reservar / WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
     </div>
 </section>
 </main>
@@ -94,6 +123,10 @@
         <strong class="dpl-topbar-brand" data-dp-copy="nome">O seu restaurante</strong>
         <p>Sala aberta para almoço e jantar.</p>
         <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+        <p class="dpl-rodape-social" data-dp-social>
+            <a href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
     </div>
 </footer>
 <script data-dp-inpage-nav>

@@ -26,6 +26,8 @@ function mapCtaTarget(target) {
     if (t === 'whatsapp') return { href: '#dpl-contactos', hrefKind: 'whatsapp' };
     if (t === 'tel') return { href: '#dpl-contactos', hrefKind: 'tel' };
     if (t === 'dpl-mapa' || t === 'maps') return { href: '#dpl-contactos', hrefKind: 'maps' };
+    if (t === 'instagram') return { href: '#dpl-redes', hrefKind: 'instagram' };
+    if (t === 'facebook') return { href: '#dpl-redes', hrefKind: 'facebook' };
     if (t.startsWith('dpl-')) return { href: `#${t}`, hrefKind: '' };
     return { href: '#dpl-contactos', hrefKind: '' };
 }
@@ -104,8 +106,31 @@ function icon(name) {
     return `<span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${I[name] || I.check}</svg></span>`;
 }
 
-function visual(n, ratio, mono, extra = '') {
-    return `<div class="dpl-visual ${extra}" data-dp-photo="${n}" style="--dp-ratio: ${ratio}" data-fallback-icon="${mono}"></div>`;
+function visual(_n, ratio, mono, extra = '') {
+    // Sem fotos: typographic mark only — never data-dp-photo (cold lead, no images).
+    return `<div class="dpl-mark ${extra}" style="--dp-ratio: ${ratio}" aria-hidden="true"><span class="dpl-mark-mono" data-fallback-icon="${mono}">${mono}</span></div>`;
+}
+
+function socialBlock() {
+    return `<section class="dpl-section dpl-social" id="dpl-redes" data-dp-social>
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <p class="dpl-kicker">Tudo num sítio</p>
+            <h2 class="dpl-h2">Facebook e Instagram</h2>
+            <p class="dpl-lede">O dia a dia, as novidades e o contacto rápido estão nas redes. Este site junta horário, morada e caminhos — um lugar para começar.</p>
+        </div>
+        <div class="dpl-social-row">
+            <a class="dpl-social-card" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>
+                <span class="dpl-social-kind">Facebook</span>
+                <span class="dpl-social-action">Ver página</span>
+            </a>
+            <a class="dpl-social-card" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>
+                <span class="dpl-social-kind">Instagram</span>
+                <span class="dpl-social-action">Ver perfil</span>
+            </a>
+        </div>
+    </div>
+</section>`;
 }
 
 function navJs() {
@@ -189,6 +214,10 @@ function footer(brand, note) {
         <strong class="dpl-topbar-brand" data-dp-copy="nome">${brand}</strong>
         <p>${note}</p>
         <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+        <p class="dpl-rodape-social" data-dp-social>
+            <a href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
     </div>
 </footer>`;
 }
@@ -200,7 +229,11 @@ function loc(cta) {
             <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
             <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
         </div>
-        <p><a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">${cta}</a></p>
+        <div class="dpl-contact-actions">
+            <a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">${cta}</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp">WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="tel">Ligar</a>
+        </div>
     </div>
 </section>`;
 }
@@ -220,13 +253,18 @@ function ctaBand(title, btn, hrefKind = 'whatsapp') {
     return `<section class="dpl-cta-band" id="dpl-cta">
     <div class="dpl-wrap">
         <h2 class="dpl-h2">${title}</h2>
-        <p class="dpl-cta-band-action"><a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="${hrefKind}">${btn}</a></p>
+        <p class="dpl-cta-band-lede">Horário, morada e redes — num só sítio. Depois siga-nos no Facebook e no Instagram.</p>
+        <p class="dpl-cta-band-action">
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="${hrefKind}">${btn}</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
     </div>
 </section>`;
 }
 
 function hero({ centered = false, extra = '', hrefKind = 'whatsapp', id = '', className = '' } = {}) {
-    const cls = ['dpl-hero', centered ? 'dpl-hero--centered' : '', className].filter(Boolean).join(' ');
+    const cls = ['dpl-hero', 'dpl-hero--atmosphere', centered ? 'dpl-hero--centered' : '', className].filter(Boolean).join(' ');
     return `<section class="${cls}">
     <div class="dpl-wrap">
         ${extra}
@@ -322,6 +360,7 @@ const CATS = [
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-sobre', label: 'Sobre' },
                     { href: '#dpl-servicos', label: 'Serviços' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Contactos' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Contactar' }
@@ -339,6 +378,7 @@ ${sobreBlock('Quem somos', visual(0, '4 / 3', 'GE'))}
     <div class="dpl-wrap">${diffs()}</div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Fale connosco')}
 ${ctaBand('Fale connosco', 'WhatsApp')}
 </main>
@@ -362,6 +402,7 @@ ${footer('O seu negócio', 'Fale connosco ou passe na loja.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Menu' },
                     { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Contactos' }
                 ],
                 cta: { href: '#dpl-servicos', label: 'Ver menu', hrefKind: 'maps' }
@@ -383,6 +424,7 @@ ${sobreBlock('A casa', visual(0, '4 / 3', 'CA'))}
     </div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Como chegar')}
 ${ctaBand('Venha tomar um café connosco.', 'Ver localização', 'maps')}
 </main>
@@ -410,6 +452,7 @@ ${footer('O seu café', 'Passe quando quiser.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Menu' },
                     { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Reservas' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Reservar' }
@@ -425,6 +468,7 @@ ${sobreBlock('A casa', visual(0, '3 / 4', 'RE'), `<p>${icon('fork')} ${icon('win
     </div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Reservar mesa')}
 ${ctaBand('Reserve a sua mesa', 'Reservar / WhatsApp')}
 </main>
@@ -449,6 +493,7 @@ ${footer('O seu restaurante', 'Sala aberta para almoço e jantar.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Tratamentos' },
                     { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Marcações' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Marcar consulta' }
@@ -474,6 +519,7 @@ ${hero({ id: this.id })}
     <div class="dpl-wrap">${trustChips()}</div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Marcar consulta')}
 ${ctaBand('Marque a sua consulta', 'Marcar')}
 </main>
@@ -503,6 +549,7 @@ ${footer('A sua clínica', 'Marcações com antecedência.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Produtos' },
                     { href: '#dpl-sobre', label: 'Serviços' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Contactos' }
                 ],
                 extra: '<a class="dpl-nav-link" href="#dpl-contactos" data-dp-copy="telefone" data-dp-href="tel">{{telefone}}</a>'
@@ -523,6 +570,7 @@ ${hero({ id: this.id })}
     </div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Telefonar')}
 ${ctaBand('Precisa de uma peça hoje?', 'Ligar agora', 'tel')}
 </main>
@@ -549,6 +597,7 @@ ${footer('A sua drogaria', 'Aberto em horário de loja — confirme antes de vir
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Coleções' },
                     { href: '#dpl-sobre', label: 'Ofício' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Visita' }
                 ]
             })}
@@ -571,6 +620,7 @@ ${footer('A sua drogaria', 'Aberto em horário de loja — confirme antes de vir
 </section>
 ${sobreBlock('Ofício', `<div class="dpl-hairline" style="padding:1rem">${visual(0, '1 / 1', 'JO')}</div>`)}
 ${quotes()}
+${socialBlock()}
 ${loc('Marcar visita')}
 ${ctaBand('Marque uma visita ao nosso atelier.', 'Pedir horário')}
 </main>
@@ -596,6 +646,7 @@ ${footer('A sua joalharia', 'Visitas com marcação.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Coleções' },
                     { href: '#dpl-sobre', label: 'Eventos' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Contactos' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Encomendar' }
@@ -613,6 +664,7 @@ ${sobreBlock('O atelier', visual(0, '4 / 3', 'FL', 'dpl-visual-blob'))}
     <div class="dpl-wrap">${destaques()}${trustChips()}</div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Encomendar')}
 ${ctaBand('Peça o ramo desta semana', 'WhatsApp')}
 </main>
@@ -638,6 +690,7 @@ ${footer('A sua florista', 'Encomendas até à véspera, quando o mercado deixar
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Coleção' },
                     { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Loja' }
                 ]
             })}
@@ -662,6 +715,7 @@ ${hero({ id: this.id })}
 <section class="dpl-look">
     <div class="dpl-wrap">${diffs()}</div>
 </section>
+${socialBlock()}
 ${loc('Visitar a loja')}
 ${ctaBand('Passe pela loja', 'Como chegar', 'maps')}
 </main>
@@ -687,8 +741,8 @@ ${footer('A sua loja', 'Horário de rua — confirme feriados.')}`;
                 links: [
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Serviços' },
-                    { href: '#dpl-contactos', label: 'Marcações' },
-                    { href: '#dpl-contactos', label: 'Contactos' }
+                    { href: '#dpl-redes', label: 'Redes' },
+                    { href: '#dpl-contactos', label: 'Marcações' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Marcar revisão' },
                 extra: '<a class="dpl-nav-link" data-dp-copy="telefone" data-dp-href="tel" href="#dpl-contactos">{{telefone}}</a>'
@@ -706,6 +760,7 @@ ${hero({ id: this.id })}
 </section>
 ${sobreBlock('A oficina', visual(0, '16 / 9', 'ME'))}
 ${quotes()}
+${socialBlock()}
 ${loc('Marcar / WhatsApp')}
 ${ctaBand('Marque a revisão', 'Ligar ou WhatsApp')}
 </main>
@@ -731,6 +786,7 @@ ${footer('A sua oficina', 'Marcações de manhã rendem lugar no mesmo dia.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Produtos' },
                     { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Contactos' }
                 ],
                 extra: '<span class="dpl-badge" data-dp-copy="horario">{{horario}}</span>'
@@ -748,6 +804,7 @@ ${hero({ hrefKind: 'maps', id: this.id })}
 </section>
 ${sobreBlock('Somos da vizinhança', visual(0, '4 / 3', 'MC'))}
 ${quotes()}
+${socialBlock()}
 ${loc('Como chegar')}
 ${ctaBand('Venha visitar-nos', 'Ver horário', 'maps')}
 </main>
@@ -778,6 +835,7 @@ ${footer('O seu mercadinho', 'Aberto os dias da rua. Domingos, confirme.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Coleção' },
                     { href: '#dpl-sobre', label: 'Serviços' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Marcações' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Marcar consulta' }
@@ -795,6 +853,7 @@ ${hero({ extra: `<div class="dpl-hero-art">${icon('glasses')}</div>`, id: this.i
 </section>
 ${sobreBlock('A loja', visual(0, '4 / 3', 'OT'))}
 ${quotes()}
+${socialBlock()}
 ${loc('Marcar consulta')}
 ${ctaBand('Reserve o exame', 'Marcar')}
 </main>
@@ -821,6 +880,7 @@ ${footer('A sua ótica', 'Marcações pelo telefone ou WhatsApp.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Serviços' },
                     { href: '#dpl-equipa', label: 'Equipa' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Marcações' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Marcar' }
@@ -842,10 +902,11 @@ ${hero({ id: this.id })}
     </div>
 </section>
 ${quotes()}
+${socialBlock()}
 ${loc('Marcar')}
 ${ctaBand('Reserve o seu momento.', 'Marcar')}
 </main>
-${footer('O seu salão', 'Marcações pelo telefone ou Instagram.')}`;
+${footer('O seu salão', 'Marcações pelo telefone, WhatsApp ou Instagram.')}`;
         }
     },
     {
@@ -871,6 +932,7 @@ ${footer('O seu salão', 'Marcações pelo telefone ou Instagram.')}`;
                     { href: '#topo', label: 'Início' },
                     { href: '#dpl-servicos', label: 'Serviços' },
                     { href: '#dpl-tecidos', label: 'Tecidos' },
+                    { href: '#dpl-redes', label: 'Redes' },
                     { href: '#dpl-contactos', label: 'Contactos' }
                 ],
                 cta: { href: '#dpl-contactos', label: 'Pedir orçamento' }
@@ -894,6 +956,7 @@ ${hero({ className: 'dpl-weave', id: this.id })}
 </section>
 ${sobreBlock('O ofício', visual(0, '4 / 3', 'TA'))}
 ${quotes()}
+${socialBlock()}
 ${loc('Pedir orçamento')}
 ${ctaBand('Peça o orçamento', 'WhatsApp')}
 </main>

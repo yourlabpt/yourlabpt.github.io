@@ -3,7 +3,9 @@
 import { seedDemoFromType } from './seed.js';
 import {
     destaqueItems,
+    facebookHref,
     interpolate,
+    instagramHref,
     mapsHref,
     telHref,
     trustChips,
@@ -237,21 +239,40 @@ function applyHrefs(html, dados) {
     const hrefs = {
         maps: mapsHref(dados),
         whatsapp: whatsappHref(dados),
-        tel: telHref(dados)
+        tel: telHref(dados),
+        instagram: instagramHref(dados && dados.instagram),
+        facebook: facebookHref(dados && dados.facebook)
     };
     let out = html;
     Object.keys(hrefs).forEach((key) => {
         const href = hrefs[key];
-        if (!href) return;
-        out = out.replace(
-            new RegExp(`(data-dp-href=["']${key}["'][^>]*\\bhref=["'])[^"']*(["'])`, 'gi'),
-            `$1${href}$2`
-        );
-        out = out.replace(
-            new RegExp(`(\\bhref=["'][^"']*["'][^>]*data-dp-href=["']${key}["'])`, 'gi'),
-            (full) => full.replace(/\bhref=["'][^"']*["']/, `href="${href}"`)
-        );
+        const reOpen = new RegExp(`<a\\b([^>]*\\bdata-dp-href=["']${key}["'][^>]*)>`, 'gi');
+        out = out.replace(reOpen, (full, attrs) => {
+            let next = attrs;
+            if (href) {
+                if (/\bhref=["'][^"']*["']/.test(next)) {
+                    next = next.replace(/\bhref=["'][^"']*["']/, `href="${href}"`);
+                } else {
+                    next = `${next} href="${href}"`;
+                }
+                next = next.replace(/\s*\bhidden\b(?:=["'][^"']*["'])?/gi, '');
+                return `<a${next}>`;
+            }
+            if (!/\bhidden\b/i.test(next)) next = `${next} hidden`;
+            return `<a${next}>`;
+        });
     });
+
+    const hasSocial = Boolean(hrefs.instagram || hrefs.facebook);
+    if (!hasSocial) {
+        out = out.replace(
+            /<(section|div|p)\b([^>]*\bdata-dp-social\b[^>]*)>/gi,
+            (full, tag, attrs) => {
+                if (/\bhidden\b/i.test(attrs)) return full;
+                return `<${tag}${attrs} hidden>`;
+            }
+        );
+    }
     return out;
 }
 
@@ -265,10 +286,15 @@ function applyBrand(html, nome) {
 
 function applyFallbackIcons(html, monogram) {
     if (!monogram) return html;
-    return html.replace(
+    let out = html.replace(
         /data-fallback-icon=""/g,
         `data-fallback-icon="${escapeText(monogram)}"`
     );
+    out = out.replace(
+        /(<span\b[^>]*\bdpl-mark-mono\b[^>]*data-fallback-icon=")[^"]*("[^>]*>)[^<]*(<\/span>)/gi,
+        `$1${escapeText(monogram)}$2${escapeText(monogram)}$3`
+    );
+    return out;
 }
 
 export function fillBoilerplateFromDemo(html, state) {

@@ -314,8 +314,56 @@ h3,
     object-fit: cover;
 }
 
+/* Sem fotos: typographic marks — never photos */
+.dpl-mark {
+    --dp-ratio: 4 / 3;
+    position: relative;
+    aspect-ratio: var(--dp-ratio);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(120% 80% at 10% 0%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 55%),
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, var(--bg)), color-mix(in srgb, var(--accent-2) 22%, var(--bg)));
+    border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.dpl-mark-mono {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 7vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: color-mix(in srgb, var(--ink) 22%, transparent);
+    user-select: none;
+}
+
 .dpl-hero {
     padding-block: var(--space-7);
+    position: relative;
+}
+
+.dpl-hero--atmosphere {
+    background:
+        radial-gradient(90% 70% at 85% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%),
+        radial-gradient(70% 50% at 0% 100%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 45%),
+        var(--bg);
+}
+
+.dpl-hero--atmosphere::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+    mix-blend-mode: soft-light;
+}
+
+.dpl-hero--atmosphere > .dpl-wrap {
+    position: relative;
+    z-index: 1;
 }
 
 .dpl-kicker {
@@ -353,7 +401,18 @@ h3,
 
 .dpl-cta-band h2 { margin: 0; }
 
-.dpl-cta-band-action { margin-top: 1.5rem; }
+.dpl-cta-band-lede {
+    margin: var(--space-2) 0 0;
+    max-width: 36rem;
+    opacity: 0.92;
+}
+
+.dpl-cta-band-action {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
 
 .dpl-cta-band .dpl-btn {
     background: var(--on-accent);
@@ -395,6 +454,84 @@ h3,
 
 .dpl-rodape-livro:hover {
     opacity: 1;
+}
+
+.dpl-contact-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.dpl-social {
+    border-block: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.dpl-social-row {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: 1fr;
+    margin-top: var(--space-4);
+}
+
+@media (min-width: 640px) {
+    .dpl-social-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.dpl-social-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 1.35rem 1.4rem;
+    border-radius: var(--radius-md);
+    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+    min-height: 5.5rem;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.dpl-social-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--ink));
+    transform: translateY(-1px);
+}
+
+.dpl-social-kind {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.dpl-social-action {
+    font-size: 0.92rem;
+    color: var(--ink-muted);
+}
+
+.dpl-rodape-social {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+
+.dpl-rodape-social a {
+    text-decoration: none;
+    opacity: 0.85;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 35%, transparent);
+    padding-bottom: 1px;
+}
+
+.dpl-rodape-social a:hover {
+    opacity: 1;
+    border-bottom-color: var(--accent-ink);
+}
+
+.dpl-social-card[hidden],
+.dpl-rodape-social a[hidden],
+.dpl-cta-band-action a[hidden],
+[data-dp-social][hidden] {
+    display: none !important;
 }
 
 .dpl-demo-switch {
@@ -569,6 +706,15 @@ ul.dpl-grid,
 }
 
 .dpl-visual-blob {
+    clip-path: ellipse(80% 70% at 50% 50%);
+}
+
+.dpl-mark.dpl-visual-round {
+    border-radius: 50%;
+    --dp-ratio: 1 / 1;
+}
+
+.dpl-mark.dpl-visual-blob {
     clip-path: ellipse(80% 70% at 50% 50%);
 }
 
