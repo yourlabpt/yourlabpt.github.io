@@ -22,5 +22,82 @@
   "reservas": { "label": "Reservas", "tipo": "sim_nao", "secao": "opcional" },
   "entregas": { "label": "Entregas ao domicílio", "tipo": "sim_nao", "secao": "opcional" },
   "anos_experiencia": { "label": "Anos de experiência", "tipo": "texto", "placeholder": "Ex.: 12", "secao": "opcional" },
-  "certificacoes": { "label": "Certificações", "tipo": "texto", "secao": "opcional" }
+  "certificacoes": { "label": "Certificações", "tipo": "texto", "secao": "opcional" },
+
+  "variante": { "label": "Variante do espaço", "tipo": "lista", "secao": "especifico" },
+  "tipologia": { "label": "Tipologia", "tipo": "texto", "placeholder": "Quinta, hotel rural, AL…", "secao": "especifico" },
+  "classificacao": { "label": "Classificação / estrelas", "tipo": "texto", "secao": "especifico" },
+  "concelho": { "label": "Concelho", "tipo": "texto", "secao": "identificacao" },
+  "historia_curta": { "label": "História curta do espaço", "tipo": "texto_longo", "secao": "descricao" },
+
+  "sentados_max": { "label": "Capacidade sentados (máx.)", "tipo": "texto", "secao": "especifico" },
+  "em_pe_max": { "label": "Capacidade em pé (máx.)", "tipo": "texto", "secao": "especifico" },
+  "areas": { "label": "Áreas do espaço", "tipo": "texto_longo", "placeholder": "Nome, m², sentados, interior/exterior…", "secao": "especifico" },
+  "tem_capela": { "label": "Tem capela?", "tipo": "sim_nao", "secao": "especifico" },
+  "plano_chuva": { "label": "Plano de chuva", "tipo": "texto", "secao": "especifico" },
+  "catering": {
+    "label": "Catering",
+    "tipo": "lista",
+    "secao": "especifico",
+    "opcoes": [
+      { "id": "proprio", "nome": "Próprio" },
+      { "id": "externo", "nome": "Externo" },
+      { "id": "lista_fechada", "nome": "Lista fechada" }
+    ]
+  },
+  "musica_ate": { "label": "Música até que horas?", "tipo": "texto", "placeholder": "Ex.: 2h", "secao": "especifico" },
+  "preco_desde": { "label": "Preço a partir de", "tipo": "texto", "secao": "especifico" },
+  "preco_modelo": { "label": "Modelo de preço", "tipo": "texto", "placeholder": "Aluguer / por convidado / pacote", "secao": "especifico" },
+  "datas_ocupadas": { "label": "Datas já ocupadas", "tipo": "texto_longo", "placeholder": "Uma data por linha", "secao": "especifico" },
+  "dossie_pdf": { "label": "Link do dossiê PDF", "tipo": "url", "secao": "especifico" },
+
+  "n_unidades": { "label": "Número de unidades / quartos", "tipo": "texto", "secao": "especifico" },
+  "tipologias": { "label": "Tipologias de quarto", "tipo": "texto_longo", "secao": "especifico" },
+  "check_in": { "label": "Check-in", "tipo": "texto", "placeholder": "A partir das 15h", "secao": "especifico" },
+  "check_out": { "label": "Check-out", "tipo": "texto", "placeholder": "Até às 11h", "secao": "especifico" },
+  "pequeno_almoco": { "label": "Pequeno-almoço incluído?", "tipo": "sim_nao", "secao": "especifico" },
+  "motor_reservas_fornecedor": { "label": "Motor de reservas (fornecedor)", "tipo": "texto", "secao": "especifico" },
+  "motor_reservas_url": { "label": "URL do motor de reservas", "tipo": "url", "secao": "especifico" },
+  "motor_reservas_google_hotel_center": { "label": "Ligado ao Google Hotel Center?", "tipo": "sim_nao", "secao": "especifico" },
+  "vantagens_diretas": {
+    "label": "Vantagens da reserva directa",
+    "tipo": "texto_longo",
+    "placeholder": "Máx. 4, só não-preço — sem «melhor preço garantido»",
+    "secao": "especifico"
+  },
+  "experiencias": { "label": "Experiências no local", "tipo": "texto_longo", "secao": "especifico" },
+
+  "numero_registo": { "label": "Número de registo (RNAL / RNT)", "tipo": "texto", "placeholder": "Ex.: 12345/AL", "secao": "especifico" },
+  "nif_negocio": { "label": "NIF do negócio", "tipo": "texto", "secao": "especifico" },
+  "taxa_turistica_aplica": { "label": "Cobra taxa turística?", "tipo": "sim_nao", "secao": "especifico" },
+  "taxa_turistica_valor": { "label": "Valor da taxa turística", "tipo": "texto", "placeholder": "Ex.: 2 € / pessoa / noite", "secao": "especifico" },
+  "taxa_turistica_max_noites": { "label": "Máx. noites com taxa", "tipo": "texto", "secao": "especifico" },
+
+  "google_place_id": { "label": "Google Place ID", "tipo": "texto", "secao": "opcional" },
+  "avaliacoes_google_media": { "label": "Nota média Google", "tipo": "texto", "secao": "opcional" },
+  "avaliacoes_google_total": { "label": "N.º de avaliações Google", "tipo": "texto", "secao": "opcional" },
+  "booking_url": { "label": "URL Booking / OTA", "tipo": "url", "secao": "opcional" },
+  "canal_enquiries": {
+    "label": "Como chegam os pedidos hoje?",
+    "tipo": "lista",
+    "secao": "especifico",
+    "opcoes": [
+      { "id": "telefone", "nome": "Telefone" },
+      { "id": "instagram", "nome": "Instagram" },
+      { "id": "booking", "nome": "Booking / OTA" }
+    ]
+  },
+
+  "modo_fotos": {
+    "label": "Estado das fotografias",
+    "tipo": "lista",
+    "secao": "especifico",
+    "opcoes": [
+      { "id": "completo", "nome": "Completo" },
+      { "id": "parcial", "nome": "Parcial" },
+      { "id": "ausente", "nome": "Ausente (temporário / ponte)" }
+    ]
+  },
+  "pontos_interesse": { "label": "Pontos de interesse perto", "tipo": "texto_longo", "secao": "opcional" },
+  "faq": { "label": "FAQ", "tipo": "texto_longo", "secao": "opcional" }
 }

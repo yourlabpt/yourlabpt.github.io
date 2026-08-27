@@ -2,6 +2,8 @@
  * Lead dossier: field catalog + completeness for the admin single source of truth.
  */
 
+const quintas = require('./digitalizept-quintas');
+
 const PUBLIC_REQUIRED = ['nome_negocio', 'morada', 'cidade', 'telefone'];
 const OUTREACH_FIELDS = ['email', 'whatsapp'];
 const LEGAL_FIELDS = [
@@ -123,17 +125,22 @@ function buildFieldCatalog(businessType, standardFields, dados) {
 
     ['nome_negocio', 'telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'].forEach((id) => {
         push(id, {
-            required: PUBLIC_REQUIRED.includes(id),
+            required: PUBLIC_REQUIRED.includes(id)
+                || (quintas.isQuintasType(type) && (id === 'whatsapp')),
             secao: 'identificacao'
         });
     });
     (type.campos_obrigatorios || []).forEach((id) => push(id, { required: true }));
-    (type.perguntas_especificas || []).forEach((q) => {
+
+    const perguntas = quintas.isQuintasType(type)
+        ? quintas.filterPerguntasByVariante(type.perguntas_especificas || [], type, dados)
+        : (type.perguntas_especificas || []);
+    perguntas.forEach((q) => {
         push(q.id, {
             label: q.label,
             tipo: q.tipo || 'texto',
             secao: 'especifico',
-            required: true
+            required: (type.campos_obrigatorios || []).includes(q.id) || q.id === 'numero_registo'
         });
     });
     (type.campos_opcionais || []).forEach((id) => push(id, {
@@ -144,6 +151,10 @@ function buildFieldCatalog(businessType, standardFields, dados) {
         if (!id || id.startsWith('_')) return;
         push(id, { required: false, secao: 'extra' });
     });
+
+    if (quintas.isQuintasType(type)) {
+        return quintas.filterFieldsByVariante(fields, type, dados);
+    }
     return fields;
 }
 
@@ -358,5 +369,6 @@ module.exports = {
     sanitizeDados,
     sanitizeIdentidade,
     saveLeadIdentidade,
-    patchLeadWhatsapp
+    patchLeadWhatsapp,
+    quintas
 };

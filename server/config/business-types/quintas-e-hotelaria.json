@@ -1,0 +1,644 @@
+{
+  "id": "quintas-e-hotelaria",
+  "nome": "Quintas e hotelaria",
+  "icone": "QH",
+  "tom": "elegante, concreto, hospitalidade portuguesa sem marketing vazio",
+  "prompt_contexto": "Quinta, espaço de eventos, turismo rural ou pequeno hotel independente em Portugal. O texto é concreto: capacidade, localização, como marcar visita ou reservar. Nunca inventa factos. Nunca promete melhor preço ou price-match (colide com paridade OTA). Vantagens de reserva directa só não-preço (late check-out, upgrade, amenidade, transfer). Cumprimento legal: número RNAL/RNT e livro de reclamações são obrigatórios na geração.",
+  "publico_alvo": "Casais a planear casamento 12–18 meses à frente; hóspedes que preferem reserva directa a OTA; donos de espaços no Norte, Douro, Alentejo e Costa de Prata.",
+  "servicos_tipicos": [
+    "Espaço para casamentos e eventos",
+    "Alojamento / turismo rural",
+    "Visitas ao espaço",
+    "Reserva directa",
+    "Catering e experiências"
+  ],
+  "diferenciais_sugeridos": [
+    "Espaço próprio com história",
+    "Capacidade clara e plano de chuva",
+    "Reserva directa sem comissão OTA",
+    "Atendimento pelo dono",
+    "Localização com pontos de interesse reais"
+  ],
+  "palavras_chave": [
+    "quinta para casamentos",
+    "espaço de eventos",
+    "turismo rural",
+    "alojamento local",
+    "reserva directa"
+  ],
+  "categorias_google": [
+    "wedding_venue",
+    "event_venue",
+    "lodging",
+    "guest_house",
+    "hotel"
+  ],
+  "idiomas_default": "pt, en",
+  "seccoes_landing": [
+    "hero",
+    "sobre",
+    "capacidade",
+    "servicos",
+    "galeria",
+    "avaliacoes",
+    "cta_bloco",
+    "mapa",
+    "faq",
+    "contactos",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#2c241c",
+    "#c4a574",
+    "#6b7f5a"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "variante",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "numero_registo",
+    "o_que_faz"
+  ],
+  "campos_opcionais": [
+    "email",
+    "responsavel",
+    "instagram",
+    "facebook",
+    "website_atual",
+    "idiomas",
+    "estacionamento",
+    "wifi",
+    "horario",
+    "diferencial",
+    "principais_servicos"
+  ],
+  "grupos_campos": {
+    "identidade": [
+      "nome_negocio",
+      "variante",
+      "tipologia",
+      "classificacao",
+      "cidade",
+      "concelho",
+      "morada",
+      "maps_url",
+      "historia_curta",
+      "o_que_faz",
+      "telefone"
+    ],
+    "capacidade_eventos": [
+      "sentados_max",
+      "em_pe_max",
+      "areas",
+      "tem_capela",
+      "plano_chuva",
+      "catering",
+      "musica_ate",
+      "preco_desde",
+      "preco_modelo",
+      "datas_ocupadas",
+      "dossie_pdf"
+    ],
+    "alojamento": [
+      "n_unidades",
+      "tipologias",
+      "check_in",
+      "check_out",
+      "pequeno_almoco",
+      "motor_reservas_fornecedor",
+      "motor_reservas_url",
+      "motor_reservas_google_hotel_center",
+      "vantagens_diretas",
+      "experiencias"
+    ],
+    "legal": [
+      "numero_registo",
+      "nif_negocio",
+      "taxa_turistica_aplica",
+      "taxa_turistica_valor",
+      "taxa_turistica_max_noites"
+    ],
+    "presenca": [
+      "google_place_id",
+      "avaliacoes_google_media",
+      "avaliacoes_google_total",
+      "instagram",
+      "booking_url",
+      "whatsapp",
+      "canal_enquiries",
+      "email"
+    ],
+    "conteudo": [
+      "modo_fotos",
+      "idiomas",
+      "pontos_interesse",
+      "faq"
+    ]
+  },
+  "variantes": {
+    "eventos": {
+      "label": "Eventos / casamentos",
+      "desc": "Receita = leads. Objectivo do site: marcar visita.",
+      "grupos": [
+        "identidade",
+        "capacidade_eventos",
+        "legal",
+        "presenca",
+        "conteudo"
+      ],
+      "seccoes_landing": [
+        "hero",
+        "sobre",
+        "capacidade",
+        "galeria",
+        "preco",
+        "avaliacoes",
+        "disponibilidade",
+        "cta_bloco",
+        "mapa",
+        "faq",
+        "contactos",
+        "rodape"
+      ],
+      "ctas_hero": [
+        {
+          "label": "Marcar visita",
+          "target": "dpl-contactos"
+        },
+        {
+          "label": "Ver disponibilidade",
+          "target": "dpl-disponibilidade"
+        }
+      ],
+      "cta_bloco": {
+        "titulo": "Venha conhecer o espaço",
+        "botao": "Marcar visita",
+        "target": "whatsapp"
+      }
+    },
+    "estadia": {
+      "label": "Estadia / turismo rural",
+      "desc": "Receita = noites. Objectivo: reserva directa (fora da OTA).",
+      "grupos": [
+        "identidade",
+        "alojamento",
+        "legal",
+        "presenca",
+        "conteudo"
+      ],
+      "seccoes_landing": [
+        "hero",
+        "vantagens",
+        "tipologias",
+        "sobre",
+        "experiencias",
+        "perto",
+        "galeria",
+        "avaliacoes",
+        "cta_bloco",
+        "mapa",
+        "faq",
+        "contactos",
+        "rodape"
+      ],
+      "ctas_hero": [
+        {
+          "label": "Reservar",
+          "target": "reservar"
+        },
+        {
+          "label": "WhatsApp",
+          "target": "whatsapp"
+        }
+      ],
+      "cta_bloco": {
+        "titulo": "Reserve directo connosco",
+        "botao": "Reservar",
+        "target": "reservar"
+      }
+    },
+    "hibrido": {
+      "label": "Híbrido (eventos + estadia)",
+      "desc": "Os dois funis. Mais comum no Norte.",
+      "grupos": [
+        "identidade",
+        "capacidade_eventos",
+        "alojamento",
+        "legal",
+        "presenca",
+        "conteudo"
+      ],
+      "seccoes_landing": [
+        "hero",
+        "vantagens",
+        "tipologias",
+        "capacidade",
+        "sobre",
+        "galeria",
+        "avaliacoes",
+        "cta_bloco",
+        "mapa",
+        "faq",
+        "contactos",
+        "rodape"
+      ],
+      "ctas_hero": [
+        {
+          "label": "Reservar",
+          "target": "reservar"
+        },
+        {
+          "label": "Marcar visita",
+          "target": "dpl-contactos"
+        }
+      ],
+      "cta_bloco": {
+        "titulo": "Reserve ou marque visita",
+        "botao": "WhatsApp",
+        "target": "whatsapp"
+      }
+    }
+  },
+  "wizard_ordem": [
+    "variante",
+    "_maps",
+    "nome_negocio",
+    "tipologia",
+    "classificacao",
+    "concelho",
+    "morada",
+    "cidade",
+    "telefone",
+    "whatsapp",
+    "historia_curta",
+    "sentados_max",
+    "em_pe_max",
+    "tem_capela",
+    "plano_chuva",
+    "catering",
+    "musica_ate",
+    "preco_desde",
+    "preco_modelo",
+    "n_unidades",
+    "check_in",
+    "check_out",
+    "pequeno_almoco",
+    "vantagens_diretas",
+    "motor_reservas_url",
+    "modo_fotos",
+    "numero_registo",
+    "taxa_turistica_aplica",
+    "taxa_turistica_valor",
+    "canal_enquiries",
+    "datas_ocupadas",
+    "instagram",
+    "google_place_id",
+    "idiomas"
+  ],
+  "perguntas_especificas": [
+    {
+      "id": "variante",
+      "label": "Que tipo de espaço é?",
+      "tipo": "lista",
+      "hint": "Define que campos e que site geramos.",
+      "grupo": "identidade"
+    },
+    {
+      "id": "tipologia",
+      "label": "Tipologia",
+      "tipo": "texto",
+      "hint": "Quinta, herdades, hotel rural, AL, casa de campo…",
+      "grupo": "identidade"
+    },
+    {
+      "id": "classificacao",
+      "label": "Classificação / estrelas",
+      "tipo": "texto",
+      "hint": "Se existir (ex.: 3*, Turismo de Habitação).",
+      "grupo": "identidade"
+    },
+    {
+      "id": "concelho",
+      "label": "Concelho",
+      "tipo": "texto",
+      "grupo": "identidade"
+    },
+    {
+      "id": "historia_curta",
+      "label": "História curta do espaço",
+      "tipo": "texto_longo",
+      "hint": "Duas ou três frases verdadeiras. Sem inventar.",
+      "grupo": "identidade"
+    },
+    {
+      "id": "sentados_max",
+      "label": "Capacidade sentados (máx.)",
+      "tipo": "texto",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "em_pe_max",
+      "label": "Capacidade em pé (máx.)",
+      "tipo": "texto",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "areas",
+      "label": "Áreas do espaço",
+      "tipo": "texto_longo",
+      "hint": "Uma por linha: nome, m², sentados, interior/exterior.",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "tem_capela",
+      "label": "Tem capela?",
+      "tipo": "sim_nao",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "plano_chuva",
+      "label": "Plano de chuva",
+      "tipo": "texto",
+      "hint": "Onde corre o evento se chover.",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "catering",
+      "label": "Catering",
+      "tipo": "lista",
+      "hint": "Próprio, externo ou lista fechada.",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "musica_ate",
+      "label": "Música até que horas?",
+      "tipo": "texto",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "preco_desde",
+      "label": "Preço a partir de",
+      "tipo": "texto",
+      "hint": "Valor indicativo (espaço ou por convidado). Sem promessas de melhor preço.",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "preco_modelo",
+      "label": "Modelo de preço",
+      "tipo": "texto",
+      "hint": "Ex.: aluguer do espaço / por convidado / pacote.",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "datas_ocupadas",
+      "label": "Datas já ocupadas",
+      "tipo": "texto_longo",
+      "hint": "Lista ou intervalo conhecido. Uma data por linha.",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "dossie_pdf",
+      "label": "Link do dossiê PDF",
+      "tipo": "url",
+      "hint": "Opcional — para captura de email na demo (secção 2).",
+      "grupo": "capacidade_eventos"
+    },
+    {
+      "id": "n_unidades",
+      "label": "Número de unidades / quartos",
+      "tipo": "texto",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "tipologias",
+      "label": "Tipologias de quarto",
+      "tipo": "texto_longo",
+      "hint": "Uma por linha: nome, ocupação, m², desde €/noite, comodidades.",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "check_in",
+      "label": "Check-in",
+      "tipo": "texto",
+      "hint": "Ex.: a partir das 15h",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "check_out",
+      "label": "Check-out",
+      "tipo": "texto",
+      "hint": "Ex.: até às 11h",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "pequeno_almoco",
+      "label": "Pequeno-almoço incluído?",
+      "tipo": "sim_nao",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "motor_reservas_fornecedor",
+      "label": "Motor de reservas (fornecedor)",
+      "tipo": "texto",
+      "hint": "Ex.: Lodgify, SmoothBooking, nenhum.",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "motor_reservas_url",
+      "label": "URL do motor de reservas",
+      "tipo": "url",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "motor_reservas_google_hotel_center",
+      "label": "Ligado ao Google Hotel Center?",
+      "tipo": "sim_nao",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "vantagens_diretas",
+      "label": "Vantagens da reserva directa",
+      "tipo": "texto_longo",
+      "hint": "Máx. 4, só não-preço (late check-out, upgrade, amenidade, transfer). Proibido «melhor preço garantido».",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "experiencias",
+      "label": "Experiências no local",
+      "tipo": "texto_longo",
+      "hint": "Prova de vinhos, passeios, workshops…",
+      "grupo": "alojamento"
+    },
+    {
+      "id": "numero_registo",
+      "label": "Número de registo (RNAL / RNT)",
+      "tipo": "texto",
+      "hint": "Obrigatório em publicidade e no site (art. 17 DL 128/2014).",
+      "grupo": "legal"
+    },
+    {
+      "id": "nif_negocio",
+      "label": "NIF do negócio",
+      "tipo": "texto",
+      "grupo": "legal"
+    },
+    {
+      "id": "taxa_turistica_aplica",
+      "label": "Cobra taxa turística?",
+      "tipo": "sim_nao",
+      "grupo": "legal"
+    },
+    {
+      "id": "taxa_turistica_valor",
+      "label": "Valor da taxa turística",
+      "tipo": "texto",
+      "hint": "Ex.: 2 € / pessoa / noite",
+      "grupo": "legal"
+    },
+    {
+      "id": "taxa_turistica_max_noites",
+      "label": "Máx. noites com taxa",
+      "tipo": "texto",
+      "hint": "Se o município limitar.",
+      "grupo": "legal"
+    },
+    {
+      "id": "google_place_id",
+      "label": "Google Place ID",
+      "tipo": "texto",
+      "grupo": "presenca"
+    },
+    {
+      "id": "avaliacoes_google_media",
+      "label": "Nota média Google",
+      "tipo": "texto",
+      "grupo": "presenca"
+    },
+    {
+      "id": "avaliacoes_google_total",
+      "label": "N.º de avaliações Google",
+      "tipo": "texto",
+      "grupo": "presenca"
+    },
+    {
+      "id": "booking_url",
+      "label": "URL Booking / OTA",
+      "tipo": "url",
+      "hint": "Para referência; o site empurra directo.",
+      "grupo": "presenca"
+    },
+    {
+      "id": "canal_enquiries",
+      "label": "Como chegam os pedidos hoje?",
+      "tipo": "lista",
+      "hint": "Telefone, Instagram ou Booking — define o argumento de fecho.",
+      "grupo": "presenca"
+    },
+    {
+      "id": "modo_fotos",
+      "label": "Estado das fotografias",
+      "tipo": "lista",
+      "hint": "«Ausente» é temporário (ponte). Ninguém reserva casamento sem ver o espaço.",
+      "grupo": "conteudo"
+    },
+    {
+      "id": "pontos_interesse",
+      "label": "Pontos de interesse perto",
+      "tipo": "texto_longo",
+      "hint": "Com km ou minutos reais. Uma por linha.",
+      "grupo": "conteudo"
+    },
+    {
+      "id": "faq",
+      "label": "FAQ (mín. 6 pares)",
+      "tipo": "texto_longo",
+      "hint": "Pergunta e resposta, uma por bloco.",
+      "grupo": "conteudo"
+    }
+  ],
+  "archetype": "venue",
+  "ctas_hero": [
+    {
+      "label": "Marcar visita",
+      "target": "dpl-contactos"
+    },
+    {
+      "label": "WhatsApp",
+      "target": "whatsapp"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "olive",
+      "nome": "Oliveira",
+      "cores": [
+        "#2c241c",
+        "#c4a574",
+        "#6b7f5a"
+      ]
+    },
+    {
+      "id": "stone",
+      "nome": "Pedra",
+      "cores": [
+        "#1e1c1a",
+        "#a89f91",
+        "#5c6b73"
+      ]
+    },
+    {
+      "id": "vine",
+      "nome": "Vinha",
+      "cores": [
+        "#241820",
+        "#8b4a5a",
+        "#c4b59a"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Fale connosco",
+    "botao": "WhatsApp",
+    "target": "whatsapp"
+  },
+  "gate_mais": "Quer detalhar capacidade, alojamento e registo legal?",
+  "destaques_campo": "vantagens_diretas",
+  "rotulos": {
+    "servicos": "O espaço",
+    "sobre": "A história",
+    "galeria": "Galeria",
+    "diferenciais": "Porquê reservar aqui",
+    "contactos": "Contactos"
+  },
+  "nav": [
+    {
+      "label": "Espaço",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Contacto",
+      "target": "dpl-contactos"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Quinta do Olival",
+    "cidade": "Amarante",
+    "titulo": "O vosso dia, no vosso ritmo",
+    "subtitulo": "Espaço para eventos e estadia em {cidade} — marque visita ou reserve directo.",
+    "sobre": "{nome} é um espaço com história em {cidade}. Capacidade clara, contacto directo e registo legal visível.",
+    "rodape": "Marque visita ou reserve por WhatsApp.",
+    "avaliacoes": [
+      {
+        "autor": "Ana e Pedro",
+        "texto": "Visita clara, sem pressão. Sabíamos exactamente o que está incluído."
+      },
+      {
+        "autor": "Hóspede",
+        "texto": "Reservámos directo — check-in simples e o sítio é como nas fotos."
+      }
+    ]
+  }
+}

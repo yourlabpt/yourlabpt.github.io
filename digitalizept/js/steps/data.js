@@ -1,10 +1,15 @@
 import { fetchSettings } from '../settings.js';
 import { isDataStepValid } from './data-valid.js';
-import { currentSubstep, renderAsk, askText, scheduleGoNext } from '../substep.js';
+import { currentSubstep, renderAsk, askText, askToggle, askChoices, scheduleGoNext } from '../substep.js';
 import { apiRequest } from '../api.js';
 import { getToken } from '../auth.js';
 import { isCustomDemo } from '../demo/seed.js';
 import { appendAdminHint } from '../admin-redirects.js';
+import {
+    isQuintasType,
+    wizardPageSpecs,
+    applyVarianteDefaults
+} from '../quintas.js';
 
 function getBusinessType(state) {
     return state.data.businessType || null;
@@ -56,6 +61,13 @@ const CORE_PAGES = [
 ];
 
 function pagesFor(state, standardFields) {
+    const businessType = getBusinessType(state);
+    const dados = (state.data && state.data.dados) || {};
+
+    if (isQuintasType(businessType)) {
+        return wizardPageSpecs(businessType, dados, standardFields);
+    }
+
     return CORE_PAGES.map((p) => ({
         ...p,
         def: (standardFields && standardFields[p.id]) || {
@@ -84,7 +96,9 @@ const DEMO_DRIVER_FIELDS = new Set([
     'cidade',
     'o_que_faz',
     'principais_servicos',
-    'diferencial'
+    'diferencial',
+    'historia_curta',
+    'variante'
 ]);
 
 function clearDemoState(state) {
@@ -120,6 +134,19 @@ function applyLookupToDados(dados, result) {
     if (d.maps_url) dados.maps_url = d.maps_url;
 }
 
+function simNaoFromToggle(opt) {
+    if (opt === 'Sim' || opt === 'sim') return 'sim';
+    if (opt === 'Não' || opt === 'Nao' || opt === 'nao') return 'nao';
+    return String(opt || '').toLowerCase();
+}
+
+function toggleLabelFromValue(value) {
+    const v = String(value || '').toLowerCase();
+    if (v === 'sim') return 'Sim';
+    if (v === 'nao') return 'Não';
+    return value || '';
+}
+
 async function render(body, ctx) {
     const businessType = getBusinessType(ctx.state);
     if (!businessType) {
@@ -145,9 +172,15 @@ async function render(body, ctx) {
     }
 
     const dados = getDados(ctx.state);
+    if (isQuintasType(businessType)) applyVarianteDefaults(dados, businessType);
+
     const pages = pagesFor(ctx.state, standardFields);
-    const idx = Math.min(currentSubstep(ctx.state), pages.length - 1);
+    const idx = Math.min(currentSubstep(ctx.state), Math.max(pages.length - 1, 0));
     const page = pages[idx];
+    if (!page) {
+        ctx.setValid(isDataStepValid(ctx.state));
+        return;
+    }
 
     const { control } = renderAsk(body, {
         title: page.title,
@@ -200,9 +233,6 @@ async function render(body, ctx) {
                     return;
                 }
                 applyLookupToDados(dados, data);
-                if (data.businessTypeId && (!businessType.id || businessType.id === 'generico')) {
-                    /* type already chosen on street; keep it */
-                }
                 if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                     ctx.state.data._mapsLat = data.lat;
                     ctx.state.data._mapsLng = data.lng;
@@ -231,12 +261,47 @@ async function render(body, ctx) {
         return;
     }
 
+    if (page.kind === 'choices') {
+        askChoices(control, page.items || [], {
+            selected: dados[page.id] || '',
+            onSelect: (item) => {
+                dados[page.id] = item.id;
+                if (page.id === 'variante') applyVarianteDefaults(dados, businessType);
+                invalidateDemoIfDriverField(ctx.state, page.id);
+                persist();
+            },
+            goNext: ctx.goNext
+        });
+        ctx.setValid(isSubstepValid(ctx.state));
+        return;
+    }
+
+    if (page.kind === 'toggle') {
+        askToggle(control, {
+            value: toggleLabelFromValue(dados[page.id]),
+            options: ['Sim', 'Não'],
+            onChange: (opt) => {
+                dados[page.id] = simNaoFromToggle(opt);
+                persist();
+            },
+            goNext: ctx.goNext
+        });
+        ctx.setValid(isSubstepValid(ctx.state));
+        return;
+    }
+
+    const inputType = page.kind === 'url' ? 'url' : page.kind === 'tel' || page.id === 'telefone' || page.id === 'whatsapp' ? 'tel' : 'text';
     askText(control, {
         value: dados[page.id] || '',
-        type: page.id === 'telefone' ? 'tel' : 'text',
+        type: inputType,
+        rows: page.kind === 'long' ? 4 : 1,
         placeholder: page.def && page.def.placeholder,
         onChange: (val) => {
             dados[page.id] = val;
+            if (page.id === 'historia_curta') {
+                dados.o_que_faz = val;
+                invalidateDemoIfDriverField(ctx.state, 'o_que_faz');
+            }
             invalidateDemoIfDriverField(ctx.state, page.id);
             persist();
         },
@@ -246,7 +311,9 @@ async function render(body, ctx) {
         showNextButton: true,
         nextLabel: 'Seguinte'
     });
-    if (page.id === 'telefone') appendAdminHint(control, 'ficha');
+    if (page.id === 'telefone' || page.id === 'whatsapp' || page.id === 'numero_registo') {
+        appendAdminHint(control, 'ficha');
+    }
     ctx.setValid(isSubstepValid(ctx.state));
 }
 
