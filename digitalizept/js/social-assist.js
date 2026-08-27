@@ -32,6 +32,45 @@ function cityOrPorto(cidade) {
     return clean(cidade) || 'Porto';
 }
 
+/** Google Maps search for a trade + city (opens results; no scrape). */
+export function googleMapsSearchUrl({ query = '', cidade = '', nome = '' } = {}) {
+    const city = cityOrPorto(cidade);
+    const q = clean(query) || clean(nome);
+    const terms = [q, city].filter(Boolean).join(' ').trim() || city;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(terms)}`;
+}
+
+/**
+ * Search terms for a Digitalize business type in a city.
+ * Prefer the first palavra_chave when present.
+ */
+export function businessTypeSearchQuery(type, cidade = '') {
+    const city = cityOrPorto(cidade);
+    const t = type || {};
+    const keyword = Array.isArray(t.palavras_chave) && t.palavras_chave[0]
+        ? clean(t.palavras_chave[0])
+        : clean(t.nome || t.id || '');
+    return [keyword, city].filter(Boolean).join(' ').trim();
+}
+
+/** Bundle of discovery deep-links for one type + city. */
+export function businessTypeDiscoveryLinks(type, cidade = '') {
+    const city = cityOrPorto(cidade);
+    const q = businessTypeSearchQuery(type, city);
+    const keyword = Array.isArray(type && type.palavras_chave) && type.palavras_chave[0]
+        ? clean(type.palavras_chave[0])
+        : clean((type && type.nome) || '');
+    return {
+        query: q,
+        cidade: city,
+        maps: googleMapsSearchUrl({ query: keyword, cidade: city }),
+        google: googleSearchUrl(q),
+        facebook: facebookPagesSearchUrl({ query: keyword, cidade: city }),
+        marketplace: facebookMarketplaceSearchUrl({ cidade: city, query: keyword }),
+        facebookWeb: facebookWebSearchUrl({ query: keyword, cidade: city })
+    };
+}
+
 /** Google site: search for Facebook pages in a city (default Porto). */
 export function facebookPagesSearchUrl({ cidade = '', query = '', nome = '' } = {}) {
     const city = cityOrPorto(cidade);

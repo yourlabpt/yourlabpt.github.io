@@ -11,6 +11,7 @@ import { renderLeadDossier, dossierHash, leadIdFromHash, vistaFromHash } from '.
 import { renderLeadProcess } from './admin-lead-process.js';
 import { renderLeadDemo } from './admin-lead-demo.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
+import { renderPortoFinder } from './admin-porto-finder.js';
 import {
     formatCountdown
 } from './demo/confirm-call.js';
@@ -1085,16 +1086,21 @@ async function loadBusinessTypes() {
     if (businessTypes.length) return businessTypes;
     const { response, data } = await api('/api/digitalizept/business-types');
     if (response.ok) {
-        businessTypes = (data.businessTypes || []).map((t) => ({ id: t.id, nome: t.nome || t.id }));
+        businessTypes = (data.businessTypes || []).map((t) => ({
+            id: t.id,
+            nome: t.nome || t.id,
+            palavras_chave: Array.isArray(t.palavras_chave) ? t.palavras_chave.slice() : []
+        }));
     }
     return businessTypes;
 }
 
-async function openQuickLead() {
+async function openQuickLead(defaults = {}) {
     const types = await loadBusinessTypes();
     openDrawer('Novo negócio', (panel) => {
         renderQuickLeadForm(panel, {
             types,
+            defaults,
             api,
             toast,
             field,
@@ -1103,6 +1109,17 @@ async function openQuickLead() {
                 await loadLeads();
             }
         });
+    });
+}
+
+function setupPortoFinder() {
+    const host = document.getElementById('leads-porto-finder');
+    if (!host) return;
+    renderPortoFinder(host, {
+        api,
+        toast,
+        loadTypes: loadBusinessTypes,
+        openQuickLeadWithDefaults: (defaults) => openQuickLead(defaults || {})
     });
 }
 
@@ -1427,6 +1444,7 @@ async function loadDeals() {
 
 async function bootData() {
     await Promise.all([loadCatalog(), loadLeads(), loadDeals(), loadProviderCard()]);
+    setupPortoFinder();
     if (el.callQueue) {
         el.callQueue.classList.add('hidden');
         el.callQueue.setAttribute('hidden', '');

@@ -1872,3 +1872,116 @@
         flex: 1 1 calc(50% - 8px);
     }
 }
+
+/* Porto business-type finder on Leads tab */
+.porto-finder {
+    margin: 0 0 16px;
+}
+
+.porto-finder-panel {
+    padding: 12px 14px;
+    border: 1px solid var(--admin-border, rgba(0, 0, 0, 0.12));
+    border-radius: 10px;
+    background: var(--admin-surface, #fff);
+}
+
+.porto-finder-panel > summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1rem;
+    list-style: none;
+}
+
+.porto-finder-panel > summary::-webkit-details-marker {
+    display: none;
+}
+
+.porto-finder-city {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 10px 0 12px;
+}
+
+.porto-finder-city .field-input {
+    max-width: 200px;
+}
+
+.porto-finder-types {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 280px;
+    overflow: auto;
+    margin-bottom: 14px;
+}
+
+.porto-finder-type {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--admin-border, rgba(0, 0, 0, 0.06));
+}
+
+.porto-finder-type-name {
+    font-weight: 600;
+    min-width: 140px;
+}
+
+.porto-finder-type-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.porto-finder-queue h4 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+}
+
+.porto-finder-paste {
+    width: 100%;
+    margin: 6px 0 8px;
+    min-height: 4.5em;
+}
+
+.porto-finder-queue-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.porto-finder-card {
+    padding: 10px 12px;
+    margin: 0 0 8px;
+    border: 1px solid var(--admin-border, rgba(0, 0, 0, 0.1));
+    border-radius: 8px;
+    background: var(--admin-fill, #f7f4ee);
+}
+
+.porto-finder-card-kind {
+    margin: 0 0 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--admin-muted, #5a5348);
+}
+
+.porto-finder-card-url {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    word-break: break-all;
+    line-height: 1.35;
+}
+
+.porto-finder-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}

@@ -10,6 +10,8 @@ let facebookPagesSearchUrl;
 let facebookMarketplaceSearchUrl;
 let facebookPlacesOrPagesQuery;
 let facebookWebSearchUrl;
+let googleMapsSearchUrl;
+let businessTypeDiscoveryLinks;
 let instagramOpenUrl;
 let googleBusinessSocialSearchUrl;
 let copySearchQuery;
@@ -25,6 +27,8 @@ before(async () => {
     facebookMarketplaceSearchUrl = mod.facebookMarketplaceSearchUrl;
     facebookPlacesOrPagesQuery = mod.facebookPlacesOrPagesQuery;
     facebookWebSearchUrl = mod.facebookWebSearchUrl;
+    googleMapsSearchUrl = mod.googleMapsSearchUrl;
+    businessTypeDiscoveryLinks = mod.businessTypeDiscoveryLinks;
     instagramOpenUrl = mod.instagramOpenUrl;
     googleBusinessSocialSearchUrl = mod.googleBusinessSocialSearchUrl;
     copySearchQuery = mod.copySearchQuery;
@@ -111,5 +115,24 @@ describe('digitalizept social-assist', () => {
             facebookPlacesOrPagesQuery('Quinta do Olival', ''),
             '"Quinta do Olival" Porto site:facebook.com'
         );
+    });
+
+    it('builds Maps and type discovery links for Porto', () => {
+        const maps = googleMapsSearchUrl({ query: 'cabeleireiro', cidade: '' });
+        assert.match(maps, /google\.com\/maps\/search/);
+        assert.match(decodeURIComponent(maps), /cabeleireiro/);
+        assert.match(decodeURIComponent(maps), /Porto/);
+
+        const pack = businessTypeDiscoveryLinks({
+            id: 'salao-beleza',
+            nome: 'Salão de Beleza',
+            palavras_chave: ['cabeleireiro', 'salão']
+        }, '');
+        assert.equal(pack.cidade, 'Porto');
+        assert.match(pack.query, /cabeleireiro/);
+        assert.match(pack.query, /Porto/);
+        assert.match(pack.maps, /maps\/search/);
+        assert.match(decodeURIComponent(pack.facebook), /site:facebook/);
+        assert.match(pack.marketplace, /marketplace/);
     });
 });

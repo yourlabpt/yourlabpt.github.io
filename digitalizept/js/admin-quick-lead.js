@@ -392,6 +392,12 @@ export function renderQuickLeadForm(panel, {
     });
 
     panel.appendChild(form);
+
+    if (maps.value.trim() && api) {
+        // Prefill from Maps URL when opened from the Porto finder queue.
+        fillBtn.click();
+    }
+
     return {
         fields,
         reset: resetForm,
