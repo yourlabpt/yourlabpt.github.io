@@ -908,8 +908,8 @@ select.field-input {
 }
 
 .image-paste {
-    min-height: 72px;
-    padding: 16px 14px;
+    min-height: 88px;
+    padding: 18px 14px;
     margin-bottom: 12px;
     border: 1px dashed var(--accent-soft);
     border-radius: 12px;
@@ -919,12 +919,16 @@ select.field-input {
     line-height: 1.4;
     text-align: center;
     outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+    touch-action: manipulation;
 }
 
 .image-paste-hint {
     pointer-events: none;
 }
 
+.image-paste.is-focused,
 .image-paste.is-drop,
 .ask-control.is-drop {
     border-color: var(--accent-color);

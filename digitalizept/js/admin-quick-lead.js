@@ -1,3 +1,11 @@
+import {
+    googleBusinessSocialSearchUrl,
+    facebookOpenUrl,
+    instagramOpenUrl,
+    copySearchQuery,
+    openExternal
+} from './social-assist.js';
+
 const CONTACT_KEYS = [
     'nome_negocio',
     'telefone',
@@ -49,6 +57,13 @@ function fillFromLookup(fields, result, { overwrite = false } = {}) {
     }
 }
 
+function contextFromFields(nome, cidade) {
+    return {
+        nome: String(nome.value || '').trim(),
+        cidade: String(cidade.value || '').trim()
+    };
+}
+
 export function renderQuickLeadForm(panel, {
     types = [],
     defaults = {},
@@ -64,7 +79,7 @@ export function renderQuickLeadForm(panel, {
     const hint = el(
         'p',
         'meta',
-        'Nome é obrigatório. Morada, Instagram e Facebook são opcionais — podes editar o que o Maps preencheu. Depois de criar, ficas aqui para o seguinte.'
+        'Nome é obrigatório. Cole o Maps → Preencher → use os botões para achar Facebook/Instagram e copiar o email. Sem scraping — abre tabs e colas à mão.'
     );
     const maps = inputEl('url', defaults.mapsUrl || defaults.maps_url || '');
     maps.placeholder = 'https://maps.app.goo.gl/…';
@@ -73,6 +88,28 @@ export function renderQuickLeadForm(panel, {
     fillBtn.type = 'button';
     const mapsRow = el('div', 'quick-lead-maps');
     mapsRow.append(maps, fillBtn);
+
+    const lookupNotes = el('p', 'meta quick-lead-lookup-notes');
+    lookupNotes.hidden = true;
+
+    const assist = el('div', 'quick-lead-assist');
+    assist.hidden = true;
+    const assistHint = el(
+        'p',
+        'meta',
+        'Redes e email: abre a tab, copia, cola cá. O Facebook costuma ter o email em Sobre / Contactos.'
+    );
+    const assistRow = el('div', 'quick-lead-assist-row');
+    const btnGoogle = el('button', 'btn-secondary', 'Procurar no Google');
+    btnGoogle.type = 'button';
+    const btnFb = el('button', 'btn-secondary', 'Abrir Facebook');
+    btnFb.type = 'button';
+    const btnIg = el('button', 'btn-secondary', 'Abrir Instagram');
+    btnIg.type = 'button';
+    const btnCopy = el('button', 'btn-secondary', 'Copiar pesquisa');
+    btnCopy.type = 'button';
+    assistRow.append(btnGoogle, btnFb, btnIg, btnCopy);
+    assist.append(assistHint, assistRow);
 
     const nome = inputEl('text', defaults.nome || defaults.nome_negocio || '');
     nome.autocomplete = 'organization';
@@ -124,6 +161,80 @@ export function renderQuickLeadForm(panel, {
         lng: defaults.lng
     };
 
+    function syncAssist() {
+        const hasNome = Boolean(String(nome.value || '').trim());
+        assist.hidden = !hasNome;
+        [btnGoogle, btnFb, btnIg, btnCopy].forEach((btn) => {
+            btn.disabled = !hasNome;
+        });
+    }
+
+    function showLookupNotes(notes) {
+        const list = Array.isArray(notes) ? notes.filter(Boolean) : [];
+        if (!list.length) {
+            lookupNotes.hidden = true;
+            lookupNotes.textContent = '';
+            return;
+        }
+        lookupNotes.hidden = false;
+        lookupNotes.textContent = list.slice(0, 4).join(' ');
+    }
+
+    nome.addEventListener('input', syncAssist);
+    syncAssist();
+
+    btnGoogle.addEventListener('click', () => {
+        const { nome: n, cidade: c } = contextFromFields(nome, cidade);
+        if (!n) {
+            toast('Escreve o nome primeiro.', true);
+            nome.focus();
+            return;
+        }
+        if (!openExternal(googleBusinessSocialSearchUrl(n, c))) {
+            toast('Não consegui abrir o browser.', true);
+        }
+    });
+
+    btnFb.addEventListener('click', () => {
+        const { nome: n, cidade: c } = contextFromFields(nome, cidade);
+        if (!n && !facebook.value.trim()) {
+            toast('Escreve o nome ou o Facebook primeiro.', true);
+            nome.focus();
+            return;
+        }
+        const url = facebookOpenUrl(facebook.value, { nome: n, cidade: c });
+        if (!openExternal(url)) toast('Não consegui abrir o Facebook.', true);
+    });
+
+    btnIg.addEventListener('click', () => {
+        const { nome: n, cidade: c } = contextFromFields(nome, cidade);
+        if (!n && !instagram.value.trim()) {
+            toast('Escreve o nome ou o Instagram primeiro.', true);
+            nome.focus();
+            return;
+        }
+        const url = instagramOpenUrl(instagram.value, { nome: n, cidade: c });
+        if (!openExternal(url)) toast('Não consegui abrir o Instagram.', true);
+    });
+
+    btnCopy.addEventListener('click', async () => {
+        const { nome: n, cidade: c } = contextFromFields(nome, cidade);
+        const q = copySearchQuery(n, c);
+        if (!q) {
+            toast('Escreve o nome primeiro.', true);
+            nome.focus();
+            return;
+        }
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(q);
+                toast('Pesquisa copiada.');
+                return;
+            }
+        } catch (_) { /* fall through */ }
+        toast(`Pesquisa: ${q}`);
+    });
+
     fillBtn.addEventListener('click', async () => {
         const url = maps.value.trim();
         if (!url) {
@@ -146,7 +257,9 @@ export function renderQuickLeadForm(panel, {
             if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                 coordHint.textContent = `Ponto: ${data.lat.toFixed(5)}, ${data.lng.toFixed(5)}`;
             }
-            toast('Pré-preenchido. Confirma telefone, morada e redes.');
+            showLookupNotes(data.notes);
+            syncAssist();
+            toast('Pré-preenchido. Confirma telefone, morada e redes — ou abre Facebook para o email.');
         } catch (_) {
             toast('Erro de rede.', true);
         } finally {
@@ -158,7 +271,9 @@ export function renderQuickLeadForm(panel, {
     form.append(
         hint,
         field('Link Google Maps', mapsRow),
+        lookupNotes,
         field('Nome', nome),
+        assist,
         field('Categoria', typeSelect),
         field('Telefone', telefone),
         field('Email', email),
@@ -193,6 +308,8 @@ export function renderQuickLeadForm(panel, {
         fields.lat = undefined;
         fields.lng = undefined;
         coordHint.textContent = noPointHint;
+        showLookupNotes([]);
+        syncAssist();
         nome.focus();
     }
 

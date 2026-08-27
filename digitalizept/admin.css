@@ -1599,6 +1599,32 @@
     flex: 1 1 160px;
 }
 
+.quick-lead-assist {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--admin-border, #e7e5e4);
+    border-radius: 10px;
+    background: var(--admin-surface-2, #fafaf9);
+}
+
+.quick-lead-assist .meta {
+    margin: 0 0 8px;
+}
+
+.quick-lead-assist-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.quick-lead-assist-row .btn-secondary {
+    min-height: 40px;
+}
+
+.quick-lead-lookup-notes {
+    margin: 6px 0 0;
+}
+
 .dossier-contact-actions .btn-secondary,
 .dossier-maps-actions .btn-secondary {
     min-height: 44px;

@@ -68,6 +68,7 @@ const {
 const dossier = require('./lib/digitalizept-dossier');
 const { leadsListOrderSql } = require('./lib/digitalizept-leads-list');
 const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
+const { fetchImageAsDataUrl } = require('./lib/digitalizept-fetch-image');
 const { ensureLeadFromVisit, findReusableLead, reconcileVisitLeadPair, syncLinkedVisitsIdentity } = require('./lib/digitalizept-visit-lead');
 const {
     currentProvider,
@@ -2497,6 +2498,27 @@ app.post('/api/digitalizept/maps-lookup', requireDigitalizept, async (req, res) 
     } catch (err) {
         console.error('digitalizept maps-lookup error:', err.message);
         return res.status(500).json({ error: 'Não foi possível ler o link do Maps.' });
+    }
+});
+
+app.post('/api/digitalizept/fetch-image', requireDigitalizept, async (req, res) => {
+    try {
+        const url = cleanText((req.body && req.body.url) || '', 2000);
+        if (!url) {
+            return res.status(400).json({ error: 'Falta o URL da imagem.' });
+        }
+        const result = await fetchImageAsDataUrl(url);
+        if (!result.ok) {
+            return res.status(400).json({ error: result.error || 'Não consegui a imagem.' });
+        }
+        return res.json({
+            ok: true,
+            dataUrl: result.dataUrl,
+            contentType: result.contentType
+        });
+    } catch (err) {
+        console.error('digitalizept fetch-image error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível descarregar a imagem.' });
     }
 });
 

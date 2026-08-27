@@ -4,11 +4,17 @@ import { renderAsk, scheduleGoNext } from '../substep.js';
 import { applyCustomCores, buildColorPrompt, parseCores } from './colors.js';
 import { sampleLogoMat } from './logo-mat.js';
 
+import { apiRequest } from '../api.js';
+import { getToken } from '../auth.js';
+
 const FALLBACK_CORES = ['#1b1b1b', '#e8d5b7', '#7a8a99'];
 const MAX_FOTOS = 6;
 const IMAGE_ACCEPT = 'image/*,image/heic,image/heif,.heic,.heif';
 const IMAGE_NAME_RE = /\.(heic|heif|jpe?g|png|webp|gif|avif)$/i;
 const DATA_IMAGE_RE = /src=["'](data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+)["']/gi;
+const REMOTE_SRC_RE = /(?:src|data-src)=["'](https?:\/\/[^"']+)["']/gi;
+const SRCSET_RE = /srcset=["']([^"']+)["']/gi;
+const PLAIN_URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
 // iOS home-screen PWAs open the camera and skip the library if `capture` is set.
 export function imagePickerConfig(source, { multiple = false } = {}) {
@@ -70,12 +76,73 @@ function filesFromHtml(html) {
     return files;
 }
 
+function cleanRemoteUrl(raw) {
+    let url = String(raw || '').trim().replace(/&amp;/g, '&');
+    if (!url) return '';
+    const hash = url.indexOf('#');
+    if (hash >= 0) url = url.slice(0, hash);
+    if (!/^https?:\/\//i.test(url)) return '';
+    if (url.length > 2000) return '';
+    // Skip tracking / non-image page links that are obviously not CDN media
+    if (/facebook\.com\/(reel|watch|share|story)/i.test(url) && !/scontent|fbcdn|cdninstagram/i.test(url)) {
+        return '';
+    }
+    return url;
+}
+
+function urlsFromSrcset(value) {
+    return String(value || '')
+        .split(',')
+        .map((part) => cleanRemoteUrl(part.trim().split(/\s+/)[0]))
+        .filter(Boolean);
+}
+
+/** FB/IG usually put https CDN URLs in clipboard HTML, not image files. */
+export function imageUrlsFromClipboardData(data) {
+    if (!data) return [];
+    const out = [];
+    const seen = new Set();
+    const add = (raw) => {
+        const url = cleanRemoteUrl(raw);
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        out.push(url);
+    };
+
+    let html = '';
+    let plain = '';
+    let uriList = '';
+    if (typeof data.getData === 'function') {
+        try { html = data.getData('text/html') || ''; } catch (_) { /* ignore */ }
+        try { plain = data.getData('text/plain') || ''; } catch (_) { /* ignore */ }
+        try { uriList = data.getData('text/uri-list') || ''; } catch (_) { /* ignore */ }
+    }
+
+    String(html).replace(REMOTE_SRC_RE, (_, src) => {
+        add(src);
+        return _;
+    });
+    String(html).replace(SRCSET_RE, (_, set) => {
+        urlsFromSrcset(set).forEach(add);
+        return _;
+    });
+    String(uriList).split('\n').forEach((line) => {
+        if (line && !line.startsWith('#')) add(line.trim());
+    });
+    if (!out.length && plain) {
+        const matches = plain.match(PLAIN_URL_RE) || [];
+        matches.forEach(add);
+        if (!matches.length) add(plain);
+    }
+    return out.slice(0, 6);
+}
+
 export function filesFromClipboardData(data) {
     if (!data) return [];
     const out = [];
     const seen = new Set();
     const add = (file) => {
-        if (!isImageFile(file)) return;
+        if (!file || !isImageFile(file)) return;
         const key = `${file.type}:${file.size}:${file.name}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -93,60 +160,198 @@ export function filesFromClipboardData(data) {
     return out;
 }
 
-export async function filesFromClipboardRead() {
-    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') return [];
-    const items = await navigator.clipboard.read();
+export async function fetchRemoteImageFile(url, index = 0) {
+    const href = cleanRemoteUrl(url);
+    if (!href) return null;
+    try {
+        const { response, data } = await apiRequest('/api/digitalizept/fetch-image', {
+            method: 'POST',
+            token: getToken(),
+            body: { url: href }
+        });
+        if (!response.ok || !data || !data.dataUrl) return null;
+        return dataUrlToFile(data.dataUrl, index);
+    } catch (_) {
+        return null;
+    }
+}
+
+export async function filesFromImageUrls(urls) {
+    const list = Array.isArray(urls) ? urls : [];
     const files = [];
-    for (const item of items) {
-        const type = (item.types || []).find((name) => /^image\//i.test(name));
-        if (!type) continue;
-        const blob = await item.getType(type);
-        const ext = type.split('/')[1] || 'png';
-        files.push(new File([blob], `colar.${ext}`, { type }));
+    for (let i = 0; i < list.length && files.length < 6; i += 1) {
+        const file = await fetchRemoteImageFile(list[i], files.length);
+        if (file) files.push(file);
     }
     return files;
 }
 
-function bindImageIntake(host, onFiles) {
-    const take = (event, files) => {
-        if (!files.length) return;
-        event.preventDefault();
-        onFiles(files);
+async function filesFromDomImages(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return [];
+    const files = [];
+    const imgs = Array.from(root.querySelectorAll('img'));
+    for (let i = 0; i < imgs.length && files.length < 6; i += 1) {
+        const src = String(imgs[i].currentSrc || imgs[i].src || '').trim();
+        if (!src) continue;
+        if (src.startsWith('data:image/')) {
+            const file = dataUrlToFile(src, files.length);
+            if (file) files.push(file);
+            continue;
+        }
+        if (src.startsWith('blob:')) {
+            try {
+                const blob = await fetch(src).then((r) => r.blob());
+                if (blob && /^image\//i.test(blob.type || 'image/png')) {
+                    const ext = (blob.type || 'image/png').split('/')[1] || 'png';
+                    files.push(new File([blob], `colar-${files.length + 1}.${ext}`, {
+                        type: blob.type || 'image/png'
+                    }));
+                }
+            } catch (_) { /* ignore */ }
+            continue;
+        }
+        if (/^https?:\/\//i.test(src)) {
+            const file = await fetchRemoteImageFile(src, files.length);
+            if (file) files.push(file);
+        }
+    }
+    return files;
+}
+
+export async function resolveClipboardImages(data) {
+    const local = filesFromClipboardData(data);
+    if (local.length) return local;
+    return filesFromImageUrls(imageUrlsFromClipboardData(data));
+}
+
+export async function filesFromClipboardRead() {
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') return [];
+    const items = await navigator.clipboard.read();
+    const files = [];
+    const htmlChunks = [];
+    for (const item of items) {
+        const types = item.types || [];
+        const imageType = types.find((name) => /^image\//i.test(name));
+        if (imageType) {
+            const blob = await item.getType(imageType);
+            const ext = imageType.split('/')[1] || 'png';
+            files.push(new File([blob], `colar.${ext}`, { type: imageType }));
+            continue;
+        }
+        if (types.includes('text/html')) {
+            try {
+                const blob = await item.getType('text/html');
+                htmlChunks.push(await blob.text());
+            } catch (_) { /* ignore */ }
+        }
+        if (types.includes('text/plain')) {
+            try {
+                const blob = await item.getType('text/plain');
+                htmlChunks.push(await blob.text());
+            } catch (_) { /* ignore */ }
+        }
+    }
+    if (files.length) return files;
+    if (!htmlChunks.length) return [];
+    const fake = {
+        getData: (type) => {
+            if (type === 'text/html') return htmlChunks.join('\n');
+            if (type === 'text/plain') return htmlChunks.join('\n');
+            return '';
+        }
     };
-    host.addEventListener('paste', (event) => {
-        take(event, filesFromClipboardData(event.clipboardData));
+    return resolveClipboardImages(fake);
+}
+
+function bindImageIntake(host, onFiles, { showToast } = {}) {
+    const take = async (event, filesPromise) => {
+        const files = await filesPromise;
+        if (!files.length) return false;
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        await onFiles(files);
+        return true;
+    };
+
+    host.addEventListener('paste', async (event) => {
+        const zone = event.target && event.target.closest
+            ? event.target.closest('.image-paste')
+            : null;
+        const handled = await take(event, resolveClipboardImages(event.clipboardData));
+        if (handled) {
+            if (zone) resetPasteZone(zone);
+            return;
+        }
+        // Mobile FB/IG: browser may insert <img src="https://cdn…"> into contenteditable.
+        if (!zone) return;
+        window.setTimeout(async () => {
+            const fromDom = await filesFromDomImages(zone);
+            resetPasteZone(zone);
+            if (fromDom.length) {
+                await onFiles(fromDom);
+                return;
+            }
+            if (typeof showToast === 'function') {
+                showToast('Não consegui a imagem. No FB/IG use “Copiar imagem”, ou grave e escolha Das fotos.', true);
+            }
+        }, 80);
     });
+
     host.addEventListener('dragover', (event) => {
         if (!event.dataTransfer) return;
         event.preventDefault();
         host.classList.add('is-drop');
     });
     host.addEventListener('dragleave', () => host.classList.remove('is-drop'));
-    host.addEventListener('drop', (event) => {
+    host.addEventListener('drop', async (event) => {
         host.classList.remove('is-drop');
         const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []).filter(isImageFile);
-        take(event, files);
+        if (files.length) {
+            event.preventDefault();
+            await onFiles(files);
+            return;
+        }
+        const urls = imageUrlsFromClipboardData(event.dataTransfer);
+        const remote = await filesFromImageUrls(urls);
+        if (remote.length) {
+            event.preventDefault();
+            await onFiles(remote);
+        }
     });
+}
+
+function resetPasteZone(zone) {
+    if (!zone) return;
+    const hint = document.createElement('span');
+    hint.className = 'image-paste-hint';
+    hint.textContent = zone.dataset.hint || 'Cole a imagem aqui — Facebook, Instagram ou fotos';
+    zone.replaceChildren(hint);
 }
 
 function makePasteZone() {
     const zone = document.createElement('div');
     zone.className = 'image-paste';
+    zone.dataset.hint = 'Cole a imagem aqui — Facebook, Instagram ou fotos';
     zone.setAttribute('contenteditable', 'true');
     zone.setAttribute('role', 'textbox');
     zone.setAttribute('spellcheck', 'false');
+    zone.setAttribute('enterkeyhint', 'done');
     zone.setAttribute('aria-label', 'Cole a imagem aqui');
-    const hint = document.createElement('span');
-    hint.className = 'image-paste-hint';
-    hint.textContent = 'Cole a imagem aqui — sem gravar no telemóvel';
-    zone.appendChild(hint);
+    zone.tabIndex = 0;
+    resetPasteZone(zone);
     zone.addEventListener('beforeinput', (event) => {
         if (event.inputType && event.inputType.startsWith('insert') && event.inputType !== 'insertFromPaste') {
             event.preventDefault();
         }
     });
-    zone.addEventListener('input', () => {
-        zone.replaceChildren(hint);
+    // Do not wipe on every input — paste handler harvests inserted <img> first.
+    zone.addEventListener('focus', () => {
+        zone.classList.add('is-focused');
+    });
+    zone.addEventListener('blur', () => {
+        zone.classList.remove('is-focused');
+        // Clear leftover paste chrome if any
+        if (zone.querySelector('img')) return;
+        resetPasteZone(zone);
     });
     return zone;
 }
@@ -166,7 +371,7 @@ function pasteButton(onFiles, showToast, zone) {
         } catch (_) { /* Safari / permission — fall through to paste hint */ }
         if (zone && typeof zone.focus === 'function') zone.focus();
         if (typeof showToast === 'function') {
-            showToast('Copie a imagem e cole aqui (Ctrl+V ou toque longo).');
+            showToast('Copie a imagem (FB/IG: Copiar imagem) e cole na caixa a tracejado.');
         }
     });
     return btn;
@@ -330,7 +535,7 @@ export function renderLogo(body, ctx, identidade, persist) {
         libraryLabel: 'Das fotos'
     });
     const pasteZone = makePasteZone();
-    bindImageIntake(control, onFiles);
+    bindImageIntake(control, onFiles, { showToast: ctx.showToast });
     actions.appendChild(pasteButton(onFiles, ctx.showToast, pasteZone));
     const noneBtn = document.createElement('button');
     noneBtn.type = 'button';
@@ -595,7 +800,7 @@ export function renderFotos(body, ctx, identidade, persist) {
         libraryLabel: 'Das fotos'
     });
     const pasteZone = makePasteZone();
-    bindImageIntake(control, onFiles);
+    bindImageIntake(control, onFiles, { showToast: ctx.showToast });
     actions.appendChild(pasteButton(onFiles, ctx.showToast, pasteZone));
     const skipBtn = document.createElement('button');
     skipBtn.type = 'button';

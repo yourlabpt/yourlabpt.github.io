@@ -6,6 +6,7 @@ import {
     ensureIdentidade,
     filesFromClipboardData,
     filesFromClipboardRead,
+    imageUrlsFromClipboardData,
     imagePickerConfig,
     isImageFile,
     persistIdentidade,
@@ -15,7 +16,13 @@ import {
 import { renderHoursPicker } from '../horario.js';
 import { appendAdminHint } from '../admin-redirects.js';
 
-export { filesFromClipboardData, filesFromClipboardRead, imagePickerConfig, isImageFile };
+export {
+    filesFromClipboardData,
+    filesFromClipboardRead,
+    imageUrlsFromClipboardData,
+    imagePickerConfig,
+    isImageFile
+};
 
 function draftSobre(state) {
     const dados = (state.data && state.data.dados) || {};
