@@ -7,6 +7,7 @@ export const FALHA_IDS = [
     'maps_sem_email',
     'site_link_errado',
     'site_fraco',
+    'so_no_facebook',
     'redes_desligadas_maps',
     'redes_sem_morada',
     'info_desencontrada',
@@ -27,6 +28,11 @@ const GANCHO_TO_FALHAS = {
 const TITULO_MAPS = {
     pt: 'Vimos-vos no Google Maps. Quem vos procura no Maps ou no Instagram ainda não vê o negócio completo num só sítio.',
     en: 'We found you on Google Maps. People who look for you on Maps or Instagram still do not see the full business in one place.'
+};
+
+const TITULO_FACEBOOK = {
+    pt: 'Encontrámos-vos no Facebook. No Google Maps ainda é difícil perceber o negócio ou contactar-vos num sítio só vosso.',
+    en: 'We found you on Facebook. On Google Maps it is still hard to understand the business or reach you in one place of your own.'
 };
 
 const TITULO_SEM_NADA = {
@@ -71,6 +77,12 @@ export const COMBINACOES = [
         chip: { pt: 'Combo · Site fraco ou errado', en: 'Pack · Weak or wrong website' },
         hint: { pt: 'Há link ou site, mas não ajuda o cliente', en: 'There is a link or site, but it does not help the customer' },
         falhas: ['site_fraco', 'maps_sem_whatsapp']
+    },
+    {
+        id: 'so_facebook',
+        chip: { pt: 'Combo · Só no Facebook', en: 'Pack · Only on Facebook' },
+        hint: { pt: 'Presença informal no Facebook; Maps e site fracos ou em falta', en: 'Informal Facebook presence; Maps and website weak or missing' },
+        falhas: ['so_no_facebook', 'maps_sem_site']
     }
 ];
 
@@ -110,6 +122,12 @@ const FALHAS = {
         chip: 'Site fraco ou pouco claro',
         frase: 'Há um site, mas a informação não chega para o cliente perceber o serviço num olhar.',
         en: { chip: 'Weak or unclear website', frase: 'There is a website, but it does not tell a customer enough about the service at a glance.' }
+    },
+    so_no_facebook: {
+        grupo: 'redes',
+        chip: 'Só no Facebook',
+        frase: 'No Facebook há página ou presença informal. No Google Maps o negócio ainda é difícil de encontrar ou de perceber — falta um sítio profissional só vosso.',
+        en: { chip: 'Only on Facebook', frase: 'On Facebook there is a page or informal presence. On Google Maps the business is still hard to find or understand — there is no professional place of your own.' }
     },
     redes_desligadas_maps: {
         grupo: 'redes',
@@ -210,6 +228,9 @@ function falhasParaCopy(ids) {
     if (list.includes('info_desencontrada')) {
         list = list.filter((id) => id !== 'redes_desligadas_maps' && id !== 'redes_sem_morada');
     }
+    if (list.includes('so_no_facebook')) {
+        list = list.filter((id) => id !== 'redes_desligadas_maps' && id !== 'sem_nada');
+    }
     if (list.length > 1) list = list.filter((id) => id !== 'sem_nada');
     return FALHA_IDS.filter((id) => list.includes(id)).slice(0, 3);
 }
@@ -222,14 +243,19 @@ export function suggestFalhas(sinais = {}) {
     const out = [];
     const phone = filled(sinais.telefone);
     const wa = filled(sinais.whatsapp) || sinais.temWhatsapp === true;
+    const hasFb = filled(sinais.facebook);
+    const weakMaps = !hasWebsite(sinais) || !filled(sinais.morada);
     if (phone && !wa) out.push('maps_telefone_sem_wa');
     else if (!wa) out.push('maps_sem_whatsapp');
     if (!hasWebsite(sinais)) out.push('maps_sem_site');
     else if (siteIsOld(sinais)) out.push('site_fraco');
     if (!filled(sinais.email)) out.push('maps_sem_email');
+    if (hasFb && weakMaps) out.push('so_no_facebook');
     if (hasSocial(sinais)) {
-        out.push('info_desencontrada');
-        out.push('redes_desligadas_maps');
+        if (!(hasFb && weakMaps)) {
+            out.push('info_desencontrada');
+            out.push('redes_desligadas_maps');
+        }
         if (!filled(sinais.morada)) out.push('redes_sem_morada');
     }
     if (sinais.fichaComErro === true && filled(sinais.problemaFicha)) out.push('ficha_errada');
@@ -244,7 +270,10 @@ export function composeAbertura({ falhas, override, sinais = {}, lang = 'pt' } =
     if (!ids.length) ids = suggestFalhas(sinais);
     const copyIds = falhasParaCopy(ids);
     const onlySemNada = copyIds.length === 1 && copyIds[0] === 'sem_nada';
-    const titulos = onlySemNada ? TITULO_SEM_NADA : TITULO_MAPS;
+    const facebookFirst = copyIds.includes('so_no_facebook');
+    const titulos = onlySemNada
+        ? TITULO_SEM_NADA
+        : (facebookFirst ? TITULO_FACEBOOK : TITULO_MAPS);
     const ganchoTitulo = titulos[outreachLang] || titulos.pt;
     const problemaFicha = String(sinais.problemaFicha || '').trim();
     const factos = copyIds.map((id) => {

@@ -6,6 +6,10 @@ const { pathToFileURL } = require('node:url');
 let googleSearchUrl;
 let businessSearchQuery;
 let facebookOpenUrl;
+let facebookPagesSearchUrl;
+let facebookMarketplaceSearchUrl;
+let facebookPlacesOrPagesQuery;
+let facebookWebSearchUrl;
 let instagramOpenUrl;
 let googleBusinessSocialSearchUrl;
 let copySearchQuery;
@@ -17,6 +21,10 @@ before(async () => {
     googleSearchUrl = mod.googleSearchUrl;
     businessSearchQuery = mod.businessSearchQuery;
     facebookOpenUrl = mod.facebookOpenUrl;
+    facebookPagesSearchUrl = mod.facebookPagesSearchUrl;
+    facebookMarketplaceSearchUrl = mod.facebookMarketplaceSearchUrl;
+    facebookPlacesOrPagesQuery = mod.facebookPlacesOrPagesQuery;
+    facebookWebSearchUrl = mod.facebookWebSearchUrl;
     instagramOpenUrl = mod.instagramOpenUrl;
     googleBusinessSocialSearchUrl = mod.googleBusinessSocialSearchUrl;
     copySearchQuery = mod.copySearchQuery;
@@ -81,6 +89,27 @@ describe('digitalizept social-assist', () => {
         assert.equal(
             copySearchQuery('Café Central', 'Braga'),
             '"Café Central" Braga facebook OR instagram'
+        );
+    });
+
+    it('builds Porto Facebook pages and Marketplace deep-links', () => {
+        const pages = facebookPagesSearchUrl({ nome: 'Talho da Costa', cidade: '' });
+        assert.match(pages, /google\.com\/search/);
+        assert.match(decodeURIComponent(pages), /Talho da Costa/);
+        assert.match(decodeURIComponent(pages), /Porto/);
+        assert.match(decodeURIComponent(pages), /site:facebook\.com/);
+
+        const market = facebookMarketplaceSearchUrl({ cidade: 'Porto', query: 'cabeleireiro' });
+        assert.match(market, /facebook\.com\/marketplace\/porto\/search/);
+        assert.match(decodeURIComponent(market), /cabeleireiro/);
+
+        const web = facebookWebSearchUrl({ nome: 'Loja X', cidade: 'Braga' });
+        assert.match(web, /facebook\.com\/search\/top/);
+        assert.match(decodeURIComponent(web), /Loja X/);
+
+        assert.equal(
+            facebookPlacesOrPagesQuery('Quinta do Olival', ''),
+            '"Quinta do Olival" Porto site:facebook.com'
         );
     });
 });

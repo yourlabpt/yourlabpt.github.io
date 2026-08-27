@@ -277,6 +277,28 @@ describe('digitalizept outreach', () => {
         assert.ok(suggested.includes('maps_sem_site'));
         assert.ok(!suggested.includes('maps_sem_whatsapp'));
 
+        const fbOnly = composeAbertura({
+            falhas: ['so_no_facebook', 'maps_sem_site'],
+            lang: 'pt'
+        });
+        assert.match(fbOnly.ganchoTitulo, /Encontrámos-vos no Facebook/);
+        assert.match(fbOnly.ganchoTexto, /presença informal|Facebook/);
+        assert.match(fbOnly.ganchoTexto, /não há um site vosso/);
+
+        const fbSuggested = suggestFalhas({
+            facebook: 'https://facebook.com/loja',
+            website: 'nao',
+            telefone: '910000000'
+        });
+        assert.ok(fbSuggested.includes('so_no_facebook'));
+        assert.ok(fbSuggested.includes('maps_sem_site'));
+
+        const combosFb = listCombinacoes('pt');
+        const soFb = combosFb.find((c) => c.id === 'so_facebook');
+        assert.ok(soFb);
+        assert.deepEqual(soFb.falhas, ['so_no_facebook', 'maps_sem_site']);
+        assert.match(soFb.chip, /Só no Facebook/);
+
         const stored = applyGanchoFields(parseFollowup({}), {
             ganchoId: 'C',
             siteVelho: true
@@ -294,7 +316,7 @@ describe('digitalizept outreach', () => {
         const migrated = parseFollowup({ ganchoId: 'B' });
         assert.ok(migrated.falhas.includes('redes_desligadas_maps'));
         assert.ok(migrated.falhas.includes('maps_sem_site'));
-        assert.equal(aberturaEmFalta('EMAIL1', {}), 'Marca em cima o que vamos resolver.');
+        assert.equal(aberturaEmFalta('EMAIL1', {}), 'Marca no diagnóstico o que vamos resolver.');
         assert.equal(aberturaEmFalta('EMAIL1', migrated), '');
         assert.equal(aberturaEmFalta('WA2', {}), '');
     });

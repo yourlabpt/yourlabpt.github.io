@@ -6,6 +6,7 @@
     "maps_sem_email",
     "site_link_errado",
     "site_fraco",
+    "so_no_facebook",
     "redes_desligadas_maps",
     "redes_sem_morada",
     "info_desencontrada",
@@ -98,11 +99,27 @@
         "en": "There is a link or site, but it does not help the customer"
       },
       "falhas": ["site_fraco", "maps_sem_whatsapp"]
+    },
+    {
+      "id": "so_facebook",
+      "chip": {
+        "pt": "Combo · Só no Facebook",
+        "en": "Pack · Only on Facebook"
+      },
+      "hint": {
+        "pt": "Presença informal no Facebook; Maps e site fracos ou em falta",
+        "en": "Informal Facebook presence; Maps and website weak or missing"
+      },
+      "falhas": ["so_no_facebook", "maps_sem_site"]
     }
   ],
   "tituloMaps": {
     "pt": "Vimos-vos no Google Maps. Quem vos procura no Maps ou no Instagram ainda não vê o negócio completo num só sítio.",
     "en": "We found you on Google Maps. People who look for you on Maps or Instagram still do not see the full business in one place."
+  },
+  "tituloFacebook": {
+    "pt": "Encontrámos-vos no Facebook. No Google Maps ainda é difícil perceber o negócio ou contactar-vos num sítio só vosso.",
+    "en": "We found you on Facebook. On Google Maps it is still hard to understand the business or reach you in one place of your own."
   },
   "tituloSemNada": {
     "pt": "Procurámos-vos no Google e nas redes. Quase não há nada para o cliente perceber o que fazem nem como vos contactar.",
@@ -165,6 +182,15 @@
       "en": {
         "chip": "Weak or unclear website",
         "frase": "There is a website, but it does not tell a customer enough about the service at a glance."
+      }
+    },
+    "so_no_facebook": {
+      "grupo": "redes",
+      "chip": "Só no Facebook",
+      "frase": "No Facebook há página ou presença informal. No Google Maps o negócio ainda é difícil de encontrar ou de perceber — falta um sítio profissional só vosso.",
+      "en": {
+        "chip": "Only on Facebook",
+        "frase": "On Facebook there is a page or informal presence. On Google Maps the business is still hard to find or understand — there is no professional place of your own."
       }
     },
     "redes_desligadas_maps": {

@@ -28,6 +28,44 @@ export function businessSearchQuery(nome, cidade, extra = '') {
     return parts.join(' ').trim();
 }
 
+function cityOrPorto(cidade) {
+    return clean(cidade) || 'Porto';
+}
+
+/** Google site: search for Facebook pages in a city (default Porto). */
+export function facebookPagesSearchUrl({ cidade = '', query = '', nome = '' } = {}) {
+    const city = cityOrPorto(cidade);
+    const q = clean(query) || clean(nome);
+    const parts = [];
+    if (q) parts.push(`"${q}"`);
+    parts.push(city, 'site:facebook.com');
+    return googleSearchUrl(parts.join(' '));
+}
+
+/** Facebook web search deep-link (pages / places). Discovery aid only. */
+export function facebookWebSearchUrl({ cidade = '', query = '', nome = '' } = {}) {
+    const city = cityOrPorto(cidade);
+    const q = clean(query) || clean(nome);
+    const terms = [q, city].filter(Boolean).join(' ').trim() || city;
+    return `https://www.facebook.com/search/top/?q=${encodeURIComponent(terms)}`;
+}
+
+/**
+ * Marketplace search deep-link for a city (default Porto).
+ * Aid for informal sellers — not auto-import.
+ */
+export function facebookMarketplaceSearchUrl({ cidade = '', query = '' } = {}) {
+    const city = cityOrPorto(cidade);
+    const q = clean(query);
+    const terms = [q, city].filter(Boolean).join(' ').trim() || city;
+    return `https://www.facebook.com/marketplace/${encodeURIComponent(city.toLowerCase())}/search/?query=${encodeURIComponent(terms)}`;
+}
+
+/** Prefer a named business + city for “find this shop’s page”. */
+export function facebookPlacesOrPagesQuery(nome, cidade) {
+    return businessSearchQuery(nome, cityOrPorto(cidade), 'site:facebook.com');
+}
+
 /** Prefer a direct profile URL; otherwise Google site: search. */
 export function facebookOpenUrl(value, { nome = '', cidade = '' } = {}) {
     const raw = clean(value);

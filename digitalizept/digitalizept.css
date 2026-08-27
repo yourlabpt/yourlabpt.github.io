@@ -3966,6 +3966,68 @@ a.btn-secondary {
 
 .lead-proc-agora {
     border-left: 3px solid var(--accent-color, #a07d3a);
+    position: sticky;
+    top: 8px;
+    z-index: 2;
+}
+
+.lead-proc-checklist {
+    margin: 0 0 12px;
+    padding: 0 0 0 1.25rem;
+    color: var(--text-muted, #5a5348);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.lead-proc-checklist li {
+    margin: 0 0 4px;
+}
+
+.lead-proc-instrucao {
+    line-height: 1.5;
+    color: var(--text-muted, #4a443c);
+}
+
+.lead-proc-msg-abertura {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: var(--admin-fill, #f7f4ee);
+    border-radius: 8px;
+}
+
+.lead-proc-msg-abertura .lead-proc-gancho {
+    font-size: 1.02rem;
+    line-height: 1.45;
+    margin: 0 0 6px;
+}
+
+.lead-proc-falhas-todas {
+    margin: 10px 0 0;
+    padding: 8px 0 0;
+    border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
+.lead-proc-falhas-todas > summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-muted, #5a5348);
+    list-style: none;
+}
+
+.lead-proc-falhas-todas > summary::-webkit-details-marker {
+    display: none;
+}
+
+.lead-proc-fb-assist {
+    margin: 10px 0 12px;
+    padding: 10px 12px;
+    background: var(--admin-fill, #f7f4ee);
+    border-radius: 8px;
+}
+
+.lead-proc-fb-assist .lead-proc-acoes {
+    margin-top: 8px;
 }
 
 .lead-proc-trilho {
@@ -4116,9 +4178,9 @@ a.btn-secondary {
 
 .lead-proc-msg {
     font-family: inherit;
-    font-size: 1.02rem;
-    line-height: 1.55;
-    min-height: 9.5em;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    min-height: 10.5em;
 }
 
 .lead-proc-acoes {
@@ -4126,6 +4188,13 @@ a.btn-secondary {
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+}
+
+.lead-proc-agora > .lead-proc-acoes {
+    position: sticky;
+    bottom: 0;
+    padding-top: 8px;
+    background: linear-gradient(to top, var(--surface-color, #fff) 70%, transparent);
 }
 
 .lead-proc-strip {

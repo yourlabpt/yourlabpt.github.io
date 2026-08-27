@@ -807,6 +807,9 @@ function falhasParaCopy(ids) {
     if (list.includes('info_desencontrada')) {
         list = list.filter((id) => id !== 'redes_desligadas_maps' && id !== 'redes_sem_morada');
     }
+    if (list.includes('so_no_facebook')) {
+        list = list.filter((id) => id !== 'redes_desligadas_maps' && id !== 'sem_nada');
+    }
     if (list.length > 1) list = list.filter((id) => id !== 'sem_nada');
     const ordem = loadFalhasCatalog().ordem;
     const max = Number(loadFalhasCatalog().maxFactos) || 3;
@@ -845,14 +848,19 @@ function suggestFalhas(sinais = {}) {
     const out = [];
     const phone = filledGanchoField(sinais.telefone);
     const wa = filledGanchoField(sinais.whatsapp) || sinais.temWhatsapp === true;
+    const hasFb = filledGanchoField(sinais.facebook);
+    const weakMaps = !hasWebsite(sinais) || !filledGanchoField(sinais.morada);
     if (phone && !wa) out.push('maps_telefone_sem_wa');
     else if (!wa) out.push('maps_sem_whatsapp');
     if (!hasWebsite(sinais)) out.push('maps_sem_site');
     else if (siteIsOld(sinais)) out.push('site_fraco');
     if (!filledGanchoField(sinais.email)) out.push('maps_sem_email');
+    if (hasFb && weakMaps) out.push('so_no_facebook');
     if (hasSocial(sinais)) {
-        out.push('info_desencontrada');
-        out.push('redes_desligadas_maps');
+        if (!(hasFb && weakMaps)) {
+            out.push('info_desencontrada');
+            out.push('redes_desligadas_maps');
+        }
         if (!filledGanchoField(sinais.morada)) out.push('redes_sem_morada');
     }
     if (sinais.fichaComErro === true && filledGanchoField(sinais.problemaFicha)) {
@@ -870,7 +878,10 @@ function composeAbertura({ falhas, override, sinais = {}, lang = 'pt' } = {}) {
     if (!ids.length) ids = suggestFalhas(sinais);
     const copyIds = falhasParaCopy(ids);
     const onlySemNada = copyIds.length === 1 && copyIds[0] === 'sem_nada';
-    const titulos = onlySemNada ? catalog.tituloSemNada : catalog.tituloMaps;
+    const facebookFirst = copyIds.includes('so_no_facebook');
+    const titulos = onlySemNada
+        ? catalog.tituloSemNada
+        : (facebookFirst && catalog.tituloFacebook ? catalog.tituloFacebook : catalog.tituloMaps);
     const ganchoTitulo = titulos[outreachLang] || titulos.pt;
     const problemaFicha = String(sinais.problemaFicha || '').trim();
     const factos = copyIds
@@ -966,7 +977,7 @@ function aberturaEmFalta(passo, followup) {
     if (key !== 'EMAIL1' && key !== 'WA1') return '';
     const f = parseFollowup(followup);
     if (normalizeFalhas(f.falhas).length) return '';
-    return 'Marca em cima o que vamos resolver.';
+    return 'Marca no diagnóstico o que vamos resolver.';
 }
 
 function applyOfferFields(followup, patch = {}) {

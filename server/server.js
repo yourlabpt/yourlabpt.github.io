@@ -4684,10 +4684,44 @@ app.get('/api/digitalizept/leads/:leadId/outreach', requireDigitalizept, (req, r
 app.post('/api/digitalizept/leads/:leadId/outreach/lang', requireDigitalizept, (req, res) => {
     try {
         const leadId = cleanText(req.params.leadId, 80);
+        const body = req.body || {};
         const db = getDigitalizeptDb();
-        const packed = buildLeadOutreach(db, leadId, req, ganchoExtrasFromBody(req.body || {}));
+        const packed = buildLeadOutreach(db, leadId, req, ganchoExtrasFromBody(body));
         if (!packed) return res.status(404).json({ error: 'Lead não encontrado.' });
+        const snapshot = leadProcess.recomputeProcesso(db, leadId);
+        const passo = snapshot && snapshot.proxima ? snapshot.proxima.passo : '';
+        const clearEdit = body.clearMessageEdit === true
+            || body.recompose === true;
+        if (clearEdit && packed.followup.edits && typeof packed.followup.edits === 'object') {
+            if (passo === 'WA1') delete packed.followup.edits.wa1;
+            if (passo === 'EMAIL1') {
+                delete packed.followup.edits.email1;
+                delete packed.followup.edits.emailSubject;
+            }
+        }
         saveLeadFollowup(db, leadId, packed.followup);
+        const edits = packed.followup.edits && typeof packed.followup.edits === 'object'
+            ? packed.followup.edits
+            : {};
+        const editsFresh = { ...edits };
+        if (passo === 'WA1') delete editsFresh.wa1;
+        if (passo === 'EMAIL1') {
+            delete editsFresh.email1;
+            delete editsFresh.emailSubject;
+        }
+        const lockedWa = passo === 'WA1'
+            && edits.wa1
+            && !String(edits.wa1).includes('{{');
+        const lockedEmail = passo === 'EMAIL1'
+            && edits.email1
+            && !String(edits.email1).includes('{{');
+        const mensagemLocked = Boolean(lockedWa || lockedEmail) && !clearEdit;
+        const mensagemFresca = (passo === 'WA1' || passo === 'EMAIL1')
+            ? outreach.textForPasso(passo, packed.ctx, editsFresh)
+            : '';
+        const assuntoFresco = passo === 'EMAIL1'
+            ? outreach.subjectForPasso(passo, packed.ctx, editsFresh)
+            : '';
         return res.json({
             ok: true,
             followup: packed.followup,
@@ -4695,7 +4729,11 @@ app.post('/api/digitalizept/leads/:leadId/outreach/lang', requireDigitalizept, (
                 titulo: packed.ctx.ganchoTitulo,
                 texto: packed.ctx.ganchoTexto,
                 falhas: packed.followup.falhas || []
-            }
+            },
+            passo,
+            mensagem: mensagemFresca,
+            assunto: assuntoFresco,
+            mensagemLocked
         });
     } catch (err) {
         console.error('digitalizept outreach lang error:', err.message);
@@ -5095,7 +5133,9 @@ function buildProcessoView(db, leadId, req) {
             morada: snapshot.row.morada || '',
             businessType: snapshot.row.business_type || '',
             demoSlug: snapshot.row.demo_slug || '',
-            demoUrl: snapshot.row.demo_slug ? `/d/${snapshot.row.demo_slug}` : ''
+            demoUrl: snapshot.row.demo_slug ? `/d/${snapshot.row.demo_slug}` : '',
+            facebook: packed.dados.facebook || '',
+            instagram: packed.dados.instagram || ''
         },
         contacto: {
             ...snapshot.contacto,
@@ -5229,6 +5269,15 @@ app.post('/api/digitalizept/leads/:leadId/process/advance', requireDigitalizept,
         if (body.canalPreferido != null) patchProcesso.canalPreferido = cleanText(body.canalPreferido, 20);
         if (!saltar && passo === 'WA1') {
             applyAutoEtapa(db, leadId, 'demo_criada');
+        }
+        const textoEnvio = cleanText(body.texto, 8000);
+        if (!saltar && textoEnvio && (passo === 'WA1' || passo === 'WA2' || passo === 'WA3')) {
+            const fu = outreach.parseFollowup((snapshot.row || {}).followup_json);
+            const edits = fu.edits && typeof fu.edits === 'object' ? { ...fu.edits } : {};
+            const stepNum = passo === 'WA1' ? 1 : (passo === 'WA2' ? 2 : 3);
+            edits[`wa${stepNum}`] = textoEnvio;
+            fu.edits = edits;
+            saveLeadFollowup(db, leadId, fu);
         }
         const feito = leadProcess.registarToque(db, leadId, {
             passo,

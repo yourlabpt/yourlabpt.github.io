@@ -7,6 +7,12 @@
 import { formatCountdown, formatCallDue } from './demo/confirm-call.js';
 import { whatsappIfMobile } from './format.js';
 import { buildVcard, downloadVcard, vcardFilename } from './vcard.js';
+import {
+    facebookPagesSearchUrl,
+    facebookMarketplaceSearchUrl,
+    facebookWebSearchUrl,
+    openExternal
+} from './social-assist.js';
 
 const CANAL_LABEL = {
     email: 'Email',
@@ -135,6 +141,8 @@ export function renderLeadProcess(host, {
     let abrirFecho = false;
     let escolhidasFalhas = null;
     let falhasSaveChain = Promise.resolve();
+    let msgBaseline = '';
+    let msgDirty = false;
 
     const toast = (msg, bad) => { if (onToast) onToast(msg, bad); };
 
@@ -523,6 +531,31 @@ export function renderLeadProcess(host, {
         const como = comoFazerBox(detalhe.canal);
         if (como) box.appendChild(como);
 
+        if (detalhe.passo === 'WA1' || detalhe.passo === 'EMAIL1') {
+            const check = el('ol', 'lead-proc-checklist');
+            [
+                'Marca as falhas no Diagnóstico (combo «Só no Facebook» se for o caso).',
+                'Revê ou edita o texto abaixo — atualiza sozinho quando mudas as falhas.',
+                detalhe.passo === 'EMAIL1'
+                    ? 'Envia o email e confirma.'
+                    : 'Abre o WhatsApp, envia, e toca em Enviei a mensagem.'
+            ].forEach((line) => {
+                check.appendChild(el('li', '', line));
+            });
+            box.appendChild(check);
+            const preview = el('div', 'lead-proc-msg-abertura');
+            preview.appendChild(el('p', 'lead-proc-grupo-label', 'Abertura neste texto'));
+            const pt = el('p', 'lead-proc-gancho');
+            pt.setAttribute('data-msg-abertura-titulo', '1');
+            pt.textContent = (view.gancho && view.gancho.titulo) || '';
+            preview.appendChild(pt);
+            const px = el('p', (view.gancho && view.gancho.texto) ? 'meta' : 'meta hidden');
+            px.setAttribute('data-msg-abertura-texto', '1');
+            px.textContent = (view.gancho && view.gancho.texto) || '';
+            preview.appendChild(px);
+            box.appendChild(preview);
+        }
+
         if (detalhe.passo === 'R1') {
             const guia = instrucoesBox(instrucoes);
             if (guia) box.appendChild(guia);
@@ -563,17 +596,32 @@ export function renderLeadProcess(host, {
         let assuntoInput = null;
         if (PASSOS_EMAIL.includes(detalhe.passo)) {
             assuntoInput = el('input', 'field-input');
+            assuntoInput.setAttribute('data-email-assunto', '1');
             assuntoInput.value = detalhe.assunto || '';
             box.appendChild(fieldWrap('Assunto', assuntoInput));
         }
         const texto = el('textarea', 'field-input lead-proc-msg');
         texto.rows = detalhe.canal === 'ligacao' ? 5 : 8;
         texto.value = detalhe.mensagem || '';
+        msgBaseline = detalhe.mensagem || '';
+        msgDirty = false;
         if (detalhe.canal === 'ligacao') texto.placeholder = 'Como foi a chamada — o que ele disse, palavra a palavra se der.';
+        texto.addEventListener('input', () => {
+            msgDirty = texto.value !== msgBaseline;
+            const btn = host.querySelector('[data-recompose-msg]');
+            if (btn) btn.classList.toggle('hidden', !msgDirty || (detalhe.passo !== 'WA1' && detalhe.passo !== 'EMAIL1'));
+        });
         box.appendChild(fieldWrap(
             detalhe.canal === 'ligacao' ? 'Nota da chamada' : 'Texto',
             texto
         ));
+        if (detalhe.passo === 'WA1' || detalhe.passo === 'EMAIL1') {
+            const recompose = el('button', 'btn-secondary hidden', 'Atualizar texto a partir da abertura');
+            recompose.type = 'button';
+            recompose.setAttribute('data-recompose-msg', '1');
+            recompose.addEventListener('click', () => act(() => forcarRecomposeMensagem(), recompose));
+            box.appendChild(recompose);
+        }
         if (detalhe.passo === 'EMAIL1') {
             box.appendChild(el(
                 'p',
@@ -799,6 +847,33 @@ export function renderLeadProcess(host, {
         if (problemaWrap) problemaWrap.classList.toggle('hidden', !marcadas.has('ficha_errada'));
     }
 
+    function aplicarMensagemFresca(data) {
+        const passo = (view.proximaAcaoDetalhe && view.proximaAcaoDetalhe.passo)
+            || (view.proximaAcao && view.proximaAcao.passo)
+            || '';
+        if (passo !== 'WA1' && passo !== 'EMAIL1') return;
+        if (data == null || data.mensagem == null) return;
+        const texto = host.querySelector('.lead-proc-msg');
+        if (!texto) return;
+        if (msgDirty || data.mensagemLocked) {
+            const btn = host.querySelector('[data-recompose-msg]');
+            if (btn) btn.classList.remove('hidden');
+            return;
+        }
+        texto.value = data.mensagem;
+        msgBaseline = data.mensagem;
+        if (view.proximaAcaoDetalhe) {
+            view.proximaAcaoDetalhe.mensagem = data.mensagem;
+        }
+        if (data.assunto != null) {
+            const assuntoInput = host.querySelector('[data-email-assunto]');
+            if (assuntoInput) assuntoInput.value = data.assunto;
+            if (view.proximaAcaoDetalhe) view.proximaAcaoDetalhe.assunto = data.assunto;
+        }
+        const btn = host.querySelector('[data-recompose-msg]');
+        if (btn) btn.classList.add('hidden');
+    }
+
     function aplicarAberturaGuardada(data) {
         if (!data) return;
         if (data.followup) {
@@ -819,6 +894,15 @@ export function renderLeadProcess(host, {
             textoNode.textContent = texto;
             textoNode.classList.toggle('hidden', !texto);
         }
+        const previewTitulo = host.querySelector('[data-msg-abertura-titulo]');
+        const previewTexto = host.querySelector('[data-msg-abertura-texto]');
+        if (previewTitulo) previewTitulo.textContent = (view.gancho && view.gancho.titulo) || '';
+        if (previewTexto) {
+            const t = (view.gancho && view.gancho.texto) || '';
+            previewTexto.textContent = t;
+            previewTexto.classList.toggle('hidden', !t);
+        }
+        aplicarMensagemFresca(data);
     }
 
     function gravarFalhas(ids, extra = {}) {
@@ -828,7 +912,9 @@ export function renderLeadProcess(host, {
             body: {
                 lang: fu.lang || 'pt',
                 falhas: ids,
-                problemaFicha: extra.problemaFicha != null ? extra.problemaFicha : (fu.problemaFicha || '')
+                problemaFicha: extra.problemaFicha != null ? extra.problemaFicha : (fu.problemaFicha || ''),
+                clearMessageEdit: extra.clearMessageEdit === true,
+                recompose: extra.recompose === true
             }
         });
     }
@@ -844,6 +930,26 @@ export function renderLeadProcess(host, {
         return falhasSaveChain;
     }
 
+    function forcarRecomposeMensagem() {
+        msgDirty = false;
+        return gravarFalhasVivas({ clearMessageEdit: true, recompose: true }).then((data) => {
+            if (data && data.mensagem != null) {
+                const texto = host.querySelector('.lead-proc-msg');
+                if (texto) {
+                    texto.value = data.mensagem;
+                    msgBaseline = data.mensagem;
+                }
+                if (data.assunto != null) {
+                    const assuntoInput = host.querySelector('[data-email-assunto]');
+                    if (assuntoInput) assuntoInput.value = data.assunto;
+                }
+                const btn = host.querySelector('[data-recompose-msg]');
+                if (btn) btn.classList.add('hidden');
+                toast('Texto atualizado a partir da abertura.');
+            }
+        });
+    }
+
     function garantirFalhas(passo) {
         if (passo !== 'EMAIL1' && passo !== 'WA1') return Promise.resolve();
         return falhasSaveChain.then(() => {
@@ -851,18 +957,73 @@ export function renderLeadProcess(host, {
             if (saved.length) return undefined;
             const shown = idsMarcados();
             if (!shown.length) {
-                throw new Error('Marca em cima o que vamos resolver.');
+                throw new Error('Marca no diagnóstico o que vamos resolver.');
             }
             return gravarFalhas(shown);
         });
     }
 
+    function facebookAssistRow() {
+        const lead = view.lead || {};
+        if (String(lead.facebook || '').trim()) return null;
+        const row = el('div', 'lead-proc-fb-assist');
+        row.appendChild(el(
+            'p',
+            'meta',
+            'Sem Facebook na ficha. Pesquisa assistida (sem scraping) — cola a página na ficha quando encontrares. Caso típico: loja só no Facebook, fraca ou ausente no Maps.'
+        ));
+        const acoes = el('div', 'lead-proc-acoes');
+        const nome = lead.nome || '';
+        const cidade = lead.cidade || 'Porto';
+        const btnPages = el('button', 'btn-secondary', 'Pesquisar FB');
+        btnPages.type = 'button';
+        btnPages.addEventListener('click', () => {
+            const url = facebookPagesSearchUrl({ nome, cidade });
+            if (!openExternal(url)) toast('Não consegui abrir a pesquisa.', true);
+        });
+        const btnWeb = el('button', 'btn-secondary', 'FB search');
+        btnWeb.type = 'button';
+        btnWeb.addEventListener('click', () => {
+            const url = facebookWebSearchUrl({ nome, cidade });
+            if (!openExternal(url)) toast('Não consegui abrir o Facebook.', true);
+        });
+        const btnMarket = el('button', 'btn-secondary', 'Marketplace');
+        btnMarket.type = 'button';
+        btnMarket.addEventListener('click', () => {
+            const url = facebookMarketplaceSearchUrl({ cidade, query: nome });
+            if (!openExternal(url)) toast('Não consegui abrir o Marketplace.', true);
+        });
+        const btnFicha = el('button', 'btn-secondary', 'Abrir ficha');
+        btnFicha.type = 'button';
+        btnFicha.addEventListener('click', () => {
+            if (onSwitchVista) onSwitchVista('ficha');
+            else toast('Cola o URL do Facebook no campo Facebook da ficha.');
+        });
+        acoes.append(btnPages, btnWeb, btnMarket, btnFicha);
+        row.appendChild(acoes);
+        return row;
+    }
+
     function aberturaCard() {
         const gancho = view.gancho || {};
         const fu = view.followup || {};
-        const box = el('div', 'lead-proc-abertura');
-        box.appendChild(el('h4', '', 'O que vamos resolver'));
-        box.appendChild(el('p', 'meta', 'Marca o que falta no pin, no site e nas redes. Combinações rápidas em cima; detalhe por grupo em baixo. Entra na abertura do email e do WhatsApp — dor primeiro, depois o exemplo. A sequência de contactos não muda.'));
+        const passo = view.proximaAcao && view.proximaAcao.passo;
+        const precisaAbertura = passo === 'WA1' || passo === 'EMAIL1';
+        const falhasOk = Boolean(
+            (fu.falhas && fu.falhas.length)
+            || (gancho.falhas && gancho.falhas.length)
+            || falhasGuardadas().length
+        );
+
+        const box = document.createElement('details');
+        box.className = 'lead-proc-abertura lead-proc-diagnostico';
+        box.open = precisaAbertura && !falhasOk;
+        box.appendChild(el('summary', '', 'Diagnóstico — o que vamos resolver'));
+        box.appendChild(el(
+            'p',
+            'meta lead-proc-instrucao',
+            'Marca o que falta (pin, site, redes). Inclui o caso «Só no Facebook» quando a presença é informal nas redes e fraca no Maps. Combinações rápidas em cima. Entra na abertura do email e do WhatsApp — dor primeiro, depois o exemplo.'
+        ));
 
         escolhidasFalhas = new Set(falhasGuardadas());
         const sugeridas = new Set(gancho.sugeridas || []);
@@ -870,7 +1031,7 @@ export function renderLeadProcess(host, {
         const comboBotoes = [];
         let problemaWrap = null;
 
-        const paint = () => pintarChipsFalhas(botoes, problemaWrap, comboBotoes);
+        const paintChips = () => pintarChipsFalhas(botoes, problemaWrap, comboBotoes);
 
         const combos = el('div', 'lead-proc-combos');
         combos.appendChild(el('p', 'lead-proc-grupo-label', 'Combinações rápidas'));
@@ -887,7 +1048,7 @@ export function renderLeadProcess(host, {
                 const allOn = ids.length && ids.every((id) => escolhidasFalhas.has(id));
                 if (allOn) ids.forEach((id) => escolhidasFalhas.delete(id));
                 else ids.forEach((id) => escolhidasFalhas.add(id));
-                paint();
+                paintChips();
                 gravarFalhasVivas();
             });
             comboRow.appendChild(btn);
@@ -896,6 +1057,14 @@ export function renderLeadProcess(host, {
             combos.appendChild(comboRow);
             box.appendChild(combos);
         }
+
+        const fbAssist = facebookAssistRow();
+        if (fbAssist) box.appendChild(fbAssist);
+
+        const gruposDetails = document.createElement('details');
+        gruposDetails.className = 'lead-proc-falhas-todas';
+        gruposDetails.open = !((gancho.combinacoes || []).length);
+        gruposDetails.appendChild(el('summary', '', 'Ver todas as falhas'));
 
         const grupos = (gancho.grupos || []).length
             ? gancho.grupos
@@ -911,7 +1080,7 @@ export function renderLeadProcess(host, {
             btn.addEventListener('click', () => {
                 if (escolhidasFalhas.has(g.id)) escolhidasFalhas.delete(g.id);
                 else escolhidasFalhas.add(g.id);
-                paint();
+                paintChips();
                 gravarFalhasVivas();
             });
             lista.appendChild(btn);
@@ -925,7 +1094,7 @@ export function renderLeadProcess(host, {
             const lista = el('div', 'lead-proc-ganchos');
             items.forEach((g) => addFalhaChip(lista, g));
             block.appendChild(lista);
-            box.appendChild(block);
+            gruposDetails.appendChild(block);
         });
 
         const groupedIds = new Set();
@@ -941,8 +1110,9 @@ export function renderLeadProcess(host, {
             const lista = el('div', 'lead-proc-ganchos');
             orphan.forEach((g) => addFalhaChip(lista, g));
             block.appendChild(lista);
-            box.appendChild(block);
+            gruposDetails.appendChild(block);
         }
+        box.appendChild(gruposDetails);
 
         problemaWrap = el('div', escolhidasFalhas.has('ficha_errada') ? '' : 'hidden');
         const problema = el('input', 'field-input');
@@ -953,7 +1123,7 @@ export function renderLeadProcess(host, {
             gravarFalhasVivas({ problemaFicha: problema.value });
         });
         box.appendChild(problemaWrap);
-        paint();
+        paintChips();
 
         box.appendChild(el('p', 'lead-proc-grupo-label', 'Abertura que o cliente lê (antes do exemplo)'));
         const titulo = el('p', 'lead-proc-gancho');
@@ -1312,9 +1482,9 @@ export function renderLeadProcess(host, {
         const apelidoBloqueia = (view.bloqueios || []).some((b) => b.id === 'apelido');
         const eChamada = detalhe && detalhe.canal === 'ligacao';
 
-        host.appendChild(aberturaCard());
         host.appendChild(trilhoCard());
         host.appendChild(agoraCard());
+        host.appendChild(aberturaCard());
         if (precisaFecho) host.appendChild(fechoCard());
         if (eChamada || apelidoBloqueia) {
             host.appendChild(contactoCard(apelidoBloqueia));

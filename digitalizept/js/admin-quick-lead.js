@@ -1,6 +1,8 @@
 import {
     googleBusinessSocialSearchUrl,
     facebookOpenUrl,
+    facebookPagesSearchUrl,
+    facebookMarketplaceSearchUrl,
     instagramOpenUrl,
     copySearchQuery,
     openExternal
@@ -98,18 +100,24 @@ export function renderQuickLeadForm(panel, {
     const assistHint = el(
         'p',
         'meta',
-        'Redes e email: abre a tab, copia, cola cá. O Facebook costuma ter o email em Sobre / Contactos.'
+        'Redes e email: abre a tab, copia, cola cá. Sem scraping. “Pesquisar FB” / Marketplace ajudam a achar lojas só no Facebook (ex.: Porto). O email costuma estar em Sobre / Contactos.'
     );
     const assistRow = el('div', 'quick-lead-assist-row');
     const btnGoogle = el('button', 'btn-secondary', 'Procurar no Google');
     btnGoogle.type = 'button';
     const btnFb = el('button', 'btn-secondary', 'Abrir Facebook');
     btnFb.type = 'button';
+    const btnFbSearch = el('button', 'btn-secondary', 'Pesquisar FB');
+    btnFbSearch.type = 'button';
+    btnFbSearch.title = 'Google site:facebook.com na cidade (Porto se vazia)';
+    const btnMarket = el('button', 'btn-secondary', 'Marketplace');
+    btnMarket.type = 'button';
+    btnMarket.title = 'Facebook Marketplace na cidade (Porto se vazia) — só descoberta';
     const btnIg = el('button', 'btn-secondary', 'Abrir Instagram');
     btnIg.type = 'button';
     const btnCopy = el('button', 'btn-secondary', 'Copiar pesquisa');
     btnCopy.type = 'button';
-    assistRow.append(btnGoogle, btnFb, btnIg, btnCopy);
+    assistRow.append(btnGoogle, btnFb, btnFbSearch, btnMarket, btnIg, btnCopy);
     assist.append(assistHint, assistRow);
 
     const nome = inputEl('text', defaults.nome || defaults.nome_negocio || '');
@@ -172,7 +180,7 @@ export function renderQuickLeadForm(panel, {
     function syncAssist() {
         const hasNome = Boolean(String(nome.value || '').trim());
         assist.hidden = !hasNome;
-        [btnGoogle, btnFb, btnIg, btnCopy].forEach((btn) => {
+        [btnGoogle, btnFb, btnFbSearch, btnMarket, btnIg, btnCopy].forEach((btn) => {
             btn.disabled = !hasNome;
         });
     }
@@ -212,6 +220,23 @@ export function renderQuickLeadForm(panel, {
         }
         const url = facebookOpenUrl(facebook.value, { nome: n, cidade: c });
         if (!openExternal(url)) toast('Não consegui abrir o Facebook.', true);
+    });
+
+    btnFbSearch.addEventListener('click', () => {
+        const { nome: n, cidade: c } = contextFromFields(nome, cidade);
+        if (!n) {
+            toast('Escreve o nome primeiro.', true);
+            nome.focus();
+            return;
+        }
+        const url = facebookPagesSearchUrl({ nome: n, cidade: c });
+        if (!openExternal(url)) toast('Não consegui abrir a pesquisa.', true);
+    });
+
+    btnMarket.addEventListener('click', () => {
+        const { nome: n, cidade: c } = contextFromFields(nome, cidade);
+        const url = facebookMarketplaceSearchUrl({ cidade: c, query: n });
+        if (!openExternal(url)) toast('Não consegui abrir o Marketplace.', true);
     });
 
     btnIg.addEventListener('click', () => {
