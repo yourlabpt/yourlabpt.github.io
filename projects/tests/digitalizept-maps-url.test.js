@@ -73,6 +73,9 @@ describe('digitalizept maps osm mapping', () => {
         assert.equal(mapBusinessType({ shop: 'hairdresser' }), 'salao-beleza');
         assert.equal(mapBusinessType({ shop: 'convenience' }), 'mercadinho');
         assert.equal(mapBusinessType({ amenity: 'bank' }), 'generico');
+        assert.equal(mapBusinessType({ tourism: 'hotel' }), 'quintas-e-hotelaria');
+        assert.equal(mapBusinessType({ tourism: 'guest_house' }), 'quintas-e-hotelaria');
+        assert.equal(mapBusinessType({ amenity: 'events_venue' }), 'quintas-e-hotelaria');
     });
 
     it('reads the shop pin from a full Google Maps place URL', () => {

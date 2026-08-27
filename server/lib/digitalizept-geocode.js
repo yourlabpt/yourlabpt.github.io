@@ -73,6 +73,7 @@ const TYPE_COLORS = {
     'mecanico-automovel': '#1e3a8a',
     mercadinho: '#b45309',
     otica: '#0e7490',
+    'quintas-e-hotelaria': '#5a4632',
     restaurante: '#991b1b',
     'salao-beleza': '#9d174d',
     tapecaria: '#6d28d9'

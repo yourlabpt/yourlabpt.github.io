@@ -136,6 +136,8 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.equal(RESULTADO_LABELS.futuro, 'Mais tarde');
         assert.equal(RESULTADO_LABELS.sem_interesse, 'Não quer');
         assert.equal(typeColor('cafe-pastelaria'), TYPE_COLORS['cafe-pastelaria']);
+        assert.equal(typeColor('quintas-e-hotelaria'), TYPE_COLORS['quintas-e-hotelaria']);
+        assert.equal(TYPE_COLORS['quintas-e-hotelaria'], '#5a4632');
     });
 });
 
