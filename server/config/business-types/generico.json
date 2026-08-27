@@ -58,10 +58,10 @@
   ],
   "campos_opcionais": [
     "email",
+    "website_atual",
     "instagram",
     "facebook",
     "tiktok",
-    "website_atual",
     "mensagem_contacto",
     "idiomas",
     "estacionamento",

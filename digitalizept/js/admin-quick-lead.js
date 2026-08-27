@@ -8,14 +8,15 @@ import {
 
 const CONTACT_KEYS = [
     'nome_negocio',
+    'website_atual',
+    'instagram',
+    'facebook',
     'telefone',
     'email',
     'whatsapp',
     'morada',
     'cidade',
-    'maps_url',
-    'instagram',
-    'facebook'
+    'maps_url'
 ];
 
 function el(tag, className, text) {
@@ -114,6 +115,12 @@ export function renderQuickLeadForm(panel, {
     const nome = inputEl('text', defaults.nome || defaults.nome_negocio || '');
     nome.autocomplete = 'organization';
     nome.required = true;
+    nome.classList.add('field-input-name');
+    const website = inputEl('url', defaults.website_atual || defaults.website || '');
+    website.placeholder = 'https://…';
+    website.inputMode = 'url';
+    website.autocapitalize = 'off';
+    website.spellcheck = false;
     const telefone = inputEl('tel', defaults.telefone || '');
     telefone.autocomplete = 'tel';
     const email = inputEl('email', defaults.email || '');
@@ -149,6 +156,7 @@ export function renderQuickLeadForm(panel, {
     const etapaHint = el('p', 'meta', 'No mapa entra como ainda não fomos. Visita fica para “Registar visita”.');
     const fields = {
         nome_negocio: nome,
+        website_atual: website,
         telefone,
         email,
         morada,
@@ -270,17 +278,18 @@ export function renderQuickLeadForm(panel, {
 
     form.append(
         hint,
+        field('Nome do negócio', nome),
+        field('Website (se existir)', website),
+        field('Instagram', instagram),
+        field('Facebook', facebook),
+        assist,
         field('Link Google Maps', mapsRow),
         lookupNotes,
-        field('Nome', nome),
-        assist,
         field('Categoria', typeSelect),
         field('Telefone', telefone),
         field('Email', email),
         field('Morada (opcional)', morada),
         field('Cidade (opcional)', cidade),
-        field('Instagram (opcional)', instagram),
-        field('Facebook (opcional)', facebook),
         coordHint,
         etapaHint
     );
@@ -298,6 +307,7 @@ export function renderQuickLeadForm(panel, {
 
     function resetForm() {
         nome.value = '';
+        website.value = '';
         telefone.value = '';
         email.value = '';
         morada.value = '';
@@ -322,6 +332,7 @@ export function renderQuickLeadForm(panel, {
             email: email.value.trim(),
             morada: morada.value.trim(),
             cidade: cidade.value.trim(),
+            website_atual: website.value.trim(),
             instagram: instagram.value.trim(),
             facebook: facebook.value.trim(),
             mapsUrl: maps.value.trim(),

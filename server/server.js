@@ -2534,12 +2534,12 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
         let mapsUrl = cleanText(body.mapsUrl || body.maps_url || (body.dados && body.dados.maps_url), 800);
         let instagram = cleanText(body.instagram || (body.dados && body.dados.instagram), 300);
         let facebook = cleanText(body.facebook || (body.dados && body.dados.facebook), 300);
+        let website = cleanText(body.website_atual || body.website || (body.dados && body.dados.website_atual), 300);
         let businessTypeId = cleanText(body.businessTypeId || body.categoria, 80);
         let lat = body.lat;
         let lng = body.lng;
         let lookupNotes = [];
         let horario = '';
-        let website = '';
 
         if (mapsUrl) {
             const looked = await lookupFromMaps({ url: mapsUrl, nome, lat, lng });
@@ -2554,7 +2554,7 @@ app.post('/api/digitalizept/leads/quick', requireDigitalizept, async (req, res) 
                 if (!instagram) instagram = cleanText(d.instagram, 300);
                 if (!facebook) facebook = cleanText(d.facebook, 300);
                 horario = cleanText(d.horario, 200);
-                website = cleanText(d.website_atual, 300);
+                if (!website) website = cleanText(d.website_atual, 300);
                 if (!businessTypeId || businessTypeId === 'generico') {
                     businessTypeId = cleanText(looked.businessTypeId, 80) || businessTypeId;
                 }

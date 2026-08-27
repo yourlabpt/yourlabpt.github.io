@@ -2,7 +2,10 @@ import { renderHoursPicker } from './horario.js';
 import { whatsappIfMobile } from './format.js';
 
 const SECTION_ORDER = ['identificacao', 'funcionamento', 'descricao', 'especifico', 'opcional', 'extra'];
-const CONTACT_IDS = ['nome_negocio', 'telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'];
+/** Top of ficha: identity + presence — not buried in Opcional. */
+const IDENTITY_IDS = ['nome_negocio', 'website_atual', 'instagram', 'facebook'];
+const CONTACT_IDS = ['telefone', 'whatsapp', 'email', 'morada', 'cidade', 'maps_url'];
+const PINNED_DADOS_IDS = [...IDENTITY_IDS, ...CONTACT_IDS];
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -11,8 +14,8 @@ function el(tag, className, text) {
     return node;
 }
 
-function fieldWrap(labelText, control, missing) {
-    const label = el('label', `field${missing ? ' field-missing' : ''}`);
+function fieldWrap(labelText, control, missing, extraClass = '') {
+    const label = el('label', `field${missing ? ' field-missing' : ''}${extraClass ? ` ${extraClass}` : ''}`);
     const span = el('span', 'field-label', labelText);
     label.append(span, control);
     return label;
@@ -67,7 +70,34 @@ function selectFor(options, value) {
 }
 
 function missingSet(completeness) {
-    return new Set((completeness && completeness.missing || []).map((m) => m.id));
+    /** Only demo/outreach essentials — not every optional/legal gap. */
+    const important = new Set(['publico', 'envio']);
+    return new Set(
+        (completeness && completeness.missing || [])
+            .filter((m) => important.has(m.group))
+            .map((m) => m.id)
+    );
+}
+
+function wireMissingClear(form) {
+    form.addEventListener('input', (event) => {
+        const control = event.target;
+        if (!control || !control.closest) return;
+        const wrap = control.closest('.field-missing');
+        if (!wrap) return;
+        if (String(control.value || '').trim()) {
+            wrap.classList.remove('field-missing');
+        }
+    });
+    form.addEventListener('change', (event) => {
+        const control = event.target;
+        if (!control || !control.closest) return;
+        const wrap = control.closest('.field-missing');
+        if (!wrap) return;
+        if (String(control.value || '').trim()) {
+            wrap.classList.remove('field-missing');
+        }
+    });
 }
 
 function groupFields(fields) {
@@ -104,40 +134,6 @@ function copyMobileToWhatsapp(form) {
     if (!copied) return;
     waEl.value = copied;
     waEl.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
-function checklist(completeness) {
-    const box = el('div', 'dossier-check');
-    if (!completeness) return box;
-    const ready = completeness.readyForDemo && completeness.readyForOutreach;
-    box.classList.toggle('dossier-check-ok', ready && completeness.readyForContract);
-    const title = el('p', 'dossier-check-title');
-    if (completeness.missing.length === 0) {
-        title.textContent = 'Ficha completa — demo, envio e contrato têm o essencial.';
-    } else {
-        title.textContent = `${completeness.missing.length} campo(s) em falta`;
-    }
-    const ul = el('ul', 'dossier-check-list');
-    const groups = {
-        publico: 'Para a demo',
-        negocio: 'Do negócio',
-        envio: 'Para email / WhatsApp',
-        legal: 'Para contrato'
-    };
-    completeness.missing.forEach((m) => {
-        const li = el('li', '', `${groups[m.group] || m.group}: ${m.label}`);
-        ul.appendChild(li);
-    });
-    box.append(title);
-    if (completeness.missing.length) box.appendChild(ul);
-    const flags = el('p', 'meta');
-    flags.textContent = [
-        completeness.readyForDemo ? 'Pronto para demo' : 'Falta o mínimo da demo',
-        completeness.readyForOutreach ? 'Pronto para envio' : 'Falta contacto de envio',
-        completeness.readyForContract ? 'Pronto para contrato' : 'Falta dados legais'
-    ].join(' · ');
-    box.appendChild(flags);
-    return box;
 }
 
 function collectForm(root) {
@@ -187,6 +183,15 @@ function collectForm(root) {
 }
 
 function appendField(grid, field, value, missing, attr, attrValue) {
+    const wide = field.id === 'nome_negocio'
+        || field.tipo === 'texto_longo'
+        || field.id === 'horario'
+        || field.tipo === 'horario'
+        || field.id === 'morada'
+        || field.id === 'o_que_faz'
+        || field.id === 'principais_servicos'
+        || field.id === 'diferencial'
+        || field.id === 'mensagem_contacto';
     if (field.id === 'horario' || field.tipo === 'horario') {
         const box = el('div', 'hours-field-box');
         const hidden = el('input');
@@ -203,7 +208,7 @@ function appendField(grid, field, value, missing, attr, attrValue) {
         hidden.addEventListener('input', () => {
             picker.setText(hidden.value);
         });
-        const wrap = el('div', `field field-hours${missing ? ' field-missing' : ''}`);
+        const wrap = el('div', `field field-hours field-wide${missing ? ' field-missing' : ''}`);
         wrap.append(el('span', 'field-label', field.required ? `${field.label} *` : field.label), box);
         grid.appendChild(wrap);
         return hidden;
@@ -212,12 +217,24 @@ function appendField(grid, field, value, missing, attr, attrValue) {
         ? selectFor(field.options, value)
         : inputFor(field, value);
     control.setAttribute(attr, attrValue);
+    if (field.id === 'nome_negocio') control.classList.add('field-input-name');
     grid.appendChild(fieldWrap(
         field.required ? `${field.label} *` : field.label,
         control,
-        missing
+        missing,
+        wide ? 'field-wide' : ''
     ));
     return control;
+}
+
+function panel(title, { className = '' } = {}) {
+    const box = el('div', `dossier-panel ${className}`.trim());
+    if (title) box.appendChild(el('h3', 'dossier-panel-title', title));
+    return box;
+}
+
+function filterPinned(list) {
+    return (list || []).filter((f) => !PINNED_DADOS_IDS.includes(f.id));
 }
 
 export function renderLeadDossier(host, payload, {
@@ -329,7 +346,6 @@ export function renderLeadDossier(host, payload, {
     const miss = missingSet(payload.completeness);
     const mobile = isMobile();
     const form = el('form', 'dossier-form');
-    form.appendChild(checklist(payload.completeness));
 
     const toolbar = el('div', 'dossier-toolbar');
     const saveTop = el('button', 'btn-primary', 'Guardar');
@@ -341,8 +357,23 @@ export function renderLeadDossier(host, payload, {
     meta.textContent = `${payload.businessType.nome || '—'} · ${payload.lead.estado || '—'} · ${payload.lead.criado_em ? new Date(payload.lead.criado_em).toLocaleDateString('pt-PT') : ''}`;
     form.appendChild(meta);
 
-    const contact = section('Contacto inicial', { open: true, className: 'dossier-contact' });
+    const contact = panel('Contacto e localização', { className: 'dossier-contact' });
     const contactGrid = el('div', 'dossier-grid');
+
+    const byId = new Map((payload.fields || []).map((f) => [f.id, f]));
+
+    const identity = panel('Negócio e presença online', { className: 'dossier-identity' });
+    const identityGrid = el('div', 'dossier-grid dossier-grid-identity');
+    IDENTITY_IDS.forEach((id) => {
+        const defaults = {
+            nome_negocio: { id, label: 'Nome do negócio', tipo: 'texto' },
+            website_atual: { id, label: 'Website', tipo: 'url', placeholder: 'https://…' },
+            instagram: { id, label: 'Instagram', tipo: 'texto', placeholder: '@utilizador ou url' },
+            facebook: { id, label: 'Facebook', tipo: 'texto', placeholder: 'facebook.com/… ou url' }
+        };
+        const field = byId.get(id) || defaults[id] || { id, label: id, tipo: 'texto' };
+        appendField(identityGrid, field, payload.dados[id], miss.has(id), 'data-dados', id);
+    });
     const typeSelect = el('select', 'field-input');
     typeSelect.setAttribute('data-business-type', '1');
     (payload.businessTypes || []).forEach((t) => {
@@ -352,9 +383,10 @@ export function renderLeadDossier(host, payload, {
         if (t.id === payload.businessType.id) o.selected = true;
         typeSelect.appendChild(o);
     });
-    contactGrid.appendChild(fieldWrap('Categoria', typeSelect));
+    identityGrid.appendChild(fieldWrap('Categoria', typeSelect, false, 'field-wide'));
+    identity.appendChild(identityGrid);
+    form.appendChild(identity);
 
-    const byId = new Map((payload.fields || []).map((f) => [f.id, f]));
     CONTACT_IDS.forEach((id) => {
         const field = byId.get(id) || { id, label: id, tipo: id === 'email' ? 'email' : id === 'maps_url' ? 'url' : 'texto' };
         appendField(contactGrid, field, payload.dados[id], miss.has(id), 'data-dados', id);
@@ -446,6 +478,16 @@ export function renderLeadDossier(host, payload, {
     form.appendChild(contact);
     form.addEventListener('input', refreshChips);
     refreshChips();
+    wireMissingClear(form);
+
+    const nomeInput = form.querySelector('[data-dados="nome_negocio"]');
+    if (nomeInput && nome) {
+        const syncTitle = () => {
+            const next = String(nomeInput.value || '').trim();
+            nome.textContent = next || payload.lead.nome || 'Lead';
+        };
+        nomeInput.addEventListener('input', syncTitle);
+    }
 
     const geoLat = el('input', 'field-input');
     geoLat.type = 'hidden';
@@ -460,10 +502,7 @@ export function renderLeadDossier(host, payload, {
     const groups = groupFields(payload.fields);
     const labels = payload.sectionLabels || {};
     SECTION_ORDER.forEach((secao) => {
-        let list = groups[secao] || [];
-        if (secao === 'identificacao') {
-            list = list.filter((f) => !CONTACT_IDS.includes(f.id));
-        }
+        let list = filterPinned(groups[secao] || []);
         if (!list.length) return;
         const set = section(labels[secao] || secao, { open: !mobile });
         const grid = el('div', 'dossier-grid');
