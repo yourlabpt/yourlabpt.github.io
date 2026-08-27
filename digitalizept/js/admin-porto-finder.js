@@ -1,8 +1,11 @@
 /**
- * Porto (or city) business-type discovery on the Leads list.
- * Opens Maps / Google / Facebook search deep-links — no scraping.
- * Seller pastes candidate Maps URLs, then creates fichas one by one
- * (maps-lookup enrich runs when creating / via CLI script).
+ * Porto (or city) business discovery on the Leads list.
+ * This panel is only an intake point: seller pastes links (one by one) or a
+ * batch of business data (JSON, e.g. exported from generate_biz_links) here.
+ * Records with the minimum data for a lead (nome + facebook/instagram +
+ * email/telefone/whatsapp + morada) are sent to /leads/quick, which already
+ * filters against existing leads (updates the match instead of duplicating).
+ * Records missing any of those go to the manual queue to be completed by hand.
  */
 import {
     businessTypeDiscoveryLinks,
@@ -16,6 +19,10 @@ function el(tag, className, text) {
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
+}
+
+function clean(value) {
+    return String(value == null ? '' : value).trim();
 }
 
 function loadCandidates() {
@@ -45,6 +52,90 @@ function looksLikeFacebookUrl(url) {
     return u.includes('facebook.com') || u.includes('fb.com') || u.includes('fb.me');
 }
 
+function looksLikeInstagramUrl(url) {
+    const u = String(url || '').trim().toLowerCase();
+    return u.includes('instagram.com') || u.includes('instagr.am');
+}
+
+/**
+ * Flatten the accepted JSON shapes into a list of raw business records:
+ * - businesses.json export: { Cidade: { tipoId: { businesses: { id: {...} } } } }
+ * - a flat map of id -> business
+ * - an array of business objects
+ * - a single business object
+ */
+function flattenBatchJson(json) {
+    const out = [];
+    if (Array.isArray(json)) {
+        json.forEach((raw) => { if (raw && typeof raw === 'object') out.push({ raw, cidade: '', tipoId: '' }); });
+        return out;
+    }
+    if (!json || typeof json !== 'object') return out;
+
+    const looksLikeBusiness = (v) => v && typeof v === 'object' && ('nome' in v || 'morada' in v || 'telefone' in v);
+    if (looksLikeBusiness(json)) {
+        out.push({ raw: json, cidade: clean(json.cidade), tipoId: clean(json.businessTypeId) });
+        return out;
+    }
+
+    const topValues = Object.values(json);
+    if (topValues.length && topValues.every(looksLikeBusiness)) {
+        Object.values(json).forEach((raw) => out.push({ raw, cidade: clean(raw.cidade), tipoId: clean(raw.businessTypeId) }));
+        return out;
+    }
+
+    // Nested Cidade -> tipoId -> { businesses: {...} }
+    Object.entries(json).forEach(([cidade, tipos]) => {
+        if (!tipos || typeof tipos !== 'object') return;
+        Object.entries(tipos).forEach(([tipoId, tipoData]) => {
+            const businesses = (tipoData && typeof tipoData === 'object' && tipoData.businesses) || null;
+            if (businesses && typeof businesses === 'object') {
+                Object.values(businesses).forEach((raw) => {
+                    if (raw && typeof raw === 'object') out.push({ raw, cidade, tipoId });
+                });
+            }
+        });
+    });
+    return out;
+}
+
+/** Website field in businesses.json sometimes is actually a social link. */
+function socialFromWebsite(website) {
+    const w = clean(website);
+    if (!w) return {};
+    if (looksLikeInstagramUrl(w)) return { instagram: w };
+    if (looksLikeFacebookUrl(w)) return { facebook: w };
+    return { website: w };
+}
+
+/** Normalize one raw business record (any of the accepted shapes) into lead fields. */
+function normalizeBatchRecord({ raw, cidade, tipoId }) {
+    const social = socialFromWebsite(raw.website);
+    return {
+        nome: clean(raw.nome || raw.nome_negocio),
+        morada: clean(raw.morada || raw.endereco || raw.address),
+        telefone: clean(raw.telefone || raw.phone),
+        email: clean(raw.email),
+        whatsapp: clean(raw.whatsapp),
+        website_atual: clean(social.website),
+        instagram: clean(raw.instagram || social.instagram),
+        facebook: clean(raw.facebook || social.facebook),
+        mapsUrl: clean(raw.maps || raw.mapsUrl || raw.maps_url),
+        cidade: clean(cidade || raw.cidade),
+        businessTypeId: clean(tipoId || raw.businessTypeId)
+    };
+}
+
+/** Minimum data for a lead: nome + facebook/instagram + email/telefone/whatsapp + morada. */
+function missingFields(record) {
+    const missing = [];
+    if (!record.nome) missing.push('nome');
+    if (!record.facebook && !record.instagram) missing.push('Facebook ou Instagram');
+    if (!record.email && !record.telefone && !record.whatsapp) missing.push('email, telefone ou WhatsApp');
+    if (!record.morada) missing.push('morada');
+    return missing;
+}
+
 export function renderPortoFinder(host, {
     api,
     toast,
@@ -62,11 +153,11 @@ export function renderPortoFinder(host, {
 
     const head = el('details', 'porto-finder-panel');
     head.open = false;
-    head.appendChild(el('summary', '', 'Descobrir negócios (Porto) — Maps / Facebook por tipo'));
+    head.appendChild(el('summary', '', 'Descobrir negócios (Porto) — receber links / dados em lote'));
     head.appendChild(el(
         'p',
         'meta',
-        'Abre pesquisas por tipo de loja na cidade. Copias os links que interessam para a fila. Crias a ficha uma a uma — o enriquecimento (telefone, morada, OSM) corre no «Preencher pelo link» / script de Maps URL. Sem scraping de Google ou Facebook.'
+        'Ponto de entrada apenas: abre pesquisas por tipo, cola links um a um, ou cola um lote de dados (JSON, ex. export do generate_biz_links). Quem tem o mínimo (nome + Facebook/Instagram + email/telefone/WhatsApp + morada) cria ficha logo — o filtro de duplicados do «Novo negócio» evita repetir. O resto fica na fila para completar à mão.'
     ));
 
     const cityRow = el('div', 'porto-finder-city');
@@ -85,6 +176,23 @@ export function renderPortoFinder(host, {
 
     const typesHost = el('div', 'porto-finder-types');
     head.appendChild(typesHost);
+
+    const batchWrap = el('div', 'porto-finder-queue');
+    batchWrap.appendChild(el('h4', '', 'Importar lote (JSON)'));
+    batchWrap.appendChild(el(
+        'p',
+        'meta',
+        'Cola aqui o JSON de negócios (o export do generate_biz_links, um objeto único, ou um array). Quem tiver o mínimo de dados cria ficha automaticamente; o resto vai para a fila abaixo.'
+    ));
+    const batchInput = el('textarea', 'field-input porto-finder-paste');
+    batchInput.rows = 4;
+    batchInput.placeholder = 'Cola o JSON (Cidade > tipo > businesses, array, ou um único negócio)';
+    const batchBtn = el('button', 'btn-primary', 'Processar lote');
+    batchBtn.type = 'button';
+    const batchActions = el('div', 'porto-finder-queue-actions');
+    batchActions.append(batchBtn);
+    batchWrap.append(batchInput, batchActions);
+    head.appendChild(batchWrap);
 
     const queueWrap = el('div', 'porto-finder-queue');
     queueWrap.appendChild(el('h4', '', 'Fila de candidatos'));
@@ -147,16 +255,20 @@ export function renderPortoFinder(host, {
         }
         candidates.forEach((item, index) => {
             const card = el('article', 'porto-finder-card');
-            const kind = item.kind === 'facebook' ? 'Facebook' : (item.kind === 'maps' ? 'Maps' : 'Link');
+            const kind = item.kind === 'facebook' ? 'Facebook' : (item.kind === 'maps' ? 'Maps' : (item.kind === 'batch' ? 'Lote' : 'Link'));
             card.appendChild(el('p', 'porto-finder-card-kind', `${kind}${item.typeNome ? ` · ${item.typeNome}` : ''}`));
             const urlLine = el('p', 'porto-finder-card-url');
-            urlLine.textContent = item.url;
+            urlLine.textContent = item.url || item.nomeHint || '(sem link)';
             card.appendChild(urlLine);
+            if (Array.isArray(item.missing) && item.missing.length) {
+                card.appendChild(el('p', 'meta', `Falta: ${item.missing.join(', ')}`));
+            }
             const row = el('div', 'porto-finder-card-actions');
             const open = el('a', 'btn-secondary', 'Abrir');
-            open.href = item.url;
+            open.href = item.url || '#';
             open.target = '_blank';
             open.rel = 'noopener';
+            if (!item.url) open.setAttribute('aria-disabled', 'true');
             const criar = el('button', 'btn-primary', 'Criar ficha');
             criar.type = 'button';
             criar.addEventListener('click', () => {
@@ -165,9 +277,14 @@ export function renderPortoFinder(host, {
                     return;
                 }
                 const defaults = {
-                    mapsUrl: item.kind === 'maps' ? item.url : '',
-                    facebook: item.kind === 'facebook' ? item.url : '',
-                    cidade,
+                    mapsUrl: item.mapsUrl || (item.kind === 'maps' ? item.url : ''),
+                    facebook: item.facebook || (item.kind === 'facebook' ? item.url : ''),
+                    instagram: item.instagram || '',
+                    telefone: item.telefone || '',
+                    email: item.email || '',
+                    morada: item.morada || '',
+                    website_atual: item.website_atual || '',
+                    cidade: item.cidade || cidade,
                     businessTypeId: item.typeId || 'generico',
                     nome: item.nomeHint || ''
                 };
@@ -225,6 +342,96 @@ export function renderPortoFinder(host, {
             queueList.appendChild(card);
         });
     }
+
+    batchBtn.addEventListener('click', async () => {
+        const text = String(batchInput.value || '').trim();
+        if (!text) {
+            toast('Cola o JSON do lote primeiro.', true);
+            return;
+        }
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (_) {
+            toast('JSON inválido — confirma o formato.', true);
+            return;
+        }
+        const rawRecords = flattenBatchJson(json);
+        if (!rawRecords.length) {
+            toast('Não encontrei negócios neste JSON.', true);
+            return;
+        }
+        if (!api) {
+            toast('Sem ligação à API — não consigo criar fichas.', true);
+            return;
+        }
+        batchBtn.disabled = true;
+        batchBtn.textContent = 'A processar…';
+        let created = 0;
+        let updated = 0;
+        let queued = 0;
+        let failed = 0;
+        try {
+            for (const entry of rawRecords) {
+                const record = normalizeBatchRecord(entry);
+                const missing = missingFields(record);
+                if (!missing.length) {
+                    try {
+                        const { response, data } = await api('/api/digitalizept/leads/quick', {
+                            method: 'POST',
+                            body: {
+                                nome: record.nome,
+                                businessTypeId: record.businessTypeId || 'generico',
+                                telefone: record.telefone,
+                                email: record.email,
+                                morada: record.morada,
+                                cidade: record.cidade || cidade,
+                                website_atual: record.website_atual,
+                                instagram: record.instagram,
+                                facebook: record.facebook,
+                                mapsUrl: record.mapsUrl
+                            }
+                        });
+                        if (!response.ok) {
+                            failed += 1;
+                        } else if (data && data.created === false) {
+                            updated += 1;
+                        } else {
+                            created += 1;
+                        }
+                    } catch (_) {
+                        failed += 1;
+                    }
+                } else if (!candidates.some((c) => c.nomeHint === record.nome && c.morada === record.morada)) {
+                    candidates.push({
+                        url: record.mapsUrl || record.facebook || record.instagram || '',
+                        kind: record.mapsUrl ? 'maps' : (record.facebook ? 'facebook' : 'batch'),
+                        typeId: record.businessTypeId || '',
+                        typeNome: '',
+                        nomeHint: record.nome,
+                        telefone: record.telefone,
+                        email: record.email,
+                        morada: record.morada,
+                        cidade: record.cidade,
+                        instagram: record.instagram,
+                        facebook: record.facebook,
+                        website_atual: record.website_atual,
+                        mapsUrl: record.mapsUrl,
+                        missing,
+                        addedAt: new Date().toISOString()
+                    });
+                    queued += 1;
+                }
+            }
+            saveCandidates(candidates);
+            paintQueue();
+            batchInput.value = '';
+            toast(`Lote: ${created} criado(s), ${updated} já existiam (atualizados), ${queued} na fila por dados em falta${failed ? `, ${failed} com erro` : ''}.`);
+        } finally {
+            batchBtn.disabled = false;
+            batchBtn.textContent = 'Processar lote';
+        }
+    });
 
     addBtn.addEventListener('click', () => {
         const lines = String(paste.value || '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
