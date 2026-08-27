@@ -1762,6 +1762,9 @@ body.dp-public.dpl-has-switch,
     --l-ink: #1c1c1c;
     --l-paper: #faf9f7;
     --l-muted: #5c5a56;
+    --l-cta-bg: #c9a66b;
+    --l-cta-fg: #17171a;
+    --l-on-base: #ffffff;
     --logo-mat: var(--l-paper);
     --on-logo-mat: var(--l-ink);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
@@ -2007,7 +2010,10 @@ html:has(body > .dp-landing) {
     cursor: pointer;
     border: none;
     text-decoration: none;
-    transition: filter 0.15s, background 0.15s, color 0.15s;
+    /* Never inherit page ink on an empty fill — safe default */
+    background: #17171a;
+    color: #ffffff;
+    transition: filter 0.15s, background 0.15s, color 0.15s, max-width 0.2s, padding 0.2s;
 }
 
 .dp-landing .dpl-btn:hover {
@@ -2016,25 +2022,29 @@ html:has(body > .dp-landing) {
 
 .dp-landing .dpl-btn-ghost:hover {
     filter: none;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
 }
 
-.dp-landing .dpl-btn svg {
+.dp-landing .dpl-btn svg,
+.dp-landing .dpl-action-icon {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
+    display: block;
 }
 
 .dp-landing .dpl-btn-cta {
-    background: var(--l-destaque);
-    color: var(--l-base);
+    background: var(--l-cta-bg, var(--l-destaque));
+    color: var(--l-cta-fg, #17171a);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 .dp-landing .dpl-btn-ghost {
     background: transparent;
-    color: #fff;
-    border: 1.5px solid rgba(255, 255, 255, 0.75);
+    color: #ffffff;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .dp-landing .dpl-hero-ctas {
@@ -2072,6 +2082,8 @@ html:has(body > .dp-landing) {
 
 .dpl-cta-bloco .dpl-btn-cta {
     box-shadow: none;
+    background: var(--l-cta-bg, var(--l-destaque));
+    color: var(--l-cta-fg, #17171a);
 }
 
 .dpl-avaliacoes {
@@ -2487,19 +2499,83 @@ html:has(body > .dp-landing) {
     margin-top: 22px;
 }
 
+/* Fixed brand action chips — never tied to identity palette */
+.dp-landing .dpl-contact-actions .dpl-action {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 0 14px;
+    gap: 0;
+    border: 0;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    filter: none;
+}
+
+.dp-landing .dpl-contact-actions .dpl-action:hover,
+.dp-landing .dpl-contact-actions .dpl-action:focus-visible {
+    filter: none;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.dp-landing .dpl-contact-actions .dpl-action-label {
+    display: inline-block;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    margin-left: 0;
+    transition: max-width 0.22s ease, opacity 0.18s ease, margin-left 0.18s ease;
+}
+
+.dp-landing .dpl-contact-actions .dpl-action:hover .dpl-action-label,
+.dp-landing .dpl-contact-actions .dpl-action:focus-visible .dpl-action-label,
+.dp-landing .dpl-contact-actions .dpl-action:focus-within .dpl-action-label {
+    max-width: 14rem;
+    opacity: 1;
+    margin-left: 10px;
+}
+
+@media (hover: none) {
+    .dp-landing .dpl-contact-actions .dpl-action-label {
+        max-width: 14rem;
+        opacity: 1;
+        margin-left: 10px;
+    }
+}
+
 .dp-landing .dpl-btn-call {
-    background: var(--l-base);
-    color: #fff;
+    background: #111111;
+    color: #ffffff;
 }
 
 .dp-landing .dpl-btn-wa {
-    background: #25d366;
-    color: #fff;
+    background: #128c7e;
+    color: #ffffff;
+}
+
+.dp-landing .dpl-btn-sms {
+    background: #2563eb;
+    color: #ffffff;
 }
 
 .dp-landing .dpl-btn-email {
-    background: var(--l-secundaria);
-    color: #fff;
+    background: #0f766e;
+    color: #ffffff;
+}
+
+.dp-landing .dpl-btn-ig {
+    background: #c13584;
+    color: #ffffff;
+}
+
+.dp-landing .dpl-btn-fb {
+    background: #1877f2;
+    color: #ffffff;
+}
+
+.dp-landing .dpl-btn-maps {
+    background: #1a73e8;
+    color: #ffffff;
 }
 
 /* Map */
@@ -2517,7 +2593,7 @@ html:has(body > .dp-landing) {
 /* Footer */
 .dpl-rodape {
     background: var(--l-base);
-    color: #fff;
+    color: var(--l-on-base, #ffffff);
     text-align: center;
     padding: 40px 22px 108px;
 }
@@ -2598,15 +2674,23 @@ html:has(body > .dp-landing) {
 }
 
 .dpl-fab-wa {
-    background: #25d366;
+    background: #128c7e;
+    color: #ffffff;
 }
 
 .dpl-fab-call {
-    background: var(--l-base);
+    background: #111111;
+    color: #ffffff;
+}
+
+.dpl-fab-sms {
+    background: #2563eb;
+    color: #ffffff;
 }
 
 .dpl-fab-maps {
     background: #1a73e8;
+    color: #ffffff;
 }
 
 .dpl-facts {
@@ -2674,7 +2758,7 @@ html:has(body > .dp-landing) {
 
 .dp-landing .dpl-btn-ig {
     background: #c13584;
-    color: #fff;
+    color: #ffffff;
 }
 
 .dp-landing[data-archetype="retail"] .dpl-hero-title {
@@ -2692,7 +2776,7 @@ html:has(body > .dp-landing) {
 
 .dp-landing .dpl-btn-maps {
     background: #1a73e8;
-    color: #fff;
+    color: #ffffff;
 }
 
 .google-resumo {

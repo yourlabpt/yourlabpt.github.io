@@ -177,6 +177,7 @@ h3,
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 0.55rem;
     min-height: 44px;
     padding: 0 1.15rem;
     border-radius: var(--radius-sm);
@@ -188,23 +189,92 @@ h3,
     font-weight: 600;
     font-size: 1rem;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 .dpl-btn:hover {
     background: color-mix(in srgb, var(--accent-solid) 82%, var(--ink));
     border-color: color-mix(in srgb, var(--accent-solid) 82%, var(--ink));
+    color: var(--on-accent);
 }
 
 .dpl-btn-ghost {
-    background: transparent;
+    background: color-mix(in srgb, var(--bg) 88%, var(--ink));
     color: var(--ink);
+    border-color: color-mix(in srgb, var(--ink) 22%, transparent);
 }
 
 .dpl-btn-ghost:hover {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg));
     color: var(--ink);
     border-color: var(--accent-solid);
+}
+
+.dpl-action-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+    display: block;
+}
+
+.dpl-contact-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.dpl-contact-actions .dpl-action {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 0 14px;
+    gap: 0;
+    border: 0;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+    filter: none;
+}
+
+.dpl-contact-actions .dpl-action-label {
+    display: inline-block;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    margin-left: 0;
+    transition: max-width 0.22s ease, opacity 0.18s ease, margin-left 0.18s ease;
+}
+
+.dpl-contact-actions .dpl-action:hover .dpl-action-label,
+.dpl-contact-actions .dpl-action:focus-visible .dpl-action-label {
+    max-width: 14rem;
+    opacity: 1;
+    margin-left: 10px;
+}
+
+@media (hover: none) {
+    .dpl-contact-actions .dpl-action-label {
+        max-width: 14rem;
+        opacity: 1;
+        margin-left: 10px;
+    }
+}
+
+.dpl-btn-call { background: #111111; color: #ffffff; border-color: #111111; }
+.dpl-btn-wa { background: #128c7e; color: #ffffff; border-color: #128c7e; }
+.dpl-btn-sms { background: #2563eb; color: #ffffff; border-color: #2563eb; }
+.dpl-btn-email { background: #0f766e; color: #ffffff; border-color: #0f766e; }
+.dpl-btn-ig { background: #c13584; color: #ffffff; border-color: #c13584; }
+.dpl-btn-fb { background: #1877f2; color: #ffffff; border-color: #1877f2; }
+.dpl-btn-maps { background: #1a73e8; color: #ffffff; border-color: #1a73e8; }
+
+.dpl-btn-call:hover,
+.dpl-btn-wa:hover,
+.dpl-btn-sms:hover,
+.dpl-btn-email:hover,
+.dpl-btn-ig:hover,
+.dpl-btn-fb:hover,
+.dpl-btn-maps:hover {
+    color: #ffffff;
+    filter: brightness(0.92);
 }
 
 .dpl-card {
@@ -456,13 +526,47 @@ h3,
     opacity: 1;
 }
 
-.dpl-contact-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+.dpl-cta-band .dpl-btn-ghost[data-dp-href="whatsapp"],
+.dpl-cta-band .dpl-btn[data-dp-href="whatsapp"] {
+    background: #128c7e;
+    color: #ffffff;
+    border-color: #128c7e;
 }
 
-.dpl-social {
+.dpl-cta-band .dpl-btn-ghost[data-dp-href="sms"],
+.dpl-cta-band .dpl-btn[data-dp-href="sms"] {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+}
+
+.dpl-cta-band .dpl-btn-ghost[data-dp-href="facebook"],
+.dpl-cta-band .dpl-btn[data-dp-href="facebook"] {
+    background: #1877f2;
+    color: #ffffff;
+    border-color: #1877f2;
+}
+
+.dpl-cta-band .dpl-btn-ghost[data-dp-href="instagram"],
+.dpl-cta-band .dpl-btn[data-dp-href="instagram"] {
+    background: #c13584;
+    color: #ffffff;
+    border-color: #c13584;
+}
+
+.dpl-cta-band .dpl-btn-ghost[data-dp-href="tel"],
+.dpl-cta-band .dpl-btn[data-dp-href="tel"] {
+    background: #111111;
+    color: #ffffff;
+    border-color: #111111;
+}
+
+.dpl-cta-band .dpl-btn-ghost[data-dp-href="maps"],
+.dpl-cta-band .dpl-btn[data-dp-href="maps"] {
+    background: #1a73e8;
+    color: #ffffff;
+    border-color: #1a73e8;
+}
     border-block: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
 }
 
@@ -485,15 +589,30 @@ h3,
     gap: 0.35rem;
     padding: 1.35rem 1.4rem;
     border-radius: var(--radius-md);
-    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
     min-height: 5.5rem;
-    transition: border-color 0.15s ease, transform 0.15s ease;
+    transition: transform 0.15s ease, filter 0.15s ease;
+    text-decoration: none;
+    border: 0;
+}
+
+.dpl-social-card.dpl-btn-fb,
+.dpl-social-card.dpl-btn-ig {
+    color: #ffffff;
+}
+
+.dpl-social-card .dpl-action-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+}
+
+.dpl-social-card .dpl-social-kind,
+.dpl-social-card .dpl-social-action {
+    color: inherit;
 }
 
 .dpl-social-card:hover {
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--ink));
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    filter: brightness(0.95);
 }
 
 .dpl-social-kind {
@@ -505,7 +624,7 @@ h3,
 
 .dpl-social-action {
     font-size: 0.92rem;
-    color: var(--ink-muted);
+    opacity: 0.9;
 }
 
 .dpl-rodape-social {

@@ -15,6 +15,7 @@ import {
     trustChips,
     whatsappHref
 } from './boilerplate.js';
+import { contrastTokens, onColor } from './colors.js';
 import { applyLogoMatStyle, sampleLogoMat } from './logo-mat.js';
 
 function el(tag, className, text) {
@@ -65,6 +66,30 @@ function whatsappIcon() {
 function mapsIcon() {
     return svgIcon([
         'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z'
+    ]);
+}
+
+function smsIcon() {
+    return svgIcon([
+        'M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z'
+    ]);
+}
+
+function emailIcon() {
+    return svgIcon([
+        'M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z'
+    ]);
+}
+
+function instagramIcon() {
+    return svgIcon([
+        'M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm5 5a5 5 0 100 10 5 5 0 000-10zm6.5-.9a1.1 1.1 0 11-2.2 0 1.1 1.1 0 012.2 0zM12 9a3 3 0 110 6 3 3 0 010-6z'
+    ]);
+}
+
+function facebookIcon() {
+    return svgIcon([
+        'M14 9h3V6h-3c-1.6 0-3 1.4-3 3v2H8v3h3v7h3v-7h3l1-3h-4V9c0-.6.4-1 1-1z'
     ]);
 }
 
@@ -433,12 +458,20 @@ function buildAntesDepois(fotos, businessType) {
 }
 
 function contactButton(label, href, cls, icon) {
-    const a = el('a', `dpl-btn ${cls}`);
+    const a = el('a', `dpl-btn dpl-action ${cls}`);
     a.href = href;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    if (icon) a.appendChild(icon);
-    a.appendChild(el('span', null, label));
+    const external = /^(https?:|\/\/)/i.test(href);
+    if (external) {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+    }
+    a.setAttribute('aria-label', label);
+    a.title = label;
+    if (icon) {
+        icon.classList.add('dpl-action-icon');
+        a.appendChild(icon);
+    }
+    a.appendChild(el('span', 'dpl-action-label', label));
     return a;
 }
 
@@ -469,13 +502,19 @@ function buildContactos(dados, businessType) {
     }
     const sms = smsHref(dados, businessType);
     if (sms) {
-        actions.appendChild(contactButton('Mensagem', sms, 'dpl-btn-sms'));
+        actions.appendChild(contactButton('Mensagem', sms, 'dpl-btn-sms', smsIcon()));
     }
-    if (dados.email) actions.appendChild(contactButton('Email', `mailto:${dados.email}`, 'dpl-btn-email'));
+    if (dados.email) {
+        actions.appendChild(contactButton('Email', `mailto:${dados.email}`, 'dpl-btn-email', emailIcon()));
+    }
     const ig = instagramHref(dados.instagram);
-    if (ig) actions.appendChild(contactButton('Instagram', ig, 'dpl-btn-ig'));
+    if (ig) {
+        actions.appendChild(contactButton('Instagram', ig, 'dpl-btn-ig', instagramIcon()));
+    }
     const fb = facebookHref(dados.facebook);
-    if (fb) actions.appendChild(contactButton('Facebook', fb, 'dpl-btn-fb'));
+    if (fb) {
+        actions.appendChild(contactButton('Facebook', fb, 'dpl-btn-fb', facebookIcon()));
+    }
     s.appendChild(actions);
 
     return s;
@@ -599,9 +638,17 @@ export function renderLanding(state) {
     root.dataset.archetype = archetype;
     if (businessType.id) root.dataset.category = businessType.id;
     const cores = identidade.cores || {};
-    root.style.setProperty('--l-base', cores.base || '#1b1b1b');
+    const tokens = contrastTokens(cores);
+    const base = cores.base || '#1b1b1b';
+    root.style.setProperty('--l-base', base);
     root.style.setProperty('--l-destaque', cores.destaque || '#e8d5b7');
     root.style.setProperty('--l-secundaria', cores.secundaria || '#7a8a99');
+    root.style.setProperty('--l-cta-bg', tokens.accentSolid || cores.destaque || '#e8d5b7');
+    root.style.setProperty('--l-cta-fg', tokens.onAccent || onColor(cores.destaque || '#e8d5b7'));
+    root.style.setProperty('--l-on-base', onColor(base));
+    root.style.setProperty('--l-ink', tokens.ink || '#1c1c1c');
+    root.style.setProperty('--l-paper', tokens.bg || '#faf9f7');
+    root.style.setProperty('--l-muted', tokens.inkMuted || '#5c5a56');
 
     root.appendChild(buildTopbar(dados, identidade, businessType));
     paintLandingLogoMat(root, identidade);
