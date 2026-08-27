@@ -79,8 +79,8 @@ describe('digitalizept outreach', () => {
 
         // No amounts on a cold lead: the seller has to turn prices on.
         const wa2 = waTextForStep(2, ctx);
-        assert.doesNotMatch(wa2, /490 euros/);
-        assert.match(waTextForStep(2, { ...ctx, ...offerCopy({ includePrices: true }, 'pt') }), /490 euros/);
+        assert.doesNotMatch(wa2, /89 euros/);
+        assert.match(waTextForStep(2, { ...ctx, ...offerCopy({ includePrices: true }, 'pt') }), /89 euros/);
         assert.match(wa2, /história toda/);
         assert.doesNotMatch(wa2, /demonstrador/);
         assert.doesNotMatch(wa2, /google\.com\/maps/);
@@ -432,19 +432,23 @@ describe('digitalizept outreach', () => {
         };
         const withPrices = buildOutreachContext({ ...base, offer: { includePrices: true } });
         assert.equal(withPrices.showPrecos, true);
-        assert.equal(withPrices.precoTudo, 490);
-        assert.match(renderEmailHtml(withPrices), /490/);
-        assert.match(waTextForStep(2, withPrices), /490 euros/);
-        assert.match(renderEmailText(withPrices), /490 euros tudo/);
+        assert.equal(withPrices.precoGoogle, 89);
+        assert.equal(withPrices.precoTudo, 129);
+        assert.equal(withPrices.precoPagina, 159);
+        assert.match(renderEmailHtml(withPrices), /89/);
+        assert.match(renderEmailHtml(withPrices), /129/);
+        assert.match(renderEmailHtml(withPrices), /159/);
+        assert.match(waTextForStep(2, withPrices), /89 euros/);
+        assert.match(renderEmailText(withPrices), /89 euros Google\+demo/);
         assert.doesNotMatch(renderEmailHtml(withPrices), /IF_PRECOS/);
         assert.doesNotMatch(renderEmailHtml(withPrices), /IF_CAMPANHA/);
 
         // Cold is the default, so an empty offer already means no amounts.
         const noPrices = buildOutreachContext(base);
         assert.equal(noPrices.showPrecos, false);
-        assert.doesNotMatch(renderEmailHtml(noPrices), /490/);
-        assert.doesNotMatch(waTextForStep(2, noPrices), /490 euros/);
-        assert.doesNotMatch(renderEmailText(noPrices), /490 euros/);
+        assert.doesNotMatch(renderEmailHtml(noPrices), /Google \+ demo/);
+        assert.doesNotMatch(waTextForStep(2, noPrices), /89 euros/);
+        assert.doesNotMatch(renderEmailText(noPrices), /89 euros/);
         assert.match(renderEmailText(noPrices), /marcamos uma conversa/);
 
         const pctOnly = buildOutreachContext({
@@ -454,7 +458,7 @@ describe('digitalizept outreach', () => {
         assert.equal(pctOnly.showCampanha, true);
         assert.equal(pctOnly.showPrecos, false);
         assert.match(renderEmailHtml(pctOnly), /15% de desconto nesta conversa/);
-        assert.doesNotMatch(renderEmailHtml(pctOnly), /490/);
+        assert.doesNotMatch(renderEmailHtml(pctOnly), /Google \+ demo/);
         assert.match(renderEmailText(pctOnly), /Campanha de 15%/);
         assert.match(waTextForStep(2, pctOnly), /Campanha: 15%/);
 
@@ -462,15 +466,15 @@ describe('digitalizept outreach', () => {
             ...base,
             offer: { includePrices: true, campanhaPct: 15, campanhaShowPrices: true }
         });
-        assert.equal(withValues.precoTudo, 417);
-        assert.equal(withValues.precoPagina, 162);
-        assert.equal(withValues.precoGoogle, 77);
+        assert.equal(withValues.precoTudo, 110);
+        assert.equal(withValues.precoPagina, 135);
+        assert.equal(withValues.precoGoogle, 76);
         assert.equal(withValues.showPrecoAntigo, true);
         const html = renderEmailHtml(withValues);
-        assert.match(html, /417/);
+        assert.match(html, /110/);
         assert.match(html, /15% de desconto/);
-        assert.match(html, /490/);
-        assert.match(waTextForStep(2, withValues), /417 euros/);
+        assert.match(html, /129/);
+        assert.match(waTextForStep(2, withValues), /76 euros/);
 
         const stored = applyGanchoFields(parseFollowup({}), {
             includePrices: false,

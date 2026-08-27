@@ -205,7 +205,7 @@ export function renderFollowupShare(host, ctx, config, { onPublish, hidePublish 
     const priceOnBtn = document.createElement('button');
     priceOnBtn.type = 'button';
     priceOnBtn.className = 'disc-chip';
-    priceOnBtn.textContent = 'Com 490 / 190 / 90';
+    priceOnBtn.textContent = 'Com 89 / 129 / 159';
     priceRow.append(priceOffBtn, priceOnBtn);
 
     const campLabel = document.createElement('span');

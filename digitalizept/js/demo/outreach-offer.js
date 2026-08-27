@@ -1,8 +1,19 @@
-/** Street offer shown on outreach email / WhatsApp 2. Same numbers as the HTML template. */
+/** Street offer shown on outreach email / WhatsApp 2. Same numbers as the HTML template.
+ *
+ * Entry is low to ease acceptance; extras stack clearly:
+ *   google 89  = Essencial Google + demo (fotos e texto)
+ *   tudo 129   = 89 + 40 domínio + configuração Netlify (site no ar)
+ *   pagina 159 = 89 + 70 landing personalizada
+ */
 export const STREET_PRICES = {
-    tudo: 490,
-    pagina: 190,
-    google: 90
+    google: 89,
+    tudo: 129,
+    pagina: 159
+};
+
+export const STREET_EXTRAS = {
+    dominioHosting: 40,
+    landingCustom: 70
 };
 
 export const CAMPANHA_PRESETS = [5, 10, 15, 20];
@@ -89,12 +100,12 @@ export function offerCopy(offer, lang = 'pt') {
     if (showPrecos) {
         if (showPrecoAntigo) {
             precoNota = en
-                ? `VAT not included. Campaign prices. If you start with ${p.google} € or ${p.pagina} €, that amount comes off if you later want everything.`
-                : `Sem IVA. Valores da campanha. Se começar pelos ${p.google} € ou ${p.pagina} €, o valor é descontado se depois quiser tudo.`;
+                ? `VAT not included. Campaign prices. Start at ${p.google} €; +${STREET_EXTRAS.dominioHosting} € puts it live with domain/Netlify; +${STREET_EXTRAS.landingCustom} € is a custom landing.`
+                : `Sem IVA. Valores da campanha. Começa nos ${p.google} €; +${STREET_EXTRAS.dominioHosting} € põe no ar com domínio/Netlify; +${STREET_EXTRAS.landingCustom} € é landing personalizada.`;
         } else {
             precoNota = en
-                ? `VAT not included. If you start with ${p.google} € or ${p.pagina} €, that amount comes off if you later want everything.`
-                : `Sem IVA. Se começar pelos ${p.google} € ou ${p.pagina} €, o valor é descontado se depois quiser tudo.`;
+                ? `VAT not included. Start at ${p.google} € (Google + demo). +${STREET_EXTRAS.dominioHosting} € = live with domain/Netlify (${p.tudo} €). +${STREET_EXTRAS.landingCustom} € = custom landing (${p.pagina} €).`
+                : `Sem IVA. Começa nos ${p.google} € (Google + demo). +${STREET_EXTRAS.dominioHosting} € = no ar com domínio/Netlify (${p.tudo} €). +${STREET_EXTRAS.landingCustom} € = landing personalizada (${p.pagina} €).`;
         }
     }
 
@@ -106,14 +117,14 @@ export function offerCopy(offer, lang = 'pt') {
     }
     if (showPrecos) {
         if (en) {
-            waLines.push(`*${p.tudo} euros* - everything handled and live in 3 days`);
-            waLines.push(`*${p.pagina} euros* - just the page, for you to put live`);
-            waLines.push(`*${p.google} euros* - just the Google part`);
+            waLines.push(`*${p.google} euros* - Google + demo (photos and text)`);
+            waLines.push(`*${p.tudo} euros* - live with domain + Netlify (+${STREET_EXTRAS.dominioHosting} €)`);
+            waLines.push(`*${p.pagina} euros* - custom landing (+${STREET_EXTRAS.landingCustom} €)`);
             waLines.push(precoNota.replace(/ €/g, ' euros').replace(/VAT not included\. /, 'VAT not included. '));
         } else {
-            waLines.push(`*${p.tudo} euros* - tudo tratado e no ar em 3 dias`);
-            waLines.push(`*${p.pagina} euros* - só a página, para pôr no ar por si`);
-            waLines.push(`*${p.google} euros* - só a parte do Google`);
+            waLines.push(`*${p.google} euros* - Google + demo (fotos e texto)`);
+            waLines.push(`*${p.tudo} euros* - no ar com domínio + Netlify (+${STREET_EXTRAS.dominioHosting} euros)`);
+            waLines.push(`*${p.pagina} euros* - landing personalizada (+${STREET_EXTRAS.landingCustom} euros)`);
             waLines.push(precoNota.replace(/ €/g, ' euros').replace(/Sem IVA\. /, 'Sem IVA. '));
         }
     }
@@ -129,8 +140,8 @@ export function offerCopy(offer, lang = 'pt') {
             ? (en ? ` Campaign ${o.campanhaPct}%.` : ` Campanha de ${o.campanhaPct}%.`)
             : '';
         fechoPreco = en
-            ? `${campanhaBit} ${p.tudo} euros everything / ${p.pagina} just the page / ${p.google} just Google, VAT not included.`
-            : `${campanhaBit} ${p.tudo} euros tudo / ${p.pagina} só a página / ${p.google} só o Google, sem IVA.`;
+            ? `${campanhaBit} ${p.google} euros Google+demo / ${p.tudo} live with domain / ${p.pagina} custom landing, VAT not included.`
+            : `${campanhaBit} ${p.google} euros Google+demo / ${p.tudo} no ar com domínio / ${p.pagina} landing personalizada, sem IVA.`;
     }
 
     return {
