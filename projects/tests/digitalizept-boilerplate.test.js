@@ -14,7 +14,9 @@ describe('digitalizept landing boilerplate', async () => {
         destaqueItems,
         interpolate,
         whatsappHref,
-        telHref
+        telHref,
+        smsHref,
+        contactMessage
     } = await import('../../digitalizept/js/demo/boilerplate.js');
     const { seedDemoFromType, ensureSeededDemo } = await import('../../digitalizept/js/demo/seed.js');
     const { GBP_SAMPLE, gbpDataFromState } = await import('../../digitalizept/js/demo/gbp-example.js');
@@ -28,8 +30,31 @@ describe('digitalizept landing boilerplate', async () => {
     });
 
     it('builds WhatsApp and tel links from Portuguese numbers', () => {
-        assert.equal(whatsappHref({ whatsapp: '912345678' }), 'https://wa.me/351912345678');
+        assert.match(whatsappHref({ whatsapp: '912345678' }), /^https:\/\/wa\.me\/351912345678\?text=/);
         assert.equal(telHref({ telefone: '912 345 678' }), 'tel:912345678');
+    });
+
+    it('builds SMS links to the configured phone with a body', () => {
+        assert.match(
+            smsHref({ telefone: '912345678', nome_negocio: 'Casa da Vila' }),
+            /^sms:\+351912345678\?body=/
+        );
+        assert.match(
+            decodeURIComponent(smsHref({ telefone: '912345678', nome_negocio: 'Casa da Vila' })),
+            /Casa da Vila/
+        );
+        assert.match(
+            smsHref({
+                telefone: '912345678',
+                mensagem_contacto: 'Quero marcar para {cidade}',
+                cidade: 'Braga'
+            }),
+            /Quero%20marcar%20para%20Braga/
+        );
+        assert.equal(
+            contactMessage({ nome_negocio: 'Loja X' }),
+            'Olá! Vi o site e gostaria de saber mais sobre Loja X.'
+        );
     });
 
     it('builds Instagram links from a handle', () => {
@@ -371,6 +396,22 @@ describe('digitalizept no-image boilerplates', async () => {
         assert.match(out, /data-dp-href="facebook"[^>]*rel="[^"]*noopener/);
         assert.doesNotMatch(out, /data-dp-href="instagram"[^>]*\bhidden\b/);
         assert.doesNotMatch(out, /data-dp-href="facebook"[^>]*\bhidden\b/);
+    });
+
+    it('fills WhatsApp and SMS send links on Sem fotos contact actions', () => {
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, {
+            nome_negocio: 'Casa da Vila',
+            cidade: 'Braga',
+            telefone: '912345678',
+            whatsapp: '912345678'
+        }, {});
+        assert.match(out, /href="https:\/\/wa\.me\/351912345678\?text=[^"]*"[^>]*data-dp-href="whatsapp"/);
+        assert.match(out, /href="sms:\+351912345678\?body=[^"]*"[^>]*data-dp-href="sms"/);
+        assert.match(out, /Enviar WhatsApp/);
+        assert.match(out, />Mensagem</);
+        assert.doesNotMatch(out, /data-dp-href="sms"[^>]*\bhidden\b/);
+        assert.doesNotMatch(out, /data-dp-href="whatsapp"[^>]*\bhidden\b/);
     });
 
     it('normalizes messy Facebook/Instagram pastes into openable profile URLs', () => {

@@ -9,6 +9,7 @@ import {
     mapsHref,
     marcaItems,
     rotulo,
+    smsHref,
     splitItems,
     telHref,
     trustChips,
@@ -100,10 +101,14 @@ function scrollToId(id) {
     });
 }
 
-function resolveCtaAction(target, dados) {
+function resolveCtaAction(target, dados, businessType = {}) {
     if (target === 'whatsapp') {
-        const href = whatsappHref(dados);
+        const href = whatsappHref(dados, businessType);
         return href ? { href, external: true } : { scroll: 'dpl-contactos' };
+    }
+    if (target === 'sms' || target === 'mensagem') {
+        const href = smsHref(dados, businessType);
+        return href ? { href, external: false } : { scroll: 'dpl-contactos' };
     }
     if (target === 'tel') {
         const href = telHref(dados);
@@ -113,8 +118,8 @@ function resolveCtaAction(target, dados) {
     return { scroll: 'dpl-contactos' };
 }
 
-function bindCta(node, target, dados) {
-    const action = resolveCtaAction(target, dados);
+function bindCta(node, target, dados, businessType = {}) {
+    const action = resolveCtaAction(target, dados, businessType);
     if (action.href) {
         node.href = action.href;
         if (action.external) {
@@ -179,7 +184,7 @@ function buildTopbar(dados, identidade, businessType) {
         nav.setAttribute('aria-label', 'Secções');
         navItems.forEach((item) => {
             const a = el('a', 'dpl-nav-link', item.label);
-            bindCta(a, item.target || 'dpl-contactos', dados);
+            bindCta(a, item.target || 'dpl-contactos', dados, businessType);
             nav.appendChild(a);
         });
         bar.appendChild(nav);
@@ -227,7 +232,7 @@ function buildHero(dados, identidade, demo, businessType, fotos) {
     const group = el('div', 'dpl-hero-ctas');
     heroCtas(businessType, demo, dados).slice(0, 2).forEach((cta, i) => {
         const a = el('a', i === 0 ? 'dpl-btn dpl-btn-cta' : 'dpl-btn dpl-btn-ghost', cta.label || demo.hero.cta);
-        bindCta(a, cta.target || 'dpl-contactos', dados);
+        bindCta(a, cta.target || 'dpl-contactos', dados, businessType);
         group.appendChild(a);
     });
     inner.appendChild(group);
@@ -339,7 +344,7 @@ function buildCtaBloco(businessType, dados) {
     const s = section('dpl-cta-bloco', 'dpl-cta-bloco');
     s.appendChild(el('h2', 'dpl-cta-title', cfg.titulo));
     const a = el('a', 'dpl-btn dpl-btn-cta', cfg.botao);
-    bindCta(a, cfg.target || 'whatsapp', dados);
+    bindCta(a, cfg.target || 'whatsapp', dados, businessType);
     s.appendChild(a);
     return s;
 }
@@ -455,12 +460,16 @@ function buildContactos(dados, businessType) {
     if (maps) {
         actions.appendChild(contactButton('Como chegar', maps, 'dpl-btn-maps', mapsIcon()));
     }
-    if (dados.telefone) {
+    if (dados.telefone || dados.whatsapp) {
         actions.appendChild(contactButton('Ligar', telHref(dados), 'dpl-btn-call', phoneIcon()));
     }
-    const wa = whatsappHref(dados);
+    const wa = whatsappHref(dados, businessType);
     if (wa) {
-        actions.appendChild(contactButton('WhatsApp', wa, 'dpl-btn-wa', whatsappIcon()));
+        actions.appendChild(contactButton('Enviar WhatsApp', wa, 'dpl-btn-wa', whatsappIcon()));
+    }
+    const sms = smsHref(dados, businessType);
+    if (sms) {
+        actions.appendChild(contactButton('Mensagem', sms, 'dpl-btn-sms'));
     }
     if (dados.email) actions.appendChild(contactButton('Email', `mailto:${dados.email}`, 'dpl-btn-email'));
     const ig = instagramHref(dados.instagram);
@@ -541,13 +550,13 @@ function fabLink(href, className, label, icon, external) {
     return a;
 }
 
-function buildFab(dados) {
+function buildFab(dados, businessType = {}) {
     const fab = el('div', 'dpl-fab');
     const maps = mapsUrl(dados);
     if (maps) {
         fab.appendChild(fabLink(maps, 'dpl-fab-maps', 'Como chegar', mapsIcon(), true));
     }
-    if (dados.telefone) {
+    if (dados.telefone || dados.whatsapp) {
         fab.appendChild(fabLink(
             telHref(dados),
             'dpl-fab-call',
@@ -556,15 +565,19 @@ function buildFab(dados) {
             false
         ));
     }
-    const wa = whatsappHref(dados);
+    const wa = whatsappHref(dados, businessType);
     if (wa) {
         fab.appendChild(fabLink(
             wa,
             'dpl-fab-wa',
-            'WhatsApp',
+            'Enviar WhatsApp',
             whatsappIcon(),
             true
         ));
+    }
+    const sms = smsHref(dados, businessType);
+    if (sms) {
+        fab.appendChild(fabLink(sms, 'dpl-fab-sms', 'Mensagem', phoneIcon(), false));
     }
     return fab;
 }
@@ -641,6 +654,6 @@ export function renderLanding(state) {
         if (facts) root.appendChild(facts);
     }
 
-    root.appendChild(buildFab(dados));
+    root.appendChild(buildFab(dados, businessType));
     return root;
 }

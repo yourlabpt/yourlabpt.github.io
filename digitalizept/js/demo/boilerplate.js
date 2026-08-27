@@ -42,14 +42,44 @@ export function mapsHref(dados) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
-export function whatsappHref(dados) {
+/** Prefill for WhatsApp / SMS. Override with dados.mensagem_contacto or type.mensagem_contacto. */
+export function contactMessage(dados = {}, businessType = {}) {
+    const custom = String(
+        (dados && dados.mensagem_contacto)
+        || (businessType && businessType.mensagem_contacto)
+        || ''
+    ).trim();
+    if (custom) return interpolate(custom, dados, businessType);
+    const nome = String((dados && dados.nome_negocio) || (businessType && businessType.nome) || '').trim();
+    return nome
+        ? `Olá! Vi o site e gostaria de saber mais sobre ${nome}.`
+        : 'Olá! Vi o site e gostaria de saber mais.';
+}
+
+export function whatsappHref(dados, businessType = {}) {
     const wa = waNumber((dados && (dados.whatsapp || dados.telefone)) || '');
-    return wa ? `https://wa.me/${wa}` : '';
+    if (!wa) return '';
+    const text = contactMessage(dados, businessType);
+    return text
+        ? `https://wa.me/${wa}?text=${encodeURIComponent(text)}`
+        : `https://wa.me/${wa}`;
 }
 
 export function telHref(dados) {
-    const d = digitsOnly(dados && dados.telefone);
+    const d = digitsOnly((dados && (dados.telefone || dados.whatsapp)) || '');
     return d ? `tel:${d}` : '';
+}
+
+/** Opens the phone Messages/SMS app to the configured number (telefone, else WhatsApp). */
+export function smsHref(dados, businessType = {}) {
+    const raw = (dados && (dados.telefone || dados.whatsapp)) || '';
+    const wa = waNumber(raw);
+    if (!wa) return '';
+    const e164 = wa.startsWith('+') ? wa : `+${wa}`;
+    const text = contactMessage(dados, businessType);
+    return text
+        ? `sms:${e164}?body=${encodeURIComponent(text)}`
+        : `sms:${e164}`;
 }
 
 function cleanSocialRaw(value) {

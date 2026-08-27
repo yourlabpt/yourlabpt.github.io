@@ -3,6 +3,12 @@
   "responsavel": { "label": "Nome do responsável", "tipo": "texto", "secao": "identificacao" },
   "telefone": { "label": "Telefone", "tipo": "telefone", "secao": "identificacao" },
   "whatsapp": { "label": "WhatsApp", "tipo": "telefone", "secao": "identificacao" },
+  "mensagem_contacto": {
+    "label": "Mensagem pré-preenchida (WhatsApp / SMS)",
+    "tipo": "texto_longo",
+    "placeholder": "Olá! Vi o site e gostaria de…",
+    "secao": "opcional"
+  },
   "morada": { "label": "Morada", "tipo": "texto", "secao": "identificacao" },
   "cidade": { "label": "Cidade", "tipo": "texto", "secao": "identificacao" },
   "horario": { "label": "Horário", "tipo": "horario", "placeholder": "Seg–Sex 9h–19h", "secao": "funcionamento" },

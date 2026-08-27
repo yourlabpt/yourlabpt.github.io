@@ -24,6 +24,7 @@ function loadType(id) {
 function mapCtaTarget(target) {
     const t = String(target || '').trim();
     if (t === 'whatsapp') return { href: '#dpl-contactos', hrefKind: 'whatsapp' };
+    if (t === 'sms' || t === 'mensagem') return { href: '#dpl-contactos', hrefKind: 'sms' };
     if (t === 'tel') return { href: '#dpl-contactos', hrefKind: 'tel' };
     if (t === 'dpl-mapa' || t === 'maps') return { href: '#dpl-contactos', hrefKind: 'maps' };
     if (t === 'instagram') return { href: '#dpl-redes', hrefKind: 'instagram' };
@@ -231,8 +232,9 @@ function loc(cta) {
         </div>
         <div class="dpl-contact-actions">
             <a class="dpl-btn" href="#dpl-contactos" data-dp-href="maps">${cta}</a>
-            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp">WhatsApp</a>
-            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="tel">Ligar</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp" hidden>Enviar WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="sms" hidden>Mensagem</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="tel" hidden>Ligar</a>
         </div>
     </div>
 </section>`;
@@ -256,6 +258,8 @@ function ctaBand(title, btn, hrefKind = 'whatsapp') {
         <p class="dpl-cta-band-lede">Prefere ver o nosso dia a dia? Encontra-nos no Facebook e no Instagram.</p>
         <p class="dpl-cta-band-action">
             <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="${hrefKind}">${btn}</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp" hidden>Enviar WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="sms" hidden>Mensagem</a>
             <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
             <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
         </p>

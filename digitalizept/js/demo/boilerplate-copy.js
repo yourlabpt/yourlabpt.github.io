@@ -7,6 +7,7 @@ import {
     interpolate,
     instagramHref,
     mapsHref,
+    smsHref,
     telHref,
     trustChips,
     whatsappHref
@@ -257,10 +258,11 @@ function withExternalTarget(attrs, href) {
     return next;
 }
 
-function applyHrefs(html, dados) {
+function applyHrefs(html, dados, businessType = {}) {
     const hrefs = {
         maps: mapsHref(dados),
-        whatsapp: whatsappHref(dados),
+        whatsapp: whatsappHref(dados, businessType),
+        sms: smsHref(dados, businessType),
         tel: telHref(dados),
         instagram: instagramHref(dados && dados.instagram),
         facebook: facebookHref(dados && dados.facebook)
@@ -330,7 +332,7 @@ export function fillBoilerplateFromDemo(html, state) {
     out = applyRepeatingList(out, 'destaques', destaqueItems(dados, type), LIST_LIMITS.destaques);
     out = applyRepeatingList(out, 'trust', trustChips(dados, type), LIST_LIMITS.trust);
     out = applyLabels(out, type.rotulos);
-    out = applyHrefs(out, dados);
+    out = applyHrefs(out, dados, type);
     out = applyBrand(out, tokens.nome);
     out = applyFallbackIcons(out, tokens.monogram);
     return out;
