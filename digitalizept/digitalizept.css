@@ -1587,6 +1587,93 @@ select.field-input {
     flex: 1;
 }
 
+/* Public demo copy friction (shell + landing). Iframe content injects its own.
+   Never block CTAs / links / form fields. */
+html.dp-protect,
+html.dp-protect body,
+body.dp-protect {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+}
+
+html.dp-protect input,
+html.dp-protect textarea,
+html.dp-protect select,
+html.dp-protect [contenteditable],
+body.dp-protect input,
+body.dp-protect textarea,
+body.dp-protect select,
+body.dp-protect [contenteditable] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+}
+
+html.dp-protect a,
+html.dp-protect button,
+html.dp-protect label,
+html.dp-protect summary,
+html.dp-protect input,
+html.dp-protect textarea,
+html.dp-protect select,
+body.dp-protect a,
+body.dp-protect button,
+body.dp-protect label,
+body.dp-protect summary,
+body.dp-protect input,
+body.dp-protect textarea,
+body.dp-protect select {
+    pointer-events: auto !important;
+}
+
+html.dp-protect img,
+html.dp-protect picture,
+html.dp-protect video,
+html.dp-protect canvas,
+body.dp-protect img,
+body.dp-protect picture,
+body.dp-protect video,
+body.dp-protect canvas {
+    -webkit-user-drag: none !important;
+    user-select: none !important;
+}
+
+.dp-protect-wm {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    left: auto;
+    z-index: 2147483646;
+    pointer-events: none;
+    max-width: min(220px, 70vw);
+    text-align: right;
+    padding: 0.4rem 0.55rem;
+    border-radius: 8px;
+    font: 600 11px/1.35 system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.01em;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(15, 23, 42, 0.72);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+@media print {
+    html.dp-protect body * {
+        visibility: hidden !important;
+    }
+    .dp-protect-wm {
+        visibility: visible !important;
+        position: fixed;
+        inset: auto 0 40%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        max-width: none;
+        font-size: 18px;
+        color: #000;
+        background: none;
+        text-shadow: none;
+    }
+}
+
 .dpl-demo-switch {
     position: fixed;
     left: 50%;

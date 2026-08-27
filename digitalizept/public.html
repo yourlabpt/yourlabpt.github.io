@@ -21,27 +21,34 @@
             resolveDemoVisual,
             typeSlug
         } from '/digitalizept/js/demo/demo-visual.js';
+        import { installShellProtect, isSellerBrowser } from '/digitalizept/js/demo/protect-demo.js';
 
         const slug = window.location.pathname.split('/').filter(Boolean).pop();
         const root = document.getElementById('root');
         const params = new URLSearchParams(window.location.search);
+        const seller = isSellerBrowser();
+        const protect = !seller;
 
         function paint(host, state) {
             host.innerHTML = '';
             if (state.data.demoHtml) {
-                document.body.className = 'dp-public dp-public-html dpl-has-switch';
+                document.body.className = protect
+                    ? 'dp-public dp-public-html'
+                    : 'dp-public dp-public-html dpl-has-switch';
                 const frameHost = document.createElement('div');
                 frameHost.className = 'dp-public-frame-host';
                 mountHtmlPreview(frameHost, state.data.demoHtml, {
                     identidade: state.data.identidade,
-                    dados: state.data.dados
+                    dados: state.data.dados,
+                    protect
                 });
                 host.replaceWith(frameHost);
                 return frameHost;
             }
-            document.body.className = 'dp-public dpl-has-switch';
+            document.body.className = protect ? 'dp-public' : 'dp-public dpl-has-switch';
             const landing = renderLanding(state);
             host.replaceWith(landing);
+            if (protect) installShellProtect(document);
             return landing;
         }
 
@@ -55,12 +62,15 @@
             fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}/visual`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ visual })
+                body: JSON.stringify({ visual }),
+                credentials: 'same-origin'
             }).catch(() => { /* best-effort */ });
         }
 
         try {
-            const response = await fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}`);
+            const response = await fetch(`/api/digitalizept/public/${encodeURIComponent(slug)}`, {
+                credentials: 'same-origin'
+            });
             const data = await response.json();
             if (!response.ok || (!data.demo && !data.demoHtml)) {
                 root.textContent = data.error || 'Demonstração não encontrada.';
@@ -78,44 +88,51 @@
                         demoVisual: data.demoVisual || ''
                     }
                 };
-                const visual = resolveDemoVisual(state, params.get('v'), {
-                    preferPublishedLanding: true,
-                    preferCustom: true
-                });
-                let html = '';
-                try {
-                    html = await htmlForVisual(state, visual);
-                } catch (_) {
-                    /* keep the published landing / HTML if a boilerplate fetch fails */
-                }
-                applyVisualToState(state, visual, html);
-                let host = paint(root, state);
-                prefetchBoilerplate(typeSlug(state));
 
-                const onSwitch = async (next) => {
-                    let nextHtml = '';
-                    try {
-                        nextHtml = await htmlForVisual(state, next);
-                    } catch (_) {
-                        return;
-                    }
-                    applyVisualToState(state, next, nextHtml);
-                    state.data.demoVisual = next;
-                    setQuery(next);
-                    persistVisual(next);
-                    const nextHost = document.createElement('div');
-                    nextHost.id = 'root';
-                    host.replaceWith(nextHost);
-                    host = paint(nextHost, state);
-                    mountDemoSwitch(document.body, {
-                        visual: next,
-                        state,
-                        onChange: onSwitch
+                if (!seller) {
+                    // Prospects only see the published demo — no boilerplate fetch / switch.
+                    if (protect) installShellProtect(document);
+                    paint(root, state);
+                } else {
+                    const visual = resolveDemoVisual(state, params.get('v'), {
+                        preferPublishedLanding: true,
+                        preferCustom: true
                     });
-                };
-                mountDemoSwitch(document.body, { visual, state, onChange: onSwitch });
-                if (normalizeVisual(params.get('v'))) {
-                    setQuery(visual);
+                    let html = '';
+                    try {
+                        html = await htmlForVisual(state, visual);
+                    } catch (_) {
+                        /* keep the published landing / HTML if a boilerplate fetch fails */
+                    }
+                    applyVisualToState(state, visual, html);
+                    let host = paint(root, state);
+                    prefetchBoilerplate(typeSlug(state));
+
+                    const onSwitch = async (next) => {
+                        let nextHtml = '';
+                        try {
+                            nextHtml = await htmlForVisual(state, next);
+                        } catch (_) {
+                            return;
+                        }
+                        applyVisualToState(state, next, nextHtml);
+                        state.data.demoVisual = next;
+                        setQuery(next);
+                        persistVisual(next);
+                        const nextHost = document.createElement('div');
+                        nextHost.id = 'root';
+                        host.replaceWith(nextHost);
+                        host = paint(nextHost, state);
+                        mountDemoSwitch(document.body, {
+                            visual: next,
+                            state,
+                            onChange: onSwitch
+                        });
+                    };
+                    mountDemoSwitch(document.body, { visual, state, onChange: onSwitch });
+                    if (normalizeVisual(params.get('v'))) {
+                        setQuery(visual);
+                    }
                 }
             }
         } catch (_) {

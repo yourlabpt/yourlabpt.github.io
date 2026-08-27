@@ -2,6 +2,7 @@ import { LIVRO_RECLAMACOES_URL, renderLanding } from './landing.js';
 import { contrastTokens } from './colors.js';
 import { applyLogoMatStyle, injectLogoMatRuntime } from './logo-mat.js';
 import { INPAGE_NAV_SCRIPT } from './inpage-nav.js';
+import { injectProtectIntoHtml, DEMO_IFRAME_SANDBOX } from './protect-demo.js';
 
 export const DEMO_HTML_MAX = 900000;
 
@@ -648,18 +649,21 @@ export function assertPromptFitsChat(text) {
     return { ok: true };
 }
 
-export function mountHtmlPreview(host, html, { identidade, dados } = {}) {
+export function mountHtmlPreview(host, html, { identidade, dados, protect = false } = {}) {
     const iframe = document.createElement('iframe');
     iframe.className = 'dp-preview-frame';
     iframe.title = 'Pré-visualização HTML';
-    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+    // Popups required so WhatsApp / Maps / social / Livro links open for the client.
+    iframe.setAttribute('sandbox', DEMO_IFRAME_SANDBOX);
     iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.style.cssText = 'width:100%;height:100%;border:0;background:#111;display:block;';
     iframe.setAttribute('scrolling', 'yes');
     host.appendChild(iframe);
     const source = extractHtml(html);
-    iframe.srcdoc = identidade
+    let filled = identidade
         ? applyIdentityToHtml(source, identidade, dados)
         : source;
+    if (protect) filled = injectProtectIntoHtml(filled);
+    iframe.srcdoc = filled;
     return iframe;
 }

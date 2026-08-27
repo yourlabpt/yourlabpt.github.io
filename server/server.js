@@ -60,6 +60,10 @@ const { normalizeEstado, isValidEstado, ESTADO_LABELS } = require('./lib/maps/st
 const { parsePropostaItens, includesGooglePresence, isGoogleOnlyDeal } = require('./lib/maps/packages');
 const outreach = require('./lib/digitalizept-outreach');
 const leadProcess = require('./lib/digitalizept-lead-process');
+const {
+    isSellerCookie,
+    sellerAssetGuard
+} = require('./lib/digitalizept-demo-protect');
 const dossier = require('./lib/digitalizept-dossier');
 const { leadsListOrderSql } = require('./lib/digitalizept-leads-list');
 const { lookupFromMaps, whatsappIfMobile } = require('./lib/digitalizept-maps-lookup');
@@ -376,6 +380,11 @@ app.get('/demos/spyfu/api/spyfu/*', async (req, res) => {
         res.status(502).json({ error: 'Upstream request failed' });
     }
 });
+
+// Boilerplates and sample pages are seller-only — public demos must not expose
+// raw templates for copy-paste into a competing site.
+app.use('/digitalizept/boilerplates', sellerAssetGuard);
+app.use('/digitalizept/samples', sellerAssetGuard);
 
 // Serve static files
 app.use(express.static(path.join(__dirname, '..'), {
@@ -5353,6 +5362,9 @@ app.get('/api/digitalizept/public/:slug', (req, res) => {
 
 app.post('/api/digitalizept/public/:slug/visual', (req, res) => {
     try {
+        if (!isSellerCookie(req.get('cookie') || '')) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         const ip = String(req.ip || req.socket.remoteAddress || 'unknown');
         if (digitalizeptVisualLimiter.isLimited(ip)) {
             return res.status(429).json({ error: 'Demasiados pedidos.' });
@@ -6024,6 +6036,8 @@ app.get('/digitalizept/', (req, res) => {
 
 app.get('/d/:slug', (req, res) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.sendFile(path.join(__dirname, '..', 'digitalizept', 'public.html'));
 });
 
@@ -6060,6 +6074,8 @@ app.get('/d/:slug/logo', (req, res) => {
         res.setHeader('Content-Type', parsed.contentType);
         res.setHeader('Cache-Control', 'public, max-age=86400');
         res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Disposition', 'inline; filename="demo-logo"');
         return res.send(parsed.buffer);
     } catch (err) {
         console.error('digitalizept demo logo error:', err.message);
@@ -6082,6 +6098,8 @@ app.get('/d/:slug/photo/:index', (req, res) => {
         res.setHeader('Content-Type', parsed.contentType);
         res.setHeader('Cache-Control', 'public, max-age=86400');
         res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Disposition', `inline; filename="demo-photo-${index}"`);
         return res.send(parsed.buffer);
     } catch (err) {
         console.error('digitalizept demo photo error:', err.message);
