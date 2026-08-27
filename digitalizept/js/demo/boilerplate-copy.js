@@ -235,6 +235,28 @@ function applyLabels(html, rotulos) {
     return out;
 }
 
+/** FB/IG refuse iframe embedding — always escape the demo preview frame. */
+function withExternalTarget(attrs, href) {
+    let next = attrs;
+    const external = /^(https?:|\/\/|mailto:)/i.test(href) || /^https:\/\/wa\.me\//i.test(href);
+    if (!external) return next;
+    if (/\btarget=/i.test(next)) {
+        next = next.replace(/\btarget=["'][^"']*["']/i, 'target="_blank"');
+    } else {
+        next = `${next} target="_blank"`;
+    }
+    if (/\brel=/i.test(next)) {
+        const relMatch = next.match(/\brel=["']([^"']*)["']/i);
+        const parts = new Set(String((relMatch && relMatch[1]) || '').split(/\s+/).filter(Boolean));
+        parts.add('noopener');
+        parts.add('noreferrer');
+        next = next.replace(/\brel=["'][^"']*["']/i, `rel="${[...parts].join(' ')}"`);
+    } else {
+        next = `${next} rel="noopener noreferrer"`;
+    }
+    return next;
+}
+
 function applyHrefs(html, dados) {
     const hrefs = {
         maps: mapsHref(dados),
@@ -256,6 +278,7 @@ function applyHrefs(html, dados) {
                     next = `${next} href="${href}"`;
                 }
                 next = next.replace(/\s*\bhidden\b(?:=["'][^"']*["'])?/gi, '');
+                next = withExternalTarget(next, href);
                 return `<a${next}>`;
             }
             if (!/\bhidden\b/i.test(next)) next = `${next} hidden`;

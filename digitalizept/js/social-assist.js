@@ -33,16 +33,15 @@ export function facebookOpenUrl(value, { nome = '', cidade = '' } = {}) {
     const raw = clean(value);
     if (raw) {
         const lower = raw.toLowerCase();
-        if (lower.includes('facebook.com/') || lower.includes('fb.com/') || lower.includes('fb.me/')) {
+        if (lower.includes('facebook.com') || lower.includes('fb.com') || lower.includes('fb.me')) {
             if (/^https?:\/\//i.test(raw)) return raw;
+            if (raw.startsWith('//')) return `https:${raw}`;
             return `https://${raw.replace(/^\/+/, '')}`;
         }
         const handle = stripAt(raw);
-        if (handle && !/\s/.test(handle) && !handle.includes('.')) {
-            return `https://www.facebook.com/${encodeURIComponent(handle)}`;
-        }
-        if (handle.includes('facebook.com') || handle.includes('fb.com')) {
-            return raw.startsWith('http') ? raw : `https://${handle.replace(/^\/+/, '')}`;
+        // Vanity pages often include dots (e.g. casadavila.braga)
+        if (handle && !/\s/.test(handle) && /^[A-Za-z0-9.]+$/.test(handle)) {
+            return `https://www.facebook.com/${handle}`;
         }
     }
     const q = businessSearchQuery(nome, cidade, 'site:facebook.com');
@@ -53,13 +52,14 @@ export function instagramOpenUrl(value, { nome = '', cidade = '' } = {}) {
     const raw = clean(value);
     if (raw) {
         const lower = raw.toLowerCase();
-        if (lower.includes('instagram.com/')) {
+        if (lower.includes('instagram.com') || lower.includes('instagr.am')) {
             if (/^https?:\/\//i.test(raw)) return raw;
+            if (raw.startsWith('//')) return `https:${raw}`;
             return `https://${raw.replace(/^\/+/, '')}`;
         }
-        const handle = stripAt(raw);
-        if (handle && !/\s/.test(handle)) {
-            return `https://www.instagram.com/${encodeURIComponent(handle)}/`;
+        const handle = stripAt(raw).replace(/\/+$/, '');
+        if (handle && !/\s/.test(handle) && /^[A-Za-z0-9._]+$/.test(handle)) {
+            return `https://www.instagram.com/${handle}/`;
         }
     }
     const q = businessSearchQuery(nome, cidade, 'site:instagram.com');

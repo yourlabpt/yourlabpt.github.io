@@ -34,7 +34,10 @@ describe('digitalizept landing boilerplate', async () => {
 
     it('builds Instagram links from a handle', () => {
         assert.equal(instagramHref('@loja'), 'https://www.instagram.com/loja');
-        assert.equal(instagramHref('https://instagram.com/loja'), 'https://instagram.com/loja');
+        assert.equal(instagramHref('https://instagram.com/loja'), 'https://www.instagram.com/loja');
+        assert.equal(instagramHref('instagram.com/loja/'), 'https://www.instagram.com/loja');
+        assert.equal(instagramHref('www.instagram.com/loja?igsh=abc'), 'https://www.instagram.com/loja');
+        assert.equal(instagramHref('  @loja.oficial  '), 'https://www.instagram.com/loja.oficial');
         assert.equal(instagramHref(''), '');
     });
 
@@ -42,6 +45,14 @@ describe('digitalizept landing boilerplate', async () => {
         assert.equal(facebookHref('loja'), 'https://www.facebook.com/loja');
         assert.equal(facebookHref('@loja'), 'https://www.facebook.com/loja');
         assert.equal(facebookHref('https://www.facebook.com/loja'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref('facebook.com/loja/'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref('fb.com/loja'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref('m.facebook.com/loja'), 'https://www.facebook.com/loja');
+        assert.equal(facebookHref('casadavila.braga'), 'https://www.facebook.com/casadavila.braga');
+        assert.equal(
+            facebookHref('https://www.facebook.com/profile.php?id=123456'),
+            'https://www.facebook.com/profile.php?id=123456'
+        );
         assert.equal(facebookHref(''), '');
         assert.equal(facebookHref('/digitalizept/samples/cafe-da-praca.html#facebook'), '/digitalizept/samples/cafe-da-praca.html#facebook');
         assert.equal(websiteHref('cafedapraca.pt'), 'https://cafedapraca.pt');
@@ -355,8 +366,23 @@ describe('digitalizept no-image boilerplates', async () => {
         }, {});
         assert.match(out, /href="https:\/\/www\.instagram\.com\/casadavila"/);
         assert.match(out, /href="https:\/\/www\.facebook\.com\/casadavila\.braga"/);
+        assert.match(out, /data-dp-href="facebook"[^>]*target="_blank"/);
+        assert.match(out, /data-dp-href="instagram"[^>]*target="_blank"/);
+        assert.match(out, /data-dp-href="facebook"[^>]*rel="[^"]*noopener/);
         assert.doesNotMatch(out, /data-dp-href="instagram"[^>]*\bhidden\b/);
         assert.doesNotMatch(out, /data-dp-href="facebook"[^>]*\bhidden\b/);
+    });
+
+    it('normalizes messy Facebook/Instagram pastes into openable profile URLs', () => {
+        const html = fs.readFileSync(path.join(root, 'generico-sem-fotos.html'), 'utf8');
+        const out = visual.fillBoilerplateCopy(html, {
+            nome_negocio: 'Casa da Vila',
+            instagram: 'https://www.instagram.com/casa.da.vila/?hl=pt',
+            facebook: 'fb.com/casa.da.vila'
+        }, {});
+        assert.match(out, /href="https:\/\/www\.instagram\.com\/casa\.da\.vila"/);
+        assert.match(out, /href="https:\/\/www\.facebook\.com\/casa\.da\.vila"/);
+        assert.match(out, /target="_blank"/);
     });
 
     it('hides social block when Instagram and Facebook are empty', () => {

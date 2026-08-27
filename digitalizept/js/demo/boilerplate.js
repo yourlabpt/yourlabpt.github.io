@@ -52,23 +52,127 @@ export function telHref(dados) {
     return d ? `tel:${d}` : '';
 }
 
-export function instagramHref(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
-    const handle = raw.replace(/^@/, '');
-    return handle ? `https://www.instagram.com/${handle}` : '';
+function cleanSocialRaw(value) {
+    return String(value || '')
+        .trim()
+        .replace(/^['"<\s]+|['">\s]+$/g, '')
+        .replace(/\s+/g, '');
 }
 
-export function facebookHref(value) {
-    const raw = String(value || '').trim();
+/** App-relative paths stay as-is (sample demos). */
+function isAppRelativePath(raw) {
+    return raw.startsWith('/') && !raw.startsWith('//');
+}
+
+function ensureHttps(urlLike) {
+    const s = String(urlLike || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.startsWith('//')) return `https:${s}`;
+    return `https://${s.replace(/^\/+/, '')}`;
+}
+
+function firstPathSegment(pathname) {
+    const parts = String(pathname || '')
+        .split('/')
+        .map((p) => p.trim())
+        .filter(Boolean);
+    return parts[0] || '';
+}
+
+const IG_RESERVED = new Set([
+    'p', 'reel', 'reels', 'stories', 'explore', 'accounts', 'direct', 'tv', 'about', 'legal'
+]);
+
+/**
+ * Accepts @handle, handle, instagram.com/handle, full URLs (with or without https),
+ * m.instagram.com, and URLs with tracking query strings.
+ */
+export function instagramHref(value) {
+    const raw = cleanSocialRaw(value);
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) return raw;
-    const handle = raw
-        .replace(/^@/, '')
-        .replace(/^https?:\/\/(www\.)?facebook\.com\//i, '')
-        .replace(/\/$/, '');
-    return handle ? `https://www.facebook.com/${handle}` : '';
+    if (isAppRelativePath(raw)) return raw;
+
+    let s = raw.replace(/^@+/, '');
+    s = s.replace(/^(https?:\/\/)?(www\.)?instagram\.com\/?/i, '');
+    s = s.replace(/^(https?:\/\/)?(www\.)?instagr\.am\/?/i, '');
+
+    if (/instagram\.com|instagr\.am/i.test(raw) || /^https?:\/\//i.test(raw) || raw.startsWith('//')) {
+        try {
+            const u = new URL(ensureHttps(raw.includes('instagram') || raw.includes('instagr.am')
+                ? raw
+                : `https://www.instagram.com/${s}`));
+            if (!/instagram\.com$/i.test(u.hostname) && !/(^|\.)instagr\.am$/i.test(u.hostname)) {
+                return ensureHttps(raw);
+            }
+            const seg = firstPathSegment(u.pathname);
+            if (!seg) return 'https://www.instagram.com/';
+            if (IG_RESERVED.has(seg.toLowerCase())) {
+                const path = u.pathname.replace(/\/+$/, '') || `/${seg}`;
+                return `https://www.instagram.com${path}${u.search || ''}`;
+            }
+            const handle = decodeURIComponent(seg).replace(/^@+/, '');
+            return handle ? `https://www.instagram.com/${handle}` : '';
+        } catch (_) {
+            /* fall through to handle parse */
+        }
+    }
+
+    const handle = s
+        .replace(/^@+/, '')
+        .split(/[/?#]/)[0]
+        .replace(/\/+$/, '');
+    if (!handle || /\s/.test(handle)) return '';
+    if (!/^[A-Za-z0-9._]+$/.test(handle)) return '';
+    return `https://www.instagram.com/${handle}`;
+}
+
+const FB_HOST_RE = /(?:^|\.)(?:facebook\.com|fb\.com|fb\.me)$/i;
+
+/**
+ * Accepts @page, page, facebook.com/…, fb.com/…, fb.me/…, m.facebook.com/…,
+ * profile.php?id=, people/…, pages/…, with or without https.
+ */
+export function facebookHref(value) {
+    const raw = cleanSocialRaw(value);
+    if (!raw) return '';
+    if (isAppRelativePath(raw)) return raw;
+
+    if (/facebook\.com|fb\.com|fb\.me/i.test(raw)) {
+        try {
+            const u = new URL(ensureHttps(raw));
+            if (!FB_HOST_RE.test(u.hostname)) return ensureHttps(raw);
+            const path = (u.pathname || '/').replace(/\/+$/, '') || '/';
+            const search = u.search || '';
+            if (/profile\.php/i.test(path) || /\/(pages|people|groups|events)\b/i.test(path)) {
+                return `https://www.facebook.com${path === '/' ? '' : path}${search}`;
+            }
+            const seg = firstPathSegment(path);
+            if (!seg) return 'https://www.facebook.com/';
+            if (/^(permalink\.php|watch|share|story\.php)$/i.test(seg)) {
+                return `https://www.facebook.com${path}${search}`;
+            }
+            const handle = decodeURIComponent(seg).replace(/^@+/, '');
+            return handle ? `https://www.facebook.com/${handle}` : '';
+        } catch (_) {
+            /* fall through */
+        }
+    }
+
+    let s = raw
+        .replace(/^@+/, '')
+        .replace(/^(https?:\/\/)?(www\.|m\.)?(facebook\.com|fb\.com|fb\.me)\/?/i, '')
+        .replace(/^@+/, '');
+    if (/^profile\.php/i.test(s)) {
+        return `https://www.facebook.com/${s}`;
+    }
+    if (/^(pages|people|groups|events)\//i.test(s)) {
+        return `https://www.facebook.com/${s.replace(/\/+$/, '')}`;
+    }
+    const handle = s.split(/[/?#]/)[0].replace(/\/+$/, '');
+    if (!handle || /\s/.test(handle)) return '';
+    if (!/^[A-Za-z0-9.]+$/.test(handle)) return '';
+    return `https://www.facebook.com/${handle}`;
 }
 
 export function websiteHref(value) {
