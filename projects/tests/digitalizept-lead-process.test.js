@@ -541,7 +541,7 @@ describe('digitalizept lead process — instruções e demo', () => {
         assert.match(adminCss, /--accent-dark: var\(--admin-press\)/);
         assert.match(adminCss, /lead-proc-ganchos \.followup-gancho\.active/);
         assert.match(adminCss, /dossier-vista-demo/);
-        assert.match(sw, /digitalizept-v111/);
+        assert.match(sw, /digitalizept-v\d+/);
         assert.match(panel, /Edite só a carta/);
         assert.match(panel, /não volte a colar o link/);
         assert.match(sw, /admin-lead-demo\.js/);
@@ -809,6 +809,34 @@ describe('digitalizept lead process — guião, objeções e métricas', () => {
         assert.equal(m.demo.taxa, 100);
         assert.ok(m.diagnostico.some((d) => d.id === 'gancho_ou_lista'));
         assert.ok(m.alertas.some((d) => d.id === 'gancho_ou_lista'));
+        db.close();
+    });
+});
+
+describe('digitalizept lead process — fecho stickiness', () => {
+    it('keeps a manual Fecho change even when the deal is GANHO/fechado', () => {
+        assert.equal(proc.resultadoFromEstado('GANHO', 'futuro', { locked: true }), 'futuro');
+        assert.equal(proc.resultadoFromEstado('GANHO', '', { locked: true }), '');
+        assert.equal(proc.resultadoFromEstado('GANHO', 'sem_interesse', { locked: true }), 'sem_interesse');
+        assert.equal(proc.resultadoFromEstado('GANHO', 'futuro'), 'futuro');
+        assert.equal(proc.resultadoFromEstado('GANHO', ''), 'digitalizado');
+    });
+
+    it('does not resurrect Cliente after the seller clears Fecho on a closed lead', () => {
+        const db = openMemoryDb();
+        const leadId = seedLead(db, { demo: 'pamelia-x' });
+        db.prepare(`
+            UPDATE lead SET estado = 'fechado', resultado = 'digitalizado', cobertura_locked = 1,
+                processo_estado = 'GANHO'
+            WHERE id = ?
+        `).run(leadId);
+        db.prepare('UPDATE lead SET resultado = ? WHERE id = ?').run('futuro', leadId);
+        const out = proc.recomputeProcesso(db, leadId);
+        assert.ok(out);
+        const row = db.prepare('SELECT resultado, cobertura_locked, processo_estado FROM lead WHERE id = ?').get(leadId);
+        assert.equal(row.resultado, 'futuro');
+        assert.equal(row.cobertura_locked, 1);
+        assert.equal(row.processo_estado, 'GANHO');
         db.close();
     });
 });

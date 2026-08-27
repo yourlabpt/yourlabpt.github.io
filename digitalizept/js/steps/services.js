@@ -112,21 +112,21 @@ function setExtra(proposta, codigo, on) {
 async function render(body, ctx) {
     const proposta = ensureProposta(ctx.state);
     if (!Array.isArray(ctx.state.data._catalog)) {
-        const loading = document.createElement('div');
-        loading.className = 'placeholder';
-        loading.textContent = 'A carregar o catálogo…';
-        body.appendChild(loading);
-        let catalog;
-        try {
-            catalog = await fetchCatalog(ctx);
-        } catch (_) {
-            loading.textContent = 'Não foi possível carregar o catálogo.';
-            ctx.setValid(false);
-            return;
-        }
+    const loading = document.createElement('div');
+    loading.className = 'placeholder';
+    loading.textContent = 'A carregar o catálogo…';
+    body.appendChild(loading);
+    let catalog;
+    try {
+        catalog = await fetchCatalog(ctx);
+    } catch (_) {
+        loading.textContent = 'Não foi possível carregar o catálogo.';
+        ctx.setValid(false);
+        return;
+    }
         if (!catalog) return;
         ctx.update({ _catalog: catalog });
-        loading.remove();
+    loading.remove();
     }
 
     const pages = pagesFor(ctx.state);

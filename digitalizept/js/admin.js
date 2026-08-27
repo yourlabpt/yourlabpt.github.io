@@ -12,7 +12,6 @@ import { renderLeadProcess } from './admin-lead-process.js';
 import { renderLeadDemo } from './admin-lead-demo.js';
 import { renderQuickLeadForm } from './admin-quick-lead.js';
 import {
-    formatCallDue,
     formatCountdown
 } from './demo/confirm-call.js';
 import { confirmAndRefreshApp, registerDigitalizeptSw } from './pwa.js';
@@ -62,6 +61,7 @@ const el = {
     catalogAddBtn: document.getElementById('catalog-add-btn'),
     leadsEmailDemosBtn: document.getElementById('leads-email-demos-btn'),
     coverageFilter: document.getElementById('coverage-filter'),
+    coverageDue: document.getElementById('coverage-due'),
     coverageStats: document.getElementById('coverage-stats'),
     coverageLegend: document.getElementById('coverage-legend'),
     coverageMap: document.getElementById('coverage-map'),
@@ -753,25 +753,44 @@ function openServiceEditor(servico) {
     });
 }
 
-function leadMapPinHtml(lead) {
-    const fill = (lead && lead.color) || '#faf8f4';
-    const stroke = (lead && lead.strokeColor) || '#8e8a84';
-    const faded = lead && lead.faded ? ' is-faded' : '';
-    return `<span class="lead-map-pin${faded}" style="--pin-fill:${fill};--pin-stroke:${stroke}" aria-hidden="true"></span>`;
+function leadDueState(lead) {
+    const when = lead && lead.proximaAcaoEm;
+    if (!when) return { due: false, overdue: false, when: '', remaining: 0 };
+    const remaining = new Date(when).getTime() - Date.now();
+    if (!Number.isFinite(remaining)) return { due: false, overdue: false, when, remaining: 0 };
+    return {
+        due: remaining <= 36 * 3600 * 1000,
+        overdue: remaining <= 0,
+        when,
+        remaining
+    };
+}
+
+function leadDueIconHtml(lead) {
+    const state = leadDueState(lead);
+    if (!state.due) return '';
+    const title = state.overdue
+        ? 'Ação disponível agora'
+        : `Próxima ação em ${formatCountdown(state.remaining)}`;
+    return `<span class="lead-due-icon${state.overdue ? ' is-overdue' : ''}" title="${title}" aria-label="${title}">!</span>`;
+}
+
+function leadProcessDotHtml(lead) {
+    const fill = (lead && lead.processoColor) || '#3b82f6';
+    return `<span class="lead-process-dot" style="--process:${fill}" aria-hidden="true"></span>`;
 }
 
 function processoMetaHtml(lead) {
     const estado = lead.processoEstadoLabel || '';
-    const when = lead.proximaAcaoEm;
-    if (!estado && !when) return '';
+    const state = leadDueState(lead);
+    if (!estado && !state.when) return '';
     let count = '';
-    if (when) {
-        const remaining = new Date(when).getTime() - Date.now();
-        count = remaining > 0
-            ? ` · próxima em ${formatCountdown(remaining)}`
-            : ' · ação disponível';
+    if (state.when) {
+        count = state.overdue
+            ? ' · ação disponível'
+            : ` · próxima em ${formatCountdown(state.remaining)}`;
     }
-    return `<p class="meta">${estado}${count}${when ? ` · ${formatCallDue(when)}` : ''}</p>`;
+    return `<p class="meta lead-process-meta">${estado}${count}</p>`;
 }
 
 function addControloLeadButton(actions, leadId, { primary = true } = {}) {
@@ -812,18 +831,24 @@ function renderDemos() {
         const card = document.createElement('article');
         const parked = isParked(l);
         const novo = isLeadNovoACompletar(l);
-        card.className = parked ? 'admin-card parked' : (novo ? 'admin-card lead-novo' : 'admin-card');
+        const due = leadDueState(l);
+        card.className = [
+            'admin-card',
+            'lead-card',
+            parked ? 'parked' : '',
+            novo ? 'lead-novo' : '',
+            due.overdue ? 'lead-due-now' : (due.due ? 'lead-due-soon' : '')
+        ].filter(Boolean).join(' ');
+        if (l.processoColor) card.style.setProperty('--process', l.processoColor);
         const tipo = categoriaNome(l.business_type);
         const situacaoTxt = l.processoEstadoLabel
-            || (novo ? 'Novo a completar' : estadoLabel(l.estado));
+            || (novo ? 'Novo' : estadoLabel(l.estado));
+        const phone = l.telefone || l.whatsapp || '';
+        const addr = [l.morada, l.cidade].filter(Boolean).join(', ') || '—';
         card.innerHTML = `
-            <h3>${leadMapPinHtml(l)}${l.nome || 'Sem nome'}${novo ? ' <span class="lead-badge-novo">Novo</span>' : ''}</h3>
-            <p class="meta">${tipo || '—'} · ${situacaoTxt} · criado ${new Date(l.criado_em).toLocaleDateString('pt-PT')}${l.atualizado_em && l.atualizado_em !== l.criado_em ? ` · act. ${new Date(l.atualizado_em).toLocaleDateString('pt-PT')}` : ''}</p>
-            <p class="meta">${l.morada || '—'}${l.telefone ? ` · ${l.telefone}` : ''}</p>
-            ${l.demo_slug ? `<p class="meta">Demo: /${l.demo_slug}</p>` : '<p class="meta">Sem demo ainda</p>'}
-            ${processoMetaHtml(l)}
-            ${parked ? '<p class="meta">Sem interesse</p>' : ''}
-            ${Number(l.fichaMissing) > 0 ? `<p class="meta">Ficha: ${l.fichaMissing} campo(s) em falta</p>` : '<p class="meta">Ficha: mínimo de contacto ok</p>'}
+            <h3>${leadDueIconHtml(l)}${leadProcessDotHtml(l)}<span class="lead-card-name">${l.nome || 'Sem nome'}</span></h3>
+            <p class="meta">${tipo || '—'} · ${situacaoTxt} · ${new Date(l.criado_em).toLocaleDateString('pt-PT')}</p>
+            <p class="meta">${addr} · ${phone || '—'} · ${l.email || '—'}</p>
         `;
         const actions = document.createElement('div');
         actions.className = 'actions';

@@ -3,10 +3,9 @@ export function coverageTypeId(pin) {
 }
 
 export function coverageResultadoId(pin) {
-    const res = String((pin && pin.resultado) || '').trim();
-    if (res) return res;
-    if (pin && (pin.estado === 'fechado' || pin.dealEstado === 'fechado')) return 'digitalizado';
-    return '';
+    // Fecho on the lead is source of truth for the map ring — do not infer
+    // "Cliente" from a closed deal / estado, or cleared pins stay stuck green.
+    return String((pin && pin.resultado) || '').trim();
 }
 
 export function coverageProcessoId(pin) {

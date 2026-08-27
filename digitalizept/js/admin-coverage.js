@@ -36,17 +36,32 @@ function loadLeaflet() {
 }
 
 function mapPinHtml(pin) {
-    const fill = (pin && pin.color) || '#faf8f4';
-    const stroke = (pin && pin.strokeColor) || '#8e8a84';
+    const fill = (pin && pin.color) || '#e7e5e4';
+    const stroke = (pin && pin.strokeColor) || '#1c1917';
     const faded = pin && pin.faded ? ' is-faded' : '';
     return `<span class="lead-map-pin${faded}" style="--pin-fill:${fill};--pin-stroke:${stroke}" aria-hidden="true"></span>`;
 }
 
+function processDotHtml(pin) {
+    const fill = (pin && pin.processoColor) || '#3b82f6';
+    return `<span class="lead-process-dot" style="--process:${fill}" aria-hidden="true"></span>`;
+}
+
+function dueIconHtml(pin) {
+    const when = pin && pin.proximaAcaoEm;
+    if (!when) return '';
+    const remaining = new Date(when).getTime() - Date.now();
+    if (!Number.isFinite(remaining) || remaining > 36 * 3600 * 1000) return '';
+    const overdue = remaining <= 0;
+    const title = overdue ? 'Ação disponível agora' : 'Próxima ação em breve';
+    return `<span class="lead-due-icon${overdue ? ' is-overdue' : ''}" title="${title}" aria-label="${title}">!</span>`;
+}
+
 function pinIcon(fill, stroke, strokeWidth, opts = {}) {
     const faded = opts.faded === true;
-    const color = fill || '#8e8a84';
-    const outline = stroke || '#1b1b1b';
-    const width = strokeWidth || 1.2;
+    const color = fill || '#e7e5e4';
+    const outline = stroke || '#1c1917';
+    const width = strokeWidth || 2.2;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
       <path fill="${color}" stroke="${outline}" stroke-width="${width}" d="M14 1C7.4 1 2 6.4 2 13c0 9.2 12 21.5 12 21.5S26 22.2 26 13C26 6.4 20.6 1 14 1z"/>
       <circle cx="14" cy="13" r="4.2" fill="#faf8f4"/>
@@ -88,9 +103,10 @@ export function setupCoverage({
     onUnauthorized
 }) {
     let pins = [];
-    let legend = { etapas: [], processos: [], resultados: [] };
+    let legend = { etapas: [], processos: [], resultados: [], tipos: [] };
     let filterIds = new Set();
     let filterTypes = new Set();
+    let dueOnly = false;
     let map = null;
     let markers = [];
     let placing = false;
@@ -160,21 +176,36 @@ export function setupCoverage({
 
     function categoryLegendItems(counts) {
         const byType = (counts && counts.byType) || new Map();
+        const legendTypes = new Map((legend.tipos || []).map((t) => [t.id, t]));
         const items = [];
         const seen = new Set();
         businessTypes.forEach((t) => {
             seen.add(t.id);
             const n = countFor(byType, t.id);
             if (!n && !filterTypes.has(t.id)) return;
-            items.push({ id: t.id, axis: 'categoria', label: t.nome, count: n });
+            const fromLegend = legendTypes.get(t.id);
+            items.push({
+                id: t.id,
+                axis: 'categoria',
+                label: t.nome,
+                count: n,
+                color: (fromLegend && fromLegend.color) || ''
+            });
         });
         byType.forEach((n, id) => {
             if (!id || seen.has(id) || !n) return;
-            items.push({ id, axis: 'categoria', label: id, count: n });
+            const fromLegend = legendTypes.get(id);
+            items.push({
+                id,
+                axis: 'categoria',
+                label: (fromLegend && fromLegend.label) || id,
+                count: n,
+                color: (fromLegend && fromLegend.color) || ''
+            });
         });
         const none = countFor(byType, '');
         if (none || filterTypes.has('')) {
-            items.push({ id: '', axis: 'categoria', label: 'Sem categoria', count: none });
+            items.push({ id: '', axis: 'categoria', label: 'Sem tipo', count: none, color: '#e7e5e4' });
         }
         items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt'));
         return items;
@@ -199,63 +230,86 @@ export function setupCoverage({
         row.appendChild(item);
     }
 
+    function duePins(list) {
+        const now = Date.now();
+        return (list || []).filter((p) => {
+            if (p.kind === 'visita' || !p.proximaAcaoEm) return false;
+            const t = new Date(p.proximaAcaoEm).getTime();
+            return Number.isFinite(t) && t - now <= 36 * 3600 * 1000;
+        });
+    }
+
+    function renderDueBadge() {
+        if (!el.coverageDue) return;
+        const due = duePins(pins);
+        if (!due.length) {
+            el.coverageDue.hidden = true;
+            el.coverageDue.replaceChildren();
+            return;
+        }
+        const overdue = due.filter((p) => new Date(p.proximaAcaoEm).getTime() <= Date.now()).length;
+        el.coverageDue.hidden = false;
+        el.coverageDue.className = `coverage-due${overdue ? ' is-overdue' : ''}${dueOnly ? ' is-active' : ''}`;
+        el.coverageDue.innerHTML = `
+            <span class="coverage-due-icon" aria-hidden="true">!</span>
+            <span class="coverage-due-text">${overdue
+                ? `${overdue} ação${overdue === 1 ? '' : 'ões'} agora`
+                : `${due.length} próxima${due.length === 1 ? '' : 's'}`}</span>
+        `;
+        el.coverageDue.title = dueOnly
+            ? 'Mostrar todos os pins'
+            : (overdue
+                ? 'Leads com passo de Controlo disponível — toque para filtrar'
+                : 'Leads com próximo passo nas próximas 36h — toque para filtrar');
+        el.coverageDue.onclick = () => {
+            filterIds.clear();
+            filterTypes.clear();
+            if (el.coverageFilter) el.coverageFilter.value = '';
+            dueOnly = !dueOnly;
+            renderLegend();
+            paint({ preserveView: true });
+        };
+    }
+
     function renderStats() {
         if (!el.coverageStats) return;
         el.coverageStats.innerHTML = '';
         const all = coverageCounts(pins);
-        const shown = coverageCounts(filtered());
-        const filtering = filterIds.size || filterTypes.size || (el.coverageFilter.value || '').trim();
+        const shownList = dueOnly ? duePins(filtered()) : filtered();
+        const shown = coverageCounts(shownList);
+        const filtering = dueOnly || filterIds.size || filterTypes.size || (el.coverageFilter.value || '').trim();
+        const due = duePins(pins);
 
         const hero = document.createElement('p');
         hero.className = 'coverage-stats-hero';
         if (filtering && shown.total !== all.total) {
-            appendStat(hero, shown.total, 'a mostrar');
-            appendStat(hero, all.total, 'no total');
-            appendStat(hero, shown.mapped, 'no mapa');
+            appendStat(hero, shown.total, 'visíveis');
+            appendStat(hero, all.mapped, 'pins');
         } else {
-            appendStat(hero, all.total, all.total === 1 ? 'sítio' : 'sítios');
+            appendStat(hero, all.total, all.total === 1 ? 'pin' : 'pins');
             appendStat(hero, all.mapped, 'no mapa');
-            appendStat(hero, all.unmapped, 'sem pin');
+            if (all.unmapped) appendStat(hero, all.unmapped, 'sem GPS');
         }
+        if (due.length) appendStat(hero, due.length, due.length === 1 ? 'a agir' : 'a agir');
         el.coverageStats.appendChild(hero);
 
         const source = filtering && shown.total !== all.total ? shown : all;
-
-        const results = document.createElement('p');
-        results.className = 'coverage-stats-row';
-        const resultadoItems = [
-            ...(legend.resultados || []),
-            { id: '', label: 'Em aberto' }
-        ];
-        resultadoItems.forEach((item) => {
+        const fecho = document.createElement('p');
+        fecho.className = 'coverage-stats-row';
+        const openN = countFor(source.byResultado, '');
+        if (openN) appendStat(fecho, openN, 'abertos');
+        (legend.resultados || []).forEach((item) => {
             const n = countFor(source.byResultado, item.id);
             if (!n) return;
-            appendStat(results, n, item.label.toLowerCase());
+            appendStat(fecho, n, item.label.toLowerCase());
         });
-        if (results.childNodes.length) el.coverageStats.appendChild(results);
-
-        const processos = document.createElement('p');
-        processos.className = 'coverage-stats-row';
-        (legend.processos || []).forEach((item) => {
-            const n = countFor(source.byProcesso, item.id);
-            if (!n) return;
-            appendStat(processos, n, item.label.toLowerCase());
-        });
-        if (processos.childNodes.length) el.coverageStats.appendChild(processos);
-
-        const types = document.createElement('p');
-        types.className = 'coverage-stats-row';
-        categoryLegendItems(source).forEach((item) => {
-            if (!item.count) return;
-            appendStat(types, item.count, item.label.toLowerCase());
-        });
-        if (types.childNodes.length) el.coverageStats.appendChild(types);
+        if (fecho.childNodes.length) el.coverageStats.appendChild(fecho);
     }
 
     function renderLegend() {
         el.coverageLegend.innerHTML = '';
         const counts = coverageCounts(pins);
-        const addGroup = (title, items) => {
+        const addGroup = (title, items, { colored = false } = {}) => {
             if (!items?.length) return;
             const group = document.createElement('div');
             group.className = 'coverage-legend-group';
@@ -272,16 +326,14 @@ export function setupCoverage({
                 if (!item.count && !selected) return;
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = `coverage-chip${selected ? ' active' : ''}`;
-                const swatch = chipSwatch(item);
+                btn.className = `coverage-chip${selected ? ' active' : ''}${colored ? '' : ' is-plain'}`;
+                const swatch = colored ? chipSwatch(item) : null;
                 const name = document.createElement('span');
                 name.textContent = item.label;
-                const num = document.createElement('span');
-                num.className = 'coverage-chip-count';
-                num.textContent = String(item.count || 0);
-                if (swatch) btn.append(swatch, name, num);
-                else btn.append(name, num);
+                if (swatch) btn.append(swatch, name);
+                else btn.append(name);
                 btn.addEventListener('click', () => {
+                    dueOnly = false;
                     const bucket = item.axis === 'categoria' ? filterTypes : filterIds;
                     if (bucket.has(item.id)) bucket.delete(item.id);
                     else bucket.add(item.id);
@@ -296,7 +348,7 @@ export function setupCoverage({
         };
         const hint = document.createElement('p');
         hint.className = 'coverage-legend-hint';
-        hint.textContent = 'Anel = na rua. Preenchimento = controlo — ou o fecho, se já decidiu.';
+        hint.textContent = 'Preenchimento = tipo · Anel = fecho';
         el.coverageLegend.appendChild(hint);
         addGroup('Na rua', (legend.etapas || []).map((item) => ({
             ...item,
@@ -312,21 +364,26 @@ export function setupCoverage({
             ...item,
             axis: 'resultado',
             count: countFor(counts.byResultado, item.id)
-        })));
-        addGroup('Categoria', categoryLegendItems(counts));
+        })), { colored: true });
+        addGroup('Tipo', categoryLegendItems(counts), { colored: true });
         renderStats();
+        renderDueBadge();
     }
 
     function chipSwatch(item) {
         const fill = item && item.color;
-        if (!fill || item.axis === 'categoria') return null;
+        if (!fill) return null;
         const swatch = document.createElement('span');
-        swatch.className = item.axis === 'etapa'
-            ? 'coverage-chip-swatch is-ring'
-            : 'coverage-chip-swatch is-fill';
+        if (item.axis === 'resultado') {
+            swatch.className = 'coverage-chip-swatch is-ring';
+            swatch.style.setProperty('--swatch-fill', '#faf8f4');
+            swatch.style.setProperty('--swatch-stroke', fill);
+        } else {
+            swatch.className = 'coverage-chip-swatch is-fill';
+            swatch.style.setProperty('--swatch-fill', fill);
+            swatch.style.setProperty('--swatch-stroke', fill);
+        }
         swatch.setAttribute('aria-hidden', 'true');
-        swatch.style.setProperty('--swatch-fill', item.axis === 'etapa' ? '#faf8f4' : fill);
-        swatch.style.setProperty('--swatch-stroke', fill);
         return swatch;
     }
 
@@ -369,12 +426,13 @@ export function setupCoverage({
             legend = {
                 etapas: raw.etapas || [],
                 processos: raw.processos || [],
-                resultados: raw.resultados || []
+                resultados: raw.resultados || [],
+                tipos: raw.tipos || []
             };
         } else if (Array.isArray(raw)) {
-            legend = { etapas: raw, processos: [], resultados: [] };
+            legend = { etapas: raw, processos: [], resultados: [], tipos: [] };
         } else {
-            legend = { etapas: [], processos: [], resultados: [] };
+            legend = { etapas: [], processos: [], resultados: [], tipos: [] };
         }
         await loadBusinessTypes();
         renderLegend();
@@ -1060,7 +1118,7 @@ export function setupCoverage({
         const preserveView = opts.preserveView === true || hasFittedView;
         markers.forEach((m) => map.removeLayer(m));
         markers = [];
-        const shown = filtered();
+        const shown = dueOnly ? duePins(filtered()) : filtered();
         const mapped = shown
             .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
             .sort((a, b) => Number(Boolean(b.faded)) - Number(Boolean(a.faded)));
@@ -1122,10 +1180,28 @@ export function setupCoverage({
             unmapped.slice(0, 40).forEach((pin) => {
                 const card = document.createElement('article');
                 const parked = pin.faded || pin.resultado === 'sem_interesse';
-                card.className = parked ? 'admin-card parked' : 'admin-card';
+                const overdue = pin.proximaAcaoEm && new Date(pin.proximaAcaoEm).getTime() <= Date.now();
+                card.className = [
+                    'admin-card',
+                    'lead-card',
+                    parked ? 'parked' : '',
+                    overdue ? 'lead-due-now' : ''
+                ].filter(Boolean).join(' ');
+                if (pin.processoColor) card.style.setProperty('--process', pin.processoColor);
+                const tipo = typeLabelFor(pin) || (pin.kind === 'visita' ? 'Visita' : '—');
+                const status = pin.processoEstadoLabel
+                    || pin.resultadoLabel
+                    || pin.etapaLabel
+                    || '—';
+                const phone = pin.telefone || '';
+                const addr = [pin.morada, pin.cidade].filter(Boolean).join(', ') || '—';
+                const created = pin.criado_em
+                    ? new Date(pin.criado_em).toLocaleDateString('pt-PT')
+                    : '—';
                 card.innerHTML = `
-                    <h3>${mapPinHtml(pin)}${pin.nome || 'Sem nome'}</h3>
-                    <p class="meta">${pin.morada || '—'}${pin.cidade ? `, ${pin.cidade}` : ''} · ${typeLabelFor(pin) || 'sem categoria'} · ${tagLabel(pin, legend)} · ${pin.kind === 'visita' ? 'visita' : 'lead'} · sem pin${pin.leadNome ? ` · → ${pin.leadNome}` : ''}${pin.visitaCount ? ` · ${pin.visitaCount} visita(s)` : ''}</p>
+                    <h3>${dueIconHtml(pin)}${pin.kind === 'lead' ? processDotHtml(pin) : mapPinHtml(pin)}<span class="lead-card-name">${pin.nome || 'Sem nome'}</span></h3>
+                    <p class="meta">${tipo} · ${status} · ${created}</p>
+                    <p class="meta">${addr} · ${phone || '—'} · ${pin.email || '—'}</p>
                 `;
                 const actions = document.createElement('div');
                 actions.className = 'actions';

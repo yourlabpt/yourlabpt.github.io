@@ -45,22 +45,21 @@ const ESTADO_LABELS = {
     REMOVIDO: 'Removido'
 };
 
-// Same language as the coverage map: fill = where the lead is in the process,
-// ring (etapa) = how far the street/demo funnel has gone.
+// Card / Controlo accents — distinct from map TYPE_COLORS and FECHO rings.
 const PROCESSO_COLORS = {
-    NOVO: '#faf8f4',
-    DEMO_PRONTO: '#d4b896',
-    DESCOBERTA: '#c4a070',
-    EM_SEQUENCIA: '#c9a227',
-    RESPONDEU: '#e0a020',
-    VISITA: '#1f1f1f',
-    PROPOSTA: '#b8860b',
-    GANHO: '#3d9a6a',
-    RECUSADO: '#b8b4ac',
-    ADORMECIDO: '#5b7c99',
-    REVISITA: '#7a9bb5',
-    ARQUIVADO: '#d4d0c8',
-    REMOVIDO: '#c8c4bc'
+    NOVO: '#3b82f6',
+    DEMO_PRONTO: '#8b5cf6',
+    DESCOBERTA: '#06b6d4',
+    EM_SEQUENCIA: '#f59e0b',
+    RESPONDEU: '#10b981',
+    VISITA: '#ea580c',
+    PROPOSTA: '#ca8a04',
+    GANHO: '#16a34a',
+    RECUSADO: '#94a3b8',
+    ADORMECIDO: '#64748b',
+    REVISITA: '#6366f1',
+    ARQUIVADO: '#cbd5e1',
+    REMOVIDO: '#a1a1aa'
 };
 
 const PROCESSO_FADED = new Set(['RECUSADO', 'ADORMECIDO', 'ARQUIVADO', 'REMOVIDO']);
@@ -1054,7 +1053,7 @@ function resumoDemoAberturas(visitas = [], toques = []) {
 function loadContext(db, leadId) {
     const row = db.prepare(`
         SELECT id, business_type, nome, telefone, whatsapp, morada, cidade, estado, resultado, cobertura,
-               demo_slug, followup_json, processo_json, processo_estado, proxima_acao_em, revisitar_em
+               cobertura_locked, demo_slug, followup_json, processo_json, processo_estado, proxima_acao_em, revisitar_em
         FROM lead WHERE id = ?
     `).get(leadId);
     if (!row) return null;
@@ -1079,12 +1078,16 @@ function loadContext(db, leadId) {
     };
 }
 
-function resultadoFromEstado(estado, atual) {
-    if (String(atual || '') === 'digitalizado') return 'digitalizado';
+function resultadoFromEstado(estado, atual, { locked = false } = {}) {
+    const cur = String(atual || '').trim();
+    // Seller Fecho edits (coverage / lead PATCH) set cobertura_locked — Controlo
+    // must not resurrect "Cliente" over that choice, including an explicit clear.
+    if (locked) return cur === 'nao_interessa' ? 'sem_interesse' : cur;
+    if (cur === 'futuro' || cur === 'sem_interesse' || cur === 'digitalizado') return cur;
     if (estado === 'GANHO') return 'digitalizado';
     if (estado === 'REMOVIDO' || estado === 'RECUSADO') return 'sem_interesse';
     if (estado === 'ADORMECIDO' || estado === 'REVISITA') return 'futuro';
-    return String(atual || '');
+    return cur;
 }
 
 /**
@@ -1133,7 +1136,9 @@ function recomputeProcesso(db, leadId, { patchProcesso = null, forcarEstado = ''
         janelas
     });
 
-    const resultado = resultadoFromEstado(estado, ctx.row.resultado);
+    const resultado = resultadoFromEstado(estado, ctx.row.resultado, {
+        locked: Boolean(ctx.row.cobertura_locked)
+    });
     db.prepare(`
         UPDATE lead SET processo_estado = ?, processo_json = ?, proxima_acao_em = ?,
             revisitar_em = ?, resultado = ? WHERE id = ?

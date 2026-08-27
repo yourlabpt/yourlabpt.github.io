@@ -5,6 +5,7 @@ export const SITE_CSS_START = '/* dp-site-export-start */';
 export const SITE_CSS_END = '/* dp-site-export-end */';
 
 const STYLESHEET_HREF = 'css/site.css';
+const SERVER_REL = 'scripts/server.mjs';
 
 const MIME_EXT = {
     'image/jpeg': 'jpg',
@@ -206,17 +207,66 @@ function fotosOf(identidade) {
         : [];
 }
 
+function placeholderSvg(label) {
+    const safe = String(label || 'Foto')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    return utf8(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#e7e5e4"/>
+  <rect x="40" y="40" width="1120" height="720" fill="none" stroke="#a8a29e" stroke-width="4" stroke-dasharray="14 10"/>
+  <text x="600" y="390" text-anchor="middle" fill="#78716c" font-family="system-ui,-apple-system,sans-serif" font-size="36">${safe}</text>
+  <text x="600" y="440" text-anchor="middle" fill="#a8a29e" font-family="system-ui,-apple-system,sans-serif" font-size="22">Substitua este ficheiro em assets/</text>
+</svg>`);
+}
+
+/**
+ * Pull any leftover data:image… out of the HTML into assets/ so the demo
+ * never loses reference photos when we remove base64 from the markup.
+ */
+export function extractInlineImagesToAssets(html, files, { startIndex = 0, prefix = 'extra' } = {}) {
+    let index = startIndex;
+    const out = String(html || '').replace(
+        /data:image\/[a-z0-9.+-]+(?:;[a-z0-9.=+-]+)*;base64,[a-z0-9+/=\s_-]*/gi,
+        (match) => {
+            const parsed = parseDataUrl(match);
+            if (!parsed || !parsed.bytes || !parsed.bytes.length) return '';
+            const href = `assets/${prefix}-${index}.${parsed.ext}`;
+            files[href] = parsed.bytes;
+            index += 1;
+            return href;
+        }
+    );
+    return { html: out, nextIndex: index };
+}
+
 export function siteFolderName(state) {
     const nome = (state && state.data && state.data.dados && state.data.dados.nome_negocio) || 'website';
     return `${siteSlug(nome)}-website`;
 }
 
-export function rewriteHtmlToAssetPaths(html, { logoHref = '', photoHrefs = [], stylesheetHref = STYLESHEET_HREF } = {}) {
+export function rewriteHtmlToAssetPaths(html, {
+    logoHref = '',
+    photoHrefs = [],
+    stylesheetHref = STYLESHEET_HREF,
+    orphanHrefs = [],
+    onMissingRef = null
+} = {}) {
     let out = String(html || '');
+    let orphanIdx = 0;
     if (logoHref) out = out.replace(/dp-logo:\/\//g, logoHref);
     else out = out.replace(/dp-logo:\/\//g, '');
     out = out.replace(/dp-photo:\/\/(\d+)/g, (_, key) => photoHrefs[Number(key)] || '');
-    out = out.replace(/dp-photo:\/\/x/g, '');
+    out = out.replace(/dp-photo:\/\/x/g, () => {
+        if (orphanIdx < orphanHrefs.length) {
+            const href = orphanHrefs[orphanIdx];
+            orphanIdx += 1;
+            return href;
+        }
+        if (typeof onMissingRef === 'function') return onMissingRef();
+        return '';
+    });
     out = out.replace(
         /href=(["'])(?:\/digitalizept\/digitalizept\.css|\.\/digitalizept\.css)\1/gi,
         `href=$1${stylesheetHref}$1`
@@ -246,78 +296,275 @@ html, body {
 ${landingCss ? `\n${landingCss}\n` : ''}`;
 }
 
+function comeceAqui(nome) {
+    return `${nome} — o seu website
+================================
+
+Esta pasta É O SITE. Pode ver no computador e pôr na Internet.
+Tudo o que precisa está aqui.
+
+COMECE AQUI (3 passos)
+----------------------
+
+1. VER NO COMPUTADOR
+   Windows → faça duplo clique em:  scripts\\abrir-localhost.bat
+   Mac     → faça duplo clique em:  scripts/abrir-localhost.command
+   (se o Mac pedir permissão: botão direito → Abrir)
+
+   Abre http://localhost:4173 com as fotos e o visual intactos.
+
+2. PÔR NA INTERNET + LIGAR O SEU DOMÍNIO
+   Abra o guia:  docs/02-ligar-o-dominio.txt
+   (Netlify Drop gratuito + apontar o domínio que já tem)
+
+3. MUDAR TEXTOS OU FOTOS
+   Abra o guia:  docs/03-alterar-textos-e-fotos.txt
+
+
+PASTA — O QUE É CADA COISA
+--------------------------
+
+  COMECE-AQUI.txt     ← este ficheiro
+  index.html          ← a página do site
+  css/site.css        ← cores e estilo
+  assets/             ← logo e fotos (não apague)
+  scripts/            ← programas para ver em localhost
+  docs/               ← guias passo a passo
+  package.json        ← para quem tem Node (npm start)
+
+
+NÃO PRECISA DE INSTALAR NADA ESPECIAL
+-------------------------------------
+
+- Sem Node: o script abre o index.html no browser.
+- Com Node (recomendado): o site corre em localhost como num servidor real.
+
+A conta Netlify, o domínio e estes ficheiros ficam SEUS.
+`;
+}
+
+function docVerComputador() {
+    return `01 — Ver o site no computador
+=============================
+
+WINDOWS
+-------
+
+1. Extraia o ZIP (botão direito → Extrair tudo).
+2. Abra a pasta extraída.
+3. Entre em scripts\\
+4. Duplo clique em abrir-localhost.bat
+
+   • Se tiver Node.js instalado, o site abre em
+     http://localhost:4173  (melhor — fotos e ligações corretas).
+   • Se não tiver, abre o index.html directamente no browser.
+
+Se o Windows disser "O Windows protegeu o PC":
+  Mais informações → Executar na mesma.
+
+
+MAC
+---
+
+1. Extraia o ZIP (duplo clique).
+2. Entre na pasta → scripts
+3. Duplo clique em abrir-localhost.command
+   (na primeira vez: botão direito → Abrir → Abrir)
+
+   Ou, no Terminal, dentro da pasta do site:
+
+     npm start
+     # ou:  node scripts/server.mjs
+
+   Depois abra http://localhost:4173
+
+
+SEM NODE (qualquer sistema)
+---------------------------
+
+Duplo clique em index.html
+ou, no Terminal, dentro da pasta do site:
+
+  python3 -m http.server 4173
+
+Depois: http://localhost:4173
+
+
+PROBLEMAS COMUNS
+----------------
+
+• Página sem fotos → confirme que a pasta assets/ está ao lado do index.html
+  (não abra só o HTML de dentro de outra cópia).
+• Porta 4173 ocupada → feche a janela do Terminal e volte a abrir o script,
+  ou use:  PORT=4174 node scripts/server.mjs
+`;
+}
+
+function docLigarDominio() {
+    return `02 — Pôr o site na Internet e ligar o seu domínio
+=================================================
+
+Isto é o caminho mais simples para um site estático (Presença Digital).
+Não precisa de programar.
+
+
+A. PUBLICAR (gratuito) — Netlify Drop
+-------------------------------------
+
+1. No browser abra:  https://app.netlify.com/drop
+2. Crie conta com o seu email (se pedir).
+3. Arraste ESTA PASTA INTEIRA para a página
+   (a pasta que tem index.html, css/, assets/, scripts/, docs/).
+4. Espere uns segundos.
+5. Aparece um endereço tipo:  alguma-coisa.netlify.app
+   Já pode partilhar esse link.
+
+
+B. LIGAR O DOMÍNIO QUE JÁ TEM (ex. oseunegocio.pt)
+-------------------------------------------------
+
+Faça isto DEPOIS do passo A.
+
+1. No Netlify, abra o site que publicou.
+2. Vá a Domain management / Domain settings.
+3. Add a domain / Add custom domain.
+4. Escreva o domínio que comprou (com ou sem www).
+5. O Netlify mostra os nameservers (dois nomes, tipo dns1.netlify.com).
+
+6. No sítio onde comprou o domínio (Amen, PTServidor, GoDaddy, Cloudflare…):
+   - Abra DNS / Name servers / Servidores DNS
+   - Escolha "Usar nameservers personalizados" (ou equivalente)
+   - Cole os dois nomes que o Netlify deu
+   - Guarde
+
+7. Espere. Pode demorar de minutos até 24 horas.
+   Quando estiver pronto, https://oseudominio.pt abre o site.
+
+
+CHECKLIST RÁPIDO
+----------------
+
+[ ] Publiquei a pasta no Netlify Drop
+[ ] Tenho o link .netlify.app a abrir bem (com fotos)
+[ ] Adicionei o domínio no Netlify
+[ ] Troquei os nameservers no registador
+[ ] Testei o domínio em telemóvel e computador
+
+
+NOTAS
+-----
+
+• O domínio, a conta Netlify e estes ficheiros ficam em nome do cliente.
+• Se já tem website noutro sítio, trocar nameservers aponta o domínio
+  para ESTE site (o antigo deixa de responder nesse domínio).
+• Precisa de email @dominio? Peça ao registador ou a quem lhe faz o email
+  — o Netlify Drop só aloja o site, não as caixas de email.
+`;
+}
+
+function docAlterarConteudo() {
+    return `03 — Alterar textos e fotos
+===========================
+
+TEXTOS
+------
+
+1. Abra index.html com um editor simples
+   (Bloco de Notas, TextEdit, VS Code…).
+2. Procure o texto que quer mudar e altere.
+3. Guarde. Recarregue o browser (F5).
+
+
+FOTOS E LOGO
+------------
+
+Tudo está na pasta assets/:
+
+  logo.png (ou .jpg / .webp)   → logótipo
+  foto-0.jpg, foto-1.jpg…      → fotos da página
+
+Para substituir:
+1. Prepare a nova imagem (JPG ou PNG).
+2. Dê-lhe EXACTAMENTE o mesmo nome do ficheiro antigo.
+3. Substitua o ficheiro dentro de assets/ (substituir / overwrite).
+4. Recarregue o browser com Ctrl+F5 (ou Cmd+Shift+R no Mac).
+
+Não apague a pasta assets nem a pasta css.
+
+
+CORES
+-----
+
+Abra css/site.css e mude as linhas:
+
+  --base: …
+  --destaque: …
+  --secundaria: …
+
+
+DEPOIS DE ALTERAR
+-----------------
+
+Se o site já está no Netlify: volte a arrastar a pasta inteira
+para https://app.netlify.com/drop (ou faça deploy na sua conta)
+para actualizar a versão online.
+`;
+}
+
+function assetsReadme() {
+    return `Pasta de imagens do site
+========================
+
+logo.*     — logótipo
+foto-N.*   — fotografias usadas na página
+extra-N.*  — imagens que vinham embutidas no HTML da demo
+
+Substitua os ficheiros mantendo o mesmo nome.
+Veja docs/03-alterar-textos-e-fotos.txt
+`;
+}
+
 function windowsBat() {
     return `@echo off
-cd /d "%~dp0"
+chcp 65001 >nul
+cd /d "%~dp0\\.."
+echo.
+echo A abrir o website em localhost...
+echo.
+where node >nul 2>&1
+if %errorlevel%==0 (
+  start "" "http://localhost:4173"
+  node scripts\\server.mjs
+  goto :eof
+)
+echo Node.js nao encontrado — a abrir index.html directamente.
+echo Para localhost completo, instale Node em https://nodejs.org
+echo.
 start "" "index.html"
 `;
 }
 
-function readmeFor(nome) {
-    return `${nome} — o seu website
-==============================
+function macCommand() {
+    return `#!/bin/bash
+cd "$(dirname "$0")/.."
+open "http://localhost:4173" 2>/dev/null || true
+if command -v node >/dev/null 2>&1; then
+  exec node scripts/server.mjs
+fi
+echo "Node.js nao encontrado — a abrir index.html"
+open "index.html"
+`;
+}
 
-Esta pasta é o site. É seu: pode ver no computador e pôr na Internet.
-
-1. VER NO WINDOWS
------------------
-
-1. Extraia o ZIP (botão direito no ficheiro → Extrair tudo).
-2. Abra a pasta extraída.
-3. Faça duplo clique em ver-no-windows.bat
-   O site abre no browser.
-
-Se o Windows disser "O Windows protegeu o PC":
-clique em Mais informações e depois em Executar na mesma.
-
-Se ainda não abrir: faça duplo clique em index.html
-
-
-2. PÔR O SITE NA INTERNET (Netlify)
------------------------------------
-
-O Netlify é gratuito para um site simples. Não precisa de programar.
-
-1. No browser, abra: https://app.netlify.com/drop
-2. Se pedir conta, crie com o seu email.
-3. Arraste ESTA PASTA INTEIRA para a página
-   (a pasta que tem o ficheiro index.html lá dentro).
-4. Espere uns segundos.
-5. Aparece um endereço, por exemplo: alguma-coisa.netlify.app
-   Esse já é o site na Internet. Pode enviá-lo a alguém para ver.
-
-Usar o seu domínio (ex. oseunegocio.pt):
-
-1. No Netlify, abra o site que acabou de criar.
-2. Clique em Domain settings (definições de domínio).
-3. Clique em Add a domain / Add custom domain (adicionar domínio).
-4. Escreva o domínio que comprou.
-5. O Netlify indica os servidores DNS (dois nomes, tipo dns1.netlify.com).
-6. No sítio onde comprou o domínio (Amen, PTServidor, GoDaddy, ou outro):
-   abra DNS / Name servers e coloque esses dois nomes.
-7. Espere. Pode demorar até 24 horas até o endereço novo abrir.
-
-A conta Netlify, o domínio e o site ficam em seu nome.
-
-
-3. MUDAR TEXTOS OU FOTOS
-------------------------
-
-- Textos: clique com o botão direito em index.html → Abrir com → Bloco de Notas.
-- Fotos: na pasta assets, substitua os ficheiros (mantenha o mesmo nome).
-- Cores: abra css\\site.css no Bloco de Notas.
-
-Não apague a pasta css nem a pasta assets.
-
-
-4. OUTRO COMPUTADOR (Mac)
--------------------------
-
-Faça duplo clique em index.html, ou no Terminal, dentro desta pasta:
-
-   python3 -m http.server 4173
-
-Depois abra http://localhost:4173
+function shellStart() {
+    return `#!/usr/bin/env bash
+cd "$(dirname "$0")/.."
+if command -v node >/dev/null 2>&1; then
+  echo "Website em http://localhost:4173"
+  exec node scripts/server.mjs
+fi
+echo "Instale Node.js (https://nodejs.org) ou use: python3 -m http.server 4173"
+exit 1
 `;
 }
 
@@ -326,7 +573,10 @@ function packageJsonFor(folder) {
         name: folder.toLowerCase().replace(/_/g, '-'),
         private: true,
         type: 'module',
-        scripts: { start: 'node server.mjs' }
+        scripts: {
+            start: 'node scripts/server.mjs',
+            serve: 'node scripts/server.mjs'
+        }
     }, null, 2)}\n`;
 }
 
@@ -337,12 +587,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT) || 4173;
 const TYPES = {
     '.html': 'text/html; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
     '.svg': 'image/svg+xml',
     '.png': 'image/png',
@@ -351,6 +602,8 @@ const TYPES = {
     '.webp': 'image/webp',
     '.gif': 'image/gif',
     '.ico': 'image/x-icon',
+    '.txt': 'text/plain; charset=utf-8',
+    '.md': 'text/plain; charset=utf-8',
     '.woff2': 'font/woff2'
 };
 
@@ -363,26 +616,35 @@ function safeFile(urlPath) {
 }
 
 const server = http.createServer((req, res) => {
-    const file = safeFile(req.url);
+    let file = safeFile(req.url);
     if (!file) {
         res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Forbidden');
         return;
     }
-    fs.readFile(file, (err, data) => {
-        if (err) {
-            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end('Não encontrado');
-            return;
+    fs.stat(file, (statErr, stat) => {
+        if (!statErr && stat.isDirectory()) {
+            file = path.join(file, 'index.html');
         }
-        const ext = path.extname(file).toLowerCase();
-        res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream' });
-        res.end(data);
+        fs.readFile(file, (err, data) => {
+            if (err) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Não encontrado');
+                return;
+            }
+            const ext = path.extname(file).toLowerCase();
+            res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream' });
+            res.end(data);
+        });
     });
 });
 
 server.listen(PORT, () => {
-    console.log(\`Website em http://localhost:\${PORT}\`);
+    console.log('');
+    console.log('  Website a correr.');
+    console.log('  Abra: http://localhost:' + PORT);
+    console.log('  Ctrl+C para parar.');
+    console.log('');
 });
 `;
 }
@@ -398,24 +660,80 @@ export function buildStandaloneWebsiteFiles(state, { landingCss = '' } = {}) {
     }
 
     const files = {};
+    const knownDataUrls = new Set();
     let logoHref = '';
     const parsedLogo = parseDataUrl(logoDataUrl(identidade));
     if (parsedLogo) {
         logoHref = `assets/logo.${parsedLogo.ext}`;
         files[logoHref] = parsedLogo.bytes;
+        knownDataUrls.add(normalizeDataUrlKey(logoDataUrl(identidade)));
     }
 
     const photoHrefs = [];
-    fotosOf(identidade).forEach((url, i) => {
-        const parsed = parseDataUrl(url);
-        if (!parsed) {
+    const rawFotos = identidade && Array.isArray(identidade.fotos) ? identidade.fotos : [];
+    rawFotos.forEach((url, i) => {
+        if (!url) {
             photoHrefs[i] = '';
             return;
         }
-        const href = `assets/foto-${i}.${parsed.ext}`;
+        const asText = String(url);
+        const parsed = parseDataUrl(asText);
+        if (parsed) {
+            const href = `assets/foto-${i}.${parsed.ext}`;
+            photoHrefs[i] = href;
+            files[href] = parsed.bytes;
+            knownDataUrls.add(normalizeDataUrlKey(asText));
+            return;
+        }
+        const href = `assets/foto-${i}.svg`;
         photoHrefs[i] = href;
-        files[href] = parsed.bytes;
+        files[href] = placeholderSvg(`Foto ${i + 1}`);
     });
+
+    // Harvest any inline demo images that are not already the logo/fotos above,
+    // so compactHtmlForAi's dp-photo://x slots still resolve to real files.
+    const orphanHrefs = [];
+    let extraIndex = 0;
+    [data.demoHtml, data.demoHtmlCustom].filter(Boolean).forEach((src) => {
+        String(src).replace(
+            /data:image\/[a-z0-9.+-]+(?:;[a-z0-9.=+-]+)*;base64,[a-z0-9+/=\s_-]*/gi,
+            (match) => {
+                const key = normalizeDataUrlKey(match);
+                if (!key || knownDataUrls.has(key)) return match;
+                const parsed = parseDataUrl(match);
+                if (!parsed || !parsed.bytes || !parsed.bytes.length) return match;
+                const href = `assets/extra-${extraIndex}.${parsed.ext}`;
+                extraIndex += 1;
+                files[href] = parsed.bytes;
+                orphanHrefs.push(href);
+                knownDataUrls.add(key);
+                return match;
+            }
+        );
+    });
+
+    const neededSlots = [...String(compact || '').matchAll(/dp-photo:\/\/(\d+)/g)]
+        .map((m) => Number(m[1]))
+        .filter((n) => Number.isInteger(n) && n >= 0);
+    neededSlots.forEach((i) => {
+        if (photoHrefs[i]) return;
+        const href = `assets/foto-${i}.svg`;
+        photoHrefs[i] = href;
+        files[href] = placeholderSvg(`Foto ${i + 1}`);
+    });
+
+    if (!logoHref && /dp-logo:\/\//.test(compact)) {
+        logoHref = 'assets/logo.svg';
+        files[logoHref] = placeholderSvg('Logo');
+    }
+
+    let missingRef = 0;
+    const onMissingRef = () => {
+        const href = `assets/foto-ref-${missingRef}.svg`;
+        missingRef += 1;
+        files[href] = placeholderSvg('Foto');
+        return href;
+    };
 
     const fileIdentidade = {
         ...identidade,
@@ -427,27 +745,63 @@ export function buildStandaloneWebsiteFiles(state, { landingCss = '' } = {}) {
         fotos: photoHrefs
     };
 
-    let html = applyIdentityToHtml(compact, fileIdentidade, dados);
+    let html = rewriteHtmlToAssetPaths(compact, {
+        logoHref,
+        photoHrefs,
+        stylesheetHref: STYLESHEET_HREF,
+        orphanHrefs,
+        onMissingRef
+    });
+    // Identity after placeholders → assets, so restoreHtmlPlaceholders cannot wipe dp-photo://x.
+    html = applyIdentityToHtml(html, fileIdentidade, dados);
     html = stripDemoSwitch(html);
-    html = rewriteHtmlToAssetPaths(html, { logoHref, photoHrefs, stylesheetHref: STYLESHEET_HREF });
+    html = rewriteHtmlToAssetPaths(html, {
+        logoHref,
+        photoHrefs,
+        stylesheetHref: STYLESHEET_HREF,
+        orphanHrefs,
+        onMissingRef
+    });
+
     if (/data:image\/|base64,/i.test(html)) {
-        html = rewriteHtmlToAssetPaths(
-            html.replace(/data:image\/[a-z0-9.+-]+(?:;[a-z0-9.=+-]+)*;base64,[a-z0-9+/=\s_-]*/gi, ''),
-            { logoHref, photoHrefs, stylesheetHref: STYLESHEET_HREF }
-        );
+        const extracted = extractInlineImagesToAssets(html, files, {
+            startIndex: extraIndex,
+            prefix: 'extra'
+        });
+        html = extracted.html;
+        html = rewriteHtmlToAssetPaths(html, {
+            logoHref,
+            photoHrefs,
+            stylesheetHref: STYLESHEET_HREF,
+            orphanHrefs,
+            onMissingRef
+        });
     }
 
     const folder = siteFolderName(state);
     const nome = dados.nome_negocio || 'Website';
+    const intro = comeceAqui(nome);
+
     files['index.html'] = html;
     files[STYLESHEET_HREF] = siteCss(cores, landingCss);
-    files['server.mjs'] = serverScript();
+    files['assets/LEIA-ME.txt'] = `\uFEFF${assetsReadme()}`;
+    files[SERVER_REL] = serverScript();
+    files['scripts/abrir-localhost.bat'] = windowsBat();
+    files['scripts/abrir-localhost.command'] = macCommand();
+    files['scripts/abrir-localhost.sh'] = shellStart();
     files['package.json'] = packageJsonFor(folder);
-    const readme = readmeFor(nome);
-    files['README.md'] = readme;
-    files['LEIA-ME.txt'] = `\uFEFF${readme}`;
-    files['ver-no-windows.bat'] = windowsBat();
+    files['COMECE-AQUI.txt'] = `\uFEFF${intro}`;
+    files['LEIA-ME.txt'] = `\uFEFF${intro}`;
+    files['README.md'] = intro;
+    files['docs/01-ver-no-computador.txt'] = `\uFEFF${docVerComputador()}`;
+    files['docs/02-ligar-o-dominio.txt'] = `\uFEFF${docLigarDominio()}`;
+    files['docs/03-alterar-textos-e-fotos.txt'] = `\uFEFF${docAlterarConteudo()}`;
+
     return { folder, files };
+}
+
+function normalizeDataUrlKey(value) {
+    return String(value || '').replace(/\s+/g, '');
 }
 
 export async function loadLandingCss() {

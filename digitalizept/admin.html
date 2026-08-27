@@ -102,14 +102,14 @@
             </section>
 
             <section id="tab-coverage" class="admin-panel hidden">
-                <p class="admin-hint">Mapa OpenStreetMap. Toque num chip para ver só esses pins. “Novo negócio” entra como ainda não fomos (não é visita). “Registar visita” é o caderno da rua. Lead e visitas ligadas partilham um pin.</p>
                 <div class="coverage-toolbar">
-                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar por nome, categoria, morada…">
+                    <div id="coverage-due" class="coverage-due" hidden></div>
+                    <input id="coverage-filter" class="field-input" type="search" placeholder="Filtrar…">
                     <div class="coverage-actions">
                         <button id="coverage-add-lead-btn" type="button" class="btn-primary">Novo negócio</button>
                         <button id="coverage-add-btn" type="button" class="btn-secondary">Registar visita</button>
                         <button id="coverage-place-btn" type="button" class="btn-secondary">Marcar no mapa</button>
-                        <button id="coverage-export-btn" type="button" class="btn-secondary">Descarregar texto</button>
+                        <button id="coverage-export-btn" type="button" class="btn-secondary">Export</button>
                     </div>
                     <div id="coverage-stats" class="coverage-stats"></div>
                     <div id="coverage-legend" class="coverage-legend"></div>

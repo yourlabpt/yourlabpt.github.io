@@ -65,7 +65,10 @@ describe('digitalizept leads list order', () => {
         assert.match(admin, /leadMatchesSituacao/);
         assert.match(admin, /syncLeadsSegmentoOptions/);
         assert.match(admin, /'atualizado'/);
-        assert.match(admin, /lead-badge-novo/);
+        assert.match(admin, /lead-due-icon/);
+        assert.match(admin, /lead-process-dot/);
+        assert.match(admin, /lead-card/);
+        assert.match(admin, /processoColor/);
     });
 
     it('stamps atualizado_em on edit without moving criado_em', () => {

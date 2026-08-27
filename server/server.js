@@ -28,6 +28,7 @@ const {
     defaultEtapaForQuickLead,
     normalizeResultado,
     pinColors,
+    typeColor,
     etapaRank,
     geocodeLeadRow,
     geocodeVisitRow,
@@ -2689,8 +2690,8 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
             leads: rows.map((r) => {
                 const followup = outreach.parseFollowup(r.followup_json);
                 const email = outreach.leadEmailFromRows(r.obrigatorios_json, r.opcionais_json, r.legal_email);
-                const resultado = r.resultado || (r.estado === 'fechado' ? 'digitalizado' : '');
-                const tags = pinTagFields(r.cobertura, resultado, 'contacto_remoto', r.processo_estado);
+                const resultado = normalizeResultado(r.resultado || '');
+                const tags = pinTagFields(r.cobertura, resultado, 'contacto_remoto', r.processo_estado, r.business_type);
                 return {
                     id: r.id,
                     business_type: r.business_type,
@@ -2705,6 +2706,7 @@ app.get('/api/digitalizept/leads', requireDigitalizept, (req, res) => {
                     color: tags.color,
                     strokeColor: tags.strokeColor,
                     faded: Boolean(tags.faded),
+                    processoColor: tags.processoColor || '',
                     demo_slug: r.demo_slug,
                     notas_admin: r.notas_admin,
                     criado_em: r.criado_em,
@@ -2821,38 +2823,50 @@ function coverageLegend() {
         etapas: ETAPA_VALUES.map((id) => ({
             id,
             axis: 'etapa',
-            label: ETAPA_LABELS[id],
-            color: ETAPA_COLORS[id]
+            label: ETAPA_LABELS[id]
         })),
         processos: leadProcess.PROCESSO_ESTADOS.map((id) => ({
             id,
             axis: 'processo',
-            label: leadProcess.ESTADO_LABELS[id],
-            color: leadProcess.PROCESSO_COLORS[id]
+            label: leadProcess.ESTADO_LABELS[id]
         })),
         resultados: RESULTADO_VALUES.map((id) => ({
             id,
             axis: 'resultado',
             label: RESULTADO_LABELS[id],
             color: RESULTADO_COLORS[id]
+        })),
+        tipos: loadBusinessTypes().map((t) => ({
+            id: t.id,
+            axis: 'categoria',
+            label: t.nome || t.id,
+            color: typeColor(t.id)
         }))
     };
 }
 
-function pinTagFields(etapaRaw, resultadoRaw, etapaFallback, processoEstado) {
+function pinTagFields(etapaRaw, resultadoRaw, etapaFallback, processoEstado, businessType) {
     const etapa = normalizeEtapa(etapaRaw, etapaFallback);
     const resultado = normalizeResultado(resultadoRaw);
     const processo = leadProcess.processoPinStyle(processoEstado);
-    const colors = pinColors(etapa, resultado, processo);
+    const colors = pinColors(etapa, resultado, {
+        faded: processo.faded,
+        businessType
+    });
     const estado = leadProcess.normalizeEstado(processoEstado);
+    const processoColor = estado
+        ? (leadProcess.PROCESSO_COLORS[estado] || '')
+        : (leadProcess.PROCESSO_COLORS.NOVO || '');
     return {
         etapa,
         cobertura: etapa,
         resultado: resultado || undefined,
         processoEstado: estado || undefined,
         processoEstadoLabel: estado ? (leadProcess.ESTADO_LABELS[estado] || estado) : undefined,
+        processoColor: processoColor || undefined,
         etapaLabel: ETAPA_LABELS[etapa] || etapa,
         resultadoLabel: resultado ? (RESULTADO_LABELS[resultado] || resultado) : undefined,
+        typeColor: colors.color,
         color: colors.color,
         strokeColor: colors.strokeColor,
         strokeWidth: colors.strokeWidth,
@@ -2866,11 +2880,14 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
         const db = getDigitalizeptDb();
         const notes = leadNotesMap(db);
         const leads = db.prepare(`
-            SELECT id, business_type, nome, morada, cidade, telefone, whatsapp, estado,
-                   cobertura, resultado, cobertura_locked, demo_slug, lat, lng, geocode_status,
-                   notas_admin, criado_em, processo_estado
-            FROM lead
-            ORDER BY criado_em DESC
+            SELECT l.id, l.business_type, l.nome, l.morada, l.cidade, l.telefone, l.whatsapp, l.estado,
+                   l.cobertura, l.resultado, l.cobertura_locked, l.demo_slug, l.lat, l.lng, l.geocode_status,
+                   l.notas_admin, l.criado_em, l.processo_estado, l.proxima_acao_em,
+                   d.obrigatorios_json, d.opcionais_json, cl.email AS legal_email
+            FROM lead l
+            LEFT JOIN dados_negocio d ON d.lead_id = l.id
+            LEFT JOIN cliente_legal cl ON cl.lead_id = l.id
+            ORDER BY l.criado_em DESC
             LIMIT 500
         `).all();
         const visits = db.prepare(`
@@ -2892,8 +2909,8 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
             const linked = visitsByLead[r.id] || [];
             const visitaIds = linked.map((v) => v.id);
             const dealEstado = dealEstadoForLead(db, r.id);
-            const resultado = r.resultado || (r.estado === 'fechado' ? 'digitalizado' : '');
-            const tags = pinTagFields(r.cobertura, resultado, 'contacto_remoto', r.processo_estado);
+            const resultado = normalizeResultado(r.resultado || '');
+            const tags = pinTagFields(r.cobertura, resultado, 'contacto_remoto', r.processo_estado, r.business_type);
             let lat = r.lat;
             let lng = r.lng;
             let geocodeStatus = r.geocode_status;
@@ -2908,6 +2925,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
             const experiencias = linked
                 .map((v) => String(v.experiencia || '').trim())
                 .filter(Boolean);
+            const email = outreach.leadEmailFromRows(r.obrigatorios_json, r.opcionais_json, r.legal_email);
             return {
                 id: r.id,
                 kind: 'lead',
@@ -2915,7 +2933,8 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 business_type: r.business_type,
                 morada: r.morada,
                 cidade: r.cidade,
-                telefone: r.telefone,
+                telefone: r.telefone || r.whatsapp || '',
+                email: email || '',
                 estado: r.estado,
                 ...tags,
                 cobertura_locked: Boolean(r.cobertura_locked),
@@ -2926,6 +2945,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
                 experiencia: experiencias.join('\n---\n'),
                 notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
                 criado_em: r.criado_em,
+                proximaAcaoEm: r.proxima_acao_em || '',
                 visitaIds,
                 visitaCount: visitaIds.length,
                 visits: linked.map((v) => ({
@@ -2942,7 +2962,7 @@ app.get('/api/digitalizept/coverage', requireDigitalizept, (req, res) => {
         });
         // Street visits without a lead stay as their own pin. Linked visits fold into the lead.
         const orphanVisitPins = visits.filter((r) => !r.lead_id).map((r) => {
-            const tags = pinTagFields(r.cobertura, r.resultado, 'visitado');
+            const tags = pinTagFields(r.cobertura, r.resultado, 'visitado', '', '');
             return {
                 id: r.id,
                 kind: 'visita',
@@ -2979,7 +2999,7 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
         const db = getDigitalizeptDb();
         const notes = leadNotesMap(db);
         const leads = db.prepare(`
-            SELECT id, nome, morada, cidade, telefone, cobertura, resultado, notas_admin, criado_em, processo_estado
+            SELECT id, nome, morada, cidade, telefone, cobertura, resultado, notas_admin, criado_em, processo_estado, business_type
             FROM lead ORDER BY criado_em DESC LIMIT 500
         `).all();
         const visits = db.prepare(`
@@ -3002,7 +3022,7 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
                 morada: r.morada,
                 cidade: r.cidade,
                 telefone: r.telefone,
-                ...pinTagFields(r.cobertura, r.resultado, 'contacto_remoto', r.processo_estado),
+                ...pinTagFields(r.cobertura, r.resultado, 'contacto_remoto', r.processo_estado, r.business_type),
                 experiencia: experiencias.join('\n---\n'),
                 notas: [r.notas_admin, ...(notes[r.id] || [])].filter(Boolean).join('\n'),
                 criado_em: r.criado_em
@@ -3014,7 +3034,7 @@ app.get('/api/digitalizept/coverage/export', requireDigitalizept, (req, res) => 
                 nome: r.nome,
                 morada: r.morada,
                 cidade: r.cidade,
-                ...pinTagFields(r.cobertura, r.resultado, 'visitado'),
+                ...pinTagFields(r.cobertura, r.resultado, 'visitado', '', ''),
                 experiencia: r.experiencia || '',
                 visitado_em: r.visitado_em,
                 criado_em: r.criado_em
@@ -3150,7 +3170,7 @@ function visitaFromRow(row, db = null) {
     const dealEstado = row.deal_estado
         || (db && leadId ? dealEstadoForLead(db, leadId) : '');
     const leadNome = row.lead_nome || '';
-    const tags = pinTagFields(row.cobertura, row.resultado, 'visitado');
+    const tags = pinTagFields(row.cobertura, row.resultado, 'visitado', '', '');
     return {
         id: row.id,
         kind: 'visita',
@@ -4300,14 +4320,14 @@ app.patch('/api/digitalizept/leads/:leadId', requireDigitalizept, (req, res) => 
             scheduleLeadGeocode(leadId, { force: true });
         }
         const updated = db.prepare(`
-            SELECT id, nome, morada, cidade, cobertura, resultado, cobertura_locked, lat, lng, geocode_status, estado, demo_slug, processo_estado
+            SELECT id, nome, morada, cidade, cobertura, resultado, cobertura_locked, lat, lng, geocode_status, estado, demo_slug, processo_estado, business_type
             FROM lead WHERE id = ?
         `).get(leadId);
         return res.json({
             ok: true,
             lead: {
                 ...updated,
-                ...pinTagFields(updated.cobertura, updated.resultado, 'contacto_remoto', updated.processo_estado)
+                ...pinTagFields(updated.cobertura, updated.resultado, 'contacto_remoto', updated.processo_estado, updated.business_type)
             }
         });
     } catch (err) {

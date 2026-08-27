@@ -9,12 +9,14 @@ const {
     defaultEtapaForQuickLead,
     normalizeResultado,
     remapCoberturaToEtapaResultado,
+    typeColor,
     ETAPA_VALUES,
     RESULTADO_VALUES,
     ETAPA_LABELS,
     RESULTADO_LABELS,
-    ETAPA_COLORS,
-    RESULTADO_COLORS
+    RESULTADO_COLORS,
+    TYPE_COLORS,
+    PIN_STROKE_OPEN
 } = require('../../server/lib/digitalizept-geocode.js');
 const {
     PROCESSO_ESTADOS,
@@ -76,44 +78,48 @@ describe('digitalizept etapa + resultado tags', () => {
         db.close();
     });
 
-    it('pinColors: fill from resultado, stroke from etapa', () => {
-        const plain = pinColors('visitado', '');
-        assert.equal(plain.color, '#faf8f4');
-        assert.equal(plain.strokeColor, ETAPA_COLORS.visitado);
+    it('pinColors: fill from business type, ring from fecho', () => {
+        const plain = pinColors('visitado', '', { businessType: 'cafe-pastelaria' });
+        assert.equal(plain.color, TYPE_COLORS['cafe-pastelaria']);
+        assert.equal(plain.strokeColor, PIN_STROKE_OPEN);
         assert.ok(plain.strokeWidth >= 2);
 
-        const lost = pinColors('demo_apresentada', 'sem_interesse');
-        assert.equal(lost.color, RESULTADO_COLORS.sem_interesse);
-        assert.equal(lost.strokeColor, ETAPA_COLORS.demo_apresentada);
+        const lost = pinColors('demo_apresentada', 'sem_interesse', { businessType: 'restaurante' });
+        assert.equal(lost.color, TYPE_COLORS.restaurante);
+        assert.equal(lost.strokeColor, RESULTADO_COLORS.sem_interesse);
         assert.equal(lost.faded, true);
         assert.ok(lost.zIndexOffset < 0);
 
-        const won = pinColors('contacto_remoto', 'digitalizado');
-        assert.equal(won.color, RESULTADO_COLORS.digitalizado);
-        assert.equal(won.strokeColor, ETAPA_COLORS.contacto_remoto);
+        const won = pinColors('contacto_remoto', 'digitalizado', { businessType: 'joalharia' });
+        assert.equal(won.color, TYPE_COLORS.joalharia);
+        assert.equal(won.strokeColor, RESULTADO_COLORS.digitalizado);
     });
 
-    it('pinColors: open lead fill comes from processo, ring stays etapa', () => {
+    it('pinColors: ignores processo fill — Controlo colours stay on cards', () => {
         const seq = processoPinStyle('EM_SEQUENCIA');
-        const open = pinColors('demo_criada', '', seq);
-        assert.equal(open.color, PROCESSO_COLORS.EM_SEQUENCIA);
-        assert.equal(open.strokeColor, ETAPA_COLORS.demo_criada);
-        assert.equal(open.faded, false);
+        const open = pinColors('demo_criada', '', { ...seq, businessType: 'otica' });
+        assert.equal(open.color, TYPE_COLORS.otica);
+        assert.equal(open.strokeColor, PIN_STROKE_OPEN);
+        assert.notEqual(open.color, PROCESSO_COLORS.EM_SEQUENCIA);
 
-        const refused = pinColors('visitado', '', processoPinStyle('RECUSADO'));
-        assert.equal(refused.color, PROCESSO_COLORS.RECUSADO);
-        assert.equal(refused.strokeColor, ETAPA_COLORS.visitado);
+        const refused = pinColors('visitado', '', { ...processoPinStyle('RECUSADO'), businessType: 'mercadinho' });
+        assert.equal(refused.color, TYPE_COLORS.mercadinho);
         assert.equal(refused.faded, true);
 
-        const closedWins = pinColors('demo_apresentada', 'digitalizado', processoPinStyle('EM_SEQUENCIA'));
-        assert.equal(closedWins.color, RESULTADO_COLORS.digitalizado);
-        assert.equal(closedWins.strokeColor, ETAPA_COLORS.demo_apresentada);
+        const closedWins = pinColors('demo_apresentada', 'digitalizado', {
+            ...processoPinStyle('EM_SEQUENCIA'),
+            businessType: 'salao-beleza'
+        });
+        assert.equal(closedWins.color, TYPE_COLORS['salao-beleza']);
+        assert.equal(closedWins.strokeColor, RESULTADO_COLORS.digitalizado);
     });
 
-    it('gives every processo estado a map colour', () => {
+    it('gives every processo estado a card colour distinct from map type fills', () => {
+        const typeFills = new Set(Object.values(TYPE_COLORS));
         PROCESSO_ESTADOS.forEach((id) => {
             assert.ok(PROCESSO_COLORS[id], id);
             assert.match(PROCESSO_COLORS[id], /^#[0-9a-fA-F]{6}$/);
+            assert.equal(typeFills.has(PROCESSO_COLORS[id]), false, id);
         });
     });
 
@@ -124,11 +130,12 @@ describe('digitalizept etapa + resultado tags', () => {
         assert.equal(normalizeResultado(''), '');
         assert.ok(ETAPA_VALUES.includes('demo_apresentada'));
         assert.ok(RESULTADO_VALUES.includes('futuro'));
-        assert.equal(RESULTADO_COLORS.sem_interesse, '#b8b4ac');
-        assert.equal(ETAPA_LABELS.contacto_remoto, 'Ainda não fomos');
-        assert.equal(ETAPA_LABELS.demo_criada, 'Demo no mapa');
-        assert.equal(RESULTADO_LABELS.futuro, 'Voltar mais tarde');
+        assert.equal(RESULTADO_COLORS.sem_interesse, '#78716c');
+        assert.equal(ETAPA_LABELS.contacto_remoto, 'Por visitar');
+        assert.equal(ETAPA_LABELS.demo_criada, 'Com demo');
+        assert.equal(RESULTADO_LABELS.futuro, 'Mais tarde');
         assert.equal(RESULTADO_LABELS.sem_interesse, 'Não quer');
+        assert.equal(typeColor('cafe-pastelaria'), TYPE_COLORS['cafe-pastelaria']);
     });
 });
 
@@ -174,16 +181,19 @@ describe('digitalizept coverage category filter', async () => {
         }), false);
     });
 
-    it('treats a closed shop as digitalizado on the map filter', () => {
+    it('uses stored Fecho only — closed deals do not invent Cliente on the map', () => {
         const won = { nome: 'Loja Fechada', business_type: 'loja-roupa', etapa: 'demo_apresentada', estado: 'fechado', resultado: '' };
-        assert.equal(coverageResultadoId(won), 'digitalizado');
+        assert.equal(coverageResultadoId(won), '');
         assert.equal(pinMatchesCoverageFilters(won, {
             filterIds: new Set(['digitalizado'])
-        }), true);
-        assert.equal(pinMatchesCoverageFilters(cafe, {
-            filterIds: new Set(['digitalizado'])
         }), false);
-        assert.equal(coverageCounts([won, cafe]).byResultado.get('digitalizado'), 1);
+        const client = { ...won, resultado: 'digitalizado' };
+        assert.equal(coverageResultadoId(client), 'digitalizado');
+        assert.equal(pinMatchesCoverageFilters(client, {
+            filterIds: new Set(['digitalizado'])
+        }), true);
+        assert.equal(coverageCounts([client, cafe]).byResultado.get('digitalizado'), 1);
+        assert.equal(coverageCounts([won, cafe]).byResultado.get(''), 2);
     });
 
     it('starts novo negócio as contacto remoto even when a pin exists', () => {

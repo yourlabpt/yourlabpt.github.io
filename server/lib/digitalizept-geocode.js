@@ -6,11 +6,10 @@
  * fallback. Prefer house/building/amenity hits over city centroids so pins
  * land on the shop, not the town centre.
  *
- * Coverage pins use three tags that answer different questions:
- *   etapa     (ring)  — na rua: have we been / shown the demo
- *   processo  (fill)  — Controlo: where the lead is in the cadence
- *   resultado (fill)  — fecho: only when it already decided (overrides processo)
-
+ * Coverage pins (map only):
+ *   business type  (fill)  — what kind of shop
+ *   resultado/fecho (ring) — closed outcome; neutral ring when still open
+ * Controlo / na-rua stay as filters and card chrome — not map colours.
  */
 
 const ETAPA_VALUES = [
@@ -21,12 +20,13 @@ const ETAPA_VALUES = [
 ];
 
 const ETAPA_LABELS = {
-    contacto_remoto: 'Ainda não fomos',
-    visitado: 'Já passámos',
-    demo_criada: 'Demo no mapa',
-    demo_apresentada: 'Mostrei na loja'
+    contacto_remoto: 'Por visitar',
+    visitado: 'Visitado',
+    demo_criada: 'Com demo',
+    demo_apresentada: 'Mostrada'
 };
 
+/** @deprecated Na rua no longer colours the map; kept for older imports / chips without swatch. */
 const ETAPA_COLORS = {
     contacto_remoto: '#8e8a84',
     visitado: '#1f1f1f',
@@ -41,19 +41,52 @@ const RESULTADO_VALUES = [
 ];
 
 const RESULTADO_LABELS = {
-    futuro: 'Voltar mais tarde',
+    futuro: 'Mais tarde',
     sem_interesse: 'Não quer',
-    digitalizado: 'Já é cliente'
+    digitalizado: 'Cliente'
 };
 
+/** Ring colours — fecho only (distinct from Controlo card accents). */
 const RESULTADO_COLORS = {
-    futuro: '#5b7c99',
-    sem_interesse: '#b8b4ac',
-    digitalizado: '#3d9a6a'
+    futuro: '#2563eb',
+    sem_interesse: '#78716c',
+    digitalizado: '#15803d'
 };
 
-/** Paper fill when no process outcome is set yet — etapa still reads as the ring. */
-const PIN_FILL_UNSET = '#faf8f4';
+/** Fill when type is unknown. */
+const PIN_FILL_UNSET = '#e7e5e4';
+
+/** Ring when the lead is still open (no fecho). */
+const PIN_STROKE_OPEN = '#1c1917';
+
+/**
+ * Map pin fills by business type — keep distinct from PROCESSO_COLORS (cards).
+ */
+const TYPE_COLORS = {
+    'cafe-pastelaria': '#c2410c',
+    'clinica-estetica': '#a21caf',
+    'drogaria-ferragens': '#3f6212',
+    generico: '#57534e',
+    joalharia: '#a16207',
+    'loja-flores-decoracao': '#0f766e',
+    'loja-roupa': '#be123c',
+    'mecanico-automovel': '#1e3a8a',
+    mercadinho: '#b45309',
+    otica: '#0e7490',
+    restaurante: '#991b1b',
+    'salao-beleza': '#9d174d',
+    tapecaria: '#6d28d9'
+};
+
+function typeColor(businessType) {
+    const id = String(businessType || '').trim();
+    if (!id) return PIN_FILL_UNSET;
+    if (TYPE_COLORS[id]) return TYPE_COLORS[id];
+    let hash = 0;
+    for (let i = 0; i < id.length; i += 1) hash = ((hash << 5) - hash) + id.charCodeAt(i);
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue} 42% 38%)`;
+}
 
 /** @deprecated use ETAPA_*; kept as aliases for older imports */
 const COBERTURA_VALUES = ETAPA_VALUES;
@@ -133,17 +166,20 @@ function isParkedResultado(value) {
     return normalizeResultado(value) === 'sem_interesse';
 }
 
+/**
+ * Map pin style: fill = business type, ring = fecho (or open stroke).
+ * `etapa` is ignored for colour (kept in the signature for call-site compatibility).
+ * `extras.fill` / processo fills are ignored — Controlo colours belong on cards.
+ */
 function pinColors(etapa, resultado, extras = {}) {
     const res = normalizeResultado(resultado);
     const parked = isParkedResultado(res) || extras.faded === true;
-    const stroke = ETAPA_COLORS[normalizeEtapa(etapa)] || ETAPA_COLORS.contacto_remoto;
-    let fill = PIN_FILL_UNSET;
-    if (res) fill = RESULTADO_COLORS[res] || PIN_FILL_UNSET;
-    else if (extras.fill) fill = extras.fill;
+    const fill = typeColor(extras.businessType);
+    const stroke = res ? (RESULTADO_COLORS[res] || PIN_STROKE_OPEN) : PIN_STROKE_OPEN;
     return {
         color: fill,
         strokeColor: stroke,
-        strokeWidth: parked ? 2.4 : 2.8,
+        strokeWidth: res ? 3.2 : 2.2,
         faded: parked,
         zIndexOffset: parked ? -80 : (Number(extras.zIndexOffset) || 0)
     };
@@ -850,6 +886,9 @@ module.exports = {
     RESULTADO_VALUES,
     RESULTADO_LABELS,
     RESULTADO_COLORS,
+    TYPE_COLORS,
+    PIN_FILL_UNSET,
+    PIN_STROKE_OPEN,
     COBERTURA_VALUES,
     COBERTURA_LABELS,
     COBERTURA_COLORS,
@@ -862,6 +901,7 @@ module.exports = {
     normalizeEtapa,
     defaultEtapaForQuickLead,
     normalizeResultado,
+    typeColor,
     pinColors,
     etapaRank,
     remapCoberturaToEtapaResultado,
