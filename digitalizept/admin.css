@@ -205,7 +205,6 @@
 .admin-body .btn-logout,
 .admin-body .btn-danger,
 .admin-body .btn-refresh-app,
-.admin-body .btn-icon-round,
 .admin-body a.btn-primary,
 .admin-body a.btn-secondary,
 .admin-body a.btn-demo-open {
@@ -300,15 +299,13 @@
 }
 
 .admin-body .btn-logout,
-.admin-body .btn-refresh-app,
-.admin-body .btn-icon-round {
+.admin-body .btn-refresh-app {
     border: none;
     background: var(--admin-fill);
     color: var(--admin-muted);
 }
 
-.admin-body .btn-refresh-app,
-.admin-body .btn-icon-round {
+.admin-body .btn-refresh-app {
     width: 36px;
     height: 36px;
     padding: 0;
@@ -316,8 +313,7 @@
 }
 
 .admin-body .btn-logout:hover,
-.admin-body .btn-refresh-app:hover,
-.admin-body .btn-icon-round:hover {
+.admin-body .btn-refresh-app:hover {
     color: var(--admin-ink);
     background: var(--admin-press);
 }
@@ -331,10 +327,17 @@
     padding: 3px;
     background: var(--admin-fill);
     border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.admin-tabs::-webkit-scrollbar {
+    display: none;
 }
 
 .admin-tab {
-    flex: 1;
+    flex: 1 0 auto;
     border: none;
     background: transparent;
     color: var(--admin-muted);
@@ -343,6 +346,7 @@
     font: inherit;
     font-weight: 600;
     font-size: 0.88rem;
+    white-space: nowrap;
     cursor: pointer;
 }
 
@@ -1949,16 +1953,50 @@
     margin-bottom: 10px;
 }
 
+.porto-finder-queue-main {
+    margin-top: 20px;
+}
+
+.porto-finder-queue-count {
+    font-weight: 400;
+    color: var(--admin-muted);
+}
+
+.porto-finder-queue-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 14px;
+}
+
+.porto-finder-queue-toolbar .field-input {
+    flex: 1 1 200px;
+    min-width: 160px;
+}
+
+.porto-finder-queue-select {
+    flex: 0 1 15rem;
+    max-width: 18rem;
+}
+
 .porto-finder-card {
-    padding: 10px 12px;
-    margin: 0 0 8px;
+    padding: 12px 14px;
+    margin: 0 0 10px;
     border: 1px solid var(--admin-border, rgba(0, 0, 0, 0.1));
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--admin-fill, #f7f4ee);
 }
 
+.porto-finder-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
 .porto-finder-card-kind {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -1966,11 +2004,64 @@
     color: var(--admin-muted, #5a5348);
 }
 
+.porto-finder-badge {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--admin-press, #e7e2d8);
+    color: var(--admin-muted);
+    white-space: nowrap;
+}
+
+.porto-finder-badge-ready {
+    background: rgba(21, 128, 61, 0.14);
+    color: #15803d;
+}
+
+.porto-finder-badge-partial {
+    background: rgba(245, 158, 11, 0.16);
+    color: #92400e;
+}
+
 .porto-finder-card-url {
-    margin: 0 0 8px;
-    font-size: 0.85rem;
+    margin: 6px 0 0;
+    font-size: 0.82rem;
     word-break: break-all;
     line-height: 1.35;
+    color: var(--admin-muted);
+}
+
+.porto-finder-card-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px 10px;
+    margin: 10px 0;
+}
+
+.porto-finder-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.porto-finder-field-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--admin-muted);
+}
+
+.porto-finder-field .field-input {
+    padding: 8px 10px;
+    font-size: 0.88rem;
+}
+
+.porto-finder-card-missing {
+    margin: 0 0 8px;
+    color: #92400e;
 }
 
 .porto-finder-card-actions {

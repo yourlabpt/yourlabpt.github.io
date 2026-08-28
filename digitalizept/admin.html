@@ -46,6 +46,7 @@
         <nav class="admin-tabs" role="tablist">
             <button type="button" class="admin-tab active" data-tab="catalog">Catálogo</button>
             <button type="button" class="admin-tab" data-tab="leads">Leads</button>
+            <button type="button" class="admin-tab" data-tab="descobrir">Descobrir</button>
             <button type="button" class="admin-tab" data-tab="deals">Propostas</button>
             <button type="button" class="admin-tab" data-tab="coverage">Cobertura</button>
             <button type="button" class="admin-tab" data-tab="metricas">Métricas</button>
@@ -83,15 +84,14 @@
                     </select>
                     <button id="leads-add-btn" type="button" class="btn-primary">Novo negócio</button>
                     <button id="leads-email-demos-btn" type="button" class="btn-secondary">Email HTML às demos</button>
-                    <button id="leads-porto-finder-btn" type="button" class="btn-icon-round" aria-label="Descobrir negócios (Porto)" title="Descobrir negócios (Porto) — links / dados em lote">
-                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                            <path fill="currentColor" d="M9.5 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0-2a6.5 6.5 0 1 0 4.23 11.44l4.92 4.92a1 1 0 0 0 1.41-1.41l-4.92-4.92A6.5 6.5 0 0 0 9.5 3z"/>
-                        </svg>
-                    </button>
                 </div>
                 <p class="admin-hint">Segmento = tipo de loja. «Novos a completar» = negócio acabado de criar (Novo negócio / rascunho) para fechar ficha, demo e Controlo (email, WhatsApp ou chamada). Controlo = enviar. Demo = logo e fotos. Dados da loja = ficha completa.</p>
                 <p id="leads-filter-summary" class="admin-hint leads-filter-summary" hidden></p>
                 <div id="leads-list" class="admin-list"></div>
+            </section>
+
+            <section id="tab-descobrir" class="admin-panel hidden">
+                <div id="descobrir-root"></div>
             </section>
 
             <section id="tab-dossier" class="admin-panel hidden">

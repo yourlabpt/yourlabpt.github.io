@@ -1,11 +1,12 @@
 /**
- * Porto (or city) business discovery on the Leads list.
- * This panel is only an intake point: seller pastes links (one by one) or a
- * batch of business data (JSON, e.g. exported from generate_biz_links) here.
- * Records with the minimum data for a lead (nome + facebook/instagram +
- * email/telefone/whatsapp + morada) are sent to /leads/quick, which already
- * filters against existing leads (updates the match instead of duplicating).
- * Records missing any of those go to the manual queue to be completed by hand.
+ * Porto (or city) business discovery — its own admin page ("Descobrir").
+ * Seller pastes links (one by one) or a batch of business data (JSON, e.g.
+ * exported from generate_biz_links) here. Records with the minimum data for
+ * a lead (nome + facebook/instagram + email/telefone/whatsapp + morada) are
+ * sent straight to /leads/quick, which already filters against existing
+ * leads (updates the match instead of duplicating). Records missing any of
+ * that land as editable cards in the queue below — fields are edited right
+ * on the card (no side drawer), then «Criar ficha» sends them the same way.
  */
 import {
     businessTypeDiscoveryLinks,
@@ -13,6 +14,7 @@ import {
 } from './social-assist.js';
 
 const STORAGE_KEY = 'dpt-porto-finder-candidates';
+const KIND_LABELS = { facebook: 'Facebook', instagram: 'Instagram', maps: 'Maps', batch: 'Lote' };
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -35,11 +37,46 @@ function clean(value) {
         .trim();
 }
 
+function genId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Fields tracked for the completeness score (badge + sort). */
+const TRACKED_FIELDS = [
+    'nome', 'telefone', 'whatsapp', 'email', 'morada', 'cidade',
+    'facebook', 'instagram', 'website_atual', 'mapsUrl', 'typeId'
+];
+
+function completenessOf(item) {
+    const filled = TRACKED_FIELDS.filter((f) => clean(item[f]).length > 0).length;
+    return { filled, total: TRACKED_FIELDS.length };
+}
+
+/** Minimum data for a lead: nome + facebook/instagram + email/telefone/whatsapp + morada. */
+function missingFields(record) {
+    const missing = [];
+    if (!clean(record.nome)) missing.push('nome');
+    if (!clean(record.facebook) && !clean(record.instagram)) missing.push('Facebook ou Instagram');
+    if (!clean(record.email) && !clean(record.telefone) && !clean(record.whatsapp)) missing.push('email, telefone ou WhatsApp');
+    if (!clean(record.morada)) missing.push('morada');
+    return missing;
+}
+
 function loadCandidates() {
     try {
         const raw = sessionStorage.getItem(STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        // Migrate older cached shapes (nomeHint -> nome, missing id).
+        return parsed.map((c) => {
+            const item = { ...c };
+            if (item.nomeHint && !item.nome) item.nome = item.nomeHint;
+            delete item.nomeHint;
+            if (!item.id) item.id = genId();
+            item.missing = missingFields(item);
+            return item;
+        });
     } catch (_) {
         return [];
     }
@@ -136,27 +173,44 @@ function normalizeBatchRecord({ raw, cidade, tipoId }) {
     };
 }
 
-/** Minimum data for a lead: nome + facebook/instagram + email/telefone/whatsapp + morada. */
-function missingFields(record) {
-    const missing = [];
-    if (!record.nome) missing.push('nome');
-    if (!record.facebook && !record.instagram) missing.push('Facebook ou Instagram');
-    if (!record.email && !record.telefone && !record.whatsapp) missing.push('email, telefone ou WhatsApp');
-    if (!record.morada) missing.push('morada');
-    return missing;
+/** Turn a normalized batch record into a queue candidate (editable card). */
+function candidateFromRecord(record) {
+    return {
+        id: genId(),
+        url: record.mapsUrl || record.facebook || record.instagram || '',
+        kind: record.mapsUrl ? 'maps' : (record.facebook ? 'facebook' : 'batch'),
+        typeId: record.businessTypeId || '',
+        typeNome: '',
+        nome: record.nome,
+        telefone: record.telefone,
+        whatsapp: record.whatsapp,
+        email: record.email,
+        morada: record.morada,
+        cidade: record.cidade,
+        instagram: record.instagram,
+        facebook: record.facebook,
+        website_atual: record.website_atual,
+        mapsUrl: record.mapsUrl,
+        missing: missingFields(record),
+        addedAt: new Date().toISOString()
+    };
 }
 
 export function renderPortoFinder(host, {
     api,
     toast,
     loadTypes,
-    openQuickLeadWithDefaults
+    onLeadSaved,
+    goToLeads
 } = {}) {
     if (!host) return { destroy() {} };
 
     let types = [];
     let candidates = loadCandidates();
     let cidade = 'Porto';
+    let queueSearch = '';
+    let queueStatus = '';
+    let queueSort = 'completo_desc';
 
     const root = el('div', 'porto-finder');
 
@@ -164,7 +218,7 @@ export function renderPortoFinder(host, {
     head.appendChild(el(
         'p',
         'meta',
-        'Ponto de entrada apenas: abre pesquisas por tipo, cola links um a um, ou cola um lote de dados (JSON, ex. export do generate_biz_links). Quem tem o mínimo (nome + Facebook/Instagram + email/telefone/WhatsApp + morada) cria ficha logo — o filtro de duplicados do «Novo negócio» evita repetir. O resto fica na fila para completar à mão.'
+        'Ponto de entrada apenas: abre pesquisas por tipo, cola links um a um, ou cola um lote de dados (JSON, ex. export do generate_biz_links). Quem tem o mínimo (nome + Facebook/Instagram + email/telefone/WhatsApp + morada) cria ficha logo — o filtro de duplicados evita repetir. O resto fica na fila de cartões abaixo para completar e criar ficha ali mesmo.'
     ));
 
     const cityRow = el('div', 'porto-finder-city');
@@ -201,12 +255,12 @@ export function renderPortoFinder(host, {
     batchWrap.append(batchInput, batchActions);
     head.appendChild(batchWrap);
 
-    const queueWrap = el('div', 'porto-finder-queue');
-    queueWrap.appendChild(el('h4', '', 'Fila de candidatos'));
-    queueWrap.appendChild(el(
+    const linksWrap = el('div', 'porto-finder-queue');
+    linksWrap.appendChild(el('h4', '', 'Adicionar links'));
+    linksWrap.appendChild(el(
         'p',
         'meta',
-        'Cola links do Maps (preferido) ou Facebook — um por linha. Depois «Criar ficha» em cada um.'
+        'Cola links do Maps (preferido) ou Facebook — um por linha. Depois completa e cria a ficha no cartão, na fila abaixo.'
     ));
     const paste = el('textarea', 'field-input porto-finder-paste');
     paste.rows = 3;
@@ -215,14 +269,79 @@ export function renderPortoFinder(host, {
     addBtn.type = 'button';
     const exportBtn = el('button', 'btn-secondary', 'Exportar URLs (script)');
     exportBtn.type = 'button';
-        exportBtn.title = 'Descarrega um .txt para scripts/enrich-maps-candidates.js';
-    const queueList = el('div', 'porto-finder-queue-list');
-    const queueActions = el('div', 'porto-finder-queue-actions');
-    queueActions.append(addBtn, exportBtn);
-    queueWrap.append(paste, queueActions, queueList);
-    head.appendChild(queueWrap);
+    exportBtn.title = 'Descarrega um .txt para scripts/enrich-maps-candidates.js';
+    const linksActions = el('div', 'porto-finder-queue-actions');
+    linksActions.append(addBtn, exportBtn);
+    linksWrap.append(paste, linksActions);
+    head.appendChild(linksWrap);
 
     root.appendChild(head);
+
+    // ---------- Queue (cards) ----------
+    const queueSection = el('div', 'porto-finder-queue porto-finder-queue-main');
+    const queueTitle = el('h4', '', 'Fila de candidatos');
+    const queueCount = el('span', 'porto-finder-queue-count');
+    queueTitle.appendChild(queueCount);
+    queueSection.appendChild(queueTitle);
+    queueSection.appendChild(el(
+        'p',
+        'meta',
+        'Cada cartão é editável — completa os campos, o estado atualiza sozinho, e «Criar ficha» fica pronto quando o mínimo estiver preenchido.'
+    ));
+
+    const queueToolbar = el('div', 'porto-finder-queue-toolbar');
+    const searchInput = el('input', 'field-input');
+    searchInput.type = 'search';
+    searchInput.placeholder = 'Filtrar por nome, morada, link…';
+    searchInput.setAttribute('aria-label', 'Filtrar fila');
+    searchInput.addEventListener('input', () => {
+        queueSearch = String(searchInput.value || '').trim().toLowerCase();
+        paintQueue();
+    });
+
+    const statusSelect = el('select', 'field-input porto-finder-queue-select');
+    statusSelect.setAttribute('aria-label', 'Estado da ficha');
+    [
+        ['', 'Todos os estados'],
+        ['prontos', 'Prontos a criar ficha'],
+        ['incompletos', 'Incompletos']
+    ].forEach(([value, label]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        statusSelect.appendChild(opt);
+    });
+    statusSelect.addEventListener('change', () => {
+        queueStatus = statusSelect.value;
+        paintQueue();
+    });
+
+    const sortSelect = el('select', 'field-input porto-finder-queue-select');
+    sortSelect.setAttribute('aria-label', 'Ordenar fila');
+    [
+        ['completo_desc', 'Mais completos primeiro'],
+        ['completo_asc', 'Menos completos primeiro'],
+        ['recentes', 'Mais recentes primeiro'],
+        ['antigos', 'Mais antigos primeiro']
+    ].forEach(([value, label]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        sortSelect.appendChild(opt);
+    });
+    sortSelect.value = queueSort;
+    sortSelect.addEventListener('change', () => {
+        queueSort = sortSelect.value;
+        paintQueue();
+    });
+
+    queueToolbar.append(searchInput, statusSelect, sortSelect);
+    queueSection.appendChild(queueToolbar);
+
+    const queueList = el('div', 'porto-finder-queue-list');
+    queueSection.appendChild(queueList);
+
+    root.appendChild(queueSection);
     host.appendChild(root);
 
     function paintTypes() {
@@ -255,100 +374,261 @@ export function renderPortoFinder(host, {
         });
     }
 
+    function removeCandidate(id) {
+        candidates = candidates.filter((c) => c.id !== id);
+        saveCandidates(candidates);
+        paintQueue();
+    }
+
+    async function submitLead(item) {
+        return api('/api/digitalizept/leads/quick', {
+            method: 'POST',
+            body: {
+                nome: item.nome,
+                businessTypeId: item.typeId || 'generico',
+                telefone: item.telefone,
+                whatsapp: item.whatsapp,
+                email: item.email,
+                morada: item.morada,
+                cidade: item.cidade || cidade,
+                website_atual: item.website_atual,
+                instagram: item.instagram,
+                facebook: item.facebook,
+                mapsUrl: item.mapsUrl || (item.kind === 'maps' ? item.url : '')
+            }
+        });
+    }
+
+    function miniField(container, labelText, item, key, attrs = {}) {
+        const wrap = el('label', 'porto-finder-field');
+        wrap.appendChild(el('span', 'porto-finder-field-label', labelText));
+        const input = el('input', 'field-input');
+        input.type = attrs.type || 'text';
+        input.value = item[key] || '';
+        if (attrs.placeholder) input.placeholder = attrs.placeholder;
+        input.addEventListener('input', () => {
+            item[key] = input.value;
+            saveCandidates(candidates);
+            refreshCard(container._card, item);
+        });
+        wrap.appendChild(input);
+        container.appendChild(wrap);
+        return input;
+    }
+
+    function typeSelect(container, item) {
+        const wrap = el('label', 'porto-finder-field');
+        wrap.appendChild(el('span', 'porto-finder-field-label', 'Tipo de negócio'));
+        const select = el('select', 'field-input');
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = 'Genérico';
+        select.appendChild(blank);
+        types.forEach((t) => {
+            if (t.id === 'generico') return;
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.nome || t.id;
+            select.appendChild(opt);
+        });
+        select.value = item.typeId || '';
+        select.addEventListener('change', () => {
+            item.typeId = select.value;
+            const hit = types.find((t) => t.id === select.value);
+            item.typeNome = hit ? (hit.nome || hit.id) : '';
+            saveCandidates(candidates);
+            refreshCard(container._card, item);
+        });
+        wrap.appendChild(select);
+        container.appendChild(wrap);
+        return select;
+    }
+
+    function refreshCard(card, item) {
+        if (!card) return;
+        const missing = missingFields(item);
+        item.missing = missing;
+        const comp = completenessOf(item);
+        const badge = card.querySelector('.porto-finder-badge');
+        if (badge) {
+            badge.textContent = `${comp.filled}/${comp.total} campos`;
+            badge.classList.toggle('porto-finder-badge-ready', missing.length === 0);
+            badge.classList.toggle('porto-finder-badge-partial', missing.length > 0);
+        }
+        const missingLine = card.querySelector('.porto-finder-card-missing');
+        if (missingLine) {
+            if (missing.length) {
+                missingLine.textContent = `Falta: ${missing.join(', ')}`;
+                missingLine.hidden = false;
+            } else {
+                missingLine.hidden = true;
+            }
+        }
+        const criarBtn = card.querySelector('.porto-finder-card-criar');
+        if (criarBtn) criarBtn.disabled = missing.length > 0;
+    }
+
+    function renderCard(item) {
+        const card = el('article', 'porto-finder-card');
+
+        const headRow = el('div', 'porto-finder-card-head');
+        const kind = KIND_LABELS[item.kind] || 'Link';
+        headRow.appendChild(el('p', 'porto-finder-card-kind', `${kind}${item.typeNome ? ` · ${item.typeNome}` : ''}`));
+        const comp = completenessOf(item);
+        const badge = el('span', 'porto-finder-badge', `${comp.filled}/${comp.total} campos`);
+        badge.classList.toggle('porto-finder-badge-ready', item.missing.length === 0);
+        badge.classList.toggle('porto-finder-badge-partial', item.missing.length > 0);
+        headRow.appendChild(badge);
+        card.appendChild(headRow);
+
+        if (item.url) {
+            const urlLine = el('p', 'porto-finder-card-url', item.url);
+            card.appendChild(urlLine);
+        }
+
+        const fields = el('div', 'porto-finder-card-fields');
+        fields._card = card;
+        miniField(fields, 'Nome', item, 'nome', { placeholder: 'Nome do negócio' });
+        miniField(fields, 'Telefone', item, 'telefone', { type: 'tel' });
+        miniField(fields, 'WhatsApp', item, 'whatsapp', { type: 'tel' });
+        miniField(fields, 'Email', item, 'email', { type: 'email' });
+        miniField(fields, 'Morada', item, 'morada');
+        miniField(fields, 'Cidade', item, 'cidade');
+        typeSelect(fields, item);
+        miniField(fields, 'Facebook', item, 'facebook', { type: 'url' });
+        miniField(fields, 'Instagram', item, 'instagram');
+        miniField(fields, 'Website', item, 'website_atual', { type: 'url' });
+        miniField(fields, 'Link Maps', item, 'mapsUrl', { type: 'url' });
+        card.appendChild(fields);
+
+        const missingLine = el('p', 'meta porto-finder-card-missing');
+        if (item.missing.length) {
+            missingLine.textContent = `Falta: ${item.missing.join(', ')}`;
+        } else {
+            missingLine.hidden = true;
+        }
+        card.appendChild(missingLine);
+
+        const actions = el('div', 'porto-finder-card-actions');
+        const open = el('a', 'btn-secondary', 'Abrir');
+        open.href = item.url || '#';
+        open.target = '_blank';
+        open.rel = 'noopener';
+        if (!item.url) open.setAttribute('aria-disabled', 'true');
+
+        const enrich = el('button', 'btn-secondary', 'Enriquecer Maps');
+        enrich.type = 'button';
+        enrich.disabled = item.kind !== 'maps' || !api;
+        enrich.title = 'Corre maps-lookup neste URL e preenche os campos acima';
+        enrich.addEventListener('click', async () => {
+            if (!api || item.kind !== 'maps') return;
+            enrich.disabled = true;
+            enrich.textContent = 'A ler…';
+            try {
+                const { response, data } = await api('/api/digitalizept/maps-lookup', {
+                    method: 'POST',
+                    body: { url: item.url }
+                });
+                if (!response.ok) {
+                    toast((data && data.error) || 'Não consegui ler o link.', true);
+                    return;
+                }
+                const d = (data && data.dados) || {};
+                if (!item.nome && d.nome_negocio) item.nome = d.nome_negocio;
+                if (!item.telefone && d.telefone) item.telefone = d.telefone;
+                if (!item.email && d.email) item.email = d.email;
+                if (!item.morada && d.morada) item.morada = d.morada;
+                if (!item.cidade && d.cidade) item.cidade = d.cidade;
+                if (!item.instagram && d.instagram) item.instagram = d.instagram;
+                if (!item.facebook && d.facebook) item.facebook = d.facebook;
+                if (!item.website_atual && (d.website_atual || d.website)) item.website_atual = d.website_atual || d.website;
+                if (!item.typeId && data.businessTypeId && data.businessTypeId !== 'generico') item.typeId = data.businessTypeId;
+                saveCandidates(candidates);
+                paintQueue();
+                toast('Pré-preenchido — confirma e cria a ficha.');
+            } catch (_) {
+                toast('Erro de rede.', true);
+            } finally {
+                enrich.disabled = false;
+                enrich.textContent = 'Enriquecer Maps';
+            }
+        });
+
+        const criar = el('button', 'btn-primary porto-finder-card-criar', 'Criar ficha');
+        criar.type = 'button';
+        criar.disabled = item.missing.length > 0;
+        criar.addEventListener('click', async () => {
+            const missing = missingFields(item);
+            if (missing.length) {
+                toast(`Faltam campos: ${missing.join(', ')}`, true);
+                return;
+            }
+            if (!api) {
+                toast('Sem ligação à API — não consigo criar fichas.', true);
+                return;
+            }
+            criar.disabled = true;
+            criar.textContent = 'A criar…';
+            try {
+                const { response, data } = await submitLead(item);
+                if (!response.ok) {
+                    toast((data && data.error) || 'Não consegui criar a ficha.', true);
+                    return;
+                }
+                removeCandidate(item.id);
+                const created = !(data && data.created === false);
+                toast(created ? 'Ficha criada.' : 'Já existia — dados atualizados.', false, {
+                    actionLabel: 'Ver leads',
+                    onAction: () => { if (typeof goToLeads === 'function') goToLeads(); }
+                });
+                if (typeof onLeadSaved === 'function') onLeadSaved();
+            } catch (_) {
+                toast('Erro de rede.', true);
+            } finally {
+                criar.disabled = missingFields(item).length > 0;
+                criar.textContent = 'Criar ficha';
+            }
+        });
+
+        const remove = el('button', 'btn-secondary', 'Remover');
+        remove.type = 'button';
+        remove.addEventListener('click', () => removeCandidate(item.id));
+
+        actions.append(open, enrich, criar, remove);
+        card.appendChild(actions);
+        return card;
+    }
+
+    function visibleCandidates() {
+        let list = candidates.slice();
+        if (queueSearch) {
+            list = list.filter((c) => `${c.nome || ''} ${c.url || ''} ${c.morada || ''} ${c.cidade || ''}`.toLowerCase().includes(queueSearch));
+        }
+        if (queueStatus === 'prontos') list = list.filter((c) => missingFields(c).length === 0);
+        else if (queueStatus === 'incompletos') list = list.filter((c) => missingFields(c).length > 0);
+
+        list.sort((a, b) => {
+            if (queueSort === 'completo_desc') return completenessOf(b).filled - completenessOf(a).filled;
+            if (queueSort === 'completo_asc') return completenessOf(a).filled - completenessOf(b).filled;
+            if (queueSort === 'antigos') return String(a.addedAt || '').localeCompare(String(b.addedAt || ''));
+            return String(b.addedAt || '').localeCompare(String(a.addedAt || '')); // recentes (default fallback)
+        });
+        return list;
+    }
+
     function paintQueue() {
+        queueCount.textContent = candidates.length ? ` (${candidates.length})` : '';
         queueList.innerHTML = '';
         if (!candidates.length) {
             queueList.appendChild(el('p', 'meta', 'Fila vazia.'));
             return;
         }
-        candidates.forEach((item, index) => {
-            const card = el('article', 'porto-finder-card');
-            const kind = item.kind === 'facebook' ? 'Facebook' : (item.kind === 'maps' ? 'Maps' : (item.kind === 'batch' ? 'Lote' : 'Link'));
-            card.appendChild(el('p', 'porto-finder-card-kind', `${kind}${item.typeNome ? ` · ${item.typeNome}` : ''}`));
-            const urlLine = el('p', 'porto-finder-card-url');
-            urlLine.textContent = item.url || item.nomeHint || '(sem link)';
-            card.appendChild(urlLine);
-            if (Array.isArray(item.missing) && item.missing.length) {
-                card.appendChild(el('p', 'meta', `Falta: ${item.missing.join(', ')}`));
-            }
-            const row = el('div', 'porto-finder-card-actions');
-            const open = el('a', 'btn-secondary', 'Abrir');
-            open.href = item.url || '#';
-            open.target = '_blank';
-            open.rel = 'noopener';
-            if (!item.url) open.setAttribute('aria-disabled', 'true');
-            const criar = el('button', 'btn-primary', 'Criar ficha');
-            criar.type = 'button';
-            criar.addEventListener('click', () => {
-                if (typeof openQuickLeadWithDefaults !== 'function') {
-                    toast('Abrir Novo negócio não está disponível.', true);
-                    return;
-                }
-                const defaults = {
-                    mapsUrl: item.mapsUrl || (item.kind === 'maps' ? item.url : ''),
-                    facebook: item.facebook || (item.kind === 'facebook' ? item.url : ''),
-                    instagram: item.instagram || '',
-                    telefone: item.telefone || '',
-                    email: item.email || '',
-                    morada: item.morada || '',
-                    website_atual: item.website_atual || '',
-                    cidade: item.cidade || cidade,
-                    businessTypeId: item.typeId || 'generico',
-                    nome: item.nomeHint || ''
-                };
-                openQuickLeadWithDefaults(defaults);
-            });
-            const enrich = el('button', 'btn-secondary', 'Enriquecer Maps');
-            enrich.type = 'button';
-            enrich.disabled = item.kind !== 'maps' || !api;
-            enrich.title = 'Corre maps-lookup neste URL e abre Novo negócio já preenchido';
-            enrich.addEventListener('click', async () => {
-                if (!api || item.kind !== 'maps') return;
-                enrich.disabled = true;
-                enrich.textContent = 'A ler…';
-                try {
-                    const { response, data } = await api('/api/digitalizept/maps-lookup', {
-                        method: 'POST',
-                        body: { url: item.url }
-                    });
-                    if (!response.ok) {
-                        toast((data && data.error) || 'Não consegui ler o link.', true);
-                        return;
-                    }
-                    const d = (data && data.dados) || {};
-                    openQuickLeadWithDefaults({
-                        nome: d.nome_negocio || '',
-                        mapsUrl: item.url,
-                        website_atual: d.website_atual || d.website || '',
-                        telefone: d.telefone || '',
-                        email: d.email || '',
-                        morada: d.morada || '',
-                        cidade: d.cidade || cidade,
-                        instagram: d.instagram || '',
-                        facebook: d.facebook || '',
-                        businessTypeId: data.businessTypeId || item.typeId || 'generico',
-                        lat: data.lat,
-                        lng: data.lng
-                    });
-                    toast('Pré-preenchido — confirma e cria a ficha.');
-                } catch (_) {
-                    toast('Erro de rede.', true);
-                } finally {
-                    enrich.disabled = false;
-                    enrich.textContent = 'Enriquecer Maps';
-                }
-            });
-            const remove = el('button', 'btn-secondary', 'Remover');
-            remove.type = 'button';
-            remove.addEventListener('click', () => {
-                candidates.splice(index, 1);
-                saveCandidates(candidates);
-                paintQueue();
-            });
-            row.append(open, enrich, criar, remove);
-            card.appendChild(row);
-            queueList.appendChild(card);
-        });
+        const list = visibleCandidates();
+        if (!list.length) {
+            queueList.appendChild(el('p', 'meta', 'Nada corresponde a este filtro.'));
+            return;
+        }
+        list.forEach((item) => queueList.appendChild(renderCard(item)));
     }
 
     batchBtn.addEventListener('click', async () => {
@@ -410,24 +690,8 @@ export function renderPortoFinder(host, {
                     } catch (_) {
                         failed += 1;
                     }
-                } else if (!candidates.some((c) => c.nomeHint === record.nome && c.morada === record.morada)) {
-                    candidates.push({
-                        url: record.mapsUrl || record.facebook || record.instagram || '',
-                        kind: record.mapsUrl ? 'maps' : (record.facebook ? 'facebook' : 'batch'),
-                        typeId: record.businessTypeId || '',
-                        typeNome: '',
-                        nomeHint: record.nome,
-                        telefone: record.telefone,
-                        email: record.email,
-                        morada: record.morada,
-                        cidade: record.cidade,
-                        instagram: record.instagram,
-                        facebook: record.facebook,
-                        website_atual: record.website_atual,
-                        mapsUrl: record.mapsUrl,
-                        missing,
-                        addedAt: new Date().toISOString()
-                    });
+                } else if (!candidates.some((c) => c.nome === record.nome && c.morada === record.morada)) {
+                    candidates.push(candidateFromRecord(record));
                     queued += 1;
                 }
             }
@@ -435,6 +699,7 @@ export function renderPortoFinder(host, {
             paintQueue();
             batchInput.value = '';
             toast(`Lote: ${created} criado(s), ${updated} já existiam (atualizados), ${queued} na fila por dados em falta${failed ? `, ${failed} com erro` : ''}.`);
+            if ((created || updated) && typeof onLeadSaved === 'function') onLeadSaved();
         } finally {
             batchBtn.disabled = false;
             batchBtn.textContent = 'Processar lote';
@@ -447,19 +712,32 @@ export function renderPortoFinder(host, {
             toast('Cola pelo menos um link.', true);
             return;
         }
-        const selectedType = types.find((t) => t.id === head.dataset.activeType) || null;
         lines.forEach((url) => {
             if (candidates.some((c) => c.url === url)) return;
             let kind = 'other';
             if (looksLikeMapsUrl(url)) kind = 'maps';
             else if (looksLikeFacebookUrl(url)) kind = 'facebook';
-            candidates.push({
+            else if (looksLikeInstagramUrl(url)) kind = 'instagram';
+            const item = {
+                id: genId(),
                 url,
                 kind,
-                typeId: selectedType ? selectedType.id : '',
-                typeNome: selectedType ? selectedType.nome : '',
+                typeId: '',
+                typeNome: '',
+                nome: '',
+                telefone: '',
+                whatsapp: '',
+                email: '',
+                morada: '',
+                cidade: '',
+                instagram: kind === 'instagram' ? url : '',
+                facebook: kind === 'facebook' ? url : '',
+                website_atual: '',
+                mapsUrl: kind === 'maps' ? url : '',
                 addedAt: new Date().toISOString()
-            });
+            };
+            item.missing = missingFields(item);
+            candidates.push(item);
         });
         saveCandidates(candidates);
         paste.value = '';
@@ -488,6 +766,7 @@ export function renderPortoFinder(host, {
         try {
             types = typeof loadTypes === 'function' ? await loadTypes() : [];
             paintTypes();
+            paintQueue();
         } catch (_) {
             typesHost.innerHTML = '';
             typesHost.appendChild(el('p', 'meta', 'Não foi possível carregar os tipos.'));

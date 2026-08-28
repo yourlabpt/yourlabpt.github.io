@@ -524,7 +524,14 @@ function parseJsonSafe(raw, fallback) {
     }
 }
 
-/** Street ladder: google 89 → publicado 129 (89+40) → landing custom 159 (89+70). */
+/**
+ * Street ladder: google 89 → publicado 129 (89+40) → landing custom 159 (89+70).
+ * The 40€ is YourLab's setup fee only — domain registration itself is paid
+ * separately by the client (the domain owner). That extra also covers
+ * linking the site to Google Maps, Instagram and Facebook if the client
+ * wants that now; otherwise it's added later on request, same price.
+ * Keep in sync with js/demo/outreach-offer.js (client-side copy of this same logic).
+ */
 const STREET_PRICES = { google: 89, tudo: 129, pagina: 159 };
 const STREET_EXTRAS = { dominioHosting: 40, landingCustom: 70 };
 const CAMPANHA_PRESETS = [5, 10, 15, 20];
@@ -608,12 +615,12 @@ function offerCopy(offer, lang = 'pt') {
     if (showPrecos) {
         if (showPrecoAntigo) {
             precoNota = en
-                ? `VAT not included. Campaign prices. Start at ${p.google} €; +${STREET_EXTRAS.dominioHosting} € puts it live with domain/Netlify; +${STREET_EXTRAS.landingCustom} € is a custom landing.`
-                : `Sem IVA. Valores da campanha. Começa nos ${p.google} €; +${STREET_EXTRAS.dominioHosting} € põe no ar com domínio/Netlify; +${STREET_EXTRAS.landingCustom} € é landing personalizada.`;
+                ? `VAT not included. Campaign prices. Start at ${p.google} € (Google + demo, with photos and text of your choice). +${STREET_EXTRAS.dominioHosting} € is our domain + hosting setup (Netlify) — the domain itself is paid by you, the owner; this also links the site to Google Maps, Instagram and Facebook if wanted, or we add that later on request. +${STREET_EXTRAS.landingCustom} € is a custom landing.`
+                : `Sem IVA. Valores da campanha. Começa nos ${p.google} € (Google + demo, com fotos e texto à escolha). +${STREET_EXTRAS.dominioHosting} € é a nossa configuração de domínio e hosting (Netlify) — o domínio em si é pago por vocês, os donos; isto já liga o site ao Google Maps, Instagram e Facebook se quiserem, ou juntamos depois, quando pedirem. +${STREET_EXTRAS.landingCustom} € é landing personalizada.`;
         } else {
             precoNota = en
-                ? `VAT not included. Start at ${p.google} € (Google + demo). +${STREET_EXTRAS.dominioHosting} € = live with domain/Netlify (${p.tudo} €). +${STREET_EXTRAS.landingCustom} € = custom landing (${p.pagina} €).`
-                : `Sem IVA. Começa nos ${p.google} € (Google + demo). +${STREET_EXTRAS.dominioHosting} € = no ar com domínio/Netlify (${p.tudo} €). +${STREET_EXTRAS.landingCustom} € = landing personalizada (${p.pagina} €).`;
+                ? `VAT not included. Start at ${p.google} € (Google + demo, with photos and text of your choice). +${STREET_EXTRAS.dominioHosting} € = domain + hosting setup (Netlify, ${p.tudo} € total) — the domain itself is paid by you, the owner; this also links the site to Google Maps, Instagram and Facebook if wanted, or we add that later on request. +${STREET_EXTRAS.landingCustom} € = custom landing (${p.pagina} €).`
+                : `Sem IVA. Começa nos ${p.google} € (Google + demo, com fotos e texto à escolha). +${STREET_EXTRAS.dominioHosting} € = configuração de domínio e hosting (Netlify, ${p.tudo} € no total) — o domínio em si é pago por vocês, os donos; isto já liga o site ao Google Maps, Instagram e Facebook se quiserem, ou juntamos depois, quando pedirem. +${STREET_EXTRAS.landingCustom} € = landing personalizada (${p.pagina} €).`;
         }
     }
 
@@ -625,13 +632,13 @@ function offerCopy(offer, lang = 'pt') {
     }
     if (showPrecos) {
         if (en) {
-            waLines.push(`*${p.google} euros* - Google + demo (photos and text)`);
-            waLines.push(`*${p.tudo} euros* - live with domain + Netlify (+${STREET_EXTRAS.dominioHosting} €)`);
-            waLines.push(`*${p.pagina} euros* - custom landing (+${STREET_EXTRAS.landingCustom} €)`);
+            waLines.push(`*${p.google} euros* - Google + demo (photos and text of your choice)`);
+            waLines.push(`*${p.tudo} euros* - live with domain + Netlify (+${STREET_EXTRAS.dominioHosting} euros setup; domain itself paid by you)`);
+            waLines.push(`*${p.pagina} euros* - custom landing (+${STREET_EXTRAS.landingCustom} euros)`);
             waLines.push(precoNota.replace(/ €/g, ' euros'));
         } else {
-            waLines.push(`*${p.google} euros* - Google + demo (fotos e texto)`);
-            waLines.push(`*${p.tudo} euros* - no ar com domínio + Netlify (+${STREET_EXTRAS.dominioHosting} euros)`);
+            waLines.push(`*${p.google} euros* - Google + demo (fotos e texto à escolha)`);
+            waLines.push(`*${p.tudo} euros* - no ar com domínio + Netlify (+${STREET_EXTRAS.dominioHosting} euros de configuração; domínio pago por vocês)`);
             waLines.push(`*${p.pagina} euros* - landing personalizada (+${STREET_EXTRAS.landingCustom} euros)`);
             waLines.push(precoNota.replace(/ €/g, ' euros'));
         }

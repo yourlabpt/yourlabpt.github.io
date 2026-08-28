@@ -71,7 +71,7 @@ const el = {
     coverageAddBtn: document.getElementById('coverage-add-btn'),
     coverageAddLeadBtn: document.getElementById('coverage-add-lead-btn'),
     leadsAddBtn: document.getElementById('leads-add-btn'),
-    leadsPortoFinderBtn: document.getElementById('leads-porto-finder-btn'),
+    descobrirRoot: document.getElementById('descobrir-root'),
     coveragePlaceBtn: document.getElementById('coverage-place-btn'),
     coverageExportBtn: document.getElementById('coverage-export-btn'),
     providerCard: document.getElementById('provider-card'),
@@ -208,12 +208,15 @@ function switchTab(name) {
     document.querySelectorAll('.admin-tab').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.tab === name);
     });
-    ['catalog', 'leads', 'deals', 'coverage', 'dossier', 'metricas'].forEach((id) => {
+    ['catalog', 'leads', 'descobrir', 'deals', 'coverage', 'dossier', 'metricas'].forEach((id) => {
         const panel = document.getElementById(`tab-${id}`);
         if (panel) panel.classList.toggle('hidden', id !== name);
     });
     if (name !== 'dossier' && leadIdFromHash(window.location.hash)) {
         history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    if (name === 'descobrir') {
+        ensurePortoFinder();
     }
     if (name === 'coverage' && coverageUi) {
         coverageUi.ensure().catch((err) => {
@@ -1113,15 +1116,17 @@ async function openQuickLead(defaults = {}) {
     });
 }
 
-async function openPortoFinder() {
-    const types = await loadBusinessTypes();
-    openDrawer('Descobrir negócios (Porto)', (panel) => {
-        renderPortoFinder(panel, {
-            api,
-            toast,
-            loadTypes: () => Promise.resolve(types),
-            openQuickLeadWithDefaults: (defaults) => openQuickLead(defaults || {})
-        });
+let portoFinderReady = false;
+
+function ensurePortoFinder() {
+    if (portoFinderReady || !el.descobrirRoot) return;
+    portoFinderReady = true;
+    renderPortoFinder(el.descobrirRoot, {
+        api,
+        toast,
+        loadTypes: loadBusinessTypes,
+        onLeadSaved: () => { loadLeads().catch(() => {}); },
+        goToLeads: () => switchTab('leads')
     });
 }
 
@@ -1555,11 +1560,6 @@ el.coverageFilter.addEventListener('input', () => {
 el.catalogAddBtn.addEventListener('click', () => openServiceEditor(null));
 if (el.leadsAddBtn) {
     el.leadsAddBtn.addEventListener('click', () => openQuickLead());
-}
-if (el.leadsPortoFinderBtn) {
-    el.leadsPortoFinderBtn.addEventListener('click', () => {
-        openPortoFinder().catch(() => toast('Não foi possível abrir o descobrir negócios.', true));
-    });
 }
 if (el.leadsEmailDemosBtn) {
     el.leadsEmailDemosBtn.addEventListener('click', async () => {
