@@ -44,16 +44,16 @@
         <div id="call-queue" class="call-queue hidden" hidden></div>
 
         <nav class="admin-tabs" role="tablist">
-            <button type="button" class="admin-tab active" data-tab="catalog">Catálogo</button>
+            <button type="button" class="admin-tab active" data-tab="descobrir">Descobrir</button>
             <button type="button" class="admin-tab" data-tab="leads">Leads</button>
-            <button type="button" class="admin-tab" data-tab="descobrir">Descobrir</button>
             <button type="button" class="admin-tab" data-tab="deals">Propostas</button>
+            <button type="button" class="admin-tab" data-tab="catalog">Catálogo</button>
             <button type="button" class="admin-tab" data-tab="coverage">Cobertura</button>
             <button type="button" class="admin-tab" data-tab="metricas">Métricas</button>
         </nav>
 
         <main class="admin-main">
-            <section id="tab-catalog" class="admin-panel">
+            <section id="tab-catalog" class="admin-panel hidden">
                 <div id="provider-card"></div>
                 <div class="admin-toolbar">
                     <input id="catalog-filter" class="field-input" type="search" placeholder="Filtrar serviços…">
@@ -90,7 +90,7 @@
                 <div id="leads-list" class="admin-list"></div>
             </section>
 
-            <section id="tab-descobrir" class="admin-panel hidden">
+            <section id="tab-descobrir" class="admin-panel">
                 <div id="descobrir-root"></div>
             </section>
 

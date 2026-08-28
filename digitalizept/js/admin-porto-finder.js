@@ -9,7 +9,8 @@
  * on the card (no side drawer), then «Criar ficha» sends them the same way.
  */
 import {
-    businessTypeDiscoveryLinks,
+    businessSearchQuery,
+    googleSearchUrl,
     openExternal
 } from './social-assist.js';
 
@@ -218,7 +219,7 @@ export function renderPortoFinder(host, {
     head.appendChild(el(
         'p',
         'meta',
-        'Ponto de entrada apenas: abre pesquisas por tipo, cola links um a um, ou cola um lote de dados (JSON, ex. export do generate_biz_links). Quem tem o mínimo (nome + Facebook/Instagram + email/telefone/WhatsApp + morada) cria ficha logo — o filtro de duplicados evita repetir. O resto fica na fila de cartões abaixo para completar e criar ficha ali mesmo.'
+        'Ponto de entrada apenas: cola links um a um, ou cola um lote de dados (JSON, ex. export do generate_biz_links). Quem tem o mínimo (nome + Facebook/Instagram + email/telefone/WhatsApp + morada) cria ficha logo — o filtro de duplicados evita repetir. O resto fica na fila de cartões abaixo para completar e criar ficha ali mesmo — cada cartão tem um atalho para pesquisar o negócio no Google.'
     ));
 
     const cityRow = el('div', 'porto-finder-city');
@@ -226,17 +227,13 @@ export function renderPortoFinder(host, {
     cityInput.type = 'text';
     cityInput.value = cidade;
     cityInput.placeholder = 'Cidade';
-    cityInput.setAttribute('aria-label', 'Cidade para pesquisa');
+    cityInput.setAttribute('aria-label', 'Cidade por omissão para o lote e a pesquisa nos cartões');
     cityInput.addEventListener('change', () => {
         cidade = String(cityInput.value || '').trim() || 'Porto';
         cityInput.value = cidade;
-        paintTypes();
     });
     cityRow.append(el('span', 'field-label', 'Cidade'), cityInput);
     head.appendChild(cityRow);
-
-    const typesHost = el('div', 'porto-finder-types');
-    head.appendChild(typesHost);
 
     const batchWrap = el('div', 'porto-finder-queue');
     batchWrap.appendChild(el('h4', '', 'Importar lote (JSON)'));
@@ -343,36 +340,6 @@ export function renderPortoFinder(host, {
 
     root.appendChild(queueSection);
     host.appendChild(root);
-
-    function paintTypes() {
-        typesHost.innerHTML = '';
-        if (!types.length) {
-            typesHost.appendChild(el('p', 'meta', 'A carregar tipos…'));
-            return;
-        }
-        types.forEach((t) => {
-            if (t.id === 'generico') return;
-            const row = el('div', 'porto-finder-type');
-            const label = el('span', 'porto-finder-type-name', t.nome || t.id);
-            const links = businessTypeDiscoveryLinks(t, cidade);
-            const actions = el('div', 'porto-finder-type-actions');
-            function addOpen(labelText, url) {
-                const btn = el('button', 'btn-secondary', labelText);
-                btn.type = 'button';
-                btn.title = links.query;
-                btn.addEventListener('click', () => {
-                    if (!openExternal(url)) toast('Não consegui abrir o browser.', true);
-                });
-                actions.appendChild(btn);
-            }
-            addOpen('Maps', links.maps);
-            addOpen('Google', links.google);
-            addOpen('Facebook', links.facebook);
-            addOpen('Marketplace', links.marketplace);
-            row.append(label, actions);
-            typesHost.appendChild(row);
-        });
-    }
 
     function removeCandidate(id) {
         candidates = candidates.filter((c) => c.id !== id);
@@ -516,6 +483,18 @@ export function renderPortoFinder(host, {
         open.rel = 'noopener';
         if (!item.url) open.setAttribute('aria-disabled', 'true');
 
+        const search = el('button', 'btn-secondary', 'Pesquisar no Google');
+        search.type = 'button';
+        search.title = 'Pesquisa o que já sabemos deste negócio no Google, para achar o que falta';
+        search.addEventListener('click', () => {
+            const query = businessSearchQuery(item.nome || item.typeNome, item.cidade || cidade, item.morada);
+            if (!query) {
+                toast('Preenche pelo menos o nome ou a morada para pesquisar.', true);
+                return;
+            }
+            if (!openExternal(googleSearchUrl(query))) toast('Não consegui abrir o browser.', true);
+        });
+
         const enrich = el('button', 'btn-secondary', 'Enriquecer Maps');
         enrich.type = 'button';
         enrich.disabled = item.kind !== 'maps' || !api;
@@ -594,7 +573,7 @@ export function renderPortoFinder(host, {
         remove.type = 'button';
         remove.addEventListener('click', () => removeCandidate(item.id));
 
-        actions.append(open, enrich, criar, remove);
+        actions.append(open, search, enrich, criar, remove);
         card.appendChild(actions);
         return card;
     }
@@ -765,11 +744,9 @@ export function renderPortoFinder(host, {
     (async () => {
         try {
             types = typeof loadTypes === 'function' ? await loadTypes() : [];
-            paintTypes();
             paintQueue();
         } catch (_) {
-            typesHost.innerHTML = '';
-            typesHost.appendChild(el('p', 'meta', 'Não foi possível carregar os tipos.'));
+            /* type select on each card just falls back to "Genérico". */
         }
     })();
 

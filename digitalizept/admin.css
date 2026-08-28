@@ -1905,36 +1905,6 @@
     max-width: 200px;
 }
 
-.porto-finder-types {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 280px;
-    overflow: auto;
-    margin-bottom: 14px;
-}
-
-.porto-finder-type {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--admin-border, rgba(0, 0, 0, 0.06));
-}
-
-.porto-finder-type-name {
-    font-weight: 600;
-    min-width: 140px;
-}
-
-.porto-finder-type-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
 .porto-finder-queue h4 {
     margin: 0 0 6px;
     font-size: 0.95rem;

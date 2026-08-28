@@ -1451,6 +1451,7 @@ async function loadDeals() {
 
 async function bootData() {
     await Promise.all([loadCatalog(), loadLeads(), loadDeals(), loadProviderCard()]);
+    ensurePortoFinder(); // Descobrir is the default landing tab.
     if (el.callQueue) {
         el.callQueue.classList.add('hidden');
         el.callQueue.setAttribute('hidden', '');
