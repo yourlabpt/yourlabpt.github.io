@@ -21,8 +21,18 @@ function el(tag, className, text) {
     return node;
 }
 
+// Google Maps "copy" actions (address, phone) and some scraped exports prepend
+// invisible bidi/formatting marks (LRM, embedding/isolate controls, BOM).
+// Strip them and normalize NBSP so telefone/morada land in the ficha exactly
+// as typed, without a manual cleanup pass.
+const INVISIBLE_CHARS_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
+const NBSP_RE = /\u00A0/g;
+
 function clean(value) {
-    return String(value == null ? '' : value).trim();
+    return String(value == null ? '' : value)
+        .replace(INVISIBLE_CHARS_RE, '')
+        .replace(NBSP_RE, ' ')
+        .trim();
 }
 
 function loadCandidates() {
@@ -148,12 +158,9 @@ export function renderPortoFinder(host, {
     let candidates = loadCandidates();
     let cidade = 'Porto';
 
-    host.innerHTML = '';
-    host.className = 'porto-finder';
+    const root = el('div', 'porto-finder');
 
-    const head = el('details', 'porto-finder-panel');
-    head.open = false;
-    head.appendChild(el('summary', '', 'Descobrir negócios (Porto) — receber links / dados em lote'));
+    const head = el('div', 'porto-finder-panel');
     head.appendChild(el(
         'p',
         'meta',
@@ -215,7 +222,8 @@ export function renderPortoFinder(host, {
     queueWrap.append(paste, queueActions, queueList);
     head.appendChild(queueWrap);
 
-    host.appendChild(head);
+    root.appendChild(head);
+    host.appendChild(root);
 
     function paintTypes() {
         typesHost.innerHTML = '';
@@ -488,7 +496,7 @@ export function renderPortoFinder(host, {
 
     return {
         destroy() {
-            host.innerHTML = '';
+            root.remove();
         }
     };
 }

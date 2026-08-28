@@ -31,6 +31,19 @@ const OSM_TO_TYPE = [
     }
 ];
 
+// OSM contact tags are sometimes pasted in from a Google Maps "copy" action,
+// which prepends invisible bidi/formatting marks (LRM, embedding/isolate
+// controls, BOM). Strip them so telefone/morada reach the ficha clean.
+const INVISIBLE_CHARS_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
+const NBSP_RE = /\u00A0/g;
+
+function clean(value) {
+    return String(value == null ? '' : value)
+        .replace(INVISIBLE_CHARS_RE, '')
+        .replace(NBSP_RE, ' ')
+        .trim();
+}
+
 function foldName(value) {
     return String(value || '')
         .normalize('NFD')
@@ -102,16 +115,16 @@ function contactFromOsm(tags) {
             facebook: ''
         };
     }
-    const telefone = String(tags.phone || '').trim();
-    const taggedWa = String(tags.whatsapp || '').trim();
+    const telefone = clean(tags.phone);
+    const taggedWa = clean(tags.whatsapp);
     return {
         telefone,
         whatsapp: taggedWa || whatsappIfMobile(telefone),
-        email: String(tags.email || '').trim(),
-        website: String(tags.website || '').trim(),
-        horario: String(tags.horario || '').trim(),
-        instagram: String(tags.instagram || '').trim(),
-        facebook: String(tags.facebook || '').trim()
+        email: clean(tags.email),
+        website: clean(tags.website),
+        horario: clean(tags.horario),
+        instagram: clean(tags.instagram),
+        facebook: clean(tags.facebook)
     };
 }
 
@@ -268,9 +281,9 @@ async function lookupFromMaps(input = {}) {
     const contact = contactFromOsm(osm);
 
     const dados = {
-        nome_negocio: nomeHint || (osm && osm.name) || (geo && geo.nome) || '',
-        morada: (geo && geo.morada) || '',
-        cidade: (geo && geo.cidade) || '',
+        nome_negocio: clean(nomeHint || (osm && osm.name) || (geo && geo.nome) || ''),
+        morada: clean(geo && geo.morada),
+        cidade: clean(geo && geo.cidade),
         telefone: contact.telefone,
         email: contact.email,
         whatsapp: contact.whatsapp,

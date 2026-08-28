@@ -205,6 +205,7 @@
 .admin-body .btn-logout,
 .admin-body .btn-danger,
 .admin-body .btn-refresh-app,
+.admin-body .btn-icon-round,
 .admin-body a.btn-primary,
 .admin-body a.btn-secondary,
 .admin-body a.btn-demo-open {
@@ -299,13 +300,15 @@
 }
 
 .admin-body .btn-logout,
-.admin-body .btn-refresh-app {
+.admin-body .btn-refresh-app,
+.admin-body .btn-icon-round {
     border: none;
     background: var(--admin-fill);
     color: var(--admin-muted);
 }
 
-.admin-body .btn-refresh-app {
+.admin-body .btn-refresh-app,
+.admin-body .btn-icon-round {
     width: 36px;
     height: 36px;
     padding: 0;
@@ -313,7 +316,8 @@
 }
 
 .admin-body .btn-logout:hover,
-.admin-body .btn-refresh-app:hover {
+.admin-body .btn-refresh-app:hover,
+.admin-body .btn-icon-round:hover {
     color: var(--admin-ink);
     background: var(--admin-press);
 }
@@ -1883,17 +1887,6 @@
     border: 1px solid var(--admin-border, rgba(0, 0, 0, 0.12));
     border-radius: 10px;
     background: var(--admin-surface, #fff);
-}
-
-.porto-finder-panel > summary {
-    cursor: pointer;
-    font-weight: 700;
-    font-size: 1rem;
-    list-style: none;
-}
-
-.porto-finder-panel > summary::-webkit-details-marker {
-    display: none;
 }
 
 .porto-finder-city {

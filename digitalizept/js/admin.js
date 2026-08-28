@@ -71,6 +71,7 @@ const el = {
     coverageAddBtn: document.getElementById('coverage-add-btn'),
     coverageAddLeadBtn: document.getElementById('coverage-add-lead-btn'),
     leadsAddBtn: document.getElementById('leads-add-btn'),
+    leadsPortoFinderBtn: document.getElementById('leads-porto-finder-btn'),
     coveragePlaceBtn: document.getElementById('coverage-place-btn'),
     coverageExportBtn: document.getElementById('coverage-export-btn'),
     providerCard: document.getElementById('provider-card'),
@@ -1112,14 +1113,15 @@ async function openQuickLead(defaults = {}) {
     });
 }
 
-function setupPortoFinder() {
-    const host = document.getElementById('leads-porto-finder');
-    if (!host) return;
-    renderPortoFinder(host, {
-        api,
-        toast,
-        loadTypes: loadBusinessTypes,
-        openQuickLeadWithDefaults: (defaults) => openQuickLead(defaults || {})
+async function openPortoFinder() {
+    const types = await loadBusinessTypes();
+    openDrawer('Descobrir negócios (Porto)', (panel) => {
+        renderPortoFinder(panel, {
+            api,
+            toast,
+            loadTypes: () => Promise.resolve(types),
+            openQuickLeadWithDefaults: (defaults) => openQuickLead(defaults || {})
+        });
     });
 }
 
@@ -1444,7 +1446,6 @@ async function loadDeals() {
 
 async function bootData() {
     await Promise.all([loadCatalog(), loadLeads(), loadDeals(), loadProviderCard()]);
-    setupPortoFinder();
     if (el.callQueue) {
         el.callQueue.classList.add('hidden');
         el.callQueue.setAttribute('hidden', '');
@@ -1554,6 +1555,11 @@ el.coverageFilter.addEventListener('input', () => {
 el.catalogAddBtn.addEventListener('click', () => openServiceEditor(null));
 if (el.leadsAddBtn) {
     el.leadsAddBtn.addEventListener('click', () => openQuickLead());
+}
+if (el.leadsPortoFinderBtn) {
+    el.leadsPortoFinderBtn.addEventListener('click', () => {
+        openPortoFinder().catch(() => toast('Não foi possível abrir o descobrir negócios.', true));
+    });
 }
 if (el.leadsEmailDemosBtn) {
     el.leadsEmailDemosBtn.addEventListener('click', async () => {
