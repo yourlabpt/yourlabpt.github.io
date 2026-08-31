@@ -23,6 +23,9 @@ const OSM_TO_TYPE = [
     { test: (t) => t.shop === 'hairdresser' || t.shop === 'beauty' || t.shop === 'cosmetics' || t.amenity === 'hairdresser', id: 'salao-beleza' },
     { test: (t) => t.amenity === 'clinic' || t.amenity === 'spa' || t.shop === 'massage' || t.leisure === 'spa', id: 'clinica-estetica' },
     { test: (t) => t.shop === 'carpet' || t.shop === 'curtain', id: 'tapecaria' },
+    { test: (t) => t.craft === 'plumber', id: 'canalizador' },
+    { test: (t) => t.craft === 'electrician', id: 'eletricista' },
+    { test: (t) => t.office === 'cleaning_service' || t.craft === 'cleaning', id: 'limpezas' },
     {
         test: (t) => ['hotel', 'guest_house', 'hostel', 'motel', 'chalet', 'apartment', 'resort'].includes(t.tourism)
             || ['events_venue', 'conference_centre', 'wedding_venue'].includes(t.amenity)

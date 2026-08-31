@@ -1,0 +1,203 @@
+{
+  "id": "eletricista",
+  "nome": "Eletricista",
+  "icone": "EL",
+  "tom": "seguro, técnico, de confiança",
+  "prompt_contexto": "Eletricista que se desloca a casa do cliente em Portugal. O texto transmite segurança técnica e resposta rápida a avarias — muitas vezes o cliente está sem luz ou com um curto-circuito e quer saber que alguém vem depressa e sabe o que faz. Sem jargão excessivo.",
+  "publico_alvo": "Moradores e pequenos negócios com avarias elétricas, instalações novas ou remodelações, que precisam de um eletricista de confiança.",
+  "servicos_tipicos": [
+    "Instalações elétricas",
+    "Avarias e curto-circuitos",
+    "Quadros elétricos",
+    "Iluminação",
+    "Certificação elétrica",
+    "Urgências"
+  ],
+  "diferenciais_sugeridos": [
+    "Certificado",
+    "Resposta rápida",
+    "Orçamento sem compromisso",
+    "Trabalho garantido"
+  ],
+  "palavras_chave": [
+    "eletricista",
+    "eletricista urgente",
+    "instalação elétrica",
+    "avaria elétrica",
+    "certificação elétrica"
+  ],
+  "categorias_google": [
+    "electrician"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "servicos",
+    "problemas",
+    "confianca",
+    "diferenciais",
+    "cta_bloco",
+    "galeria",
+    "avaliacoes",
+    "horario",
+    "mapa",
+    "contactos",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#17181b",
+    "#e8b324",
+    "#c8cdd2"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "website_atual",
+    "estacionamento",
+    "anos_experiencia",
+    "certificacoes"
+  ],
+  "perguntas_especificas": [
+    {
+      "id": "certificado_apr",
+      "label": "Tem carteira profissional (certificação APR)?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "atende_urgencias",
+      "label": "Atende avarias urgentes?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "emite_certificado_eletrico",
+      "label": "Emite certificado de instalação elétrica?",
+      "tipo": "sim_nao"
+    }
+  ],
+  "archetype": "servico",
+  "ctas_hero": [
+    {
+      "label": "Pedir orçamento",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver serviços",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#17181b",
+        "#e8b324",
+        "#c8cdd2"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1a1d22",
+        "#c9a227",
+        "#e4e7ea"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#1c1814",
+        "#d68a2c",
+        "#d8c7a0"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Avaria elétrica? Fale connosco.",
+    "botao": "WhatsApp / Ligar",
+    "target": "whatsapp"
+  },
+  "problemas_titulo": "Situações que resolvemos",
+  "gate_mais": "Quer falar de certificação, urgências e garantia?",
+  "rotulos": {
+    "servicos": "Serviços",
+    "problemas": "Quando precisa de um eletricista",
+    "sobre": "Quem somos",
+    "galeria": "Trabalhos feitos",
+    "confianca": "Confiança",
+    "contactos": "Pedir orçamento"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Orçamento",
+      "target": "dpl-cta-bloco"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "certificado_apr",
+      "label": "Carteira profissional (APR)"
+    },
+    {
+      "id": "emite_certificado_eletrico",
+      "label": "Certificado de instalação"
+    },
+    {
+      "id": "atende_urgencias",
+      "label": "Urgências"
+    },
+    {
+      "id": "estacionamento",
+      "label": "Estacionamento"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Eletricidade Santos",
+    "cidade": "Braga",
+    "titulo": "O seu eletricista, sem demoras",
+    "subtitulo": "Avarias, instalações e certificação — com segurança e orçamento claro.",
+    "sobre": "{nome} trata da instalação elétrica de {cidade} e arredores com segurança e sem gambiarras. Diagnosticamos, explicamos o risco e só avançamos com o seu sim.",
+    "rodape": "Ligue ou mande WhatsApp. Dizemos quando podemos lá estar.",
+    "problemas": [
+      "Foi a luz e não sabe porquê",
+      "Precisa de mais tomadas ou pontos de luz",
+      "Quer o certificado elétrico em dia"
+    ],
+    "avaliacoes": [
+      {
+        "autor": "Rui",
+        "texto": "Veio no mesmo dia e explicou tudo antes de mexer no quadro."
+      },
+      {
+        "autor": "Inês",
+        "texto": "Certificado emitido sem complicações. Recomendo."
+      }
+    ],
+    "servicos_itens": [
+      { "nome": "Instalações elétricas", "descricao": "Casas novas, remodelações e ampliações, do quadro às tomadas." },
+      { "nome": "Avarias e curto-circuitos", "descricao": "Diagnóstico rápido e reparação segura, sem adivinhar." },
+      { "nome": "Quadros elétricos", "descricao": "Modernização e substituição de quadros antigos ou inseguros." },
+      { "nome": "Iluminação", "descricao": "Pontos de luz, exteriores e projetos à medida do espaço." },
+      { "nome": "Certificação elétrica", "descricao": "Vistoria e emissão de certificado para venda ou seguro." },
+      { "nome": "Urgências", "descricao": "Sem luz ou com cheiro a queimado — respondemos depressa." }
+    ]
+  }
+}

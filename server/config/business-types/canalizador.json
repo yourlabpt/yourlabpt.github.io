@@ -1,0 +1,200 @@
+{
+  "id": "canalizador",
+  "nome": "Canalizador",
+  "icone": "CA",
+  "tom": "direto, disponível, de confiança",
+  "prompt_contexto": "Canalizador que se desloca a casa do cliente em Portugal. O texto transmite disponibilidade, rapidez a chegar e clareza no orçamento — quem liga tem normalmente uma fuga ou avaria e quer saber que alguém vem já. Sem jargão técnico desnecessário.",
+  "publico_alvo": "Moradores e pequenos negócios com fugas, entupimentos ou obras de canalização, que precisam de alguém de confiança que se desloque ao local.",
+  "servicos_tipicos": [
+    "Fugas e reparações",
+    "Desentupimentos",
+    "Instalação de canalizações",
+    "Torneiras e autoclismos",
+    "Esquentadores e caldeiras",
+    "Orçamentos sem compromisso"
+  ],
+  "diferenciais_sugeridos": [
+    "Chegamos rápido",
+    "Orçamento antes de começar",
+    "Urgências ao fim de semana",
+    "Trabalho garantido"
+  ],
+  "palavras_chave": [
+    "canalizador",
+    "canalizador urgente",
+    "desentupimentos",
+    "fuga de água",
+    "canalizações"
+  ],
+  "categorias_google": [
+    "plumber"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "servicos",
+    "problemas",
+    "confianca",
+    "diferenciais",
+    "cta_bloco",
+    "galeria",
+    "avaliacoes",
+    "horario",
+    "mapa",
+    "contactos",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#12222b",
+    "#1c6e9c",
+    "#d98a2b"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "website_atual",
+    "estacionamento",
+    "anos_experiencia",
+    "certificacoes"
+  ],
+  "perguntas_especificas": [
+    {
+      "id": "atende_urgencias",
+      "label": "Atende urgências (noite/fim de semana)?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "seguro_responsabilidade_civil",
+      "label": "Tem seguro de responsabilidade civil?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "tempo_resposta",
+      "label": "Tempo médio de resposta",
+      "tipo": "texto",
+      "hint": "Ex.: 30 a 60 minutos na zona"
+    }
+  ],
+  "archetype": "servico",
+  "ctas_hero": [
+    {
+      "label": "Pedir orçamento",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver serviços",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#12222b",
+        "#1c6e9c",
+        "#d98a2b"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#182229",
+        "#3a7fa8",
+        "#c9d2d6"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#1c1a16",
+        "#c46a2a",
+        "#d8c7a0"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Tem uma fuga? Não espere.",
+    "botao": "WhatsApp / Ligar",
+    "target": "whatsapp"
+  },
+  "problemas_titulo": "Situações que resolvemos",
+  "gate_mais": "Quer falar de seguro, tempo de resposta e urgências?",
+  "rotulos": {
+    "servicos": "Serviços",
+    "problemas": "Quando precisa de um canalizador",
+    "sobre": "Quem somos",
+    "galeria": "Trabalhos feitos",
+    "confianca": "Confiança",
+    "contactos": "Pedir orçamento"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Orçamento",
+      "target": "dpl-cta-bloco"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "atende_urgencias",
+      "label": "Urgências 24h"
+    },
+    {
+      "id": "seguro_responsabilidade_civil",
+      "label": "Seguro de responsabilidade civil"
+    },
+    {
+      "id": "estacionamento",
+      "label": "Estacionamento"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Canalizações Ferreira",
+    "cidade": "Vila Nova de Gaia",
+    "titulo": "O seu canalizador, à porta rápido",
+    "subtitulo": "Fugas, desentupimentos e instalação — com orçamento antes de mexer em nada.",
+    "sobre": "{nome} vai a sua casa em {cidade} e zonas à volta. Diagnosticamos o problema, explicamos o que precisa de ser feito e só avançamos com o seu sim.",
+    "rodape": "Ligue ou mande WhatsApp. Dizemos quando podemos lá estar.",
+    "problemas": [
+      "Tem uma fuga de água",
+      "A sanita ou o cano estão entupidos",
+      "Precisa de trocar o esquentador"
+    ],
+    "avaliacoes": [
+      {
+        "autor": "Marta",
+        "texto": "Chegou em menos de uma hora e resolveu a fuga sem drama."
+      },
+      {
+        "autor": "João",
+        "texto": "Orçamento claro antes de começar. Sem surpresas na fatura."
+      }
+    ],
+    "servicos_itens": [
+      { "nome": "Fugas e reparações", "descricao": "Encontramos a origem da fuga e reparamos sem partir mais do que o necessário." },
+      { "nome": "Desentupimentos", "descricao": "Ralos, sanitas e canos entupidos — resolvido no mesmo dia." },
+      { "nome": "Instalação de canalizações", "descricao": "Cozinhas, casas de banho e obras novas, do zero ou em remodelação." },
+      { "nome": "Torneiras e autoclismos", "descricao": "Substituição e reparação, com peças de qualidade." },
+      { "nome": "Esquentadores e caldeiras", "descricao": "Instalação, manutenção e substituição com segurança." },
+      { "nome": "Orçamentos sem compromisso", "descricao": "Vemos o problema e dizemos o preço antes de mexer em nada." }
+    ]
+  }
+}

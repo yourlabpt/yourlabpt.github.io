@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-PT" data-dp-boilerplate="eletricista">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O seu eletricista, sem demoras</title>
+<meta name="description" content="Avarias, instalações e certificação elétrica — com segurança e orçamento claro.">
+<meta property="og:title" content="O seu eletricista, sem demoras">
+<meta property="og:description" content="Avarias, instalações e certificação elétrica — com segurança e orçamento claro.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dpl-base.css">
+<link rel="stylesheet" href="css/eletricista.css">
+</head>
+<body>
+<header class="dpl-topbar">
+    <a class="dpl-topbar-brand" href="#topo" data-dp-copy="nome">O seu eletricista</a>
+    <button class="dpl-nav-toggle" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+    <nav id="menu" class="dpl-nav" aria-label="Secções">
+            <a class="dpl-nav-link" href="#topo">Início</a>
+            <a class="dpl-nav-link" href="#dpl-servicos">Serviços</a>
+            <a class="dpl-nav-link" href="#dpl-sobre">Sobre</a>
+            <a class="dpl-nav-link" href="#dpl-redes">Redes</a>
+            <a class="dpl-nav-link" href="#dpl-contactos">Contactos</a>
+            <a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">Pedir orçamento</a>
+    </nav>
+    <a class="dpl-nav-link" data-dp-copy="telefone" data-dp-href="tel" href="#dpl-contactos">{{telefone}}</a>
+</header>
+<main id="topo">
+<section class="dpl-hero dpl-hero--atmosphere">
+    <div class="dpl-wrap">
+        
+        <p class="dpl-kicker" data-dp-copy="cidade"></p>
+        <h1 data-dp-copy="hero.titulo"></h1>
+        <p class="dpl-hero-sub" data-dp-copy="hero.subtitulo"></p>
+        <div class="dpl-hero-ctas"><a class="dpl-btn" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp"></a><a class="dpl-btn dpl-btn-ghost" href="#dpl-servicos">Ver serviços</a></div>
+    </div>
+</section>
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
+        <ul class="dpl-acc" data-dp-list="servicos">
+            <li class="dpl-acc-item" data-dp-item hidden>
+                <details>
+                    <summary><span class="dpl-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7v4M15 7v4"/><path d="M7 11h10v3a5 5 0 01-10 0v-3z"/><path d="M12 19v3"/></svg></span><span class="dpl-acc-title" data-dp-copy="servico.nome"></span><span class="dpl-menu-price" data-dp-copy="servico.preco"></span></summary>
+                    <p class="dpl-acc-body" data-dp-copy="servico.descricao"></p>
+                </details>
+            </li>
+        </ul>
+    </div>
+</section>
+<section class="dpl-cta-band">
+    <div class="dpl-wrap"><ul class="dpl-chips" data-dp-list="trust">
+            <li class="dpl-badge" data-dp-item hidden data-dp-copy="trust.texto"></li>
+        </ul></div>
+</section>
+<section class="dpl-section" id="dpl-sobre">
+    <div class="dpl-wrap dpl-grid dpl-grid-2">
+        <div>
+            <h2 class="dpl-h2" data-dp-label="sobre">Quem somos</h2>
+            <p>{{sobre}}</p>
+            
+        </div>
+        <div class="dpl-mark " style="--dp-ratio: 16 / 9" aria-hidden="true"><span class="dpl-mark-mono" data-fallback-icon="EL">EL</span></div>
+    </div>
+</section>
+<section class="dpl-section dpl-section--muted" id="dpl-avaliacoes">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="avaliacoes">O que dizem</h2>
+        <div class="dpl-grid dpl-grid-2" data-dp-list="avaliacoes" style="margin-top:2rem">
+            <blockquote class="dpl-quote" data-dp-item hidden><p data-dp-copy="avaliacao.texto"></p><footer data-dp-copy="avaliacao.autor"></footer></blockquote>
+        </div>
+    </div>
+</section>
+<section class="dpl-section dpl-social" id="dpl-redes" data-dp-social>
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <p class="dpl-kicker">Acompanhe-nos</p>
+            <h2 class="dpl-h2">Explore mais sobre nós nas redes</h2>
+            <p class="dpl-lede">Novidades, bastidores e o dia a dia — siga-nos no Facebook e no Instagram.</p>
+        </div>
+        <div class="dpl-social-row">
+            <a class="dpl-social-card dpl-action dpl-btn-fb" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden aria-label="Facebook">
+                <svg class="dpl-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14 9h3V6h-3c-1.6 0-3 1.4-3 3v2H8v3h3v7h3v-7h3l1-3h-4V9c0-.6.4-1 1-1z"/></svg>
+                <span class="dpl-social-kind">Facebook</span>
+                <span class="dpl-social-action dpl-action-label">Ver página</span>
+            </a>
+            <a class="dpl-social-card dpl-action dpl-btn-ig" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden aria-label="Instagram">
+                <svg class="dpl-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2h10a5 5 0 015 5v10a5 5 0 01-5 5H7a5 5 0 01-5-5V7a5 5 0 015-5zm5 5a5 5 0 100 10 5 5 0 000-10z"/></svg>
+                <span class="dpl-social-kind">Instagram</span>
+                <span class="dpl-social-action dpl-action-label">Ver perfil</span>
+            </a>
+        </div>
+    </div>
+</section>
+<section class="dpl-section dpl-section--muted" id="dpl-contactos">
+    <div class="dpl-wrap">
+        <div class="dpl-section-head">
+            <h2 class="dpl-h2" data-dp-label="contactos">Onde estamos</h2>
+            <p class="dpl-lede">{{morada}}, {{cidade}}. <span data-dp-copy="horario">{{horario}}</span></p>
+        </div>
+        <div class="dpl-contact-actions">
+            <a class="dpl-btn dpl-action dpl-btn-maps" href="#dpl-contactos" data-dp-href="maps" aria-label="Como chegar"><svg class="dpl-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z"/></svg><span class="dpl-action-label">Pedir orçamento</span></a>
+            <a class="dpl-btn dpl-action dpl-btn-wa" href="#dpl-contactos" data-dp-href="whatsapp" hidden aria-label="Enviar WhatsApp"><svg class="dpl-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2C6.5 2 2 6.49 2 12.02c0 1.77.46 3.45 1.28 4.92L2 22l5.2-1.36A9.98 9.98 0 0012.04 22C17.56 22 22 17.51 22 11.98 22 6.49 17.56 2 12.04 2z"/></svg><span class="dpl-action-label">Enviar WhatsApp</span></a>
+            <a class="dpl-btn dpl-action dpl-btn-sms" href="#dpl-contactos" data-dp-href="sms" hidden aria-label="Mensagem"><svg class="dpl-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2z"/></svg><span class="dpl-action-label">Mensagem</span></a>
+            <a class="dpl-btn dpl-action dpl-btn-call" href="#dpl-contactos" data-dp-href="tel" hidden aria-label="Ligar"><svg class="dpl-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.36 11.36 0 003.58.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.58 1 1 0 01-.24 1.01l-2.21 2.2z"/></svg><span class="dpl-action-label">Ligar</span></a>
+        </div>
+    </div>
+</section>
+<section class="dpl-cta-band" id="dpl-cta">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2">Avaria elétrica? Fale connosco.</h2>
+        <p class="dpl-cta-band-lede">Prefere ver o nosso dia a dia? Encontra-nos no Facebook e no Instagram.</p>
+        <p class="dpl-cta-band-action">
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-copy="hero.cta" data-dp-href="whatsapp">WhatsApp / Ligar</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="whatsapp" hidden>Enviar WhatsApp</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-contactos" data-dp-href="sms" hidden>Mensagem</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a class="dpl-btn dpl-btn-ghost" href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
+    </div>
+</section>
+</main>
+<footer class="dpl-rodape">
+    <div class="dpl-wrap">
+        <strong class="dpl-topbar-brand" data-dp-copy="nome">O seu eletricista</strong>
+        <p>Ligue ou mande WhatsApp — dizemos quando podemos lá estar.</p>
+        <p>{{morada}} · {{cidade}} · <span data-dp-copy="horario">{{horario}}</span></p>
+        <p class="dpl-rodape-social" data-dp-social>
+            <a href="#dpl-redes" data-dp-href="facebook" data-dp-social-link="facebook" hidden>Facebook</a>
+            <a href="#dpl-redes" data-dp-href="instagram" data-dp-social-link="instagram" hidden>Instagram</a>
+        </p>
+    </div>
+</footer>
+<script data-dp-inpage-nav>
+(function () {
+  var btn = document.querySelector('.dpl-nav-toggle');
+  var nav = document.querySelector('.dpl-nav');
+  if (btn && nav) {
+    btn.addEventListener('click', function () {
+      var open = nav.classList.toggle('is-open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+  function openExternal(href) {
+    try {
+      var w = window.open(href, '_blank', 'noopener,noreferrer');
+      if (w) return true;
+    } catch (e) {}
+    try {
+      window.top.location.href = href;
+      return true;
+    } catch (e2) {}
+    return false;
+  }
+  document.addEventListener('click', function (event) {
+    var a = event.target.closest && event.target.closest('a[href]');
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href === '#') return;
+
+    if (href.charAt(0) === '#') {
+      if (href.length < 2) return;
+      var id = decodeURIComponent(href.slice(1));
+      var target = document.getElementById(id);
+      if (!target) return;
+      event.preventDefault();
+      if (nav) nav.classList.remove('is-open');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    if (/^(https?:|\/\/)/i.test(href)) {
+      event.preventDefault();
+      if (nav) nav.classList.remove('is-open');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+      openExternal(href);
+    }
+  });
+})();
+</script>
+</body>
+</html>

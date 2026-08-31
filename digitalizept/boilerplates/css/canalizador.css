@@ -1,0 +1,15 @@
+:root {
+    --bg: #EFF3F5; --ink: #12222B; --accent: #1C6E9C; --accent-2: #D98A2B;
+    --font-display: "IBM Plex Sans", system-ui, sans-serif; --font-body: "IBM Plex Sans", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #1c6e9c; --accent2-ink: #956225;
+    --accent-solid: #1c6e9c;
+    --on-accent: #f4f1ea; --on-accent-2: #17171a; --ink-muted: #435057;
+    
+}
+.dpl-hero { background: radial-gradient(ellipse at 15% 10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 55%); }
+.dpl-acc-item summary { font-weight: 600; }

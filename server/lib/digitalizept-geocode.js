@@ -64,10 +64,13 @@ const PIN_STROKE_OPEN = '#1c1917';
  */
 const TYPE_COLORS = {
     'cafe-pastelaria': '#c2410c',
+    canalizador: '#0369a1',
     'clinica-estetica': '#a21caf',
     'drogaria-ferragens': '#3f6212',
+    eletricista: '#ca8a04',
     generico: '#57534e',
     joalharia: '#a16207',
+    limpezas: '#15803d',
     'loja-flores-decoracao': '#0f766e',
     'loja-roupa': '#be123c',
     'mecanico-automovel': '#1e3a8a',
