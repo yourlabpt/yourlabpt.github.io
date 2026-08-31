@@ -1,0 +1,198 @@
+{
+  "id": "limpezas",
+  "nome": "Limpezas",
+  "icone": "LI",
+  "tom": "fiável, cuidadoso, prático",
+  "prompt_contexto": "Empresa ou profissional de limpezas que se desloca a casas e escritórios em Portugal. O texto transmite confiança (entra-se em casa das pessoas), cuidado com o espaço e simplicidade para marcar. Fala de regularidade, produtos e pontualidade.",
+  "publico_alvo": "Famílias e pequenos negócios que precisam de limpeza doméstica ou de escritório, pontual ou regular, com uma equipa de confiança.",
+  "servicos_tipicos": [
+    "Limpeza doméstica",
+    "Limpeza de escritórios",
+    "Limpeza pós-obra",
+    "Limpeza de vidros",
+    "Limpezas pontuais ou regulares"
+  ],
+  "diferenciais_sugeridos": [
+    "Equipa de confiança",
+    "Produtos incluídos",
+    "Horário flexível",
+    "Pontualidade"
+  ],
+  "palavras_chave": [
+    "limpezas",
+    "empresa de limpeza",
+    "limpeza doméstica",
+    "limpeza de escritórios",
+    "limpeza pós-obra"
+  ],
+  "categorias_google": [
+    "house_cleaning_service"
+  ],
+  "seccoes_landing": [
+    "hero",
+    "servicos",
+    "problemas",
+    "confianca",
+    "diferenciais",
+    "cta_bloco",
+    "galeria",
+    "avaliacoes",
+    "horario",
+    "mapa",
+    "contactos",
+    "rodape"
+  ],
+  "cores_sugeridas": [
+    "#1c2a22",
+    "#3f8f6d",
+    "#2e6b93"
+  ],
+  "campos_obrigatorios": [
+    "nome_negocio",
+    "responsavel",
+    "telefone",
+    "whatsapp",
+    "morada",
+    "cidade",
+    "horario",
+    "o_que_faz",
+    "principais_servicos",
+    "diferencial"
+  ],
+  "campos_opcionais": [
+    "email",
+    "instagram",
+    "facebook",
+    "website_atual",
+    "mbway",
+    "anos_experiencia",
+    "certificacoes"
+  ],
+  "perguntas_especificas": [
+    {
+      "id": "equipa_propria",
+      "label": "Equipa própria (não subcontratada)?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "produtos_incluidos",
+      "label": "Produtos de limpeza incluídos?",
+      "tipo": "sim_nao"
+    },
+    {
+      "id": "frequencia",
+      "label": "Frequência que faz",
+      "tipo": "texto",
+      "hint": "Ex.: pontual, semanal, quinzenal, mensal"
+    }
+  ],
+  "archetype": "servico",
+  "ctas_hero": [
+    {
+      "label": "Pedir orçamento",
+      "target": "dpl-cta-bloco"
+    },
+    {
+      "label": "Ver serviços",
+      "target": "dpl-servicos"
+    }
+  ],
+  "paletas_sugeridas": [
+    {
+      "id": "bold",
+      "nome": "Bold",
+      "cores": [
+        "#1c2a22",
+        "#3f8f6d",
+        "#2e6b93"
+      ]
+    },
+    {
+      "id": "clean",
+      "nome": "Clean",
+      "cores": [
+        "#1e2422",
+        "#4a9a7a",
+        "#e6ece8"
+      ]
+    },
+    {
+      "id": "warm",
+      "nome": "Warm",
+      "cores": [
+        "#20201a",
+        "#c98a3c",
+        "#e8dfc7"
+      ]
+    }
+  ],
+  "cta_bloco": {
+    "titulo": "Peça uma limpeza esta semana",
+    "botao": "WhatsApp",
+    "target": "whatsapp"
+  },
+  "problemas_titulo": "Quando chamar uma limpeza",
+  "gate_mais": "Quer falar de equipa, produtos e frequência?",
+  "rotulos": {
+    "servicos": "Serviços",
+    "problemas": "Quando precisa de nós",
+    "sobre": "Quem somos",
+    "galeria": "O nosso trabalho",
+    "confianca": "Confiança",
+    "contactos": "Pedir orçamento"
+  },
+  "nav": [
+    {
+      "label": "Serviços",
+      "target": "dpl-servicos"
+    },
+    {
+      "label": "Orçamento",
+      "target": "dpl-cta-bloco"
+    }
+  ],
+  "trust_flags": [
+    {
+      "id": "equipa_propria",
+      "label": "Equipa própria"
+    },
+    {
+      "id": "produtos_incluidos",
+      "label": "Produtos incluídos"
+    },
+    {
+      "id": "anos_experiencia",
+      "label": "Anos de experiência"
+    }
+  ],
+  "demo_seed": {
+    "nome_negocio": "Limpezas Oliveira",
+    "cidade": "Cascais",
+    "titulo": "A sua casa ou escritório, sempre em ordem",
+    "subtitulo": "Limpeza pontual ou regular — equipa de confiança, produtos incluídos.",
+    "sobre": "{nome} trata da limpeza de casas e escritórios em {cidade} e arredores. Combina o horário consigo e deixa o espaço pronto a usar, sem stress.",
+    "rodape": "Mande WhatsApp com o que precisa. Combinamos dia e horário.",
+    "problemas": [
+      "Vai receber visitas e falta tempo",
+      "O escritório precisa de limpeza regular",
+      "Acabou uma obra e falta a limpeza final"
+    ],
+    "avaliacoes": [
+      {
+        "autor": "Cristina",
+        "texto": "Pontuais e cuidadosas. Já é a nossa limpeza fixa há um ano."
+      },
+      {
+        "autor": "Pedro",
+        "texto": "A limpeza pós-obra ficou impecável. Recomendo sem dúvida."
+      }
+    ],
+    "servicos_itens": [
+      { "nome": "Limpeza doméstica", "descricao": "Casa limpa de fio a pavio, no dia e hora que combinar." },
+      { "nome": "Limpeza de escritórios", "descricao": "Regular ou pontual, fora do horário de expediente se precisar." },
+      { "nome": "Limpeza pós-obra", "descricao": "Tiramos o pó e os restos da obra — pronto a habitar." },
+      { "nome": "Limpeza de vidros", "descricao": "Janelas e montras sem manchas, por dentro e por fora." },
+      { "nome": "Limpezas pontuais ou regulares", "descricao": "Uma vez, ou toda semana — o que fizer sentido para si." }
+    ]
+  }
+}

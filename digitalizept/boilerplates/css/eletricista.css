@@ -1,0 +1,15 @@
+:root {
+    --bg: #17181B; --ink: #F2EFE6; --accent: #E8B324; --accent-2: #C8CDD2;
+    --font-display: "Space Grotesk", system-ui, sans-serif; --font-body: "Inter", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #e8b324; --accent2-ink: #c8cdd2;
+    --accent-solid: #e8b324;
+    --on-accent: #17171a; --on-accent-2: #17171a; --ink-muted: #c2c0b9;
+    
+}
+h1, h2 { text-transform: uppercase; letter-spacing: 0.01em; }
+.dpl-hero { background: radial-gradient(ellipse at 50% 10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 55%); }

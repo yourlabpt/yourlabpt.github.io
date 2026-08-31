@@ -1,0 +1,14 @@
+:root {
+    --bg: #F5FAF7; --ink: #1C2A22; --accent: #3F8F6D; --accent-2: #2E6B93;
+    --font-display: "Quicksand", system-ui, sans-serif; --font-body: "Mulish", system-ui, sans-serif;
+    
+    --l-paper: var(--bg); --l-ink: var(--ink);
+    --l-destaque: var(--accent); --l-secundaria: var(--accent-2);
+    --l-base: var(--ink);
+    --base: var(--l-base); --destaque: var(--l-destaque); --secundaria: var(--l-secundaria);
+    --accent-ink: #397D61; --accent2-ink: #2e6b93;
+    --accent-solid: #3f8f6d;
+    --on-accent: #17171a; --on-accent-2: #f4f1ea; --ink-muted: #4c5851;
+    
+}
+.dpl-hero { background: radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 45%); }

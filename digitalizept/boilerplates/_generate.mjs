@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** One-shot generator for the 13 sem-fotos boilerplates + theme CSS. */
+/** One-shot generator for the sem-fotos boilerplates + theme CSS, one per category in CATS below. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -783,6 +783,136 @@ ${footer('A sua oficina', 'Marcações de manhã rendem lugar no mesmo dia.')}`;
         }
     },
     {
+        id: 'canalizador',
+        label: 'Canalizador',
+        title: 'O seu canalizador, à porta rápido',
+        description: 'Fugas, desentupimentos e instalação de canalizações — com orçamento antes de mexer em nada.',
+        fontsHref: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&display=swap',
+        display: '"IBM Plex Sans", system-ui, sans-serif',
+        bodyFont: '"IBM Plex Sans", system-ui, sans-serif',
+        tokens: { bg: '#EFF3F5', ink: '#12222B', accent: '#1C6E9C', accent2: '#D98A2B', accent2Ink: '#956225' },
+        extraCss: `.dpl-hero { background: radial-gradient(ellipse at 15% 10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 55%); }
+.dpl-acc-item summary { font-weight: 600; }`,
+        build() {
+            return `${header({
+                brand: 'O seu canalizador',
+                links: [
+                    { href: '#topo', label: 'Início' },
+                    { href: '#dpl-servicos', label: 'Serviços' },
+                    { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
+                    { href: '#dpl-contactos', label: 'Contactos' }
+                ],
+                cta: { href: '#dpl-contactos', label: 'Pedir orçamento' },
+                extra: '<a class="dpl-nav-link" data-dp-copy="telefone" data-dp-href="tel" href="#dpl-contactos">{{telefone}}</a>'
+            })}
+<main id="topo">
+${hero({ id: this.id })}
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
+        ${serviceAccordion({ iconHtml: icon('pipe') })}
+    </div>
+</section>
+<section class="dpl-section dpl-section--muted">
+    <div class="dpl-wrap">${trustChips()}${destaques()}</div>
+</section>
+${sobreBlock('Quem somos', visual(0, '4 / 3', 'CA'))}
+${quotes()}
+${socialBlock()}
+${loc('Pedir orçamento')}
+${ctaBand('Tem uma fuga? Não espere.', 'WhatsApp / Ligar')}
+</main>
+${footer('O seu canalizador', 'Ligue ou mande WhatsApp — dizemos quando podemos lá estar.')}`;
+        }
+    },
+    {
+        id: 'eletricista',
+        label: 'Eletricista',
+        title: 'O seu eletricista, sem demoras',
+        description: 'Avarias, instalações e certificação elétrica — com segurança e orçamento claro.',
+        fontsHref: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500&display=swap',
+        display: '"Space Grotesk", system-ui, sans-serif',
+        bodyFont: '"Inter", system-ui, sans-serif',
+        tokens: { bg: '#17181B', ink: '#F2EFE6', accent: '#E8B324', accent2: '#C8CDD2' },
+        extraCss: `h1, h2 { text-transform: uppercase; letter-spacing: 0.01em; }
+.dpl-hero { background: radial-gradient(ellipse at 50% 10%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 55%); }`,
+        build() {
+            return `${header({
+                brand: 'O seu eletricista',
+                links: [
+                    { href: '#topo', label: 'Início' },
+                    { href: '#dpl-servicos', label: 'Serviços' },
+                    { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
+                    { href: '#dpl-contactos', label: 'Contactos' }
+                ],
+                cta: { href: '#dpl-contactos', label: 'Pedir orçamento' },
+                extra: '<a class="dpl-nav-link" data-dp-copy="telefone" data-dp-href="tel" href="#dpl-contactos">{{telefone}}</a>'
+            })}
+<main id="topo">
+${hero({ id: this.id })}
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
+        ${serviceAccordion({ iconHtml: icon('plug') })}
+    </div>
+</section>
+<section class="dpl-cta-band">
+    <div class="dpl-wrap">${trustChips()}</div>
+</section>
+${sobreBlock('Quem somos', visual(0, '16 / 9', 'EL'))}
+${quotes()}
+${socialBlock()}
+${loc('Pedir orçamento')}
+${ctaBand('Avaria elétrica? Fale connosco.', 'WhatsApp / Ligar')}
+</main>
+${footer('O seu eletricista', 'Ligue ou mande WhatsApp — dizemos quando podemos lá estar.')}`;
+        }
+    },
+    {
+        id: 'limpezas',
+        label: 'Limpezas',
+        title: 'A sua casa ou escritório, sempre em ordem',
+        description: 'Limpeza doméstica, de escritórios e pós-obra — equipa de confiança, produtos incluídos.',
+        fontsHref: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&family=Mulish:wght@400;500&display=swap',
+        display: '"Quicksand", system-ui, sans-serif',
+        bodyFont: '"Mulish", system-ui, sans-serif',
+        tokens: { bg: '#F5FAF7', ink: '#1C2A22', accent: '#3F8F6D', accent2: '#2E6B93', accentInk: '#397D61' },
+        extraCss: `.dpl-hero { background: radial-gradient(circle at 85% 20%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 45%); }`,
+        build() {
+            return `${header({
+                brand: 'A sua empresa de limpezas',
+                links: [
+                    { href: '#topo', label: 'Início' },
+                    { href: '#dpl-servicos', label: 'Serviços' },
+                    { href: '#dpl-sobre', label: 'Sobre' },
+                    { href: '#dpl-redes', label: 'Redes' },
+                    { href: '#dpl-contactos', label: 'Contactos' }
+                ],
+                cta: { href: '#dpl-contactos', label: 'Pedir orçamento' }
+            })}
+<main id="topo">
+${hero({ id: this.id })}
+<section class="dpl-section" id="dpl-servicos">
+    <div class="dpl-wrap">
+        <h2 class="dpl-h2" data-dp-label="servicos">Serviços</h2>
+        ${serviceCards({ iconHtml: icon('broom') })}
+    </div>
+</section>
+<section class="dpl-section dpl-section--muted">
+    <div class="dpl-wrap">${trustChips()}${destaques()}</div>
+</section>
+${sobreBlock('Quem somos', visual(0, '4 / 3', 'LI'))}
+${quotes()}
+${socialBlock()}
+${loc('Pedir orçamento')}
+${ctaBand('Peça uma limpeza esta semana', 'WhatsApp')}
+</main>
+${footer('A sua empresa de limpezas', 'Mande WhatsApp com o que precisa — combinamos dia e horário.')}`;
+        }
+    },
+    {
         id: 'mercadinho',
         label: 'Mercadinho',
         title: 'O mercado de bairro, todos os dias',
@@ -1023,7 +1153,7 @@ const index = `<!DOCTYPE html>
 <body>
 <header class="dpl-topbar"><strong class="dpl-topbar-brand">Digitalize Portugal — exemplos</strong></header>
 <main class="dpl-wrap dpl-section">
-<h1>13 categorias, duas versões</h1>
+<h1>${CATS.length} categorias, duas versões</h1>
 <p class="dpl-lede">O mesmo negócio. Com fotos é a landing gerada. Sem fotos é o boilerplate tipográfico.</p>
 ${CATS.map((c) => `<section class="dpl-section" id="${c.id}">
     <h2 class="dpl-h2">${c.label}</h2>
