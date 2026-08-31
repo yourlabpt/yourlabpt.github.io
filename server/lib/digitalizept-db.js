@@ -112,11 +112,49 @@ CREATE TABLE IF NOT EXISTS nota (
     texto TEXT NOT NULL DEFAULT '',
     criado_em TEXT NOT NULL
 );
+
+-- Self-serve onboarding app (/digitalize). No client accounts/OAuth yet
+-- (credencial_oauth above is reserved for that, unused) — a session is
+-- just a private resumable link, one per lead-in-progress.
+CREATE TABLE IF NOT EXISTS digitalize_sessao (
+    id TEXT PRIMARY KEY,
+    lead_id TEXT NOT NULL REFERENCES lead(id),
+    nivel INTEGER NOT NULL DEFAULT 1,
+    criado_em TEXT NOT NULL,
+    actualizado_em TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_digitalize_sessao_lead ON digitalize_sessao(lead_id);
+
+-- Append-only points ledger. UNIQUE(sessao_id, chave) makes awarding points
+-- per step idempotent — replaying/re-answering a step never double-counts,
+-- and the level (derived from the sum) can only ever go up.
+CREATE TABLE IF NOT EXISTS digitalize_ponto (
+    id TEXT PRIMARY KEY,
+    sessao_id TEXT NOT NULL REFERENCES digitalize_sessao(id),
+    chave TEXT NOT NULL,
+    pontos INTEGER NOT NULL DEFAULT 0,
+    criado_em TEXT NOT NULL,
+    UNIQUE (sessao_id, chave)
+);
+
+CREATE TABLE IF NOT EXISTS digitalize_pagamento (
+    id TEXT PRIMARY KEY,
+    sessao_id TEXT NOT NULL REFERENCES digitalize_sessao(id),
+    lead_id TEXT NOT NULL REFERENCES lead(id),
+    metodo TEXT NOT NULL DEFAULT '',
+    estado TEXT NOT NULL DEFAULT 'pendente',
+    valor_centimos INTEGER NOT NULL DEFAULT 0,
+    referencia_externa TEXT NOT NULL DEFAULT '',
+    criado_em TEXT NOT NULL,
+    pago_em TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_digitalize_pagamento_sessao ON digitalize_pagamento(sessao_id);
 `;
 
 // GBP-first commercial model. Prices in cents, s/ IVA.
 // Admin may override rows marked admin_edited=1; seed only fills gaps / unedited rows.
 const CATALOG_SEED = [
+    { codigo: 'digitalize_app_basico', nome: 'Site + domínio (self-service)', descricao_cliente: 'Fluxo automático em digitalize.yourlabpt.com/digitalize: site publicado com domínio e hosting, sem intervenção de vendedor.', preco_centimos: 4900, tipo: 'pacote', ordem: 5 },
     { codigo: 'google_essencial', nome: 'Essencial Google', descricao_cliente: 'Configuração básica do Perfil Google Business / Maps (conta do cliente): criar ou reivindicar, dados, pin, horário, descrição, fotos essenciais e apoio à validação. Sem website.', preco_centimos: 29000, tipo: 'pacote', ordem: 10 },
     { codigo: 'site_maps', nome: 'Site + Maps', descricao_cliente: 'Landing page + ligar ou atualizar o perfil Google já existente (website, contactos, fotos chave). Ideal quando o Maps já existe.', preco_centimos: 39000, tipo: 'pacote', ordem: 15 },
     { codigo: 'digital_completo', nome: 'Completo 0→100', descricao_cliente: 'Perfil Google completo (conta, reivindicar, dados, visuais, validação, perfil 100%) mais landing alinhada ao perfil. Sem promessa de ranking.', preco_centimos: 59000, tipo: 'pacote', ordem: 18 },

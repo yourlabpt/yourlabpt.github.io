@@ -46,6 +46,7 @@ const {
 } = require('./lib/digitalizept-geocode');
 const { createRateLimiter } = require('./lib/rate-limit');
 const { findAvailableDomains } = require('./lib/digitalizept-domains');
+const digitalizeApp = require('./lib/digitalize-app');
 const {
     mergeDemoForResume,
     resumeWizardPosition,
@@ -1762,6 +1763,9 @@ app.post('/api/admin/logout', (req, res) => {
 const digitalizeptLoginLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
 const digitalizeptDomainLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 20 });
 const digitalizeptVisualLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
+// /digitalize is public (no admin key) — tighter limits than the seller-only routes above.
+const digitalizeAppLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
+const digitalizeCheckoutLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 6 });
 
 app.post('/api/digitalizept/login', (req, res) => {
     const ip = clientIp(req);
@@ -1993,6 +1997,268 @@ app.get('/api/digitalizept/domains', requireDigitalizept, async (req, res) => {
     } catch (err) {
         console.error('digitalizept domains error:', err.message);
         return res.status(500).json({ error: 'Não foi possível verificar domínios.' });
+    }
+});
+
+// ============================================================
+// /digitalize \u2014 self-serve onboarding app. Public: no admin key.
+// Every route here is rate-limited by IP since there is no auth.
+// ============================================================
+
+function digitalizeSessionResponse(state) {
+    if (!state) return null;
+    return {
+        token: state.token,
+        dados: state.dados,
+        businessTypeId: state.businessTypeId,
+        pontos: state.pontos,
+        nivel: state.nivel,
+        nivelNome: state.nivelNome,
+        proximoNivelEm: state.proximoNivelEm,
+        pago: state.pago,
+        demoSlug: state.lead.demo_slug || '',
+        pagamentoEstado: state.pagamento ? state.pagamento.estado : ''
+    };
+}
+
+app.post('/api/digitalize/sessoes', (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeAppLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiados pedidos. Aguarde um minuto.' });
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const { token } = digitalizeApp.createSession(db);
+        return res.json({ token });
+    } catch (err) {
+        console.error('digitalize sessoes create error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel come\u00e7ar.' });
+    }
+});
+
+app.get('/api/digitalize/sessoes/:token', (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        return res.json(digitalizeSessionResponse(state));
+    } catch (err) {
+        console.error('digitalize sessoes get error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
+    }
+});
+
+app.patch('/api/digitalize/sessoes/:token/dados', (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeAppLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiados pedidos. Aguarde um minuto.' });
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        const body = req.body || {};
+        const patch = body.patch && typeof body.patch === 'object' ? body.patch : {};
+        const businessType = loadBusinessTypes().find((t) => t.id === (patch.businessTypeId || state.businessTypeId))
+            || { id: 'generico', campos_obrigatorios: [], perguntas_especificas: [] };
+        digitalizeApp.patchDados(db, { leadId: state.leadId, businessType, patch });
+        let pontos = state.pontos;
+        let nivel = state.nivel;
+        const chave = cleanText(body.chave, 60);
+        if (chave && Number.isFinite(Number(body.pontos))) {
+            const awarded = digitalizeApp.awardPoints(db, state.token, chave, Math.max(0, Math.round(Number(body.pontos))));
+            pontos = awarded.total;
+            nivel = awarded.nivel;
+        }
+        if (!state.lead.cidade && patch.cidade) scheduleLeadGeocode(state.leadId);
+        const next = digitalizeApp.getSession(db, req.params.token);
+        return res.json(digitalizeSessionResponse(next) || { pontos, nivel });
+    } catch (err) {
+        console.error('digitalize dados patch error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel guardar.' });
+    }
+});
+
+app.get('/api/digitalize/sessoes/:token/dominios', async (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeptDomainLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiadas pesquisas de dom\u00ednio. Aguarde um minuto.' });
+    }
+    const nome = String(req.query.nome || '').trim().slice(0, 120);
+    const cidade = String(req.query.cidade || '').trim().slice(0, 80);
+    if (!nome) return res.status(400).json({ error: 'Indique o nome do neg\u00f3cio.' });
+    try {
+        const result = await findAvailableDomains(nome, cidade);
+        return res.json(result);
+    } catch (err) {
+        console.error('digitalize dominios error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel verificar dom\u00ednios.' });
+    }
+});
+
+app.post('/api/digitalize/sessoes/:token/checkout', async (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeCheckoutLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiados pedidos. Aguarde um minuto.' });
+    }
+    if (!digitalizeApp.payments.isConfigured()) {
+        return res.status(503).json({ error: 'Pagamentos ainda n\u00e3o est\u00e3o configurados. Contacte o suporte.' });
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        if (state.pago) return res.status(409).json({ error: 'Este neg\u00f3cio j\u00e1 est\u00e1 pago e no ar.' });
+
+        const body = req.body || {};
+        const clienteNome = cleanText(body.clienteNome, 200);
+        const clienteEmail = normalizeEmail(body.clienteEmail);
+        const clienteNif = cleanText(body.clienteNif, 20);
+        if (!clienteNome || !clienteEmail) {
+            return res.status(400).json({ error: 'Falta o nome e o email para a fatura.' });
+        }
+        const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
+            || { id: 'generico', campos_obrigatorios: [], perguntas_especificas: [] };
+        digitalizeApp.patchDados(db, {
+            leadId: state.leadId,
+            businessType,
+            patch: {
+                nome_negocio: clienteNome,
+                email: clienteEmail,
+                dominio_escolhido: cleanText(body.dominioEscolhido, 100)
+            }
+        });
+
+        const pagamentoId = crypto.randomUUID().replace(/-/g, '').slice(0, 15);
+        const now = digitalizeptNow();
+        db.prepare(`
+            INSERT INTO digitalize_pagamento (id, sessao_id, lead_id, metodo, estado, valor_centimos, criado_em)
+            VALUES (?, ?, ?, '', 'pendente', ?, ?)
+        `).run(pagamentoId, state.token, state.leadId, digitalizeApp.PACOTE_PRECO_CENTIMOS, now);
+
+        const origin = `${req.protocol}://${req.get('host')}`;
+        const returnBase = `${origin}/digitalize/c/${encodeURIComponent(state.token)}`;
+        const { redirectUrl } = await digitalizeApp.payments.createCheckout({
+            orderId: pagamentoId,
+            amountCents: digitalizeApp.PACOTE_PRECO_CENTIMOS,
+            description: `Site + dom\u00ednio \u2014 ${clienteNome}`.slice(0, 200),
+            successUrl: `${returnBase}?pagamento=sucesso`,
+            errorUrl: `${returnBase}?pagamento=erro`,
+            cancelUrl: `${returnBase}?pagamento=cancelado`,
+            returnUrl: returnBase
+        });
+        return res.json({ redirectUrl, pagamentoId });
+    } catch (err) {
+        console.error('digitalize checkout error:', err.message);
+        return res.status(502).json({ error: 'N\u00e3o foi poss\u00edvel iniciar o pagamento.' });
+    }
+});
+
+app.get('/api/digitalize/sessoes/:token/pagamento', (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        return res.json({ pago: state.pago, pagamento: state.pagamento, demoSlug: state.lead.demo_slug || '' });
+    } catch (err) {
+        console.error('digitalize pagamento status error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel verificar o pagamento.' });
+    }
+});
+
+// ifthenpay calls this server-to-server on successful payment (see
+// digitalizept-payments.js for the one-off callback-activation setup).
+// GET or POST, query-string placeholders \u2014 see printCallbackActivationCurl().
+app.all('/api/digitalize/callback/ifthenpay', async (req, res) => {
+    const query = { ...req.query, ...(req.body || {}) };
+    const v = digitalizeApp.payments.verifyCallback(query);
+    if (!v.ok) {
+        console.warn('digitalize callback: bad anti-phishing key');
+        return res.status(403).send('forbidden');
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const pagamento = db.prepare('SELECT * FROM digitalize_pagamento WHERE id = ?').get(v.orderId);
+        if (!pagamento) return res.status(200).send('ok'); // unknown/old id \u2014 ack so ifthenpay stops retrying
+        if (pagamento.estado === 'pago') return res.status(200).send('ok'); // already processed, idempotent
+
+        db.prepare(`
+            UPDATE digitalize_pagamento SET estado = 'pago', metodo = ?, referencia_externa = ?, pago_em = ?
+            WHERE id = ?
+        `).run(v.method, v.paidAt, digitalizeptNow(), pagamento.id);
+
+        const state = digitalizeApp.getSession(db, pagamento.sessao_id);
+        if (state) {
+            const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
+                || { id: 'generico', nome: 'Neg\u00f3cio' };
+            const clienteLegal = db.prepare('SELECT * FROM cliente_legal WHERE lead_id = ?').get(state.leadId);
+            await digitalizeApp.finalizeSelfServeDeal(db, {
+                leadId: state.leadId,
+                businessType,
+                clienteNome: state.dados.nome_negocio || state.lead.nome || 'Cliente',
+                clienteEmail: state.dados.email || (clienteLegal && clienteLegal.email) || '',
+                clienteNif: state.dados.dominio_escolhido ? '' : '',
+                ip: req.ip || '',
+                userAgent: req.headers['user-agent'] || ''
+            });
+            digitalizeApp.awardPoints(db, state.token, 'ilha2_no_ar', 400);
+            scheduleLeadGeocode(state.leadId);
+        }
+        return res.status(200).send('ok');
+    } catch (err) {
+        console.error('digitalize callback error:', err.message);
+        // Still 200: ifthenpay retries on non-2xx, and retrying a broken
+        // finalize won't fix it \u2014 the payment row stays 'pago' pending,
+        // visible to fix by hand.
+        return res.status(200).send('ok');
+    }
+});
+
+app.get('/api/digitalize/sessoes/:token/crescimento', (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        const d = state.dados;
+        const servicos = String(d.principais_servicos || '').split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean);
+        res.json({
+            ilha3: [
+                { chave: 'google_ligar', label: 'Ligar \u00e0 sua ficha do Google', pontos: 80, feito: false, disponivel: false, nota: 'Em breve \u2014 por agora, fala connosco no WhatsApp.' },
+                { chave: 'google_fotos', label: 'Fotos no Google', pontos: 40, feito: false, disponivel: false, nota: 'Em breve.' },
+                { chave: 'google_descricao', label: 'Descri\u00e7\u00e3o e servi\u00e7os no Google', pontos: 40, feito: false, disponivel: false, nota: 'Em breve.' },
+                { chave: 'google_avaliacao', label: 'Pedir uma avalia\u00e7\u00e3o', pontos: 60, feito: false, disponivel: false, nota: 'Em breve.' }
+            ],
+            ilha4: [
+                { chave: 'whatsapp_ok', label: 'WhatsApp a funcionar', pontos: 40, feito: Boolean(d.whatsapp), disponivel: true },
+                { chave: 'instagram_link', label: 'Link no Instagram', pontos: 60, feito: Boolean(d.instagram), disponivel: true },
+                { chave: 'facebook_link', label: 'Link no Facebook', pontos: 40, feito: Boolean(d.facebook), disponivel: true },
+                { chave: 'qr_code', label: 'C\u00f3digo QR para imprimir', pontos: 30, feito: false, disponivel: Boolean(state.lead.demo_slug) }
+            ],
+            ilha5: [
+                { chave: 'foto_extra', label: 'Adicionar uma fotografia', pontos: 25, feito: false, disponivel: false, nota: 'Em breve \u2014 envia por WhatsApp entretanto.' },
+                { chave: 'servico_extra', label: 'Acrescentar um servi\u00e7o', pontos: 25, feito: servicos.length > 1, disponivel: true },
+                { chave: 'zona_extra', label: 'Acrescentar uma zona', pontos: 25, feito: false, disponivel: true },
+                { chave: 'certificacao_extra', label: 'Adicionar alvar\u00e1 ou certifica\u00e7\u00e3o', pontos: 25, feito: Boolean(d.certificacoes), disponivel: true }
+            ]
+        });
+    } catch (err) {
+        console.error('digitalize crescimento error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
+    }
+});
+
+// Trimmed, public list \u2014 just enough for the type picker in Ilha 1.
+app.get('/api/digitalize/tipos', (req, res) => {
+    try {
+        const types = loadBusinessTypes().map((t) => ({
+            id: t.id,
+            nome: t.nome || t.id,
+            paletas_sugeridas: t.paletas_sugeridas || []
+        }));
+        return res.json({ tipos: types });
+    } catch (err) {
+        console.error('digitalize tipos error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
     }
 });
 
@@ -6244,6 +6510,13 @@ app.get('/d/:slug', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.sendFile(path.join(__dirname, '..', 'digitalizept', 'public.html'));
+});
+
+// /digitalize app shell — client-side router reads the token from the path.
+app.get(['/digitalize', '/digitalize/', '/digitalize/c/:token'], (req, res) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, '..', 'digitalize', 'index.html'));
 });
 
 function parseDataImageUrl(raw) {
