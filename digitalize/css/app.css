@@ -424,16 +424,8 @@ body {
     border-radius: 999px;
 }
 
-/* Services picker screen (grouped tap-to-select) */
-.dz-servicos-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 14px;
-    gap: 10px;
-}
-.dz-servicos-count { font-weight: 700; font-size: 0.9rem; color: var(--dz-accent); }
-.dz-servicos-group { margin-bottom: 20px; }
+/* Services picker screen (grouped tap-to-select, one group per page) */
+.dz-servicos-count { font-weight: 700; font-size: 0.9rem; color: var(--dz-accent); margin-bottom: 14px; }
 .dz-servicos-group-title {
     font-weight: 700;
     font-size: 0.92rem;

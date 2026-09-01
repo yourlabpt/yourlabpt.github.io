@@ -2324,6 +2324,18 @@ app.get('/api/digitalize/tipos', (req, res) => {
     }
 });
 
+// Three ready-made "what does it do" phrases for one business type \u2014 Q3
+// picks from these instead of typing; typing is an explicit opt-out.
+app.get('/api/digitalize/tipos/:id/descricoes', (req, res) => {
+    try {
+        const type = loadBusinessTypes().find((t) => t.id === req.params.id);
+        return res.json({ frases: (type && type.descricoes_sugeridas) || [] });
+    } catch (err) {
+        console.error('digitalize descricoes error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
+    }
+});
+
 // The curated tap-to-select catalog for one business type, plus the shared
 // cross-type attribute chips (ao domic\u00edlio, urg\u00eancia, or\u00e7amento gr\u00e1tis...).
 app.get('/api/digitalize/tipos/:id/servicos', (req, res) => {

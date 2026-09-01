@@ -199,5 +199,10 @@
       { "nome": "Certificação elétrica", "descricao": "Vistoria e emissão de certificado para venda ou seguro." },
       { "nome": "Urgências", "descricao": "Sem luz ou com cheiro a queimado — respondemos depressa." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Eletricista ao domicílio — avarias, instalações e certificação elétrica.",
+    "Instalações elétricas seguras, do quadro às tomadas, com orçamento claro.",
+    "Resposta rápida a avarias elétricas, residenciais e comerciais."
+  ]
 }

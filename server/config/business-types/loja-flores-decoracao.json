@@ -200,5 +200,10 @@
       { "nome": "Presentes e arranjos", "descricao": "Ajudamos a escolher e a embrulhar." },
       { "nome": "Entrega ao domicílio", "descricao": "Chega a horas, na zona." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Florista com arranjos para todas as ocasiões e entrega ao domicílio.",
+    "Flores e decoração para casamentos, eventos e presentes do dia a dia.",
+    "Bouquets, plantas e decoração — feitos à medida do momento."
+  ]
 }

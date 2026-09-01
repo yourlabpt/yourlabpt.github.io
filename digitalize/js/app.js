@@ -58,8 +58,8 @@ const QUESTOES = [
     {
         chave: 'q3_oficio', pontos: 40, campo: 'o_que_faz',
         titulo: 'O que faz, em poucas palavras?',
-        lede: 'Duas frases chegam — usamos isto para escrever o resto do site.',
-        tipo: 'texto_longo', placeholder: 'Ex.: Canalizador ao domicílio, fugas e desentupimentos.'
+        lede: 'Escolha a frase mais parecida com o seu negócio — ou escreva a sua.',
+        tipo: 'descricao', placeholder: 'Ex.: Canalizador ao domicílio, fugas e desentupimentos.'
     },
     {
         chave: 'q4_zonas', pontos: 30, campo: 'cidade',
@@ -98,7 +98,8 @@ const state = {
     token: '',
     session: null,
     tipos: [],
-    servicosCatalog: {} // businessTypeId -> { grupos, atributosGlobais } (fetched once per session)
+    servicosCatalog: {}, // businessTypeId -> { grupos, atributosGlobais } (fetched once per session)
+    descricoesCatalog: {} // businessTypeId -> [frase, frase, frase]
 };
 
 function persistToken(token) {
@@ -249,6 +250,10 @@ function renderQuestion(q, index) {
         renderServicosEntryBody(screen, q, index);
         return;
     }
+    if (q.tipo === 'descricao') {
+        renderDescricaoBody(screen, q, index);
+        return;
+    }
 
     const field = el('div', 'dz-field');
     const input = el(q.tipo === 'texto_longo' ? 'textarea' : 'input', q.tipo === 'texto_longo' ? 'dz-textarea' : 'dz-input');
@@ -350,6 +355,96 @@ function renderTipoNegocioBody(screen, q, index) {
         nextBtn.disabled = true;
         try {
             await submitAnswer(q, { businessTypeId: selectedTypeId });
+            goToQuestion(index + 1);
+        } catch (err) {
+            toast(err.message || 'Não consegui guardar.');
+            nextBtn.disabled = false;
+        }
+    });
+}
+
+// Q3 body: 3 ready phrases to tap, not a text box. Typing is an explicit
+// opt-out ("Nenhuma destas"), not the default path.
+async function loadDescricoesSugeridas(businessTypeId) {
+    const id = businessTypeId || 'generico';
+    if (state.descricoesCatalog[id]) return state.descricoesCatalog[id];
+    const { frases } = await api(`/tipos/${encodeURIComponent(id)}/descricoes`);
+    state.descricoesCatalog[id] = frases || [];
+    return state.descricoesCatalog[id];
+}
+
+function renderDescricaoBody(screen, q, index) {
+    const wrap = el('div');
+    wrap.appendChild(el('p', 'dz-hint', 'A carregar sugestões…'));
+    screen.appendChild(wrap);
+    screen.appendChild(el('div', 'dz-spacer'));
+
+    const actions = el('div', 'dz-actions');
+    const nextBtn = el('button', 'dz-btn dz-btn-primary', 'Continuar');
+    nextBtn.type = 'button';
+    nextBtn.disabled = true;
+    actions.appendChild(nextBtn);
+    screen.appendChild(actions);
+
+    const d = (state.session && state.session.dados) || {};
+    let selected = d[q.campo] || '';
+    let customMode = false;
+    let customInput = null;
+
+    function paintChoices(frases) {
+        wrap.innerHTML = '';
+        const grid = el('div', 'dz-choices');
+        frases.forEach((frase) => {
+            const btn = el('button', `dz-choice${!customMode && selected === frase ? ' is-selected' : ''}`);
+            btn.type = 'button';
+            btn.appendChild(el('p', 'dz-choice-label', frase));
+            btn.addEventListener('click', () => {
+                customMode = false;
+                selected = frase;
+                nextBtn.disabled = false;
+                paintChoices(frases);
+            });
+            grid.appendChild(btn);
+        });
+        wrap.appendChild(grid);
+
+        const customBtn = el('button', `dz-choice${customMode ? ' is-selected' : ''}`);
+        customBtn.type = 'button';
+        customBtn.appendChild(el('p', 'dz-choice-label', 'Nenhuma destas — escrever a minha'));
+        customBtn.addEventListener('click', () => {
+            customMode = true;
+            paintChoices(frases);
+        });
+        wrap.appendChild(customBtn);
+
+        if (customMode) {
+            const field = el('div', 'dz-field');
+            field.style.marginTop = '10px';
+            customInput = el('textarea', 'dz-textarea');
+            customInput.placeholder = q.placeholder || '';
+            customInput.value = frases.includes(selected) ? '' : selected;
+            customInput.addEventListener('input', () => {
+                nextBtn.disabled = !clean(customInput.value);
+            });
+            field.appendChild(customInput);
+            wrap.appendChild(field);
+            nextBtn.disabled = !clean(customInput.value);
+            customInput.focus();
+        }
+    }
+
+    loadDescricoesSugeridas(state.session.businessTypeId).then((frases) => {
+        if (!frases.length) { customMode = true; paintChoices([]); return; }
+        if (selected && !frases.includes(selected)) customMode = true;
+        paintChoices(frases);
+    }).catch(() => { customMode = true; paintChoices([]); });
+
+    nextBtn.addEventListener('click', async () => {
+        const value = customMode ? clean(customInput.value) : selected;
+        if (!value) { toast('Escolha uma frase ou escreva a sua.'); return; }
+        nextBtn.disabled = true;
+        try {
+            await submitAnswer(q, { [q.campo]: value });
             goToQuestion(index + 1);
         } catch (err) {
             toast(err.message || 'Não consegui guardar.');
@@ -477,157 +572,183 @@ function renderServicosEntryBody(screen, q, index) {
 // Reused from both Q6 (Ilha 1) and the "Acrescentar um serviço" growth item
 // (Ilha 5) — `back` navigates away without saving, `submit` receives
 // {servicosSelecionados, atributosSelecionados} and owns what happens next.
+// One group per screen (Grupo 1 de N, Grupo 2 de N…) instead of one long
+// scroll of everything — same paced, one-thing-at-a-time feel as Q1–Q8. A
+// final screen collects custom add-ons and the "como atende" attributes.
 function renderServicosPicker({ back, submit, saveLabel = 'Guardar e continuar' }) {
-    const screen = screenShell({ back, points: state.session ? state.session.pontos : 0 });
-    screen.appendChild(el('p', 'dz-kicker', 'OS SEUS SERVIÇOS'));
-    screen.appendChild(el('h1', 'dz-h1', 'Toque no que oferece'));
-    screen.appendChild(el('p', 'dz-lede', 'Lista pronta para o seu tipo de negócio — acrescente o que faltar no fim.'));
-
-    const toolbar = el('div', 'dz-servicos-toolbar');
-    const countLabel = el('span', 'dz-servicos-count', '');
-    toolbar.appendChild(countLabel);
-    screen.appendChild(toolbar);
-
-    const groupsWrap = el('div');
-    groupsWrap.appendChild(el('p', 'dz-hint', 'A carregar os serviços do seu tipo de negócio…'));
-    screen.appendChild(groupsWrap);
-
-    const customSelectedWrap = el('div');
-    screen.appendChild(customSelectedWrap);
-
-    screen.appendChild(el('p', 'dz-servicos-group-title', 'Não está na lista?'));
-    const customRow = el('div', 'dz-servicos-custom-row');
-    const customInput = el('input', 'dz-input');
-    customInput.placeholder = 'Outro serviço que ofereça…';
-    const customAddBtn = el('button', 'dz-servicos-custom-add', '+ Adicionar');
-    customAddBtn.type = 'button';
-    customRow.append(customInput, customAddBtn);
-    screen.appendChild(customRow);
-
-    const attrsWrap = el('div');
-    attrsWrap.style.marginTop = '22px';
-    screen.appendChild(attrsWrap);
-
-    screen.appendChild(el('div', 'dz-spacer'));
-    const footer = el('div', 'dz-servicos-footer');
-    const saveBtn = el('button', 'dz-btn dz-btn-primary', saveLabel);
-    saveBtn.type = 'button';
-    footer.appendChild(saveBtn);
-    screen.appendChild(footer);
+    const loading = screenShell({ back, points: state.session ? state.session.pontos : 0 });
+    loading.appendChild(el('p', 'dz-kicker', 'OS SEUS SERVIÇOS'));
+    loading.appendChild(el('p', 'dz-hint', 'A carregar os serviços do seu tipo de negócio…'));
 
     const d = (state.session && state.session.dados) || {};
     const selected = new Map(); // lowercase nome -> {nome, descricao, preco}
     parseServicosSelecionados(d).forEach((item) => selected.set(item.nome.toLowerCase(), item));
     const attrsSelected = new Map();
     parseAtributosSelecionados(d).forEach((item) => attrsSelected.set(item.nome.toLowerCase(), item));
-    const chipsByName = new Map(); // lowercase nome -> [chipEl, ...] (same service can appear in >1 group)
-    let catalogNames = new Set();
 
-    function updateCount() {
-        countLabel.textContent = `${selected.size} serviço${selected.size === 1 ? '' : 's'} escolhido${selected.size === 1 ? '' : 's'}`;
-    }
-    updateCount();
-
-    function renderCustomSelected() {
-        customSelectedWrap.innerHTML = '';
-        const customs = Array.from(selected.values()).filter((item) => !catalogNames.has(item.nome.toLowerCase()));
-        if (!customs.length) return;
-        customSelectedWrap.appendChild(el('p', 'dz-servicos-group-title', 'Acrescentados por si'));
-        const grid = el('div', 'dz-servicos-grid');
-        customs.forEach((item) => {
-            const chip = el('button', 'dz-service-chip is-selected', `${item.nome}  ×`);
-            chip.type = 'button';
-            chip.addEventListener('click', () => {
-                selected.delete(item.nome.toLowerCase());
-                updateCount();
-                renderCustomSelected();
-            });
-            grid.appendChild(chip);
-        });
-        customSelectedWrap.appendChild(grid);
-    }
-
-    function toggleServiceByName(nome) {
-        const key = nome.toLowerCase();
-        if (selected.has(key)) selected.delete(key);
-        else selected.set(key, { nome, descricao: '', preco: '' });
-        (chipsByName.get(key) || []).forEach((chip) => chip.classList.toggle('is-selected', selected.has(key)));
-        updateCount();
+    function countLabelText() {
+        return `${selected.size} serviço${selected.size === 1 ? '' : 's'} escolhido${selected.size === 1 ? '' : 's'}`;
     }
 
     loadServicosCatalog(state.session.businessTypeId).then(({ grupos, atributosGlobais }) => {
-        groupsWrap.innerHTML = '';
-        (grupos || []).forEach((grupo) => {
-            if (!grupo.servicos || !grupo.servicos.length) return;
-            const groupEl = el('div', 'dz-servicos-group');
-            groupEl.appendChild(el('p', 'dz-servicos-group-title', grupo.nome));
-            const grid = el('div', 'dz-servicos-grid');
-            grupo.servicos.forEach((servico) => {
-                catalogNames.add(servico.nome.toLowerCase());
-                const isOn = selected.has(servico.nome.toLowerCase());
-                const chip = el('button', `dz-service-chip${isOn ? ' is-selected' : ''}`, servico.nome);
-                chip.type = 'button';
-                chip.addEventListener('click', () => toggleServiceByName(servico.nome));
-                const key = servico.nome.toLowerCase();
-                if (!chipsByName.has(key)) chipsByName.set(key, []);
-                chipsByName.get(key).push(chip);
-                grid.appendChild(chip);
-            });
-            groupEl.appendChild(grid);
-            groupsWrap.appendChild(groupEl);
-        });
-        if (!groupsWrap.children.length) {
-            groupsWrap.appendChild(el('p', 'dz-hint', 'Ainda não há lista pronta para este tipo de negócio — acrescente por baixo.'));
-        }
-        renderCustomSelected();
+        const pages = (grupos || []).filter((g) => g.servicos && g.servicos.length);
+        const catalogNames = new Set();
+        pages.forEach((g) => g.servicos.forEach((s) => catalogNames.add(s.nome.toLowerCase())));
+        const totalSteps = pages.length + 1; // + final "outros / como atende" step
 
-        attrsWrap.appendChild(el('p', 'dz-servicos-group-title', 'Como atende'));
-        const attrGrid = el('div', 'dz-servicos-grid');
-        (atributosGlobais || []).forEach((attr) => {
-            const isOn = attrsSelected.has(attr.nome.toLowerCase());
-            const chip = el('button', `dz-service-chip${isOn ? ' is-selected' : ''}`, attr.nome);
-            chip.type = 'button';
-            chip.addEventListener('click', () => {
-                const key = attr.nome.toLowerCase();
-                if (attrsSelected.has(key)) { attrsSelected.delete(key); chip.classList.remove('is-selected'); } else { attrsSelected.set(key, { nome: attr.nome, descricao: '', preco: '' }); chip.classList.add('is-selected'); }
+        function renderStep(stepIndex) {
+            const isFinal = stepIndex >= pages.length;
+            const stepBack = stepIndex === 0 ? back : () => renderStep(stepIndex - 1);
+            const screen = screenShell({
+                back: stepBack, progressCurrent: stepIndex, progressTotal: totalSteps,
+                points: state.session ? state.session.pontos : 0
             });
-            attrGrid.appendChild(chip);
-        });
-        attrsWrap.appendChild(attrGrid);
-    }).catch(() => {
-        groupsWrap.innerHTML = '';
-        groupsWrap.appendChild(el('p', 'dz-hint', 'Não consegui carregar a lista. Pode acrescentar por baixo.'));
-    });
+            screen.appendChild(el('p', 'dz-kicker', isFinal ? 'MAIS ALGUMA COISA?' : `GRUPO ${stepIndex + 1} DE ${pages.length}`));
+            const countLabel = el('p', 'dz-servicos-count', countLabelText());
+            screen.appendChild(countLabel);
 
-    customAddBtn.addEventListener('click', () => {
-        const nome = clean(customInput.value);
-        if (!nome) return;
-        const key = nome.toLowerCase();
-        if (!selected.has(key)) {
-            selected.set(key, { nome, descricao: '', preco: '' });
-            updateCount();
+            if (!isFinal) {
+                const grupo = pages[stepIndex];
+                screen.appendChild(el('h1', 'dz-h1', grupo.nome));
+                screen.appendChild(el('p', 'dz-lede', 'Toque nos que oferece.'));
+                const grid = el('div', 'dz-servicos-grid');
+                grupo.servicos.forEach((servico) => {
+                    const key = servico.nome.toLowerCase();
+                    const chip = el('button', `dz-service-chip${selected.has(key) ? ' is-selected' : ''}`, servico.nome);
+                    chip.type = 'button';
+                    chip.addEventListener('click', () => {
+                        if (selected.has(key)) selected.delete(key);
+                        else selected.set(key, { nome: servico.nome, descricao: '', preco: '' });
+                        chip.classList.toggle('is-selected', selected.has(key));
+                        countLabel.textContent = countLabelText();
+                    });
+                    grid.appendChild(chip);
+                });
+                screen.appendChild(grid);
+                screen.appendChild(el('div', 'dz-spacer'));
+                const actions = el('div', 'dz-actions');
+                const nextBtn = el('button', 'dz-btn dz-btn-primary', 'Continuar');
+                nextBtn.type = 'button';
+                nextBtn.addEventListener('click', () => renderStep(stepIndex + 1));
+                actions.appendChild(nextBtn);
+                screen.appendChild(actions);
+                return;
+            }
+
+            screen.appendChild(el('h1', 'dz-h1', 'Falta mais algum? E como atende?'));
+            screen.appendChild(el('p', 'dz-lede', 'Acrescente o que não esteja na lista e diga como atende.'));
+
+            const customSelectedWrap = el('div');
+            screen.appendChild(customSelectedWrap);
+
+            function renderCustomSelected() {
+                customSelectedWrap.innerHTML = '';
+                const customs = Array.from(selected.values()).filter((item) => !catalogNames.has(item.nome.toLowerCase()));
+                if (!customs.length) return;
+                customSelectedWrap.appendChild(el('p', 'dz-servicos-group-title', 'Acrescentados por si'));
+                const grid = el('div', 'dz-servicos-grid');
+                customs.forEach((item) => {
+                    const chip = el('button', 'dz-service-chip is-selected', `${item.nome}  ×`);
+                    chip.type = 'button';
+                    chip.addEventListener('click', () => {
+                        selected.delete(item.nome.toLowerCase());
+                        countLabel.textContent = countLabelText();
+                        renderCustomSelected();
+                    });
+                    grid.appendChild(chip);
+                });
+                customSelectedWrap.appendChild(grid);
+            }
             renderCustomSelected();
-        }
-        customInput.value = '';
-        customInput.focus();
-    });
-    customInput.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') { ev.preventDefault(); customAddBtn.click(); }
-    });
 
-    saveBtn.addEventListener('click', async () => {
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'A guardar…';
-        try {
-            await submit({
-                servicosSelecionados: Array.from(selected.values()),
-                atributosSelecionados: Array.from(attrsSelected.values())
+            screen.appendChild(el('p', 'dz-servicos-group-title', 'Não está na lista?'));
+            const customRow = el('div', 'dz-servicos-custom-row');
+            const customInput = el('input', 'dz-input');
+            customInput.placeholder = 'Outro serviço que ofereça…';
+            const customAddBtn = el('button', 'dz-servicos-custom-add', '+ Adicionar');
+            customAddBtn.type = 'button';
+            customAddBtn.addEventListener('click', () => {
+                const nome = clean(customInput.value);
+                if (!nome) return;
+                const key = nome.toLowerCase();
+                if (!selected.has(key)) {
+                    selected.set(key, { nome, descricao: '', preco: '' });
+                    countLabel.textContent = countLabelText();
+                    renderCustomSelected();
+                }
+                customInput.value = '';
+                customInput.focus();
             });
-        } catch (err) {
-            toast(err.message || 'Não consegui guardar.');
-            saveBtn.disabled = false;
-            saveBtn.textContent = saveLabel;
+            customInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); customAddBtn.click(); } });
+            customRow.append(customInput, customAddBtn);
+            screen.appendChild(customRow);
+
+            const attrsWrap = el('div');
+            attrsWrap.style.marginTop = '22px';
+            attrsWrap.appendChild(el('p', 'dz-servicos-group-title', 'Como atende'));
+            const attrGrid = el('div', 'dz-servicos-grid');
+            (atributosGlobais || []).forEach((attr) => {
+                const key = attr.nome.toLowerCase();
+                const chip = el('button', `dz-service-chip${attrsSelected.has(key) ? ' is-selected' : ''}`, attr.nome);
+                chip.type = 'button';
+                chip.addEventListener('click', () => {
+                    if (attrsSelected.has(key)) { attrsSelected.delete(key); chip.classList.remove('is-selected'); } else { attrsSelected.set(key, { nome: attr.nome, descricao: '', preco: '' }); chip.classList.add('is-selected'); }
+                });
+                attrGrid.appendChild(chip);
+            });
+            attrsWrap.appendChild(attrGrid);
+            screen.appendChild(attrsWrap);
+
+            screen.appendChild(el('div', 'dz-spacer'));
+            const footer = el('div', 'dz-servicos-footer');
+            const saveBtn = el('button', 'dz-btn dz-btn-primary', saveLabel);
+            saveBtn.type = 'button';
+            saveBtn.addEventListener('click', async () => {
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'A guardar…';
+                try {
+                    await submit({
+                        servicosSelecionados: Array.from(selected.values()),
+                        atributosSelecionados: Array.from(attrsSelected.values())
+                    });
+                } catch (err) {
+                    toast(err.message || 'Não consegui guardar.');
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = saveLabel;
+                }
+            });
+            footer.appendChild(saveBtn);
+            screen.appendChild(footer);
         }
+
+        renderStep(0);
+    }).catch(() => {
+        const screen = screenShell({ back, points: state.session ? state.session.pontos : 0 });
+        screen.appendChild(el('p', 'dz-kicker', 'OS SEUS SERVIÇOS'));
+        screen.appendChild(el('h1', 'dz-h1', 'Não consegui carregar a lista'));
+        screen.appendChild(el('p', 'dz-lede', 'Pode escrever os seus serviços, separados por vírgula, e tentamos de novo mais tarde.'));
+        const input = el('textarea', 'dz-textarea');
+        input.placeholder = 'Ex.: Fugas, Desentupimentos, Instalação de canalizações';
+        screen.appendChild(input);
+        screen.appendChild(el('div', 'dz-spacer'));
+        const actions = el('div', 'dz-actions');
+        const btn = el('button', 'dz-btn dz-btn-primary', saveLabel);
+        btn.type = 'button';
+        btn.addEventListener('click', async () => {
+            const nomes = clean(input.value).split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+            btn.disabled = true;
+            try {
+                await submit({
+                    servicosSelecionados: nomes.map((nome) => ({ nome, descricao: '', preco: '' })),
+                    atributosSelecionados: []
+                });
+            } catch (err) {
+                toast(err.message || 'Não consegui guardar.');
+                btn.disabled = false;
+            }
+        });
+        actions.appendChild(btn);
+        screen.appendChild(actions);
     });
 }
 

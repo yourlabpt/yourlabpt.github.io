@@ -203,5 +203,10 @@
       { "nome": "Consultoria skincare", "descricao": "Ajudamos a escolher os produtos para a rotina em casa." },
       { "nome": "Acompanhamento pré e pós-cirúrgico", "descricao": "Preparação e recuperação, em articulação com o médico." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Tratamentos de estética facial e corporal, com avaliação personalizada.",
+    "Cuidados de pele, corpo e bem-estar num espaço pensado para si.",
+    "Estética avançada — dos tratamentos clássicos às tecnologias mais recentes."
+  ]
 }

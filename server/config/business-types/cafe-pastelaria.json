@@ -206,5 +206,10 @@
       { "nome": "Bolos por encomenda", "descricao": "Aniversários e o bolo do sábado, feitos cá." },
       { "nome": "Snacks ligeiros", "descricao": "Quando o almoço tem de ser rápido." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Café, pequenos-almoços e pastelaria feita todos os dias.",
+    "Pastelaria tradicional, bolos por encomenda e um espaço para parar.",
+    "Café de bairro com pastelaria própria e take-away rápido."
+  ]
 }

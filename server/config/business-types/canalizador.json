@@ -196,5 +196,10 @@
       { "nome": "Esquentadores e caldeiras", "descricao": "Instalação, manutenção e substituição com segurança." },
       { "nome": "Orçamentos sem compromisso", "descricao": "Vemos o problema e dizemos o preço antes de mexer em nada." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Canalizador ao domicílio — fugas, desentupimentos e instalações.",
+    "Resolvo canalizações em casas e escritórios, com orçamento antes de começar.",
+    "Urgências de canalização com resposta rápida e trabalho garantido."
+  ]
 }

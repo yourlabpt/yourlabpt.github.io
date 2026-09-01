@@ -208,5 +208,10 @@
       { "nome": "Reparação de sofás", "descricao": "Molas, espumas e costuras — sem trocar o sofá." },
       { "nome": "Tapeçaria decorativa", "descricao": "Almofadas e apontamentos que acompanham a peça." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Estofador — sofás, cadeiras e bancos automóveis como novos.",
+    "Reparação e estofamento à medida, em qualquer tipo de tecido.",
+    "Tapeçaria para casa, automóvel e náutica, com escolha de tecidos."
+  ]
 }

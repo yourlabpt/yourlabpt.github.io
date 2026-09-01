@@ -201,5 +201,10 @@
       { "nome": "Produtos de limpeza", "descricao": "Do doméstico ao mais forte, com indicação de uso." },
       { "nome": "Duplicação de chaves", "descricao": "Cópias feitas no balcão, enquanto espera." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Ferragens, tintas e tudo para a casa — com aconselhamento no balcão.",
+    "Loja de bricolage e produtos para o lar, do parafuso à tinta certa.",
+    "Drogaria de bairro com ferramentas, material elétrico e corte de chaves."
+  ]
 }

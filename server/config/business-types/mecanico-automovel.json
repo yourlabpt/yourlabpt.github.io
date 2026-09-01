@@ -212,5 +212,10 @@
       { "nome": "Pré-inspeção IPO", "descricao": "Vemos o que chumba antes de ir, para não voltar." },
       { "nome": "Ar condicionado", "descricao": "Carga de gás e limpeza do circuito antes do verão." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Oficina automóvel — revisões, mecânica geral e diagnóstico eletrónico.",
+    "Manutenção e reparação automóvel, com orçamento antes de qualquer trabalho.",
+    "Da mecânica aos pneus e à estética automóvel, tudo num só sítio."
+  ]
 }

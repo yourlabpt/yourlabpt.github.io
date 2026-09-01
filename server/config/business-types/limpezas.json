@@ -194,5 +194,10 @@
       { "nome": "Limpeza de vidros", "descricao": "Janelas e montras sem manchas, por dentro e por fora." },
       { "nome": "Limpezas pontuais ou regulares", "descricao": "Uma vez, ou toda semana — o que fizer sentido para si." }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Limpezas domésticas e de escritório, pontuais ou regulares.",
+    "Equipa de confiança para deixar a sua casa ou espaço impecável.",
+    "Limpeza profissional, com produtos incluídos e horário flexível."
+  ]
 }

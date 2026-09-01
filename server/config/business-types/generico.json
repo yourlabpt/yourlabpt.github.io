@@ -173,5 +173,10 @@
         "texto": "É o sítio da rua. Resolvem."
       }
     ]
-  }
+  },
+  "descricoes_sugeridas": [
+    "Um negócio local pronto para atender quem precisa do meu serviço.",
+    "Atendimento próximo, com qualidade e confiança em cada trabalho.",
+    "O serviço que procura, feito por quem conhece bem a zona."
+  ]
 }
