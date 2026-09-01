@@ -69,6 +69,22 @@ function tokenFromPath() {
     return match ? decodeURIComponent(match[1]) : '';
 }
 
+/**
+ * Forgets this browser's resumable link and returns to the login doors —
+ * the only way back to a fresh start once a session exists. The lead
+ * itself isn't deleted server-side; this just clears what THIS device
+ * remembers, same as losing the link and needing to sign in again.
+ */
+function resetSession() {
+    try { localStorage.removeItem(TOKEN_KEY); } catch (_) { /* ignore */ }
+    state.token = '';
+    state.session = null;
+    state.crescimento = null;
+    state.lastNivel = null;
+    window.history.replaceState(null, '', '/digitalize');
+    renderLogin();
+}
+
 async function loadTipos() {
     if (state.tipos.length) return state.tipos;
     const { tipos } = await api('/tipos');
@@ -1384,12 +1400,33 @@ function renderAjuda() {
     scroll.appendChild(faqWrap);
 
     scroll.appendChild(el('p', 'dz-node-hint', 'Se preferir que tratemos de um passo por si, contacte-nos por WhatsApp.'));
+
+    const resetWrap = el('div');
+    resetWrap.style.cssText = 'margin-top:22px;padding-top:18px;border-top:1px solid var(--dz-border)';
+    resetWrap.appendChild(el('p', 'dz-field-label', 'Não é o seu negócio?'));
+    const resetBtn = el('button', 'dz-btn dz-btn-ghost', 'Sair e começar com outro negócio');
+    resetBtn.type = 'button';
+    resetBtn.style.cssText = 'border:1.5px solid var(--dz-border);margin-top:6px';
+    resetBtn.addEventListener('click', () => {
+        if (window.confirm('Isto esquece o link deste negócio neste aparelho. Continuar?')) resetSession();
+    });
+    resetWrap.appendChild(resetBtn);
+    scroll.appendChild(resetWrap);
 }
 
 // ---------- Install to home screen ----------
+const ICON_SHARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5v11"/><path d="M8.2 6.3L12 2.5l3.8 3.8"/><path d="M6 9h-.5A1.5 1.5 0 0 0 4 10.5v9A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 18.5 9H18"/></svg>';
+const ICON_PLUS_SQUARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>';
+const ICON_CHECK_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
 function showInstallBanner(kind) {
     if (document.querySelector('.dz-install-banner')) return;
     const banner = el('div', 'dz-install-banner');
+    const icon = document.createElement('img');
+    icon.src = '/digitalize/icons/icon-192.png';
+    icon.alt = '';
+    icon.className = 'dz-install-icon';
+    banner.appendChild(icon);
     const text = el('div', 'dz-install-text');
     text.appendChild(el('p', 'dz-install-title', 'Instale a app'));
     text.appendChild(el('p', 'dz-install-sub', 'Acesso instantâneo, sem abrir o browser.'));
@@ -1414,24 +1451,37 @@ function showInstallBanner(kind) {
 function renderIosInstallSheet(banner) {
     const overlay = el('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:70';
-    const card = el('div');
-    card.style.cssText = 'background:var(--dz-surface);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px';
-    card.appendChild(el('p', 'dz-field-label', 'Adicionar ao ecrã principal'));
-    const steps = document.createElement('ol');
-    steps.style.cssText = 'padding-left:20px;line-height:1.8;color:var(--dz-ink);font-size:0.92rem';
-    [
-        'Toque no ícone de partilha (quadrado com seta a subir) na barra do browser.',
-        'Escolha "Adicionar ao Ecrã Principal".',
-        'Toque em "Adicionar" — fica pronto a abrir como uma app.'
-    ].forEach((textStep) => {
-        const li = document.createElement('li');
-        li.textContent = textStep;
-        steps.appendChild(li);
+    const card = el('div', 'dz-ios-sheet');
+
+    const preview = el('div', 'dz-ios-preview');
+    const previewIcon = document.createElement('img');
+    previewIcon.src = '/digitalize/icons/icon-192.png';
+    previewIcon.alt = '';
+    previewIcon.className = 'dz-ios-preview-icon';
+    preview.appendChild(previewIcon);
+    const previewLabel = el('div');
+    previewLabel.appendChild(el('p', 'dz-field-label', 'Adicionar ao ecrã principal'));
+    previewLabel.appendChild(el('p', 'dz-install-sub', 'Fica ao lado das suas outras apps, pronto a abrir num toque.'));
+    preview.appendChild(previewLabel);
+    card.appendChild(preview);
+
+    const steps = [
+        { icon: ICON_SHARE_SVG, text: 'Toque no ícone de partilha na barra do Safari.' },
+        { icon: ICON_PLUS_SQUARE_SVG, text: 'Escolha "Adicionar ao Ecrã Principal".' },
+        { icon: ICON_CHECK_SVG, text: 'Toque em "Adicionar" — fica pronto a abrir como uma app.' }
+    ];
+    steps.forEach((step) => {
+        const row = el('div', 'dz-ios-step');
+        const iconChip = el('div', 'dz-ios-step-icon');
+        iconChip.innerHTML = step.icon;
+        row.appendChild(iconChip);
+        row.appendChild(el('p', 'dz-ios-step-text', step.text));
+        card.appendChild(row);
     });
-    card.appendChild(steps);
+
     const closeBtn = el('button', 'dz-btn dz-btn-primary', 'Entendi');
     closeBtn.type = 'button';
-    closeBtn.style.marginTop = '8px';
+    closeBtn.style.marginTop = '6px';
     closeBtn.addEventListener('click', () => { overlay.remove(); if (banner) banner.remove(); dismissInstallPrompt(); });
     card.appendChild(closeBtn);
     overlay.appendChild(card);

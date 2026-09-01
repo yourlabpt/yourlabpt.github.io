@@ -256,70 +256,6 @@ body {
 
 .dz-type-chip.is-selected { border-color: var(--dz-accent); background: var(--dz-accent-fill); color: var(--dz-accent); }
 
-/* Level / points banner */
-.dz-level-card {
-    background: var(--dz-surface);
-    border-radius: var(--dz-radius-lg);
-    padding: 20px;
-    margin-bottom: 18px;
-}
-
-.dz-level-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
-.dz-level-name { font-weight: 700; font-size: 1.05rem; }
-.dz-level-pts { color: var(--dz-muted); font-size: 0.85rem; }
-
-.dz-level-bar { height: 8px; background: var(--dz-fill); border-radius: 999px; overflow: hidden; }
-.dz-level-bar-fill { height: 100%; background: var(--dz-accent); border-radius: 999px; transition: width 0.4s ease; }
-
-/* Island / checklist cards */
-.dz-island { margin-bottom: 22px; }
-.dz-island-title { font-size: 1.05rem; font-weight: 700; margin: 0 0 3px; }
-.dz-island-sub { color: var(--dz-muted); font-size: 0.85rem; margin: 0 0 12px; }
-
-.dz-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: var(--dz-surface);
-    border-radius: 14px;
-    padding: 13px 14px;
-    margin-bottom: 8px;
-}
-
-.dz-item.is-done { opacity: 0.6; }
-.dz-item.is-disabled { opacity: 0.55; }
-
-.dz-item-check {
-    flex: 0 0 auto;
-    width: 26px;
-    height: 26px;
-    border-radius: 999px;
-    border: 1.5px solid var(--dz-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-}
-
-.dz-item.is-done .dz-item-check { background: var(--dz-accent); border-color: var(--dz-accent); color: #fff; }
-
-.dz-item-body { flex: 1; min-width: 0; }
-.dz-item-label { font-weight: 600; font-size: 0.92rem; }
-.dz-item-note { color: var(--dz-muted); font-size: 0.78rem; margin-top: 2px; }
-.dz-item-pts { flex: 0 0 auto; font-size: 0.78rem; font-weight: 700; color: var(--dz-accent); }
-.dz-item-action {
-    flex: 0 0 auto;
-    border: none;
-    background: var(--dz-fill);
-    color: var(--dz-ink);
-    border-radius: 999px;
-    padding: 7px 12px;
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-
 .dz-domain-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 
 .dz-domain-option {
@@ -454,6 +390,33 @@ body {
     padding: 4px 8px;
     cursor: pointer;
 }
+.dz-install-icon { width: 40px; height: 40px; border-radius: 11px; flex: 0 0 auto; }
+
+/* iOS "add to home screen" instruction sheet — visual, not just a text list */
+.dz-ios-sheet {
+    background: var(--dz-surface);
+    border-radius: 20px 20px 0 0;
+    padding: 22px 22px calc(22px + env(safe-area-inset-bottom, 0px));
+    width: 100%;
+    max-width: 480px;
+}
+.dz-ios-preview {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--dz-fill);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+.dz-ios-preview-icon { width: 52px; height: 52px; border-radius: 14px; flex: 0 0 auto; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); }
+.dz-ios-step { display: flex; align-items: center; gap: 13px; padding: 11px 0; border-bottom: 1px solid var(--dz-fill); }
+.dz-ios-step:last-of-type { border-bottom: none; }
+.dz-ios-step-icon {
+    width: 38px; height: 38px; border-radius: 12px; flex: 0 0 auto; background: var(--dz-accent-fill);
+    color: var(--dz-accent); display: flex; align-items: center; justify-content: center;
+}
+.dz-ios-step-text { flex: 1; font-size: 0.92rem; line-height: 1.4; margin: 0; }
 
 .dz-faq { border-bottom: 1px solid var(--dz-border); padding: 12px 0; }
 .dz-faq summary { font-weight: 600; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
