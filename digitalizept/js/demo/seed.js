@@ -49,24 +49,45 @@ function mapServico(item, dados, seed) {
     };
 }
 
+// The tap-to-select screen writes dados.servicos_selecionados as a JSON
+// array of {nome, descricao, preco}. Prefer it over the older free-text
+// principais_servicos field, which stays as a fallback for leads that
+// still only have typed text (or none at all).
+function parseSelectedServicos(value) {
+    if (!value) return null;
+    try {
+        const arr = JSON.parse(value);
+        if (!Array.isArray(arr)) return null;
+        const items = arr
+            .map((item) => (item && typeof item === 'object' ? item : { nome: item }))
+            .filter((item) => String(item.nome || '').trim());
+        return items.length ? items : null;
+    } catch (_) {
+        return null;
+    }
+}
+
 function seedServicos(businessType, dados, seed) {
     const fromSeed = Array.isArray(seed.servicos_itens) ? seed.servicos_itens : [];
     const fromType = Array.isArray(businessType.servicos_tipicos) ? businessType.servicos_tipicos : [];
     const fallback = fromSeed.length ? fromSeed : fromType;
-    const typed = splitItems(dados.principais_servicos);
+    const selected = parseSelectedServicos(dados.servicos_selecionados);
+    const picked = selected || splitItems(dados.principais_servicos).map((nome) => ({ nome, descricao: '', preco: '' }));
     const used = new Set();
     const source = [];
 
-    typed.forEach((nome) => {
+    picked.forEach((item) => {
         if (source.length >= L.servicos.maxItens) return;
+        const nome = itemNome(item);
+        if (!nome) return;
         const key = nome.toLowerCase();
         if (used.has(key)) return;
         used.add(key);
-        source.push({ nome, descricao: '', preco: '' });
+        source.push(item);
     });
 
     fallback.forEach((item) => {
-        const cap = typed.length ? L.servicos.minItens : L.servicos.maxItens;
+        const cap = picked.length ? L.servicos.minItens : L.servicos.maxItens;
         if (source.length >= cap) return;
         const nome = itemNome(item);
         if (!nome) return;

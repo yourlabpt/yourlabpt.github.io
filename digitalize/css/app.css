@@ -401,6 +401,90 @@ body {
 .dz-faq summary::-webkit-details-marker { display: none; }
 .dz-faq p { color: var(--dz-muted); font-size: 0.88rem; margin: 8px 0 0; line-height: 1.5; }
 
+/* Services picker entry card (Q6) */
+.dz-servicos-entry {
+    background: var(--dz-surface);
+    border: 1.5px solid var(--dz-border);
+    border-radius: var(--dz-radius);
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    width: 100%;
+    font: inherit;
+}
+.dz-servicos-entry:hover { border-color: var(--dz-ink); }
+.dz-servicos-entry-count {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--dz-accent);
+    background: var(--dz-accent-fill);
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+/* Services picker screen (grouped tap-to-select) */
+.dz-servicos-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    gap: 10px;
+}
+.dz-servicos-count { font-weight: 700; font-size: 0.9rem; color: var(--dz-accent); }
+.dz-servicos-group { margin-bottom: 20px; }
+.dz-servicos-group-title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    margin: 0 0 10px;
+}
+.dz-servicos-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.dz-service-chip {
+    border: 1.5px solid var(--dz-border);
+    background: var(--dz-surface);
+    border-radius: 999px;
+    padding: 9px 14px;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.2;
+}
+.dz-service-chip.is-selected {
+    border-color: var(--dz-accent);
+    background: var(--dz-accent);
+    color: var(--dz-accent-ink);
+}
+.dz-servicos-custom-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+.dz-servicos-custom-row .dz-input { flex: 1; }
+.dz-servicos-custom-add {
+    flex: 0 0 auto;
+    border: 1.5px solid var(--dz-border);
+    background: var(--dz-fill);
+    color: var(--dz-ink);
+    border-radius: 12px;
+    padding: 0 16px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.dz-servicos-footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--dz-bg);
+    padding: 14px 0 4px;
+    margin-top: 8px;
+}
+
 @media (prefers-color-scheme: dark) {
     :root {
         --dz-bg: #17171a;

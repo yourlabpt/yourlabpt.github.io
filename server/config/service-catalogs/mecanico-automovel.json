@@ -1,0 +1,251 @@
+{
+  "id": "mecanico-automovel",
+  "grupos": [
+    {
+      "id": "mecanica",
+      "nome": "Mecânica",
+      "servicos": [
+        {
+          "id": "revisao-automovel",
+          "nome": "Revisão automóvel"
+        },
+        {
+          "id": "manutencao-preventiva",
+          "nome": "Manutenção preventiva"
+        },
+        {
+          "id": "diagnostico-automovel",
+          "nome": "Diagnóstico automóvel"
+        },
+        {
+          "id": "reparacao-de-motor",
+          "nome": "Reparação de motor"
+        },
+        {
+          "id": "reparacao-de-caixa-de-velocidades",
+          "nome": "Reparação de caixa de velocidades"
+        },
+        {
+          "id": "reparacao-de-embraiagem",
+          "nome": "Reparação de embraiagem"
+        },
+        {
+          "id": "reparacao-de-travoes",
+          "nome": "Reparação de travões"
+        },
+        {
+          "id": "reparacao-de-suspensao",
+          "nome": "Reparação de suspensão"
+        },
+        {
+          "id": "reparacao-de-direcao",
+          "nome": "Reparação de direção"
+        },
+        {
+          "id": "reparacao-de-transmissao",
+          "nome": "Reparação de transmissão"
+        },
+        {
+          "id": "reparacao-de-sistema-de-arrefecimento",
+          "nome": "Reparação de sistema de arrefecimento"
+        },
+        {
+          "id": "reparacao-de-sistema-de-combustivel",
+          "nome": "Reparação de sistema de combustível"
+        }
+      ]
+    },
+    {
+      "id": "eletronica",
+      "nome": "Eletrónica",
+      "servicos": [
+        {
+          "id": "diagnostico-eletronico",
+          "nome": "Diagnóstico eletrónico"
+        },
+        {
+          "id": "programacao-de-centralinas",
+          "nome": "Programação de centralinas"
+        },
+        {
+          "id": "reparacao-de-sistemas-eletronicos",
+          "nome": "Reparação de sistemas eletrónicos"
+        },
+        {
+          "id": "diagnostico-obd",
+          "nome": "Diagnóstico OBD"
+        },
+        {
+          "id": "reparacao-de-sensores",
+          "nome": "Reparação de sensores"
+        },
+        {
+          "id": "reparacao-de-sistemas-de-iluminacao",
+          "nome": "Reparação de sistemas de iluminação"
+        }
+      ]
+    },
+    {
+      "id": "pneus",
+      "nome": "Pneus",
+      "servicos": [
+        {
+          "id": "venda-de-pneus",
+          "nome": "Venda de pneus"
+        },
+        {
+          "id": "montagem-de-pneus",
+          "nome": "Montagem de pneus"
+        },
+        {
+          "id": "troca-de-pneus",
+          "nome": "Troca de pneus"
+        },
+        {
+          "id": "reparacao-de-furos",
+          "nome": "Reparação de furos"
+        },
+        {
+          "id": "alinhamento-de-direcao",
+          "nome": "Alinhamento de direção"
+        },
+        {
+          "id": "equilibragem",
+          "nome": "Equilibragem"
+        },
+        {
+          "id": "rotacao-de-pneus",
+          "nome": "Rotação de pneus"
+        }
+      ]
+    },
+    {
+      "id": "climatizacao",
+      "nome": "Climatização",
+      "servicos": [
+        {
+          "id": "carregamento-de-ar-condicionado",
+          "nome": "Carregamento de ar condicionado"
+        },
+        {
+          "id": "reparacao-de-ar-condicionado",
+          "nome": "Reparação de ar condicionado"
+        },
+        {
+          "id": "higienizacao-do-ar-condicionado",
+          "nome": "Higienização do ar condicionado"
+        },
+        {
+          "id": "reparacao-de-aquecimento",
+          "nome": "Reparação de aquecimento"
+        }
+      ]
+    },
+    {
+      "id": "carrocaria",
+      "nome": "Carroçaria",
+      "servicos": [
+        {
+          "id": "reparacao-de-carrocaria",
+          "nome": "Reparação de carroçaria"
+        },
+        {
+          "id": "pintura-automovel",
+          "nome": "Pintura automóvel"
+        },
+        {
+          "id": "polimento",
+          "nome": "Polimento"
+        },
+        {
+          "id": "remocao-de-riscos",
+          "nome": "Remoção de riscos"
+        },
+        {
+          "id": "reparacao-de-pequenos-danos",
+          "nome": "Reparação de pequenos danos"
+        },
+        {
+          "id": "tratamento-anti-ferrugem",
+          "nome": "Tratamento anti-ferrugem"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "preparacao-para-inspecao",
+          "nome": "Preparação para inspeção"
+        },
+        {
+          "id": "inspecao-previa",
+          "nome": "Inspeção prévia"
+        },
+        {
+          "id": "manutencao-de-veiculos-eletricos",
+          "nome": "Manutenção de veículos elétricos"
+        },
+        {
+          "id": "manutencao-de-veiculos-hibridos",
+          "nome": "Manutenção de veículos híbridos"
+        },
+        {
+          "id": "diagnostico-de-baterias",
+          "nome": "Diagnóstico de baterias"
+        },
+        {
+          "id": "reparacao-de-sistemas-de-carregamento",
+          "nome": "Reparação de sistemas de carregamento"
+        },
+        {
+          "id": "reparacao-de-motociclos",
+          "nome": "Reparação de motociclos"
+        },
+        {
+          "id": "instalacao-de-acessorios",
+          "nome": "Instalação de acessórios"
+        }
+      ]
+    },
+    {
+      "id": "estetica-automovel",
+      "nome": "Estética automóvel",
+      "servicos": [
+        {
+          "id": "lavagem",
+          "nome": "Lavagem"
+        },
+        {
+          "id": "lavagem-detalhada",
+          "nome": "Lavagem detalhada"
+        },
+        {
+          "id": "detalhe-automovel",
+          "nome": "Detalhe automóvel"
+        },
+        {
+          "id": "polimento",
+          "nome": "Polimento"
+        },
+        {
+          "id": "protecao-ceramica",
+          "nome": "Proteção cerâmica"
+        },
+        {
+          "id": "limpeza-de-interiores",
+          "nome": "Limpeza de interiores"
+        },
+        {
+          "id": "higienizacao-de-estofos",
+          "nome": "Higienização de estofos"
+        },
+        {
+          "id": "restauro-de-farois",
+          "nome": "Restauro de faróis"
+        }
+      ]
+    }
+  ]
+}

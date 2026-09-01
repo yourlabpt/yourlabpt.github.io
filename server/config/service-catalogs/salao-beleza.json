@@ -1,0 +1,227 @@
+{
+  "id": "salao-beleza",
+  "grupos": [
+    {
+      "id": "cabelo",
+      "nome": "Cabelo",
+      "servicos": [
+        {
+          "id": "corte-feminino",
+          "nome": "Corte feminino"
+        },
+        {
+          "id": "corte-masculino",
+          "nome": "Corte masculino"
+        },
+        {
+          "id": "corte-infantil",
+          "nome": "Corte infantil"
+        },
+        {
+          "id": "brushing",
+          "nome": "Brushing"
+        },
+        {
+          "id": "penteados",
+          "nome": "Penteados"
+        },
+        {
+          "id": "secagem",
+          "nome": "Secagem"
+        },
+        {
+          "id": "coloracao",
+          "nome": "Coloração"
+        },
+        {
+          "id": "madeixas",
+          "nome": "Madeixas"
+        },
+        {
+          "id": "balayage",
+          "nome": "Balayage"
+        },
+        {
+          "id": "ombre",
+          "nome": "Ombré"
+        },
+        {
+          "id": "descoloracao",
+          "nome": "Descoloração"
+        },
+        {
+          "id": "tonalizacao",
+          "nome": "Tonalização"
+        },
+        {
+          "id": "alisamento",
+          "nome": "Alisamento"
+        },
+        {
+          "id": "permanente",
+          "nome": "Permanente"
+        },
+        {
+          "id": "tratamentos-capilares",
+          "nome": "Tratamentos capilares"
+        },
+        {
+          "id": "hidratacao-capilar",
+          "nome": "Hidratação capilar"
+        },
+        {
+          "id": "reconstrucao-capilar",
+          "nome": "Reconstrução capilar"
+        }
+      ]
+    },
+    {
+      "id": "barbeiro",
+      "nome": "Barbeiro",
+      "servicos": [
+        {
+          "id": "corte-masculino",
+          "nome": "Corte masculino"
+        },
+        {
+          "id": "corte-de-barba",
+          "nome": "Corte de barba"
+        },
+        {
+          "id": "aparar-barba",
+          "nome": "Aparar barba"
+        },
+        {
+          "id": "modelacao-de-barba",
+          "nome": "Modelação de barba"
+        },
+        {
+          "id": "barba-tradicional",
+          "nome": "Barba tradicional"
+        }
+      ]
+    },
+    {
+      "id": "unhas",
+      "nome": "Unhas",
+      "servicos": [
+        {
+          "id": "manicure",
+          "nome": "Manicure"
+        },
+        {
+          "id": "pedicure",
+          "nome": "Pedicure"
+        },
+        {
+          "id": "verniz-gel",
+          "nome": "Verniz gel"
+        },
+        {
+          "id": "gel",
+          "nome": "Gel"
+        },
+        {
+          "id": "acrilico",
+          "nome": "Acrílico"
+        },
+        {
+          "id": "nail-art",
+          "nome": "Nail art"
+        },
+        {
+          "id": "manutencao-de-unhas",
+          "nome": "Manutenção de unhas"
+        }
+      ]
+    },
+    {
+      "id": "sobrancelhas",
+      "nome": "Sobrancelhas",
+      "servicos": [
+        {
+          "id": "design-de-sobrancelhas",
+          "nome": "Design de sobrancelhas"
+        },
+        {
+          "id": "henna",
+          "nome": "Henna"
+        },
+        {
+          "id": "threading",
+          "nome": "Threading"
+        },
+        {
+          "id": "lifting-de-sobrancelhas",
+          "nome": "Lifting de sobrancelhas"
+        }
+      ]
+    },
+    {
+      "id": "pestanas",
+      "nome": "Pestanas",
+      "servicos": [
+        {
+          "id": "extensao-de-pestanas",
+          "nome": "Extensão de pestanas"
+        },
+        {
+          "id": "lifting-de-pestanas",
+          "nome": "Lifting de pestanas"
+        },
+        {
+          "id": "coloracao-de-pestanas",
+          "nome": "Coloração de pestanas"
+        }
+      ]
+    },
+    {
+      "id": "maquilhagem",
+      "nome": "Maquilhagem",
+      "servicos": [
+        {
+          "id": "maquilhagem-social",
+          "nome": "Maquilhagem social"
+        },
+        {
+          "id": "maquilhagem-de-noiva",
+          "nome": "Maquilhagem de noiva"
+        },
+        {
+          "id": "maquilhagem-para-eventos",
+          "nome": "Maquilhagem para eventos"
+        },
+        {
+          "id": "maquilhagem-profissional",
+          "nome": "Maquilhagem profissional"
+        }
+      ]
+    },
+    {
+      "id": "complementares",
+      "nome": "Complementares",
+      "servicos": [
+        {
+          "id": "consultoria-de-imagem",
+          "nome": "Consultoria de imagem"
+        },
+        {
+          "id": "packs-de-beleza",
+          "nome": "Packs de beleza"
+        },
+        {
+          "id": "atendimento-ao-domicilio",
+          "nome": "Atendimento ao domicílio"
+        },
+        {
+          "id": "servicos-para-noivas",
+          "nome": "Serviços para noivas"
+        },
+        {
+          "id": "servicos-para-eventos",
+          "nome": "Serviços para eventos"
+        }
+      ]
+    }
+  ]
+}

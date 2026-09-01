@@ -74,10 +74,10 @@ const QUESTOES = [
         tipo: 'telefone', placeholder: '9xx xxx xxx'
     },
     {
-        chave: 'q6_servicos', pontos: 40, campo: 'principais_servicos',
-        titulo: 'O que faz exatamente?',
-        lede: 'Liste os serviços principais, separados por vírgula.',
-        tipo: 'texto_longo', placeholder: 'Ex.: Fugas, Desentupimentos, Instalação de canalizações'
+        chave: 'q6_servicos', pontos: 40, campo: 'servicos_passo_estado',
+        titulo: 'Quais são os seus serviços?',
+        lede: 'Escolha da lista — não precisa de escrever nada. Pode sempre mudar depois.',
+        tipo: 'servicos'
     },
     {
         chave: 'q7_horario', pontos: 40, campo: 'horario',
@@ -97,7 +97,8 @@ const QUESTOES = [
 const state = {
     token: '',
     session: null,
-    tipos: []
+    tipos: [],
+    servicosCatalog: {} // businessTypeId -> { grupos, atributosGlobais } (fetched once per session)
 };
 
 function persistToken(token) {
@@ -242,6 +243,10 @@ function renderQuestion(q, index) {
     }
     if (q.tipo === 'paleta') {
         renderPaletaBody(screen, q, index);
+        return;
+    }
+    if (q.tipo === 'servicos') {
+        renderServicosEntryBody(screen, q, index);
         return;
     }
 
@@ -403,6 +408,225 @@ function renderPaletaBody(screen, q, index) {
         } catch (err) {
             toast(err.message || 'Não consegui guardar.');
             nextBtn.disabled = false;
+        }
+    });
+}
+
+// ---------- Services picker (Q6) — tap to select, no typing ----------
+function parseServicosSelecionados(dados) {
+    try {
+        const arr = JSON.parse((dados && dados.servicos_selecionados) || '[]');
+        return Array.isArray(arr) ? arr.filter((item) => item && item.nome) : [];
+    } catch (_) { return []; }
+}
+
+function parseAtributosSelecionados(dados) {
+    try {
+        const arr = JSON.parse((dados && dados.atributos_selecionados) || '[]');
+        return Array.isArray(arr) ? arr.filter((item) => item && item.nome) : [];
+    } catch (_) { return []; }
+}
+
+async function loadServicosCatalog(businessTypeId) {
+    const id = businessTypeId || 'generico';
+    if (state.servicosCatalog[id]) return state.servicosCatalog[id];
+    const data = await api(`/tipos/${encodeURIComponent(id)}/servicos`);
+    state.servicosCatalog[id] = data;
+    return data;
+}
+
+// Q6 body: a single entry card, not a text box — picking services never
+// requires typing. Skippable, and shows how many are already chosen.
+function renderServicosEntryBody(screen, q, index) {
+    const d = (state.session && state.session.dados) || {};
+    const selecionados = parseServicosSelecionados(d);
+    const card = el('button', 'dz-servicos-entry');
+    card.type = 'button';
+    card.appendChild(el('p', 'dz-choice-label', selecionados.length ? 'Editar os meus serviços' : 'Escolher da lista'));
+    card.appendChild(el('p', 'dz-choice-desc', 'Toque nos que oferece — nada para escrever.'));
+    if (selecionados.length) {
+        card.appendChild(el('span', 'dz-servicos-entry-count', `${selecionados.length} escolhido${selecionados.length === 1 ? '' : 's'}`));
+    }
+    card.addEventListener('click', () => renderServicosPicker({
+        back: () => goToQuestion(index),
+        submit: async (payload) => {
+            await submitAnswer(q, { ...payload, servicos_passo_estado: 'feito' });
+            goToQuestion(index + 1);
+        }
+    }));
+    screen.appendChild(card);
+    screen.appendChild(el('div', 'dz-spacer'));
+
+    const actions = el('div', 'dz-actions');
+    const nextBtn = el('button', 'dz-btn dz-btn-primary', selecionados.length ? 'Continuar' : 'Saltar por agora');
+    nextBtn.type = 'button';
+    nextBtn.addEventListener('click', async () => {
+        nextBtn.disabled = true;
+        try {
+            await submitAnswer(q, { servicos_passo_estado: selecionados.length ? 'feito' : 'saltado' });
+            goToQuestion(index + 1);
+        } catch (err) {
+            toast(err.message || 'Não consegui guardar.');
+            nextBtn.disabled = false;
+        }
+    });
+    actions.appendChild(nextBtn);
+    screen.appendChild(actions);
+}
+
+// Reused from both Q6 (Ilha 1) and the "Acrescentar um serviço" growth item
+// (Ilha 5) — `back` navigates away without saving, `submit` receives
+// {servicosSelecionados, atributosSelecionados} and owns what happens next.
+function renderServicosPicker({ back, submit, saveLabel = 'Guardar e continuar' }) {
+    const screen = screenShell({ back, points: state.session ? state.session.pontos : 0 });
+    screen.appendChild(el('p', 'dz-kicker', 'OS SEUS SERVIÇOS'));
+    screen.appendChild(el('h1', 'dz-h1', 'Toque no que oferece'));
+    screen.appendChild(el('p', 'dz-lede', 'Lista pronta para o seu tipo de negócio — acrescente o que faltar no fim.'));
+
+    const toolbar = el('div', 'dz-servicos-toolbar');
+    const countLabel = el('span', 'dz-servicos-count', '');
+    toolbar.appendChild(countLabel);
+    screen.appendChild(toolbar);
+
+    const groupsWrap = el('div');
+    groupsWrap.appendChild(el('p', 'dz-hint', 'A carregar os serviços do seu tipo de negócio…'));
+    screen.appendChild(groupsWrap);
+
+    const customSelectedWrap = el('div');
+    screen.appendChild(customSelectedWrap);
+
+    screen.appendChild(el('p', 'dz-servicos-group-title', 'Não está na lista?'));
+    const customRow = el('div', 'dz-servicos-custom-row');
+    const customInput = el('input', 'dz-input');
+    customInput.placeholder = 'Outro serviço que ofereça…';
+    const customAddBtn = el('button', 'dz-servicos-custom-add', '+ Adicionar');
+    customAddBtn.type = 'button';
+    customRow.append(customInput, customAddBtn);
+    screen.appendChild(customRow);
+
+    const attrsWrap = el('div');
+    attrsWrap.style.marginTop = '22px';
+    screen.appendChild(attrsWrap);
+
+    screen.appendChild(el('div', 'dz-spacer'));
+    const footer = el('div', 'dz-servicos-footer');
+    const saveBtn = el('button', 'dz-btn dz-btn-primary', saveLabel);
+    saveBtn.type = 'button';
+    footer.appendChild(saveBtn);
+    screen.appendChild(footer);
+
+    const d = (state.session && state.session.dados) || {};
+    const selected = new Map(); // lowercase nome -> {nome, descricao, preco}
+    parseServicosSelecionados(d).forEach((item) => selected.set(item.nome.toLowerCase(), item));
+    const attrsSelected = new Map();
+    parseAtributosSelecionados(d).forEach((item) => attrsSelected.set(item.nome.toLowerCase(), item));
+    const chipsByName = new Map(); // lowercase nome -> [chipEl, ...] (same service can appear in >1 group)
+    let catalogNames = new Set();
+
+    function updateCount() {
+        countLabel.textContent = `${selected.size} serviço${selected.size === 1 ? '' : 's'} escolhido${selected.size === 1 ? '' : 's'}`;
+    }
+    updateCount();
+
+    function renderCustomSelected() {
+        customSelectedWrap.innerHTML = '';
+        const customs = Array.from(selected.values()).filter((item) => !catalogNames.has(item.nome.toLowerCase()));
+        if (!customs.length) return;
+        customSelectedWrap.appendChild(el('p', 'dz-servicos-group-title', 'Acrescentados por si'));
+        const grid = el('div', 'dz-servicos-grid');
+        customs.forEach((item) => {
+            const chip = el('button', 'dz-service-chip is-selected', `${item.nome}  ×`);
+            chip.type = 'button';
+            chip.addEventListener('click', () => {
+                selected.delete(item.nome.toLowerCase());
+                updateCount();
+                renderCustomSelected();
+            });
+            grid.appendChild(chip);
+        });
+        customSelectedWrap.appendChild(grid);
+    }
+
+    function toggleServiceByName(nome) {
+        const key = nome.toLowerCase();
+        if (selected.has(key)) selected.delete(key);
+        else selected.set(key, { nome, descricao: '', preco: '' });
+        (chipsByName.get(key) || []).forEach((chip) => chip.classList.toggle('is-selected', selected.has(key)));
+        updateCount();
+    }
+
+    loadServicosCatalog(state.session.businessTypeId).then(({ grupos, atributosGlobais }) => {
+        groupsWrap.innerHTML = '';
+        (grupos || []).forEach((grupo) => {
+            if (!grupo.servicos || !grupo.servicos.length) return;
+            const groupEl = el('div', 'dz-servicos-group');
+            groupEl.appendChild(el('p', 'dz-servicos-group-title', grupo.nome));
+            const grid = el('div', 'dz-servicos-grid');
+            grupo.servicos.forEach((servico) => {
+                catalogNames.add(servico.nome.toLowerCase());
+                const isOn = selected.has(servico.nome.toLowerCase());
+                const chip = el('button', `dz-service-chip${isOn ? ' is-selected' : ''}`, servico.nome);
+                chip.type = 'button';
+                chip.addEventListener('click', () => toggleServiceByName(servico.nome));
+                const key = servico.nome.toLowerCase();
+                if (!chipsByName.has(key)) chipsByName.set(key, []);
+                chipsByName.get(key).push(chip);
+                grid.appendChild(chip);
+            });
+            groupEl.appendChild(grid);
+            groupsWrap.appendChild(groupEl);
+        });
+        if (!groupsWrap.children.length) {
+            groupsWrap.appendChild(el('p', 'dz-hint', 'Ainda não há lista pronta para este tipo de negócio — acrescente por baixo.'));
+        }
+        renderCustomSelected();
+
+        attrsWrap.appendChild(el('p', 'dz-servicos-group-title', 'Como atende'));
+        const attrGrid = el('div', 'dz-servicos-grid');
+        (atributosGlobais || []).forEach((attr) => {
+            const isOn = attrsSelected.has(attr.nome.toLowerCase());
+            const chip = el('button', `dz-service-chip${isOn ? ' is-selected' : ''}`, attr.nome);
+            chip.type = 'button';
+            chip.addEventListener('click', () => {
+                const key = attr.nome.toLowerCase();
+                if (attrsSelected.has(key)) { attrsSelected.delete(key); chip.classList.remove('is-selected'); } else { attrsSelected.set(key, { nome: attr.nome, descricao: '', preco: '' }); chip.classList.add('is-selected'); }
+            });
+            attrGrid.appendChild(chip);
+        });
+        attrsWrap.appendChild(attrGrid);
+    }).catch(() => {
+        groupsWrap.innerHTML = '';
+        groupsWrap.appendChild(el('p', 'dz-hint', 'Não consegui carregar a lista. Pode acrescentar por baixo.'));
+    });
+
+    customAddBtn.addEventListener('click', () => {
+        const nome = clean(customInput.value);
+        if (!nome) return;
+        const key = nome.toLowerCase();
+        if (!selected.has(key)) {
+            selected.set(key, { nome, descricao: '', preco: '' });
+            updateCount();
+            renderCustomSelected();
+        }
+        customInput.value = '';
+        customInput.focus();
+    });
+    customInput.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); customAddBtn.click(); }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'A guardar…';
+        try {
+            await submit({
+                servicosSelecionados: Array.from(selected.values()),
+                atributosSelecionados: Array.from(attrsSelected.values())
+            });
+        } catch (err) {
+            toast(err.message || 'Não consegui guardar.');
+            saveBtn.disabled = false;
+            saveBtn.textContent = saveLabel;
         }
     });
 }
@@ -653,8 +877,11 @@ function growthAction(item, dados) {
     if (item.chave === 'qr_code' && state.session.demoSlug) {
         return { label: 'Gerar QR', action: 'qr' };
     }
+    if (item.chave === 'servico_extra') {
+        return { label: 'Adicionar', action: 'editar-servicos' };
+    }
     if (item.chave === 'instagram_link' || item.chave === 'facebook_link'
-        || item.chave === 'servico_extra' || item.chave === 'zona_extra' || item.chave === 'certificacao_extra') {
+        || item.chave === 'zona_extra' || item.chave === 'certificacao_extra') {
         return { label: 'Adicionar', action: 'editar' };
     }
     return null;
@@ -687,7 +914,6 @@ function renderEditarCampo(chave) {
     const map = {
         instagram_link: { campo: 'instagram', label: 'Instagram', placeholder: '@utilizador ou link' },
         facebook_link: { campo: 'facebook', label: 'Facebook', placeholder: 'facebook.com/…' },
-        servico_extra: { campo: 'principais_servicos', label: 'Serviços', placeholder: 'Liste os serviços, separados por vírgula' },
         zona_extra: { campo: 'cidade', label: 'Zona', placeholder: 'Ex.: Porto, Gaia, Matosinhos' },
         certificacao_extra: { campo: 'certificacoes', label: 'Certificações', placeholder: 'Ex.: Alvará nº…' }
     };
@@ -756,6 +982,20 @@ function renderIsland(screen, title, sub, items, dados) {
                     btn.addEventListener('click', () => {
                         if (action.action === 'qr') renderQrModal();
                         else if (action.action === 'editar') renderEditarCampo(item.chave);
+                        else if (action.action === 'editar-servicos') {
+                            renderServicosPicker({
+                                back: renderCrescer,
+                                saveLabel: 'Guardar',
+                                submit: async (payload) => {
+                                    await api(`/sessoes/${encodeURIComponent(state.token)}/dados`, {
+                                        method: 'PATCH',
+                                        body: { patch: payload, chave: 'crescer_servico_extra', pontos: GROWTH_POINTS.servico_extra || 25 }
+                                    });
+                                    await refreshSession();
+                                    renderCrescer();
+                                }
+                            });
+                        }
                     });
                 }
                 row.appendChild(btn);

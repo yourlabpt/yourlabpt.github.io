@@ -1,0 +1,191 @@
+{
+  "id": "loja-flores-decoracao",
+  "grupos": [
+    {
+      "id": "florista",
+      "nome": "Florista",
+      "servicos": [
+        {
+          "id": "bouquets",
+          "nome": "Bouquets"
+        },
+        {
+          "id": "ramos-personalizados",
+          "nome": "Ramos personalizados"
+        },
+        {
+          "id": "arranjos-florais",
+          "nome": "Arranjos florais"
+        },
+        {
+          "id": "flores-de-corte",
+          "nome": "Flores de corte"
+        },
+        {
+          "id": "flores-secas",
+          "nome": "Flores secas"
+        },
+        {
+          "id": "flores-artificiais",
+          "nome": "Flores artificiais"
+        },
+        {
+          "id": "plantas",
+          "nome": "Plantas"
+        },
+        {
+          "id": "plantas-de-interior",
+          "nome": "Plantas de interior"
+        },
+        {
+          "id": "plantas-de-exterior",
+          "nome": "Plantas de exterior"
+        }
+      ]
+    },
+    {
+      "id": "eventos",
+      "nome": "Eventos",
+      "servicos": [
+        {
+          "id": "decoracao-de-casamentos",
+          "nome": "Decoração de casamentos"
+        },
+        {
+          "id": "decoracao-de-batizados",
+          "nome": "Decoração de batizados"
+        },
+        {
+          "id": "decoracao-de-aniversarios",
+          "nome": "Decoração de aniversários"
+        },
+        {
+          "id": "decoracao-de-eventos",
+          "nome": "Decoração de eventos"
+        },
+        {
+          "id": "decoracao-de-mesas",
+          "nome": "Decoração de mesas"
+        },
+        {
+          "id": "arcos-florais",
+          "nome": "Arcos florais"
+        },
+        {
+          "id": "centros-de-mesa",
+          "nome": "Centros de mesa"
+        },
+        {
+          "id": "decoracao-de-igrejas",
+          "nome": "Decoração de igrejas"
+        },
+        {
+          "id": "decoracao-de-espacos",
+          "nome": "Decoração de espaços"
+        }
+      ]
+    },
+    {
+      "id": "ocasioes",
+      "nome": "Ocasiões",
+      "servicos": [
+        {
+          "id": "flores-para-aniversarios",
+          "nome": "Flores para aniversários"
+        },
+        {
+          "id": "flores-para-casamentos",
+          "nome": "Flores para casamentos"
+        },
+        {
+          "id": "flores-para-funerais",
+          "nome": "Flores para funerais"
+        },
+        {
+          "id": "flores-para-aniversarios-de-casamento",
+          "nome": "Flores para aniversários de casamento"
+        },
+        {
+          "id": "flores-romanticas",
+          "nome": "Flores românticas"
+        },
+        {
+          "id": "flores-para-nascimento",
+          "nome": "Flores para nascimento"
+        },
+        {
+          "id": "flores-corporativas",
+          "nome": "Flores corporativas"
+        }
+      ]
+    },
+    {
+      "id": "decoracao",
+      "nome": "Decoração",
+      "servicos": [
+        {
+          "id": "decoracao-de-interiores",
+          "nome": "Decoração de interiores"
+        },
+        {
+          "id": "vasos",
+          "nome": "Vasos"
+        },
+        {
+          "id": "arranjos-decorativos",
+          "nome": "Arranjos decorativos"
+        },
+        {
+          "id": "plantas-decorativas",
+          "nome": "Plantas decorativas"
+        },
+        {
+          "id": "cestos",
+          "nome": "Cestos"
+        },
+        {
+          "id": "velas",
+          "nome": "Velas"
+        },
+        {
+          "id": "artigos-de-decoracao",
+          "nome": "Artigos de decoração"
+        },
+        {
+          "id": "presentes",
+          "nome": "Presentes"
+        }
+      ]
+    },
+    {
+      "id": "servicos",
+      "nome": "Serviços",
+      "servicos": [
+        {
+          "id": "entrega-de-flores",
+          "nome": "Entrega de flores"
+        },
+        {
+          "id": "encomendas-personalizadas",
+          "nome": "Encomendas personalizadas"
+        },
+        {
+          "id": "assinatura-floral",
+          "nome": "Assinatura floral"
+        },
+        {
+          "id": "decoracao-empresarial",
+          "nome": "Decoração empresarial"
+        },
+        {
+          "id": "manutencao-de-plantas",
+          "nome": "Manutenção de plantas"
+        },
+        {
+          "id": "decoracao-sazonal",
+          "nome": "Decoração sazonal"
+        }
+      ]
+    }
+  ]
+}

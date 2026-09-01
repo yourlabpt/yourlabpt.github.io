@@ -1,0 +1,181 @@
+{
+  "id": "joalharia",
+  "grupos": [
+    {
+      "id": "produtos-e-servicos-principais",
+      "nome": "Produtos e serviços principais",
+      "servicos": [
+        {
+          "id": "venda-de-joalharia",
+          "nome": "Venda de joalharia"
+        },
+        {
+          "id": "aneis",
+          "nome": "Anéis"
+        },
+        {
+          "id": "aliancas",
+          "nome": "Alianças"
+        },
+        {
+          "id": "brincos",
+          "nome": "Brincos"
+        },
+        {
+          "id": "colares",
+          "nome": "Colares"
+        },
+        {
+          "id": "pulseiras",
+          "nome": "Pulseiras"
+        },
+        {
+          "id": "pendentes",
+          "nome": "Pendentes"
+        },
+        {
+          "id": "relogios",
+          "nome": "Relógios"
+        },
+        {
+          "id": "bijuteria",
+          "nome": "Bijuteria"
+        },
+        {
+          "id": "prata",
+          "nome": "Prata"
+        },
+        {
+          "id": "ouro",
+          "nome": "Ouro"
+        },
+        {
+          "id": "pedras-preciosas",
+          "nome": "Pedras preciosas"
+        },
+        {
+          "id": "pedras-semipreciosas",
+          "nome": "Pedras semipreciosas"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "reparacao-de-joias",
+          "nome": "Reparação de joias"
+        },
+        {
+          "id": "limpeza-de-joias",
+          "nome": "Limpeza de joias"
+        },
+        {
+          "id": "polimento",
+          "nome": "Polimento"
+        },
+        {
+          "id": "gravacao",
+          "nome": "Gravação"
+        },
+        {
+          "id": "gravacao-personalizada",
+          "nome": "Gravação personalizada"
+        },
+        {
+          "id": "ajuste-de-aneis",
+          "nome": "Ajuste de anéis"
+        },
+        {
+          "id": "redimensionamento-de-aneis",
+          "nome": "Redimensionamento de anéis"
+        },
+        {
+          "id": "reparacao-de-correntes",
+          "nome": "Reparação de correntes"
+        },
+        {
+          "id": "reparacao-de-fechos",
+          "nome": "Reparação de fechos"
+        },
+        {
+          "id": "criacao-de-joias-personalizadas",
+          "nome": "Criação de joias personalizadas"
+        },
+        {
+          "id": "transformacao-de-joias",
+          "nome": "Transformação de joias"
+        },
+        {
+          "id": "restauro-de-joias",
+          "nome": "Restauro de joias"
+        },
+        {
+          "id": "avaliacao-de-joias",
+          "nome": "Avaliação de joias"
+        },
+        {
+          "id": "criacao-de-aliancas-personalizadas",
+          "nome": "Criação de alianças personalizadas"
+        }
+      ]
+    },
+    {
+      "id": "relojoaria",
+      "nome": "Relojoaria",
+      "servicos": [
+        {
+          "id": "reparacao-de-relogios",
+          "nome": "Reparação de relógios"
+        },
+        {
+          "id": "troca-de-pilhas",
+          "nome": "Troca de pilhas"
+        },
+        {
+          "id": "ajuste-de-braceletes",
+          "nome": "Ajuste de braceletes"
+        },
+        {
+          "id": "troca-de-braceletes",
+          "nome": "Troca de braceletes"
+        },
+        {
+          "id": "manutencao-de-relogios",
+          "nome": "Manutenção de relógios"
+        },
+        {
+          "id": "limpeza-de-relogios",
+          "nome": "Limpeza de relógios"
+        }
+      ]
+    },
+    {
+      "id": "complementares",
+      "nome": "Complementares",
+      "servicos": [
+        {
+          "id": "personalizacao",
+          "nome": "Personalização"
+        },
+        {
+          "id": "embalagem-para-presente",
+          "nome": "Embalagem para presente"
+        },
+        {
+          "id": "gravacao-de-aliancas",
+          "nome": "Gravação de alianças"
+        },
+        {
+          "id": "encomendas-especiais",
+          "nome": "Encomendas especiais"
+        },
+        {
+          "id": "consultoria-para-escolha-de-joias",
+          "nome": "Consultoria para escolha de joias"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,217 @@
+{
+  "id": "clinica-estetica",
+  "grupos": [
+    {
+      "id": "estetica-facial",
+      "nome": "Estética facial",
+      "servicos": [
+        {
+          "id": "limpeza-de-pele",
+          "nome": "Limpeza de pele"
+        },
+        {
+          "id": "limpeza-de-pele-profunda",
+          "nome": "Limpeza de pele profunda"
+        },
+        {
+          "id": "hidratacao-facial",
+          "nome": "Hidratação facial"
+        },
+        {
+          "id": "peeling",
+          "nome": "Peeling"
+        },
+        {
+          "id": "tratamentos-antiacne",
+          "nome": "Tratamentos antiacne"
+        },
+        {
+          "id": "tratamentos-anti-envelhecimento",
+          "nome": "Tratamentos anti-envelhecimento"
+        },
+        {
+          "id": "tratamentos-para-manchas",
+          "nome": "Tratamentos para manchas"
+        },
+        {
+          "id": "tratamentos-para-poros",
+          "nome": "Tratamentos para poros"
+        },
+        {
+          "id": "tratamentos-de-hidratacao",
+          "nome": "Tratamentos de hidratação"
+        },
+        {
+          "id": "massagem-facial",
+          "nome": "Massagem facial"
+        }
+      ]
+    },
+    {
+      "id": "estetica-corporal",
+      "nome": "Estética corporal",
+      "servicos": [
+        {
+          "id": "massagem",
+          "nome": "Massagem"
+        },
+        {
+          "id": "drenagem-linfatica",
+          "nome": "Drenagem linfática"
+        },
+        {
+          "id": "massagem-modeladora",
+          "nome": "Massagem modeladora"
+        },
+        {
+          "id": "tratamentos-anticelulite",
+          "nome": "Tratamentos anticelulite"
+        },
+        {
+          "id": "tratamentos-de-reducao-de-medidas",
+          "nome": "Tratamentos de redução de medidas"
+        },
+        {
+          "id": "tratamentos-de-flacidez",
+          "nome": "Tratamentos de flacidez"
+        },
+        {
+          "id": "esfoliacao-corporal",
+          "nome": "Esfoliação corporal"
+        },
+        {
+          "id": "hidratacao-corporal",
+          "nome": "Hidratação corporal"
+        }
+      ]
+    },
+    {
+      "id": "depilacao",
+      "nome": "Depilação",
+      "servicos": [
+        {
+          "id": "depilacao-a-cera",
+          "nome": "Depilação a cera"
+        },
+        {
+          "id": "depilacao-facial",
+          "nome": "Depilação facial"
+        },
+        {
+          "id": "depilacao-corporal",
+          "nome": "Depilação corporal"
+        },
+        {
+          "id": "depilacao-a-laser",
+          "nome": "Depilação a laser"
+        },
+        {
+          "id": "depilacao-definitiva",
+          "nome": "Depilação definitiva"
+        }
+      ]
+    },
+    {
+      "id": "tecnologia-estetica",
+      "nome": "Tecnologia estética",
+      "servicos": [
+        {
+          "id": "radiofrequencia",
+          "nome": "Radiofrequência"
+        },
+        {
+          "id": "cavitacao",
+          "nome": "Cavitação"
+        },
+        {
+          "id": "criolipolise",
+          "nome": "Criolipólise"
+        },
+        {
+          "id": "pressoterapia",
+          "nome": "Pressoterapia"
+        },
+        {
+          "id": "ultrassons",
+          "nome": "Ultrassons"
+        },
+        {
+          "id": "microagulhamento",
+          "nome": "Microagulhamento"
+        },
+        {
+          "id": "led",
+          "nome": "LED"
+        },
+        {
+          "id": "fototerapia",
+          "nome": "Fototerapia"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "micropigmentacao",
+          "nome": "Micropigmentação"
+        },
+        {
+          "id": "micropigmentacao-de-sobrancelhas",
+          "nome": "Micropigmentação de sobrancelhas"
+        },
+        {
+          "id": "micropigmentacao-labial",
+          "nome": "Micropigmentação labial"
+        },
+        {
+          "id": "design-de-sobrancelhas",
+          "nome": "Design de sobrancelhas"
+        },
+        {
+          "id": "lifting-de-pestanas",
+          "nome": "Lifting de pestanas"
+        },
+        {
+          "id": "extensao-de-pestanas",
+          "nome": "Extensão de pestanas"
+        },
+        {
+          "id": "tratamentos-capilares",
+          "nome": "Tratamentos capilares"
+        },
+        {
+          "id": "tratamentos-de-couro-cabeludo",
+          "nome": "Tratamentos de couro cabeludo"
+        }
+      ]
+    },
+    {
+      "id": "complementares",
+      "nome": "Complementares",
+      "servicos": [
+        {
+          "id": "avaliacao-estetica",
+          "nome": "Avaliação estética"
+        },
+        {
+          "id": "consulta-de-avaliacao",
+          "nome": "Consulta de avaliação"
+        },
+        {
+          "id": "planos-de-tratamento",
+          "nome": "Planos de tratamento"
+        },
+        {
+          "id": "packs-de-tratamentos",
+          "nome": "Packs de tratamentos"
+        },
+        {
+          "id": "venda-de-cosmeticos",
+          "nome": "Venda de cosméticos"
+        }
+      ]
+    }
+  ]
+}

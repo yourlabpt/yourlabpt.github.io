@@ -1,0 +1,169 @@
+{
+  "id": "mercadinho",
+  "grupos": [
+    {
+      "id": "alimentacao",
+      "nome": "Alimentação",
+      "servicos": [
+        {
+          "id": "produtos-frescos",
+          "nome": "Produtos frescos"
+        },
+        {
+          "id": "frutas-e-legumes",
+          "nome": "Frutas e legumes"
+        },
+        {
+          "id": "carne",
+          "nome": "Carne"
+        },
+        {
+          "id": "peixe",
+          "nome": "Peixe"
+        },
+        {
+          "id": "charcutaria",
+          "nome": "Charcutaria"
+        },
+        {
+          "id": "queijos",
+          "nome": "Queijos"
+        },
+        {
+          "id": "padaria",
+          "nome": "Padaria"
+        },
+        {
+          "id": "pastelaria",
+          "nome": "Pastelaria"
+        },
+        {
+          "id": "congelados",
+          "nome": "Congelados"
+        },
+        {
+          "id": "produtos-refrigerados",
+          "nome": "Produtos refrigerados"
+        }
+      ]
+    },
+    {
+      "id": "mercearia",
+      "nome": "Mercearia",
+      "servicos": [
+        {
+          "id": "massas",
+          "nome": "Massas"
+        },
+        {
+          "id": "arroz",
+          "nome": "Arroz"
+        },
+        {
+          "id": "conservas",
+          "nome": "Conservas"
+        },
+        {
+          "id": "cereais",
+          "nome": "Cereais"
+        },
+        {
+          "id": "molhos",
+          "nome": "Molhos"
+        },
+        {
+          "id": "snacks",
+          "nome": "Snacks"
+        },
+        {
+          "id": "chocolates",
+          "nome": "Chocolates"
+        },
+        {
+          "id": "bebidas",
+          "nome": "Bebidas"
+        },
+        {
+          "id": "produtos-internacionais",
+          "nome": "Produtos internacionais"
+        }
+      ]
+    },
+    {
+      "id": "servicos",
+      "nome": "Serviços",
+      "servicos": [
+        {
+          "id": "encomendas",
+          "nome": "Encomendas"
+        },
+        {
+          "id": "entrega-ao-domicilio",
+          "nome": "Entrega ao domicílio"
+        },
+        {
+          "id": "compras-por-telefone",
+          "nome": "Compras por telefone"
+        },
+        {
+          "id": "compras-online",
+          "nome": "Compras online"
+        },
+        {
+          "id": "levantamento-em-loja",
+          "nome": "Levantamento em loja"
+        },
+        {
+          "id": "cestas-de-produtos",
+          "nome": "Cestas de produtos"
+        },
+        {
+          "id": "cabazes-personalizados",
+          "nome": "Cabazes personalizados"
+        },
+        {
+          "id": "produtos-a-granel",
+          "nome": "Produtos a granel"
+        },
+        {
+          "id": "produtos-locais",
+          "nome": "Produtos locais"
+        },
+        {
+          "id": "produtos-biologicos",
+          "nome": "Produtos biológicos"
+        }
+      ]
+    },
+    {
+      "id": "complementares",
+      "nome": "Complementares",
+      "servicos": [
+        {
+          "id": "servico-de-entrega",
+          "nome": "Serviço de entrega"
+        },
+        {
+          "id": "encomendas-para-festas",
+          "nome": "Encomendas para festas"
+        },
+        {
+          "id": "cabazes-de-natal",
+          "nome": "Cabazes de Natal"
+        },
+        {
+          "id": "cabazes-empresariais",
+          "nome": "Cabazes empresariais"
+        },
+        {
+          "id": "produtos-regionais",
+          "nome": "Produtos regionais"
+        },
+        {
+          "id": "produtos-importados",
+          "nome": "Produtos importados"
+        }
+      ]
+    }
+  ]
+}

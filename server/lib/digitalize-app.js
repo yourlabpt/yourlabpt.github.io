@@ -134,6 +134,38 @@ function getSession(db, token) {
     };
 }
 
+/**
+ * Structured service picks (tap-to-select, not typed) — arrays of
+ * {nome, descricao, preco}. sanitizeDados would flatten these to
+ * "[object Object]" strings, so they're stored as raw JSON, bypassing it
+ * like businessTypeId. Always optional: nobody is required to pick services.
+ */
+const STRUCTURED_LIST_FIELDS = { servicosSelecionados: 'servicos_selecionados', atributosSelecionados: 'atributos_selecionados' };
+const STRUCTURED_LIST_MAX_BYTES = 20000;
+
+function cleanStructuredList(value) {
+    if (!Array.isArray(value)) return null;
+    const items = value
+        .slice(0, 200)
+        .map((item) => {
+            if (item && typeof item === 'object') {
+                return {
+                    nome: cleanText(item.nome, 160),
+                    descricao: cleanText(item.descricao, 300),
+                    preco: cleanText(item.preco, 40)
+                };
+            }
+            return { nome: cleanText(item, 160), descricao: '', preco: '' };
+        })
+        .filter((item) => item.nome);
+    let json = JSON.stringify(items);
+    while (json.length > STRUCTURED_LIST_MAX_BYTES && items.length) {
+        items.pop();
+        json = JSON.stringify(items);
+    }
+    return json;
+}
+
 /** Merge a partial answer into dados_negocio, using the same split as the admin dossier. */
 function patchDados(db, { leadId, businessType, patch }) {
     const dadosRow = db.prepare('SELECT id, obrigatorios_json, opcionais_json FROM dados_negocio WHERE lead_id = ?').get(leadId);
@@ -143,7 +175,16 @@ function patchDados(db, { leadId, businessType, patch }) {
     const businessTypeId = patch && patch.businessTypeId;
     const rest = { ...(patch || {}) };
     delete rest.businessTypeId;
+    const structuredPatches = {};
+    Object.entries(STRUCTURED_LIST_FIELDS).forEach(([patchKey, dadosKey]) => {
+        if (Object.prototype.hasOwnProperty.call(rest, patchKey)) {
+            const json = cleanStructuredList(rest[patchKey]);
+            if (json !== null) structuredPatches[dadosKey] = json;
+            delete rest[patchKey];
+        }
+    });
     const clean = sanitizeDados(rest, cleanText);
+    Object.assign(clean, structuredPatches);
     const requiredIds = new Set([
         ...(Array.isArray(businessType.campos_obrigatorios) ? businessType.campos_obrigatorios : []),
         ...((businessType.perguntas_especificas || []).map((q) => q.id))
@@ -222,6 +263,21 @@ async function finalizeSelfServeDeal(db, {
 }) {
     const lead = db.prepare('SELECT * FROM lead WHERE id = ?').get(leadId);
     if (!lead) throw new Error('Lead não encontrado.');
+    // Idempotency guard: the payment callback and the status-poll self-heal
+    // (see server.js /pagamento) can both call this for the same lead. A
+    // second call must be a safe no-op, not a duplicate proposta/contrato.
+    if (lead.estado === 'fechado' && lead.demo_slug) {
+        const proposta = db.prepare('SELECT id FROM proposta WHERE lead_id = ? ORDER BY criado_em DESC LIMIT 1').get(leadId);
+        const projeto = proposta
+            ? db.prepare(`
+                SELECT projeto.id FROM projeto
+                JOIN contrato ON contrato.id = projeto.contrato_id
+                WHERE contrato.proposta_id = ?
+                ORDER BY projeto.criado_em DESC LIMIT 1
+            `).get(proposta.id)
+            : null;
+        return { demoSlug: lead.demo_slug, propostaId: proposta ? proposta.id : '', projetoId: projeto ? projeto.id : '' };
+    }
     const dadosRow = db.prepare('SELECT * FROM dados_negocio WHERE lead_id = ?').get(leadId);
     const dados = { ...JSON.parse(dadosRow.opcionais_json || '{}'), ...JSON.parse(dadosRow.obrigatorios_json || '{}') };
 

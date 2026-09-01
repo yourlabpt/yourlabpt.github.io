@@ -1,0 +1,52 @@
+{
+  "atributos": [
+    {
+      "id": "atendimento-no-estabelecimento",
+      "nome": "Atendimento no estabelecimento"
+    },
+    {
+      "id": "atendimento-ao-domicilio",
+      "nome": "Atendimento ao domicílio"
+    },
+    {
+      "id": "servico-movel",
+      "nome": "Serviço móvel"
+    },
+    {
+      "id": "servico-de-emergencia",
+      "nome": "Serviço de emergência"
+    },
+    {
+      "id": "servico-por-marcacao",
+      "nome": "Serviço por marcação"
+    },
+    {
+      "id": "orcamento-gratuito",
+      "nome": "Orçamento gratuito"
+    },
+    {
+      "id": "orcamento-sem-compromisso",
+      "nome": "Orçamento sem compromisso"
+    },
+    {
+      "id": "encomendas",
+      "nome": "Encomendas"
+    },
+    {
+      "id": "entrega-ao-domicilio",
+      "nome": "Entrega ao domicílio"
+    },
+    {
+      "id": "atendimento-a-empresas",
+      "nome": "Atendimento a empresas"
+    },
+    {
+      "id": "atendimento-a-particulares",
+      "nome": "Atendimento a particulares"
+    },
+    {
+      "id": "servico-personalizado",
+      "nome": "Serviço personalizado"
+    }
+  ]
+}

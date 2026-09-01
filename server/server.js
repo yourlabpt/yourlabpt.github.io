@@ -1806,6 +1806,36 @@ function loadBusinessTypes() {
         .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt'));
 }
 
+// Per-type catalogs for the "escolher serviços" tap-to-select screen — the
+// owner picks from a curated list instead of typing. One file per business
+// type id, plus a shared _atributos-globais.json. Same file = new type
+// pattern as business-types above.
+const digitalizeServiceCatalogDir = path.join(__dirname, 'config', 'service-catalogs');
+
+function loadServiceCatalog(tipoId) {
+    const safe = String(tipoId || '').replace(/[^a-z0-9-]/gi, '');
+    if (!safe) return null;
+    const filePath = path.join(digitalizeServiceCatalogDir, `${safe}.json`);
+    if (!fs.existsSync(filePath)) return null;
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (err) {
+        console.error(`digitalize: invalid service catalog ${safe}.json: ${err.message}`);
+        return null;
+    }
+}
+
+function loadAtributosGlobais() {
+    const filePath = path.join(digitalizeServiceCatalogDir, '_atributos-globais.json');
+    if (!fs.existsSync(filePath)) return [];
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8')).atributos || [];
+    } catch (err) {
+        console.error(`digitalize: invalid _atributos-globais.json: ${err.message}`);
+        return [];
+    }
+}
+
 function loadStandardFields() {
     const fieldsPath = path.join(__dirname, 'config', 'fields.json');
     if (!fs.existsSync(fieldsPath)) return {};
@@ -2154,11 +2184,39 @@ app.post('/api/digitalize/sessoes/:token/checkout', async (req, res) => {
     }
 });
 
-app.get('/api/digitalize/sessoes/:token/pagamento', (req, res) => {
+app.get('/api/digitalize/sessoes/:token/pagamento', async (req, res) => {
     try {
         const db = getDigitalizeptDb();
-        const state = digitalizeApp.getSession(db, req.params.token);
+        let state = digitalizeApp.getSession(db, req.params.token);
         if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+
+        // Self-heal: the gateway callback already marked this payment 'pago',
+        // but finalization (demo/contrato/proposta) never completed \u2014 e.g. a
+        // transient failure the callback swallowed. Retry it here so the
+        // client's poll loop doesn't spin forever on a paid-but-stuck deal.
+        // finalizeSelfServeDeal is idempotent, so retrying is always safe.
+        if (!state.pago && state.pagamento && state.pagamento.estado === 'pago') {
+            try {
+                const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
+                    || { id: 'generico', nome: 'Neg\u00f3cio' };
+                const clienteLegal = db.prepare('SELECT * FROM cliente_legal WHERE lead_id = ?').get(state.leadId);
+                await digitalizeApp.finalizeSelfServeDeal(db, {
+                    leadId: state.leadId,
+                    businessType,
+                    clienteNome: state.dados.nome_negocio || state.lead.nome || 'Cliente',
+                    clienteEmail: state.dados.email || (clienteLegal && clienteLegal.email) || '',
+                    clienteNif: '',
+                    ip: req.ip || '',
+                    userAgent: req.headers['user-agent'] || ''
+                });
+                digitalizeApp.awardPoints(db, state.token, 'ilha2_no_ar', 400);
+                scheduleLeadGeocode(state.leadId);
+                state = digitalizeApp.getSession(db, req.params.token);
+            } catch (retryErr) {
+                console.error('digitalize pagamento self-heal finalize failed:', retryErr.message);
+            }
+        }
+
         return res.json({ pago: state.pago, pagamento: state.pagamento, demoSlug: state.lead.demo_slug || '' });
     } catch (err) {
         console.error('digitalize pagamento status error:', err.message);
@@ -2220,7 +2278,11 @@ app.get('/api/digitalize/sessoes/:token/crescimento', (req, res) => {
         const state = digitalizeApp.getSession(db, req.params.token);
         if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
         const d = state.dados;
-        const servicos = String(d.principais_servicos || '').split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean);
+        let servicosSelecionados = [];
+        try { servicosSelecionados = JSON.parse(d.servicos_selecionados || '[]'); } catch (_) { servicosSelecionados = []; }
+        const servicos = servicosSelecionados.length
+            ? servicosSelecionados
+            : String(d.principais_servicos || '').split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean);
         res.json({
             ilha3: [
                 { chave: 'google_ligar', label: 'Ligar \u00e0 sua ficha do Google', pontos: 80, feito: false, disponivel: false, nota: 'Em breve \u2014 por agora, fala connosco no WhatsApp.' },
@@ -2258,6 +2320,18 @@ app.get('/api/digitalize/tipos', (req, res) => {
         return res.json({ tipos: types });
     } catch (err) {
         console.error('digitalize tipos error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
+    }
+});
+
+// The curated tap-to-select catalog for one business type, plus the shared
+// cross-type attribute chips (ao domic\u00edlio, urg\u00eancia, or\u00e7amento gr\u00e1tis...).
+app.get('/api/digitalize/tipos/:id/servicos', (req, res) => {
+    try {
+        const catalog = loadServiceCatalog(req.params.id) || { id: req.params.id, grupos: [] };
+        return res.json({ grupos: catalog.grupos || [], atributosGlobais: loadAtributosGlobais() });
+    } catch (err) {
+        console.error('digitalize servicos catalog error:', err.message);
         return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
     }
 });

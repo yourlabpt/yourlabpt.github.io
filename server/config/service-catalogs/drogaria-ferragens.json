@@ -1,0 +1,251 @@
+{
+  "id": "drogaria-ferragens",
+  "grupos": [
+    {
+      "id": "ferragens",
+      "nome": "Ferragens",
+      "servicos": [
+        {
+          "id": "venda-de-ferramentas",
+          "nome": "Venda de ferramentas"
+        },
+        {
+          "id": "venda-de-ferragens",
+          "nome": "Venda de ferragens"
+        },
+        {
+          "id": "parafusos",
+          "nome": "Parafusos"
+        },
+        {
+          "id": "pregos",
+          "nome": "Pregos"
+        },
+        {
+          "id": "buchas",
+          "nome": "Buchas"
+        },
+        {
+          "id": "fechaduras",
+          "nome": "Fechaduras"
+        },
+        {
+          "id": "dobradicas",
+          "nome": "Dobradiças"
+        },
+        {
+          "id": "cadeados",
+          "nome": "Cadeados"
+        },
+        {
+          "id": "acessorios-de-montagem",
+          "nome": "Acessórios de montagem"
+        }
+      ]
+    },
+    {
+      "id": "casa",
+      "nome": "Casa",
+      "servicos": [
+        {
+          "id": "utensilios-domesticos",
+          "nome": "Utensílios domésticos"
+        },
+        {
+          "id": "material-de-cozinha",
+          "nome": "Material de cozinha"
+        },
+        {
+          "id": "material-de-limpeza",
+          "nome": "Material de limpeza"
+        },
+        {
+          "id": "produtos-de-higiene",
+          "nome": "Produtos de higiene"
+        },
+        {
+          "id": "organizacao-domestica",
+          "nome": "Organização doméstica"
+        },
+        {
+          "id": "pequenos-acessorios-para-casa",
+          "nome": "Pequenos acessórios para casa"
+        }
+      ]
+    },
+    {
+      "id": "pintura",
+      "nome": "Pintura",
+      "servicos": [
+        {
+          "id": "tintas",
+          "nome": "Tintas"
+        },
+        {
+          "id": "primarios",
+          "nome": "Primários"
+        },
+        {
+          "id": "vernizes",
+          "nome": "Vernizes"
+        },
+        {
+          "id": "esmaltes",
+          "nome": "Esmaltes"
+        },
+        {
+          "id": "pinceis",
+          "nome": "Pincéis"
+        },
+        {
+          "id": "rolos",
+          "nome": "Rolos"
+        },
+        {
+          "id": "material-de-pintura",
+          "nome": "Material de pintura"
+        },
+        {
+          "id": "preparacao-de-superficies",
+          "nome": "Preparação de superfícies"
+        },
+        {
+          "id": "coloracao-mistura-de-tintas",
+          "nome": "Coloração/mistura de tintas"
+        }
+      ]
+    },
+    {
+      "id": "eletricidade",
+      "nome": "Eletricidade",
+      "servicos": [
+        {
+          "id": "lampadas",
+          "nome": "Lâmpadas"
+        },
+        {
+          "id": "cabos",
+          "nome": "Cabos"
+        },
+        {
+          "id": "fichas",
+          "nome": "Fichas"
+        },
+        {
+          "id": "interruptores",
+          "nome": "Interruptores"
+        },
+        {
+          "id": "tomadas",
+          "nome": "Tomadas"
+        },
+        {
+          "id": "extensoes",
+          "nome": "Extensões"
+        },
+        {
+          "id": "material-eletrico",
+          "nome": "Material elétrico"
+        }
+      ]
+    },
+    {
+      "id": "canalizacao",
+      "nome": "Canalização",
+      "servicos": [
+        {
+          "id": "tubos",
+          "nome": "Tubos"
+        },
+        {
+          "id": "torneiras",
+          "nome": "Torneiras"
+        },
+        {
+          "id": "acessorios",
+          "nome": "Acessórios"
+        },
+        {
+          "id": "ligacoes",
+          "nome": "Ligações"
+        },
+        {
+          "id": "vedantes",
+          "nome": "Vedantes"
+        },
+        {
+          "id": "material-de-reparacao",
+          "nome": "Material de reparação"
+        }
+      ]
+    },
+    {
+      "id": "jardinagem",
+      "nome": "Jardinagem",
+      "servicos": [
+        {
+          "id": "ferramentas-de-jardim",
+          "nome": "Ferramentas de jardim"
+        },
+        {
+          "id": "mangueiras",
+          "nome": "Mangueiras"
+        },
+        {
+          "id": "sistemas-de-rega",
+          "nome": "Sistemas de rega"
+        },
+        {
+          "id": "vasos",
+          "nome": "Vasos"
+        },
+        {
+          "id": "produtos-para-plantas",
+          "nome": "Produtos para plantas"
+        },
+        {
+          "id": "fertilizantes",
+          "nome": "Fertilizantes"
+        }
+      ]
+    },
+    {
+      "id": "servicos-complementares",
+      "nome": "Serviços complementares",
+      "servicos": [
+        {
+          "id": "corte-de-chaves",
+          "nome": "Corte de chaves"
+        },
+        {
+          "id": "copias-de-chaves",
+          "nome": "Cópias de chaves"
+        },
+        {
+          "id": "afiacao",
+          "nome": "Afiação"
+        },
+        {
+          "id": "corte-de-materiais",
+          "nome": "Corte de materiais"
+        },
+        {
+          "id": "entrega-ao-domicilio",
+          "nome": "Entrega ao domicílio"
+        },
+        {
+          "id": "encomendas-de-material",
+          "nome": "Encomendas de material"
+        },
+        {
+          "id": "aluguer-de-ferramentas",
+          "nome": "Aluguer de ferramentas"
+        },
+        {
+          "id": "servico-de-aconselhamento-tecnico",
+          "nome": "Serviço de aconselhamento técnico"
+        }
+      ]
+    }
+  ]
+}

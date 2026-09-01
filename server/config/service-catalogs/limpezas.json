@@ -1,0 +1,169 @@
+{
+  "id": "limpezas",
+  "grupos": [
+    {
+      "id": "limpeza-domestica",
+      "nome": "Limpeza doméstica",
+      "servicos": [
+        {
+          "id": "limpeza-de-casas",
+          "nome": "Limpeza de casas"
+        },
+        {
+          "id": "limpeza-de-apartamentos",
+          "nome": "Limpeza de apartamentos"
+        },
+        {
+          "id": "limpeza-de-moradias",
+          "nome": "Limpeza de moradias"
+        },
+        {
+          "id": "limpeza-de-quartos",
+          "nome": "Limpeza de quartos"
+        },
+        {
+          "id": "limpeza-de-cozinhas",
+          "nome": "Limpeza de cozinhas"
+        },
+        {
+          "id": "limpeza-de-casas-de-banho",
+          "nome": "Limpeza de casas de banho"
+        },
+        {
+          "id": "limpeza-profunda",
+          "nome": "Limpeza profunda"
+        },
+        {
+          "id": "limpeza-regular",
+          "nome": "Limpeza regular"
+        }
+      ]
+    },
+    {
+      "id": "limpeza-profissional",
+      "nome": "Limpeza profissional",
+      "servicos": [
+        {
+          "id": "limpeza-de-escritorios",
+          "nome": "Limpeza de escritórios"
+        },
+        {
+          "id": "limpeza-de-lojas",
+          "nome": "Limpeza de lojas"
+        },
+        {
+          "id": "limpeza-de-restaurantes",
+          "nome": "Limpeza de restaurantes"
+        },
+        {
+          "id": "limpeza-de-condominios",
+          "nome": "Limpeza de condomínios"
+        },
+        {
+          "id": "limpeza-de-clinicas",
+          "nome": "Limpeza de clínicas"
+        },
+        {
+          "id": "limpeza-de-espacos-comerciais",
+          "nome": "Limpeza de espaços comerciais"
+        },
+        {
+          "id": "limpeza-industrial",
+          "nome": "Limpeza industrial"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "limpeza-de-vidros",
+          "nome": "Limpeza de vidros"
+        },
+        {
+          "id": "limpeza-de-fachadas",
+          "nome": "Limpeza de fachadas"
+        },
+        {
+          "id": "limpeza-de-estofos",
+          "nome": "Limpeza de estofos"
+        },
+        {
+          "id": "limpeza-de-sofas",
+          "nome": "Limpeza de sofás"
+        },
+        {
+          "id": "limpeza-de-colchoes",
+          "nome": "Limpeza de colchões"
+        },
+        {
+          "id": "limpeza-de-carpetes",
+          "nome": "Limpeza de carpetes"
+        },
+        {
+          "id": "limpeza-de-tapetes",
+          "nome": "Limpeza de tapetes"
+        },
+        {
+          "id": "limpeza-pos-obra",
+          "nome": "Limpeza pós-obra"
+        },
+        {
+          "id": "limpeza-de-obras",
+          "nome": "Limpeza de obras"
+        },
+        {
+          "id": "limpeza-de-fim-de-arrendamento",
+          "nome": "Limpeza de fim de arrendamento"
+        },
+        {
+          "id": "limpeza-de-mudanca",
+          "nome": "Limpeza de mudança"
+        },
+        {
+          "id": "desinfecao",
+          "nome": "Desinfeção"
+        },
+        {
+          "id": "higienizacao",
+          "nome": "Higienização"
+        }
+      ]
+    },
+    {
+      "id": "servicos-adicionais",
+      "nome": "Serviços adicionais",
+      "servicos": [
+        {
+          "id": "engomadoria",
+          "nome": "Engomadoria"
+        },
+        {
+          "id": "lavandaria",
+          "nome": "Lavandaria"
+        },
+        {
+          "id": "lavagem-a-seco",
+          "nome": "Lavagem a seco"
+        },
+        {
+          "id": "limpeza-de-cozinhas-industriais",
+          "nome": "Limpeza de cozinhas industriais"
+        },
+        {
+          "id": "limpeza-de-piscinas",
+          "nome": "Limpeza de piscinas"
+        },
+        {
+          "id": "limpeza-de-exteriores",
+          "nome": "Limpeza de exteriores"
+        },
+        {
+          "id": "limpeza-de-jardins",
+          "nome": "Limpeza de jardins"
+        }
+      ]
+    }
+  ]
+}

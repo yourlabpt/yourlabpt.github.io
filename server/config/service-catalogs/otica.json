@@ -1,0 +1,149 @@
+{
+  "id": "otica",
+  "grupos": [
+    {
+      "id": "otica",
+      "nome": "Ótica",
+      "servicos": [
+        {
+          "id": "venda-de-oculos",
+          "nome": "Venda de óculos"
+        },
+        {
+          "id": "oculos-graduados",
+          "nome": "Óculos graduados"
+        },
+        {
+          "id": "oculos-de-sol",
+          "nome": "Óculos de sol"
+        },
+        {
+          "id": "lentes-de-contacto",
+          "nome": "Lentes de contacto"
+        },
+        {
+          "id": "lentes-graduadas",
+          "nome": "Lentes graduadas"
+        },
+        {
+          "id": "lentes-progressivas",
+          "nome": "Lentes progressivas"
+        },
+        {
+          "id": "lentes-ocupacionais",
+          "nome": "Lentes ocupacionais"
+        },
+        {
+          "id": "lentes-fotocromaticas",
+          "nome": "Lentes fotocromáticas"
+        }
+      ]
+    },
+    {
+      "id": "servicos",
+      "nome": "Serviços",
+      "servicos": [
+        {
+          "id": "exame-de-optometria",
+          "nome": "Exame de optometria"
+        },
+        {
+          "id": "avaliacao-visual",
+          "nome": "Avaliação visual"
+        },
+        {
+          "id": "medicao-da-visao",
+          "nome": "Medição da visão"
+        },
+        {
+          "id": "adaptacao-de-lentes",
+          "nome": "Adaptação de lentes"
+        },
+        {
+          "id": "adaptacao-de-lentes-de-contacto",
+          "nome": "Adaptação de lentes de contacto"
+        },
+        {
+          "id": "ajuste-de-oculos",
+          "nome": "Ajuste de óculos"
+        },
+        {
+          "id": "reparacao-de-oculos",
+          "nome": "Reparação de óculos"
+        },
+        {
+          "id": "troca-de-lentes",
+          "nome": "Troca de lentes"
+        },
+        {
+          "id": "troca-de-armacoes",
+          "nome": "Troca de armações"
+        },
+        {
+          "id": "limpeza-de-oculos",
+          "nome": "Limpeza de óculos"
+        }
+      ]
+    },
+    {
+      "id": "especializados",
+      "nome": "Especializados",
+      "servicos": [
+        {
+          "id": "oculos-personalizados",
+          "nome": "Óculos personalizados"
+        },
+        {
+          "id": "oculos-para-criancas",
+          "nome": "Óculos para crianças"
+        },
+        {
+          "id": "oculos-desportivos",
+          "nome": "Óculos desportivos"
+        },
+        {
+          "id": "oculos-de-protecao",
+          "nome": "Óculos de proteção"
+        },
+        {
+          "id": "lentes-de-contacto-multifocais",
+          "nome": "Lentes de contacto multifocais"
+        },
+        {
+          "id": "lentes-de-contacto-toricas",
+          "nome": "Lentes de contacto tóricas"
+        },
+        {
+          "id": "lentes-para-controlo-da-miopia",
+          "nome": "Lentes para controlo da miopia"
+        }
+      ]
+    },
+    {
+      "id": "complementares",
+      "nome": "Complementares",
+      "servicos": [
+        {
+          "id": "consultas-por-marcacao",
+          "nome": "Consultas por marcação"
+        },
+        {
+          "id": "entrega-de-oculos",
+          "nome": "Entrega de óculos"
+        },
+        {
+          "id": "encomenda-de-lentes",
+          "nome": "Encomenda de lentes"
+        },
+        {
+          "id": "garantia-assistencia",
+          "nome": "Garantia/assistência"
+        },
+        {
+          "id": "manutencao-de-oculos",
+          "nome": "Manutenção de óculos"
+        }
+      ]
+    }
+  ]
+}

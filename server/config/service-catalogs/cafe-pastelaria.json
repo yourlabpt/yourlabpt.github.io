@@ -1,0 +1,167 @@
+{
+  "id": "cafe-pastelaria",
+  "grupos": [
+    {
+      "id": "servicos-principais",
+      "nome": "Serviços principais",
+      "servicos": [
+        {
+          "id": "cafe-e-bebidas-quentes",
+          "nome": "Café e bebidas quentes"
+        },
+        {
+          "id": "cha-e-infusoes",
+          "nome": "Chá e infusões"
+        },
+        {
+          "id": "pequenos-almocos",
+          "nome": "Pequenos-almoços"
+        },
+        {
+          "id": "lanches",
+          "nome": "Lanches"
+        },
+        {
+          "id": "pastelaria",
+          "nome": "Pastelaria"
+        },
+        {
+          "id": "padaria",
+          "nome": "Padaria"
+        },
+        {
+          "id": "sanduiches",
+          "nome": "Sanduíches"
+        },
+        {
+          "id": "tostas",
+          "nome": "Tostas"
+        },
+        {
+          "id": "salgados",
+          "nome": "Salgados"
+        },
+        {
+          "id": "sobremesas",
+          "nome": "Sobremesas"
+        },
+        {
+          "id": "gelados",
+          "nome": "Gelados"
+        },
+        {
+          "id": "sumos-naturais",
+          "nome": "Sumos naturais"
+        },
+        {
+          "id": "bebidas-frias",
+          "nome": "Bebidas frias"
+        },
+        {
+          "id": "brunch",
+          "nome": "Brunch"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "pasteis-de-nata",
+          "nome": "Pastéis de nata"
+        },
+        {
+          "id": "bolos-personalizados",
+          "nome": "Bolos personalizados"
+        },
+        {
+          "id": "bolos-de-aniversario",
+          "nome": "Bolos de aniversário"
+        },
+        {
+          "id": "bolos-para-eventos",
+          "nome": "Bolos para eventos"
+        },
+        {
+          "id": "doces-personalizados",
+          "nome": "Doces personalizados"
+        },
+        {
+          "id": "pastelaria-artesanal",
+          "nome": "Pastelaria artesanal"
+        },
+        {
+          "id": "pastelaria-tradicional-portuguesa",
+          "nome": "Pastelaria tradicional portuguesa"
+        },
+        {
+          "id": "produtos-sem-gluten",
+          "nome": "Produtos sem glúten"
+        },
+        {
+          "id": "produtos-sem-lactose",
+          "nome": "Produtos sem lactose"
+        },
+        {
+          "id": "produtos-vegan",
+          "nome": "Produtos vegan"
+        },
+        {
+          "id": "pastelaria-por-encomenda",
+          "nome": "Pastelaria por encomenda"
+        },
+        {
+          "id": "cestas-de-pequeno-almoco",
+          "nome": "Cestas de pequeno-almoço"
+        }
+      ]
+    },
+    {
+      "id": "servicos-complementares",
+      "nome": "Serviços complementares",
+      "servicos": [
+        {
+          "id": "take-away",
+          "nome": "Take-away"
+        },
+        {
+          "id": "encomendas",
+          "nome": "Encomendas"
+        },
+        {
+          "id": "entrega-ao-domicilio",
+          "nome": "Entrega ao domicílio"
+        },
+        {
+          "id": "catering",
+          "nome": "Catering"
+        },
+        {
+          "id": "coffee-break",
+          "nome": "Coffee break"
+        },
+        {
+          "id": "catering-para-empresas",
+          "nome": "Catering para empresas"
+        },
+        {
+          "id": "catering-para-festas",
+          "nome": "Catering para festas"
+        },
+        {
+          "id": "mesas-de-doces",
+          "nome": "Mesas de doces"
+        },
+        {
+          "id": "encomendas-para-eventos",
+          "nome": "Encomendas para eventos"
+        },
+        {
+          "id": "reservas-de-mesa",
+          "nome": "Reservas de mesa"
+        }
+      ]
+    }
+  ]
+}

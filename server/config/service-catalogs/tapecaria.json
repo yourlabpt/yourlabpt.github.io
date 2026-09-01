@@ -1,0 +1,201 @@
+{
+  "id": "tapecaria",
+  "grupos": [
+    {
+      "id": "estofamento",
+      "nome": "Estofamento",
+      "servicos": [
+        {
+          "id": "estofamento-de-sofas",
+          "nome": "Estofamento de sofás"
+        },
+        {
+          "id": "estofamento-de-cadeiras",
+          "nome": "Estofamento de cadeiras"
+        },
+        {
+          "id": "estofamento-de-poltronas",
+          "nome": "Estofamento de poltronas"
+        },
+        {
+          "id": "estofamento-de-bancos",
+          "nome": "Estofamento de bancos"
+        },
+        {
+          "id": "estofamento-de-cabeceiras",
+          "nome": "Estofamento de cabeceiras"
+        },
+        {
+          "id": "estofamento-de-mobiliario",
+          "nome": "Estofamento de mobiliário"
+        }
+      ]
+    },
+    {
+      "id": "reparacao",
+      "nome": "Reparação",
+      "servicos": [
+        {
+          "id": "reparacao-de-sofas",
+          "nome": "Reparação de sofás"
+        },
+        {
+          "id": "reparacao-de-cadeiras",
+          "nome": "Reparação de cadeiras"
+        },
+        {
+          "id": "reparacao-de-poltronas",
+          "nome": "Reparação de poltronas"
+        },
+        {
+          "id": "reparacao-de-estruturas",
+          "nome": "Reparação de estruturas"
+        },
+        {
+          "id": "substituicao-de-espumas",
+          "nome": "Substituição de espumas"
+        },
+        {
+          "id": "substituicao-de-molas",
+          "nome": "Substituição de molas"
+        },
+        {
+          "id": "reparacao-de-almofadas",
+          "nome": "Reparação de almofadas"
+        }
+      ]
+    },
+    {
+      "id": "tecidos",
+      "nome": "Tecidos",
+      "servicos": [
+        {
+          "id": "troca-de-tecido",
+          "nome": "Troca de tecido"
+        },
+        {
+          "id": "aplicacao-de-tecidos",
+          "nome": "Aplicação de tecidos"
+        },
+        {
+          "id": "escolha-de-tecidos",
+          "nome": "Escolha de tecidos"
+        },
+        {
+          "id": "personalizacao-de-tecidos",
+          "nome": "Personalização de tecidos"
+        },
+        {
+          "id": "couro",
+          "nome": "Couro"
+        },
+        {
+          "id": "pele-sintetica",
+          "nome": "Pele sintética"
+        },
+        {
+          "id": "veludo",
+          "nome": "Veludo"
+        },
+        {
+          "id": "tecidos-decorativos",
+          "nome": "Tecidos decorativos"
+        }
+      ]
+    },
+    {
+      "id": "automovel",
+      "nome": "Automóvel",
+      "servicos": [
+        {
+          "id": "estofamento-automovel",
+          "nome": "Estofamento automóvel"
+        },
+        {
+          "id": "reparacao-de-bancos",
+          "nome": "Reparação de bancos"
+        },
+        {
+          "id": "revestimento-de-bancos",
+          "nome": "Revestimento de bancos"
+        },
+        {
+          "id": "reparacao-de-forros",
+          "nome": "Reparação de forros"
+        },
+        {
+          "id": "reparacao-de-tetos-interiores",
+          "nome": "Reparação de tetos interiores"
+        },
+        {
+          "id": "personalizacao-de-interiores",
+          "nome": "Personalização de interiores"
+        },
+        {
+          "id": "volantes-em-pele",
+          "nome": "Volantes em pele"
+        }
+      ]
+    },
+    {
+      "id": "nautica",
+      "nome": "Náutica",
+      "servicos": [
+        {
+          "id": "estofamento-nautico",
+          "nome": "Estofamento náutico"
+        },
+        {
+          "id": "capas-para-barcos",
+          "nome": "Capas para barcos"
+        },
+        {
+          "id": "almofadas-nauticas",
+          "nome": "Almofadas náuticas"
+        },
+        {
+          "id": "coberturas",
+          "nome": "Coberturas"
+        }
+      ]
+    },
+    {
+      "id": "outros",
+      "nome": "Outros",
+      "servicos": [
+        {
+          "id": "cortinados",
+          "nome": "Cortinados"
+        },
+        {
+          "id": "almofadas-personalizadas",
+          "nome": "Almofadas personalizadas"
+        },
+        {
+          "id": "cabeceiras-personalizadas",
+          "nome": "Cabeceiras personalizadas"
+        },
+        {
+          "id": "mobiliario-por-medida",
+          "nome": "Mobiliário por medida"
+        },
+        {
+          "id": "restauro-de-mobiliario",
+          "nome": "Restauro de mobiliário"
+        },
+        {
+          "id": "trabalhos-para-hoteis",
+          "nome": "Trabalhos para hotéis"
+        },
+        {
+          "id": "trabalhos-para-restaurantes",
+          "nome": "Trabalhos para restaurantes"
+        },
+        {
+          "id": "trabalhos-para-empresas",
+          "nome": "Trabalhos para empresas"
+        }
+      ]
+    }
+  ]
+}

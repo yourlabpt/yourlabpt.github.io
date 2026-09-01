@@ -1,0 +1,177 @@
+{
+  "id": "loja-roupa",
+  "grupos": [
+    {
+      "id": "produtos",
+      "nome": "Produtos",
+      "servicos": [
+        {
+          "id": "roupa-de-senhora",
+          "nome": "Roupa de senhora"
+        },
+        {
+          "id": "roupa-de-homem",
+          "nome": "Roupa de homem"
+        },
+        {
+          "id": "roupa-de-crianca",
+          "nome": "Roupa de criança"
+        },
+        {
+          "id": "roupa-de-bebe",
+          "nome": "Roupa de bebé"
+        },
+        {
+          "id": "vestidos",
+          "nome": "Vestidos"
+        },
+        {
+          "id": "fatos",
+          "nome": "Fatos"
+        },
+        {
+          "id": "camisas",
+          "nome": "Camisas"
+        },
+        {
+          "id": "calcas",
+          "nome": "Calças"
+        },
+        {
+          "id": "casacos",
+          "nome": "Casacos"
+        },
+        {
+          "id": "saias",
+          "nome": "Saias"
+        },
+        {
+          "id": "malhas",
+          "nome": "Malhas"
+        },
+        {
+          "id": "roupa-interior",
+          "nome": "Roupa interior"
+        },
+        {
+          "id": "roupa-desportiva",
+          "nome": "Roupa desportiva"
+        }
+      ]
+    },
+    {
+      "id": "acessorios",
+      "nome": "Acessórios",
+      "servicos": [
+        {
+          "id": "carteiras",
+          "nome": "Carteiras"
+        },
+        {
+          "id": "malas",
+          "nome": "Malas"
+        },
+        {
+          "id": "cintos",
+          "nome": "Cintos"
+        },
+        {
+          "id": "chapeus",
+          "nome": "Chapéus"
+        },
+        {
+          "id": "lencos",
+          "nome": "Lenços"
+        },
+        {
+          "id": "bijuteria",
+          "nome": "Bijuteria"
+        },
+        {
+          "id": "oculos",
+          "nome": "Óculos"
+        },
+        {
+          "id": "calcado",
+          "nome": "Calçado"
+        }
+      ]
+    },
+    {
+      "id": "servicos",
+      "nome": "Serviços",
+      "servicos": [
+        {
+          "id": "atendimento-personalizado",
+          "nome": "Atendimento personalizado"
+        },
+        {
+          "id": "consultoria-de-imagem",
+          "nome": "Consultoria de imagem"
+        },
+        {
+          "id": "personal-shopper",
+          "nome": "Personal shopper"
+        },
+        {
+          "id": "ajustes-de-roupa",
+          "nome": "Ajustes de roupa"
+        },
+        {
+          "id": "arranjos-de-roupa",
+          "nome": "Arranjos de roupa"
+        },
+        {
+          "id": "costura",
+          "nome": "Costura"
+        },
+        {
+          "id": "confecao-por-medida",
+          "nome": "Confeção por medida"
+        },
+        {
+          "id": "personalizacao-de-pecas",
+          "nome": "Personalização de peças"
+        },
+        {
+          "id": "encomendas-especiais",
+          "nome": "Encomendas especiais"
+        }
+      ]
+    },
+    {
+      "id": "servicos-digitais",
+      "nome": "Serviços digitais",
+      "servicos": [
+        {
+          "id": "venda-online",
+          "nome": "Venda online"
+        },
+        {
+          "id": "encomenda-online",
+          "nome": "Encomenda online"
+        },
+        {
+          "id": "reserva-de-pecas",
+          "nome": "Reserva de peças"
+        },
+        {
+          "id": "levantamento-em-loja",
+          "nome": "Levantamento em loja"
+        },
+        {
+          "id": "entrega-ao-domicilio",
+          "nome": "Entrega ao domicílio"
+        },
+        {
+          "id": "trocas",
+          "nome": "Trocas"
+        },
+        {
+          "id": "gift-cards",
+          "nome": "Gift cards"
+        }
+      ]
+    }
+  ]
+}

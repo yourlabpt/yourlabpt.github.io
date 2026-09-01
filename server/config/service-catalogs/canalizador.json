@@ -1,0 +1,167 @@
+{
+  "id": "canalizador",
+  "grupos": [
+    {
+      "id": "servicos-principais",
+      "nome": "Serviços principais",
+      "servicos": [
+        {
+          "id": "reparacao-de-canalizacoes",
+          "nome": "Reparação de canalizações"
+        },
+        {
+          "id": "instalacao-de-canalizacoes",
+          "nome": "Instalação de canalizações"
+        },
+        {
+          "id": "manutencao-de-canalizacoes",
+          "nome": "Manutenção de canalizações"
+        },
+        {
+          "id": "reparacao-de-torneiras",
+          "nome": "Reparação de torneiras"
+        },
+        {
+          "id": "reparacao-de-autoclismos",
+          "nome": "Reparação de autoclismos"
+        },
+        {
+          "id": "reparacao-de-sanitas",
+          "nome": "Reparação de sanitas"
+        },
+        {
+          "id": "reparacao-de-lavatorios",
+          "nome": "Reparação de lavatórios"
+        },
+        {
+          "id": "reparacao-de-chuveiros",
+          "nome": "Reparação de chuveiros"
+        },
+        {
+          "id": "reparacao-de-banheiras",
+          "nome": "Reparação de banheiras"
+        },
+        {
+          "id": "reparacao-de-fugas-de-agua",
+          "nome": "Reparação de fugas de água"
+        },
+        {
+          "id": "desentupimentos",
+          "nome": "Desentupimentos"
+        },
+        {
+          "id": "substituicao-de-tubagens",
+          "nome": "Substituição de tubagens"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "detecao-de-fugas",
+          "nome": "Deteção de fugas"
+        },
+        {
+          "id": "detecao-de-fugas-sem-destruicao",
+          "nome": "Deteção de fugas sem destruição"
+        },
+        {
+          "id": "reparacao-de-roturas",
+          "nome": "Reparação de roturas"
+        },
+        {
+          "id": "instalacao-de-agua-quente",
+          "nome": "Instalação de água quente"
+        },
+        {
+          "id": "instalacao-de-agua-fria",
+          "nome": "Instalação de água fria"
+        },
+        {
+          "id": "instalacao-de-esgotos",
+          "nome": "Instalação de esgotos"
+        },
+        {
+          "id": "instalacao-de-redes-de-agua",
+          "nome": "Instalação de redes de água"
+        },
+        {
+          "id": "instalacao-de-redes-de-gas",
+          "nome": "Instalação de redes de gás"
+        },
+        {
+          "id": "instalacao-de-termoacumuladores",
+          "nome": "Instalação de termoacumuladores"
+        },
+        {
+          "id": "instalacao-de-esquentadores",
+          "nome": "Instalação de esquentadores"
+        },
+        {
+          "id": "instalacao-de-bombas-de-agua",
+          "nome": "Instalação de bombas de água"
+        },
+        {
+          "id": "instalacao-de-sistemas-de-rega",
+          "nome": "Instalação de sistemas de rega"
+        },
+        {
+          "id": "instalacao-de-bombas-de-pressao",
+          "nome": "Instalação de bombas de pressão"
+        },
+        {
+          "id": "reparacao-de-sistemas-de-aquecimento",
+          "nome": "Reparação de sistemas de aquecimento"
+        },
+        {
+          "id": "reparacao-de-aguas-pluviais",
+          "nome": "Reparação de águas pluviais"
+        }
+      ]
+    },
+    {
+      "id": "servicos-complementares",
+      "nome": "Serviços complementares",
+      "servicos": [
+        {
+          "id": "emergencias-24h",
+          "nome": "Emergências 24h"
+        },
+        {
+          "id": "manutencao-preventiva",
+          "nome": "Manutenção preventiva"
+        },
+        {
+          "id": "orcamento-no-local",
+          "nome": "Orçamento no local"
+        },
+        {
+          "id": "assistencia-ao-domicilio",
+          "nome": "Assistência ao domicílio"
+        },
+        {
+          "id": "obras-de-remodelacao",
+          "nome": "Obras de remodelação"
+        },
+        {
+          "id": "instalacoes-para-cozinhas",
+          "nome": "Instalações para cozinhas"
+        },
+        {
+          "id": "instalacoes-para-casas-de-banho",
+          "nome": "Instalações para casas de banho"
+        },
+        {
+          "id": "servicos-para-empresas",
+          "nome": "Serviços para empresas"
+        },
+        {
+          "id": "manutencao-de-condominios",
+          "nome": "Manutenção de condomínios"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "id": "generico",
+  "grupos": [
+    {
+      "id": "servicos",
+      "nome": "Serviços",
+      "servicos": [
+        {
+          "id": "consultoria",
+          "nome": "Consultoria"
+        },
+        {
+          "id": "reparacao",
+          "nome": "Reparação"
+        },
+        {
+          "id": "manutencao",
+          "nome": "Manutenção"
+        },
+        {
+          "id": "instalacao",
+          "nome": "Instalação"
+        },
+        {
+          "id": "atendimento-ao-domicilio",
+          "nome": "Atendimento ao domicílio"
+        },
+        {
+          "id": "entrega",
+          "nome": "Entrega"
+        },
+        {
+          "id": "encomendas",
+          "nome": "Encomendas"
+        },
+        {
+          "id": "orcamentos",
+          "nome": "Orçamentos"
+        },
+        {
+          "id": "venda-de-produtos",
+          "nome": "Venda de produtos"
+        },
+        {
+          "id": "aluguer",
+          "nome": "Aluguer"
+        },
+        {
+          "id": "formacao",
+          "nome": "Formação"
+        },
+        {
+          "id": "apoio-tecnico",
+          "nome": "Apoio técnico"
+        }
+      ]
+    }
+  ]
+}

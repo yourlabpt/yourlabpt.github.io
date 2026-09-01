@@ -1,0 +1,175 @@
+{
+  "id": "quintas-e-hotelaria",
+  "grupos": [
+    {
+      "id": "alojamento",
+      "nome": "Alojamento",
+      "servicos": [
+        {
+          "id": "quartos-suites",
+          "nome": "Quartos / suites"
+        },
+        {
+          "id": "turismo-rural",
+          "nome": "Turismo rural"
+        },
+        {
+          "id": "casas-de-campo",
+          "nome": "Casas de campo"
+        },
+        {
+          "id": "turismo-de-habitacao",
+          "nome": "Turismo de habitação"
+        },
+        {
+          "id": "alojamento-local",
+          "nome": "Alojamento local"
+        },
+        {
+          "id": "pequeno-almoco-incluido",
+          "nome": "Pequeno-almoço incluído"
+        },
+        {
+          "id": "estadias-de-fim-de-semana",
+          "nome": "Estadias de fim de semana"
+        },
+        {
+          "id": "estadias-prolongadas",
+          "nome": "Estadias prolongadas"
+        }
+      ]
+    },
+    {
+      "id": "eventos-e-casamentos",
+      "nome": "Eventos e casamentos",
+      "servicos": [
+        {
+          "id": "casamentos",
+          "nome": "Casamentos"
+        },
+        {
+          "id": "aluguer-do-espaco-para-eventos",
+          "nome": "Aluguer do espaço para eventos"
+        },
+        {
+          "id": "batizados",
+          "nome": "Batizados"
+        },
+        {
+          "id": "aniversarios",
+          "nome": "Aniversários"
+        },
+        {
+          "id": "eventos-corporativos",
+          "nome": "Eventos corporativos"
+        },
+        {
+          "id": "jantares-de-empresa",
+          "nome": "Jantares de empresa"
+        },
+        {
+          "id": "sessoes-fotograficas",
+          "nome": "Sessões fotográficas"
+        },
+        {
+          "id": "plano-b-para-chuva",
+          "nome": "Plano B para chuva"
+        }
+      ]
+    },
+    {
+      "id": "experiencias",
+      "nome": "Experiências",
+      "servicos": [
+        {
+          "id": "visitas-guiadas-a-quinta",
+          "nome": "Visitas guiadas à quinta"
+        },
+        {
+          "id": "provas-de-vinho",
+          "nome": "Provas de vinho"
+        },
+        {
+          "id": "colheita-apanha-na-quinta",
+          "nome": "Colheita / apanha na quinta"
+        },
+        {
+          "id": "passeios-a-cavalo",
+          "nome": "Passeios a cavalo"
+        },
+        {
+          "id": "piqueniques",
+          "nome": "Piqueniques"
+        },
+        {
+          "id": "atividades-ao-ar-livre",
+          "nome": "Atividades ao ar livre"
+        },
+        {
+          "id": "experiencias-gastronomicas",
+          "nome": "Experiências gastronómicas"
+        }
+      ]
+    },
+    {
+      "id": "catering-e-restauracao",
+      "nome": "Catering e restauração",
+      "servicos": [
+        {
+          "id": "catering-para-eventos",
+          "nome": "Catering para eventos"
+        },
+        {
+          "id": "refeicoes-para-hospedes",
+          "nome": "Refeições para hóspedes"
+        },
+        {
+          "id": "menu-de-degustacao",
+          "nome": "Menu de degustação"
+        },
+        {
+          "id": "produtos-da-quinta",
+          "nome": "Produtos da quinta"
+        },
+        {
+          "id": "petiscos-e-aperitivos",
+          "nome": "Petiscos e aperitivos"
+        }
+      ]
+    },
+    {
+      "id": "servicos-complementares",
+      "nome": "Serviços complementares",
+      "servicos": [
+        {
+          "id": "reserva-direta",
+          "nome": "Reserva direta"
+        },
+        {
+          "id": "transfer",
+          "nome": "Transfer"
+        },
+        {
+          "id": "estacionamento-privado",
+          "nome": "Estacionamento privado"
+        },
+        {
+          "id": "piscina",
+          "nome": "Piscina"
+        },
+        {
+          "id": "animais-de-estimacao-permitidos",
+          "nome": "Animais de estimação permitidos"
+        },
+        {
+          "id": "wi-fi",
+          "nome": "Wi-Fi"
+        },
+        {
+          "id": "acessibilidade",
+          "nome": "Acessibilidade"
+        }
+      ]
+    }
+  ]
+}

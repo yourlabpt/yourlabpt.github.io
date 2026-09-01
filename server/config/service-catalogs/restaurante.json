@@ -1,0 +1,219 @@
+{
+  "id": "restaurante",
+  "grupos": [
+    {
+      "id": "refeicoes",
+      "nome": "Refeições",
+      "servicos": [
+        {
+          "id": "almoco",
+          "nome": "Almoço"
+        },
+        {
+          "id": "jantar",
+          "nome": "Jantar"
+        },
+        {
+          "id": "pequeno-almoco",
+          "nome": "Pequeno-almoço"
+        },
+        {
+          "id": "brunch",
+          "nome": "Brunch"
+        },
+        {
+          "id": "menu-do-dia",
+          "nome": "Menu do dia"
+        },
+        {
+          "id": "menu-degustacao",
+          "nome": "Menu degustação"
+        },
+        {
+          "id": "a-carta",
+          "nome": "À carta"
+        },
+        {
+          "id": "petiscos",
+          "nome": "Petiscos"
+        },
+        {
+          "id": "tapas",
+          "nome": "Tapas"
+        },
+        {
+          "id": "take-away",
+          "nome": "Take-away"
+        }
+      ]
+    },
+    {
+      "id": "especialidades",
+      "nome": "Especialidades",
+      "servicos": [
+        {
+          "id": "cozinha-portuguesa",
+          "nome": "Cozinha portuguesa"
+        },
+        {
+          "id": "cozinha-internacional",
+          "nome": "Cozinha internacional"
+        },
+        {
+          "id": "cozinha-italiana",
+          "nome": "Cozinha italiana"
+        },
+        {
+          "id": "cozinha-mediterranica",
+          "nome": "Cozinha mediterrânica"
+        },
+        {
+          "id": "cozinha-asiatica",
+          "nome": "Cozinha asiática"
+        },
+        {
+          "id": "sushi",
+          "nome": "Sushi"
+        },
+        {
+          "id": "pizzas",
+          "nome": "Pizzas"
+        },
+        {
+          "id": "hamburgueres",
+          "nome": "Hambúrgueres"
+        },
+        {
+          "id": "grelhados",
+          "nome": "Grelhados"
+        },
+        {
+          "id": "marisco",
+          "nome": "Marisco"
+        },
+        {
+          "id": "peixe",
+          "nome": "Peixe"
+        },
+        {
+          "id": "carne",
+          "nome": "Carne"
+        },
+        {
+          "id": "vegetariano",
+          "nome": "Vegetariano"
+        },
+        {
+          "id": "vegan",
+          "nome": "Vegan"
+        }
+      ]
+    },
+    {
+      "id": "servicos",
+      "nome": "Serviços",
+      "servicos": [
+        {
+          "id": "reservas",
+          "nome": "Reservas"
+        },
+        {
+          "id": "take-away",
+          "nome": "Take-away"
+        },
+        {
+          "id": "entrega-ao-domicilio",
+          "nome": "Entrega ao domicílio"
+        },
+        {
+          "id": "catering",
+          "nome": "Catering"
+        },
+        {
+          "id": "catering-empresarial",
+          "nome": "Catering empresarial"
+        },
+        {
+          "id": "catering-para-eventos",
+          "nome": "Catering para eventos"
+        },
+        {
+          "id": "servico-para-grupos",
+          "nome": "Serviço para grupos"
+        },
+        {
+          "id": "salas-privadas",
+          "nome": "Salas privadas"
+        },
+        {
+          "id": "eventos-privados",
+          "nome": "Eventos privados"
+        }
+      ]
+    },
+    {
+      "id": "especializados",
+      "nome": "Especializados",
+      "servicos": [
+        {
+          "id": "menu-executivo",
+          "nome": "Menu executivo"
+        },
+        {
+          "id": "menu-infantil",
+          "nome": "Menu infantil"
+        },
+        {
+          "id": "harmonizacao-de-vinhos",
+          "nome": "Harmonização de vinhos"
+        },
+        {
+          "id": "chef-privado",
+          "nome": "Chef privado"
+        },
+        {
+          "id": "jantares-privados",
+          "nome": "Jantares privados"
+        },
+        {
+          "id": "eventos-gastronomicos",
+          "nome": "Eventos gastronómicos"
+        },
+        {
+          "id": "aulas-de-cozinha",
+          "nome": "Aulas de cozinha"
+        }
+      ]
+    },
+    {
+      "id": "eventos",
+      "nome": "Eventos",
+      "servicos": [
+        {
+          "id": "aniversarios",
+          "nome": "Aniversários"
+        },
+        {
+          "id": "casamentos",
+          "nome": "Casamentos"
+        },
+        {
+          "id": "batizados",
+          "nome": "Batizados"
+        },
+        {
+          "id": "jantares-de-grupo",
+          "nome": "Jantares de grupo"
+        },
+        {
+          "id": "eventos-empresariais",
+          "nome": "Eventos empresariais"
+        },
+        {
+          "id": "festas-privadas",
+          "nome": "Festas privadas"
+        }
+      ]
+    }
+  ]
+}

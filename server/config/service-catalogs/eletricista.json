@@ -1,0 +1,183 @@
+{
+  "id": "eletricista",
+  "grupos": [
+    {
+      "id": "servicos-gerais",
+      "nome": "Serviços gerais",
+      "servicos": [
+        {
+          "id": "reparacao-eletrica",
+          "nome": "Reparação elétrica"
+        },
+        {
+          "id": "instalacao-eletrica",
+          "nome": "Instalação elétrica"
+        },
+        {
+          "id": "manutencao-eletrica",
+          "nome": "Manutenção elétrica"
+        },
+        {
+          "id": "diagnostico-de-avarias",
+          "nome": "Diagnóstico de avarias"
+        },
+        {
+          "id": "substituicao-de-tomadas",
+          "nome": "Substituição de tomadas"
+        },
+        {
+          "id": "substituicao-de-interruptores",
+          "nome": "Substituição de interruptores"
+        },
+        {
+          "id": "instalacao-de-iluminacao",
+          "nome": "Instalação de iluminação"
+        },
+        {
+          "id": "reparacao-de-iluminacao",
+          "nome": "Reparação de iluminação"
+        },
+        {
+          "id": "instalacao-de-quadros-eletricos",
+          "nome": "Instalação de quadros elétricos"
+        },
+        {
+          "id": "reparacao-de-quadros-eletricos",
+          "nome": "Reparação de quadros elétricos"
+        }
+      ]
+    },
+    {
+      "id": "instalacoes",
+      "nome": "Instalações",
+      "servicos": [
+        {
+          "id": "instalacoes-eletricas-residenciais",
+          "nome": "Instalações elétricas residenciais"
+        },
+        {
+          "id": "instalacoes-eletricas-comerciais",
+          "nome": "Instalações elétricas comerciais"
+        },
+        {
+          "id": "instalacoes-industriais",
+          "nome": "Instalações industriais"
+        },
+        {
+          "id": "remodelacao-de-instalacoes",
+          "nome": "Remodelação de instalações"
+        },
+        {
+          "id": "instalacao-de-cablagem",
+          "nome": "Instalação de cablagem"
+        },
+        {
+          "id": "instalacao-de-iluminacao-exterior",
+          "nome": "Instalação de iluminação exterior"
+        },
+        {
+          "id": "iluminacao-led",
+          "nome": "Iluminação LED"
+        }
+      ]
+    },
+    {
+      "id": "servicos-especializados",
+      "nome": "Serviços especializados",
+      "servicos": [
+        {
+          "id": "automacao-residencial",
+          "nome": "Automação residencial"
+        },
+        {
+          "id": "domotica",
+          "nome": "Domótica"
+        },
+        {
+          "id": "videoporteiros",
+          "nome": "Videoporteiros"
+        },
+        {
+          "id": "intercomunicadores",
+          "nome": "Intercomunicadores"
+        },
+        {
+          "id": "sistemas-de-seguranca",
+          "nome": "Sistemas de segurança"
+        },
+        {
+          "id": "cctv",
+          "nome": "CCTV"
+        },
+        {
+          "id": "alarmes",
+          "nome": "Alarmes"
+        },
+        {
+          "id": "redes-de-dados",
+          "nome": "Redes de dados"
+        },
+        {
+          "id": "redes-estruturadas",
+          "nome": "Redes estruturadas"
+        },
+        {
+          "id": "sistemas-de-controlo-de-acesso",
+          "nome": "Sistemas de controlo de acesso"
+        },
+        {
+          "id": "portoes-automaticos",
+          "nome": "Portões automáticos"
+        }
+      ]
+    },
+    {
+      "id": "energia",
+      "nome": "Energia",
+      "servicos": [
+        {
+          "id": "instalacao-de-carregadores-para-veiculos-eletricos",
+          "nome": "Instalação de carregadores para veículos elétricos"
+        },
+        {
+          "id": "instalacao-de-paineis-solares",
+          "nome": "Instalação de painéis solares"
+        },
+        {
+          "id": "manutencao-de-sistemas-fotovoltaicos",
+          "nome": "Manutenção de sistemas fotovoltaicos"
+        },
+        {
+          "id": "baterias-de-armazenamento",
+          "nome": "Baterias de armazenamento"
+        },
+        {
+          "id": "sistemas-de-autoconsumo",
+          "nome": "Sistemas de autoconsumo"
+        }
+      ]
+    },
+    {
+      "id": "emergencia",
+      "nome": "Emergência",
+      "servicos": [
+        {
+          "id": "assistencia-24h",
+          "nome": "Assistência 24h"
+        },
+        {
+          "id": "avarias-urgentes",
+          "nome": "Avarias urgentes"
+        },
+        {
+          "id": "falta-de-energia",
+          "nome": "Falta de energia"
+        },
+        {
+          "id": "curto-circuitos",
+          "nome": "Curto-circuitos"
+        }
+      ]
+    }
+  ]
+}
