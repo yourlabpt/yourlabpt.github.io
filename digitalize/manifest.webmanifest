@@ -1,0 +1,30 @@
+{
+  "name": "Digitalize — o seu negócio na internet",
+  "short_name": "Digitalize",
+  "description": "O seu negócio na internet, um passo de cada vez.",
+  "start_url": "/digitalize/",
+  "scope": "/digitalize/",
+  "display": "standalone",
+  "background_color": "#faf9f5",
+  "theme_color": "#faf9f5",
+  "lang": "pt",
+  "icons": [
+    {
+      "src": "/digitalize/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/digitalize/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/digitalize/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
