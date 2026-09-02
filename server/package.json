@@ -28,7 +28,8 @@
     "nodemailer": "^9.0.1",
     "openai": "^4.100.0",
     "pdfkit": "^0.17.2",
-    "puppeteer": "^24.43.1"
+    "puppeteer": "^24.43.1",
+    "stripe": "^22.6.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

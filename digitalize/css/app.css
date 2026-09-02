@@ -381,21 +381,6 @@ body {
 .dz-price-block .dz-plano-price { justify-content: center; margin-top: 0; }
 .dz-price-block .dz-plano-price-now { font-size: 2.2rem; }
 
-.dz-method-row { display: flex; gap: 8px; margin-bottom: 16px; }
-.dz-method-chip {
-    flex: 1;
-    border: 1.5px solid var(--dz-border);
-    background: var(--dz-surface);
-    border-radius: 12px;
-    padding: 12px 8px;
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-    text-align: center;
-}
-.dz-method-chip.is-selected { border-color: var(--dz-ink); background: var(--dz-fill); }
-
 .dz-checkbox-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; font-size: 0.85rem; color: var(--dz-muted); }
 .dz-checkbox-row input { margin-top: 3px; }
 

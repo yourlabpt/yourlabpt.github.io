@@ -2219,10 +2219,9 @@ app.post('/api/digitalize/sessoes/:token/checkout', async (req, res) => {
             orderId: pagamentoId,
             amountCents,
             description: `Site + dom\u00ednio \u2014 ${clienteNome}`.slice(0, 200),
+            customerEmail: clienteEmail,
             successUrl: `${returnBase}?pagamento=sucesso`,
-            errorUrl: `${returnBase}?pagamento=erro`,
-            cancelUrl: `${returnBase}?pagamento=cancelado`,
-            returnUrl: returnBase
+            cancelUrl: `${returnBase}?pagamento=cancelado`
         });
         return res.json({ redirectUrl, pagamentoId });
     } catch (err) {
@@ -2271,26 +2270,46 @@ app.get('/api/digitalize/sessoes/:token/pagamento', async (req, res) => {
     }
 });
 
-// ifthenpay calls this server-to-server on successful payment (see
-// digitalizept-payments.js for the one-off callback-activation setup).
-// GET or POST, query-string placeholders \u2014 see printCallbackActivationCurl().
-app.all('/api/digitalize/callback/ifthenpay', async (req, res) => {
-    const query = { ...req.query, ...(req.body || {}) };
-    const v = digitalizeApp.payments.verifyCallback(query);
-    if (!v.ok) {
-        console.warn('digitalize callback: bad anti-phishing key');
-        return res.status(403).send('forbidden');
+// Stripe calls this server-to-server for every event on the account's webhook
+// endpoint (configured at https://dashboard.stripe.com/webhooks to point here).
+// Fulfillment lives here, never on the success page \u2014 a customer isn't
+// guaranteed to reach it even after paying (lost connection, closed tab).
+// Needs the exact raw body to verify the signature \u2014 see server.js's
+// express.json() verify callback, which stashes it on req.rawBody.
+app.post('/api/digitalize/callback/stripe', async (req, res) => {
+    let event;
+    try {
+        event = digitalizeApp.payments.constructEvent(req.rawBody, req.headers['stripe-signature']);
+    } catch (err) {
+        console.warn('digitalize callback: bad Stripe signature:', err.message);
+        return res.status(400).send('bad signature');
     }
+
+    const relevant = ['checkout.session.completed', 'checkout.session.async_payment_succeeded'];
+    if (event.type === 'checkout.session.async_payment_failed') {
+        console.warn('digitalize callback: async payment failed for', event.data.object.client_reference_id);
+        return res.status(200).send('ok');
+    }
+    if (!relevant.includes(event.type)) return res.status(200).send('ok'); // not ours to handle
+
+    const session = event.data.object;
+    // Delayed-notification methods fire "completed" while still unpaid \u2014 the
+    // async_payment_succeeded event is what actually confirms those later.
+    if (session.payment_status === 'unpaid') return res.status(200).send('ok');
+
+    const orderId = String(session.client_reference_id || (session.metadata && session.metadata.orderId) || '').trim();
+    if (!orderId) return res.status(200).send('ok');
+
     try {
         const db = getDigitalizeptDb();
-        const pagamento = db.prepare('SELECT * FROM digitalize_pagamento WHERE id = ?').get(v.orderId);
-        if (!pagamento) return res.status(200).send('ok'); // unknown/old id \u2014 ack so ifthenpay stops retrying
+        const pagamento = db.prepare('SELECT * FROM digitalize_pagamento WHERE id = ?').get(orderId);
+        if (!pagamento) return res.status(200).send('ok'); // unknown/old id \u2014 ack so Stripe stops retrying
         if (pagamento.estado === 'pago') return res.status(200).send('ok'); // already processed, idempotent
 
         db.prepare(`
-            UPDATE digitalize_pagamento SET estado = 'pago', metodo = ?, referencia_externa = ?, pago_em = ?
+            UPDATE digitalize_pagamento SET estado = 'pago', metodo = 'stripe', referencia_externa = ?, pago_em = ?
             WHERE id = ?
-        `).run(v.method, v.paidAt, digitalizeptNow(), pagamento.id);
+        `).run(String(session.payment_intent || session.id || ''), digitalizeptNow(), pagamento.id);
 
         const state = digitalizeApp.getSession(db, pagamento.sessao_id);
         if (state) {
@@ -2312,9 +2331,8 @@ app.all('/api/digitalize/callback/ifthenpay', async (req, res) => {
         return res.status(200).send('ok');
     } catch (err) {
         console.error('digitalize callback error:', err.message);
-        // Still 200: ifthenpay retries on non-2xx, and retrying a broken
-        // finalize won't fix it \u2014 the payment row stays 'pago' pending,
-        // visible to fix by hand.
+        // Still 200: retrying a broken finalize won't fix it \u2014 the payment row
+        // stays 'pago' pending, visible to fix by hand.
         return res.status(200).send('ok');
     }
 });

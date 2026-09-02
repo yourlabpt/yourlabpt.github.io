@@ -19,7 +19,7 @@ const { sanitizeDados } = require('./digitalizept-dossier');
 const { renderContractPdf } = require('./digitalizept-pdf');
 const { scaffoldClosedDeal } = require('./digitalizept-work');
 const { allocateDemoSlug } = require('./digitalizept-business-identity');
-const payments = require('./digitalizept-payments');
+const payments = require('./digitalizept-payments-stripe');
 
 const CONTRACTS_DIR = path.join(__dirname, '..', 'data', 'digitalizept-contracts');
 const PACOTE_CODIGO = 'digitalize_app_basico';

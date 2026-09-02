@@ -1787,22 +1787,9 @@ function bodyPagar() {
     };
     paintExtraOptions();
 
-    const methods = [['mbway', 'MB WAY'], ['multibanco', 'Multibanco'], ['cartao', 'Cartão']];
-    let metodo = 'mbway';
-    const methodRow = el('div', 'dz-method-row');
-    methodRow.style.marginTop = '14px';
-    methods.forEach(([id, label]) => {
-        const chip = el('button', `dz-method-chip${id === metodo ? ' is-selected' : ''}`, label);
-        chip.type = 'button';
-        chip.addEventListener('click', () => {
-            metodo = id;
-            Array.from(methodRow.children).forEach((c) => c.classList.remove('is-selected'));
-            chip.classList.add('is-selected');
-        });
-        methodRow.appendChild(chip);
-    });
-    scroll.appendChild(methodRow);
-
+    // No payment-method picker here — Stripe's own hosted checkout page shows
+    // whichever methods are eligible (MB WAY, Multibanco, card, ...) based on
+    // the Dashboard's payment method settings, not a fixed list we'd pick for it.
     renderPrice();
 
     payBtn.addEventListener('click', async () => {
@@ -1815,7 +1802,7 @@ function bodyPagar() {
                 method: 'POST',
                 body: {
                     clienteNome: dados.nome_negocio || '', clienteEmail: dados.email || '', clienteNif: dados.nif_negocio || '',
-                    dominioEscolhido: dados.dominio_escolhido || '', extraPlano: extraChoice, metodo
+                    dominioEscolhido: dados.dominio_escolhido || '', extraPlano: extraChoice
                 }
             });
             window.location.href = redirectUrl;
