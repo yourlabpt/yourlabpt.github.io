@@ -13,6 +13,11 @@
     --dz-radius-lg: 24px;
     --dz-install-banner-h: 0px;
     font-size: 16px;
+    /* This app has one fixed light look (cream + the dark-green login/celebrate
+       screens are a deliberate accent, not a dark theme). Without this, iOS Safari
+       in system dark mode paints the canvas beyond the page content black — the
+       gap shows up as a black band around the cream/green content on iPhone. */
+    color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -21,10 +26,10 @@ html, body {
     margin: 0;
     height: 100%;
     overflow: hidden; /* the screen itself scrolls internally, never the page */
+    background: var(--dz-bg);
 }
 
 body {
-    background: var(--dz-bg);
     color: var(--dz-ink);
     font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -598,15 +603,10 @@ body {
 .dz-door-google { background: #f4f1ea; color: #12261c; }
 .dz-door-wa { background: #25d366; color: #08240f; }
 .dz-door-badge { width: 20px; height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: 0 0 auto; }
-.dz-login-why {
-    margin-top: 26px; background: rgba(255, 255, 255, 0.06); border-radius: 18px; padding: 16px 18px;
-}
-.dz-login-why-title { font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; color: #84b199; font-weight: 700; }
-.dz-login-why-item { font-size: 0.92rem; line-height: 1.4; color: rgba(244, 241, 234, 0.78); margin-top: 8px; }
 .dz-google-btn-holder {
-    display: flex; justify-content: center; align-items: center; height: 44px;
-    /* visible the instant it's on screen, not just once Google's script finishes loading */
-    background: #f4f1ea; border-radius: 22px; overflow: hidden;
+    /* No background/border of its own — Google's rendered button already draws its
+       own white pill, so a second frame around it looked like a nested box. */
+    display: flex; justify-content: center; align-items: center; min-height: 44px;
 }
 .dz-wa-form { display: flex; gap: 8px; }
 .dz-wa-form .dz-input { flex: 1; height: 44px; border-radius: 22px; border: none; padding: 0 16px; font-size: 0.95rem; }

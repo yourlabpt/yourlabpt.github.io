@@ -323,6 +323,9 @@ function loadGoogleIdentityScript() {
 }
 
 async function enterFlow() {
+    // Nothing answered yet — first time through a door, so show the welcome
+    // banner once before the first real question. Returning mid-flow skips it.
+    if (state.session && state.session.pontos === 0) { renderWelcomeBanner(); return; }
     const first = currentNodeId() || NODES[0].id;
     renderNode(first);
 }
@@ -512,10 +515,11 @@ function renderLogin() {
     screen.appendChild(scroll);
     root.appendChild(screen);
 
+    // Kept deliberately short — this audience mostly doesn't read long copy,
+    // so the doors themselves are the content, not the paragraph above them.
     const login = el('div', 'dz-login-screen');
     login.appendChild(el('div', 'dz-login-kicker', 'DIGITALIZE'));
-    login.appendChild(el('h1', 'dz-login-title', 'O seu negócio na internet, um passo de cada vez.'));
-    login.appendChild(el('p', 'dz-login-body', 'Escolha uma porta. A seguir são perguntas de um toque — nunca formulários.'));
+    login.appendChild(el('h1', 'dz-login-title', 'Vamos começar.'));
 
     const doors = el('div');
     doors.style.cssText = 'display:flex;flex-direction:column;gap:11px;margin-top:26px';
@@ -533,17 +537,35 @@ function renderLogin() {
     login.appendChild(emailSlot);
     renderEmailDoor(emailSlot);
 
-    const why = el('div', 'dz-login-why');
-    why.appendChild(el('div', 'dz-login-why-title', 'Porque é mais rápido'));
-    [
-        'Entra num toque. Sem esperar por código.',
-        'As suas faturas chegam sempre ao email certo.',
-        'Menos para escrever à mão a seguir.',
-        'Nunca mais tem de se lembrar de nada.'
-    ].forEach((w) => why.appendChild(el('div', 'dz-login-why-item', w)));
-    login.appendChild(why);
-
     scroll.appendChild(login);
+}
+
+// One-time welcome banner shown right after the very first login, before the
+// first real question — the marketing pitch lives here, not on the door
+// screen, so the doors aren't competing with a wall of text for attention.
+function renderWelcomeBanner() {
+    const root = document.getElementById('app');
+    root.innerHTML = '';
+    const screen = el('div', 'dz-screen');
+    const topbar = el('div', 'dz-topbar');
+    topbar.appendChild(el('div', 'dz-back'));
+    screen.appendChild(topbar);
+    const scroll = el('div', 'dz-scroll');
+    screen.appendChild(scroll);
+    root.appendChild(screen);
+
+    const banner = el('div', 'dz-login-screen');
+    banner.appendChild(el('div', 'dz-login-kicker', 'DIGITALIZE O SEU NEGÓCIO'));
+    banner.appendChild(el('h1', 'dz-login-title', 'Coloque-o nas nuvens, onde todos podem ver.'));
+    banner.appendChild(el('p', 'dz-login-body', 'O seu negócio no ar de forma simples e prática — sem precisar chamar o seu sobrinho.'));
+
+    const startBtn = el('button', 'dz-door dz-door-google', 'Vamos começar');
+    startBtn.type = 'button';
+    startBtn.style.marginTop = '26px';
+    startBtn.addEventListener('click', () => renderNode(currentNodeId() || NODES[0].id));
+    banner.appendChild(startBtn);
+
+    scroll.appendChild(banner);
 }
 
 // ---------- Path (map of islands) ----------
