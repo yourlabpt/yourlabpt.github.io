@@ -2050,7 +2050,12 @@ function digitalizeSessionResponse(state) {
         proximoNivelEm: state.proximoNivelEm,
         pago: state.pago,
         demoSlug: state.lead.demo_slug || '',
-        pagamentoEstado: state.pagamento ? state.pagamento.estado : ''
+        pagamentoEstado: state.pagamento ? state.pagamento.estado : '',
+        // Client reads prices from here rather than hardcoding them, so bodyContrato/
+        // bodyPagar can never drift from what the server will actually charge.
+        plano: digitalizeApp.planoFor(state.dados),
+        extra: digitalizeApp.extraFor(state.dados),
+        totalCentimos: digitalizeApp.totalFor(state.dados)
     };
 }
 
@@ -2092,6 +2097,9 @@ app.get('/api/digitalize/sessoes/:token/preview', async (req, res) => {
         const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
             || { id: 'generico', nome: 'Negócio', paletas_sugeridas: [] };
         const { demo, identidade } = await digitalizeApp.computeDemoPreview({ businessType, dados: state.dados });
+        const boilerplateHtml = req.query.visual === 'sem-fotos'
+            ? await digitalizeApp.computeSemFotosHtml({ businessType, dados: state.dados, demo })
+            : '';
         return res.json({
             nome: state.dados.nome_negocio || '',
             businessType,
@@ -2099,7 +2107,8 @@ app.get('/api/digitalize/sessoes/:token/preview', async (req, res) => {
             demoHtml: '',
             demoHtmlCustom: '',
             demoHtmlSource: '',
-            demoVisual: '',
+            demoVisual: state.dados.demoVisual || '',
+            boilerplateHtml,
             identidade,
             dados: state.dados
         });
@@ -2180,28 +2189,35 @@ app.post('/api/digitalize/sessoes/:token/checkout', async (req, res) => {
         }
         const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
             || { id: 'generico', campos_obrigatorios: [], perguntas_especificas: [] };
+        const extraPlano = ['dominio_anual', 'mensalidade'].includes(body.extraPlano) ? body.extraPlano : '';
         digitalizeApp.patchDados(db, {
             leadId: state.leadId,
             businessType,
             patch: {
                 nome_negocio: clienteNome,
                 email: clienteEmail,
-                dominio_escolhido: cleanText(body.dominioEscolhido, 100)
+                dominio_escolhido: cleanText(body.dominioEscolhido, 100),
+                extra_plano: extraPlano
             }
         });
+
+        // Re-read after the patch above so a domain/plan choice made on this same
+        // request (or just before it) is reflected in the authoritative amount.
+        const patchedState = digitalizeApp.getSession(db, req.params.token);
+        const amountCents = digitalizeApp.totalFor(patchedState.dados);
 
         const pagamentoId = crypto.randomUUID().replace(/-/g, '').slice(0, 15);
         const now = digitalizeptNow();
         db.prepare(`
             INSERT INTO digitalize_pagamento (id, sessao_id, lead_id, metodo, estado, valor_centimos, criado_em)
             VALUES (?, ?, ?, '', 'pendente', ?, ?)
-        `).run(pagamentoId, state.token, state.leadId, digitalizeApp.PACOTE_PRECO_CENTIMOS, now);
+        `).run(pagamentoId, state.token, state.leadId, amountCents, now);
 
         const origin = `${req.protocol}://${req.get('host')}`;
         const returnBase = `${origin}/digitalize/c/${encodeURIComponent(state.token)}`;
         const { redirectUrl } = await digitalizeApp.payments.createCheckout({
             orderId: pagamentoId,
-            amountCents: digitalizeApp.PACOTE_PRECO_CENTIMOS,
+            amountCents,
             description: `Site + dom\u00ednio \u2014 ${clienteNome}`.slice(0, 200),
             successUrl: `${returnBase}?pagamento=sucesso`,
             errorUrl: `${returnBase}?pagamento=erro`,

@@ -11,23 +11,46 @@
     <div id="root" class="dp-public">A carregar a pré-visualização…</div>
     <script type="module">
         import { renderLanding } from '/digitalizept/js/demo/landing.js';
+        import { resolveDemoVisual, VISUAL_SEM_FOTOS } from '/digitalizept/js/demo/demo-visual.js';
+        import { mountHtmlPreview } from '/digitalizept/js/demo/html.js';
 
-        const token = new URLSearchParams(window.location.search).get('token');
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+        const queryVisual = params.get('visual');
         const root = document.getElementById('root');
 
         if (!token) {
             root.textContent = 'Falta o token da sessão.';
         } else {
             try {
-                const res = await fetch(`/api/digitalize/sessoes/${encodeURIComponent(token)}/preview`);
+                // The boilerplate HTML itself comes from the server (see /preview) rather
+                // than a client-side fetch of /digitalizept/boilerplates/ — that path is
+                // intentionally blocked for anonymous requests (sellerAssetGuard), so this
+                // page can't fetch it directly; it can only receive it already-resolved.
+                const previewQs = queryVisual ? `?visual=${encodeURIComponent(queryVisual)}` : '';
+                const res = await fetch(`/api/digitalize/sessoes/${encodeURIComponent(token)}/preview${previewQs}`);
                 const data = await res.json();
                 if (!res.ok || !data.demo) {
                     root.textContent = data.error || 'Ainda não há dados suficientes para uma pré-visualização.';
                 } else {
                     document.title = `${data.nome || 'Pré-visualização'} — Digitalize`;
-                    const state = { data: { businessType: data.businessType, dados: data.dados, identidade: data.identidade, demo: data.demo } };
-                    const landing = renderLanding(state);
-                    root.replaceWith(landing);
+                    const state = {
+                        data: {
+                            businessType: data.businessType, dados: data.dados, identidade: data.identidade,
+                            demo: data.demo, demoVisual: data.demoVisual || ''
+                        }
+                    };
+                    const visual = resolveDemoVisual(state, queryVisual);
+                    if (visual === VISUAL_SEM_FOTOS && data.boilerplateHtml) {
+                        // Mounted in its own srcdoc iframe (mountHtmlPreview) — it has its own
+                        // stylesheet baked in server-side, isolated from this page's own styles.
+                        root.innerHTML = '';
+                        root.style.height = '100vh';
+                        mountHtmlPreview(root, data.boilerplateHtml, { identidade: data.identidade, dados: data.dados });
+                    } else {
+                        const landing = renderLanding(state);
+                        root.replaceWith(landing);
+                    }
                 }
             } catch (_) {
                 root.textContent = 'Não foi possível carregar a pré-visualização.';

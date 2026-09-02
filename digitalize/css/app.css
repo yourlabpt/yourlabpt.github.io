@@ -373,6 +373,13 @@ body {
 
 .dz-price-amount { font-size: 2.2rem; font-weight: 800; }
 .dz-price-note { font-size: 0.85rem; opacity: 0.75; margin-top: 6px; }
+.dz-price-extra { font-size: 0.85rem; opacity: 0.85; margin-top: 8px; }
+
+.dz-plano-price { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
+.dz-plano-price-was { text-decoration: line-through; opacity: 0.6; font-size: 0.95rem; font-weight: 600; }
+.dz-plano-price-now { font-size: 1.3rem; font-weight: 800; }
+.dz-price-block .dz-plano-price { justify-content: center; margin-top: 0; }
+.dz-price-block .dz-plano-price-now { font-size: 2.2rem; }
 
 .dz-method-row { display: flex; gap: 8px; margin-bottom: 16px; }
 .dz-method-chip {
@@ -704,6 +711,22 @@ body {
     border-radius: var(--dz-radius-lg);
     background: var(--dz-surface);
 }
+
+.dz-demo-switch-row { display: flex; gap: 8px; }
+.dz-demo-switch-btn {
+    flex: 1; border: 1.5px solid var(--dz-border); background: var(--dz-surface); border-radius: 12px;
+    padding: 10px; font: inherit; font-weight: 700; font-size: 0.86rem; cursor: pointer; text-align: center;
+}
+.dz-demo-switch-btn.is-selected { border-color: var(--dz-accent); background: var(--dz-accent-fill); color: var(--dz-accent); }
+
+.dz-upsell-card {
+    display: block; width: 100%; text-align: left; margin-top: 14px;
+    border: 1.5px dashed var(--dz-border); background: var(--dz-surface); border-radius: var(--dz-radius);
+    padding: 16px; font: inherit; cursor: pointer;
+}
+.dz-upsell-card.is-selected { border-style: solid; border-color: var(--dz-accent); background: var(--dz-accent-fill); }
+.dz-upsell-title { font-weight: 700; font-size: 0.95rem; }
+.dz-upsell-desc { color: var(--dz-muted); font-size: 0.85rem; margin-top: 4px; line-height: 1.4; }
 .dz-node-value {
     margin-top: 20px; background: var(--dz-fill); border-radius: var(--dz-radius-lg); padding: 20px 18px;
 }

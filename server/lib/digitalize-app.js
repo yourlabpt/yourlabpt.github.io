@@ -23,7 +23,34 @@ const payments = require('./digitalizept-payments');
 
 const CONTRACTS_DIR = path.join(__dirname, '..', 'data', 'digitalizept-contracts');
 const PACOTE_CODIGO = 'digitalize_app_basico';
-const PACOTE_PRECO_CENTIMOS = 4900;
+
+// Two tiers, both shown as a promo off a listed price. `dados.plano_escolhido`
+// is set client-side when the person picks the "site personalizado" upsell in
+// the preview step; anything else (including unset) resolves to 'normal'.
+const PLANOS = {
+    normal: { id: 'normal', nome: 'Site', precoOriginalCentimos: 8990, precoCentimos: 4990 },
+    custom: { id: 'custom', nome: 'Site personalizado', precoOriginalCentimos: 11910, precoCentimos: 8990 }
+};
+function planoFor(dados) {
+    return PLANOS[(dados && dados.plano_escolhido === 'custom') ? 'custom' : 'normal'];
+}
+
+// Optional add-on chosen on the payment step: either the picked domain's first
+// year, or the first month of an ongoing plan that keeps editing self-service.
+// DOMINIO_ANO_CENTIMOS is a placeholder — real registrar cost varies by name/TLD
+// and there's no pricing API wired up (see findAvailableDomains); confirm before
+// this goes live with real charges.
+const DOMINIO_ANO_CENTIMOS = 1500;
+const MENSALIDADE_CENTIMOS = 299;
+function extraFor(dados) {
+    const escolha = dados && dados.extra_plano;
+    if (escolha === 'mensalidade') return { id: 'mensalidade', nome: 'Mensalidade (1.º mês)', centimos: MENSALIDADE_CENTIMOS };
+    if (escolha === 'dominio_anual') return { id: 'dominio_anual', nome: 'Domínio (1 ano)', centimos: DOMINIO_ANO_CENTIMOS };
+    return { id: '', nome: '', centimos: 0 };
+}
+function totalFor(dados) {
+    return planoFor(dados).precoCentimos + extraFor(dados).centimos;
+}
 
 function cleanText(value, max = 1200) {
     if (!value || typeof value !== 'string') return '';
@@ -229,9 +256,47 @@ async function computeDemoPreview({ businessType, dados }) {
     return { demo, identidade };
 }
 
-function buildFlatContractHtml({ clienteNome, clienteNif, negocioNome, dataIso, hash }) {
+const BOILERPLATES_DIR = path.join(__dirname, '..', '..', 'digitalizept', 'boilerplates');
+
+/**
+ * Server-side equivalent of demo-visual.js's loadBoilerplateHtml(), for the
+ * public /digitalize app: that module's own version fetches straight from
+ * /digitalizept/boilerplates/, which sellerAssetGuard deliberately blocks for
+ * anonymous requests (raw templates aren't meant to be scraped from a public
+ * demo). Reading the file here sidesteps the guard entirely — Node has plain
+ * filesystem access, no HTTP request involved.
+ *
+ * Also inlines the boilerplate's local <link rel="stylesheet"> tags (its own
+ * inlineLocalStyles() needs DOMParser, unavailable in Node) — a srcdoc iframe
+ * has no base URL of its own, so the boilerplate's relative css/*.css hrefs
+ * would 404 without this. Identity/color substitution is left to the client's
+ * mountHtmlPreview(), which does have DOMParser.
+ */
+async function computeSemFotosHtml({ businessType, dados, demo }) {
+    const { fillBoilerplateFromDemo } = await import('../../digitalizept/js/demo/boilerplate-copy.js');
+    const slug = cleanText(businessType && businessType.id, 80) || 'generico';
+    let filePath = path.join(BOILERPLATES_DIR, `${slug}-sem-fotos.html`);
+    if (!fs.existsSync(filePath)) filePath = path.join(BOILERPLATES_DIR, 'generico-sem-fotos.html');
+    if (!fs.existsSync(filePath)) return '';
+    let raw = fs.readFileSync(filePath, 'utf8');
+    raw = raw.replace(/<link\b[^>]*>/g, (tag) => {
+        if (!/rel=["']stylesheet["']/i.test(tag)) return tag;
+        const hrefMatch = /href=["']([^"']+)["']/i.exec(tag);
+        if (!hrefMatch || /^https?:\/\//i.test(hrefMatch[1])) return tag;
+        try {
+            const css = fs.readFileSync(path.join(BOILERPLATES_DIR, hrefMatch[1]), 'utf8');
+            return `<style>${css}</style>`;
+        } catch (_) { return tag; }
+    });
+    return fillBoilerplateFromDemo(raw, { data: { businessType, dados, demo } });
+}
+
+function buildFlatContractHtml({ clienteNome, clienteNif, negocioNome, dataIso, hash, totalCentimos, extra }) {
     const dataFmt = new Date(dataIso).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
-    const preco = (PACOTE_PRECO_CENTIMOS / 100).toFixed(2).replace('.', ',');
+    const preco = (totalCentimos / 100).toFixed(2).replace('.', ',');
+    const mensalidadeNota = extra && extra.id === 'mensalidade'
+        ? ` Inclui a mensalidade de ${(MENSALIDADE_CENTIMOS / 100).toFixed(2).replace('.', ',')} € (1.º mês, cobrado agora), que mantém o site no ar e permite ao cliente alterar fotos e texto do site a qualquer altura.`
+        : '';
     return `<!DOCTYPE html>
 <html lang="pt-PT"><head><meta charset="UTF-8"><title>Acordo — ${negocioNome}</title>
 <style>
@@ -253,7 +318,7 @@ ul{padding-left:1.2rem}
 <li>Botão de WhatsApp a funcionar no site.</li>
 <li>Alterações de conteúdo (texto, fotos, horário, serviços) sempre grátis, feitas na app.</li>
 </ul>
-<p class="preco">Valor: ${preco} € (pagamento único, sem IVA, sem mensalidades).</p>
+<p class="preco">Valor: ${preco} € (sem IVA).${mensalidadeNota}</p>
 <p>O site e o código ficam propriedade de ${clienteNome} — sem obrigação de permanência com a YourLab.</p>
 <p>Este acordo é aceite eletronicamente ao confirmar o pagamento, com registo de data, hora e dispositivo.</p>
 <p class="foot">Documento gerado automaticamente pela app Digitalize · hash ${hash}</p>
@@ -300,6 +365,9 @@ async function finalizeSelfServeDeal(db, {
     }
     const dadosRow = db.prepare('SELECT * FROM dados_negocio WHERE lead_id = ?').get(leadId);
     const dados = { ...JSON.parse(dadosRow.opcionais_json || '{}'), ...JSON.parse(dadosRow.obrigatorios_json || '{}') };
+    const plano = planoFor(dados);
+    const extra = extraFor(dados);
+    const totalCentimos = plano.precoCentimos + extra.centimos;
 
     const now = nowIso();
     const propostaId = crypto.randomUUID();
@@ -309,7 +377,8 @@ async function finalizeSelfServeDeal(db, {
     const projetoId = crypto.randomUUID();
 
     const html = buildFlatContractHtml({
-        clienteNome, clienteNif, negocioNome: dados.nome_negocio || lead.nome, dataIso: now, hash: contratoId
+        clienteNome, clienteNif, negocioNome: dados.nome_negocio || lead.nome, dataIso: now, hash: contratoId,
+        totalCentimos, extra
     });
     const htmlPath = saveContractFiles(contratoId, html);
     const hash = crypto.createHash('sha256').update(html).digest('hex');
@@ -334,11 +403,11 @@ async function finalizeSelfServeDeal(db, {
             negocio: dados.nome_negocio || lead.nome,
             clienteNome,
             clienteEmail,
-            verified: { totalComIva: PACOTE_PRECO_CENTIMOS, totalSemIva: PACOTE_PRECO_CENTIMOS, iva: 0 },
+            verified: { totalComIva: totalCentimos, totalSemIva: totalCentimos, iva: 0 },
             contractHtmlPath: htmlPath,
             contractPdfPath: pdfOk ? pdfPath : '',
             dados,
-            proposta: { pacote: PACOTE_CODIGO, extras: [], cobrarIva: false, origem: 'digitalize-app' },
+            proposta: { pacote: PACOTE_CODIGO, extras: extra.id ? [extra.id] : [], cobrarIva: false, origem: 'digitalize-app' },
             googlePresence: null,
             googleDiagnostico: null
         });
@@ -359,8 +428,8 @@ async function finalizeSelfServeDeal(db, {
             VALUES (?, ?, ?, ?, 0, 0, ?, 0, 0, ?, '', 'assinada', ?)
         `).run(
             propostaId, leadId,
-            JSON.stringify({ pacote: PACOTE_CODIGO, extras: [], origem: 'digitalize-app' }),
-            PACOTE_PRECO_CENTIMOS, PACOTE_PRECO_CENTIMOS, PACOTE_PRECO_CENTIMOS, now
+            JSON.stringify({ pacote: PACOTE_CODIGO, extras: extra.id ? [extra.id] : [], origem: 'digitalize-app' }),
+            totalCentimos, totalCentimos, totalCentimos, now
         );
         db.prepare(`
             INSERT INTO cliente_legal (id, lead_id, nome, nif, morada, email, telefone)
@@ -385,7 +454,10 @@ async function finalizeSelfServeDeal(db, {
 
 module.exports = {
     PACOTE_CODIGO,
-    PACOTE_PRECO_CENTIMOS,
+    PLANOS,
+    planoFor,
+    extraFor,
+    totalFor,
     LEVELS,
     levelForPoints,
     nextLevelThreshold,
@@ -395,6 +467,7 @@ module.exports = {
     getSession,
     patchDados,
     computeDemoPreview,
+    computeSemFotosHtml,
     finalizeSelfServeDeal,
     payments
 };

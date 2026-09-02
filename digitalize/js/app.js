@@ -215,7 +215,7 @@ const NODES = [
     // Ilha 2 — no points; gated only by reaching it, never locked behind payment
     { id: 'dominio', isl: 1, pts: 0, campo: 'dominio_escolhido', kind: 'dominio', titulo: 'Que endereço quer?', lede: 'O próprio é o que as pessoas escrevem no telemóvel.' },
     { id: 'contrato', isl: 1, pts: 0, campo: 'contrato_passo_estado', kind: 'contrato', titulo: 'O seu nome, para a fatura', lede: 'O resto vem já preenchido do que respondeu.' },
-    { id: 'pagar', isl: 1, pts: 0, kind: 'pagar', titulo: 'Falta um passo para o seu negócio ficar online.', lede: '49 €, uma vez. Sem mensalidades. As alterações são sempre grátis.' },
+    { id: 'pagar', isl: 1, pts: 0, kind: 'pagar', titulo: 'Falta um passo para o seu negócio ficar online.', lede: 'Pagamento único para publicar. As alterações de conteúdo são sempre grátis.' },
     // Ilha 3 — Google (not built yet, informational stub, locked until paid)
     { id: 'google_ligar', isl: 2, pts: 80, kind: 'howto', titulo: 'Ligar à sua ficha do Google.', lede: 'Se ligar a ficha, vários passos ficam feitos de uma vez.' },
     { id: 'google_fotos', isl: 2, pts: 40, kind: 'howto', titulo: 'Fotos no Google.' },
@@ -1488,9 +1488,20 @@ function bodyPaleta(node) {
 }
 
 // ---- kind: preview ----
+// Both a strikethrough "was" price and the bold promo price — reused on the
+// preview upsell card, the contract summary and the payment screen so the
+// three never show different numbers for the same plan.
+function planoPriceNode(plano) {
+    const wrap = el('div', 'dz-plano-price');
+    wrap.appendChild(el('span', 'dz-plano-price-was', `${(plano.precoOriginalCentimos / 100).toFixed(2).replace('.', ',')} €`));
+    wrap.appendChild(el('span', 'dz-plano-price-now', `${(plano.precoCentimos / 100).toFixed(2).replace('.', ',')} €`));
+    return wrap;
+}
+
 function bodyPreview(node) {
     const scroll = document.querySelector('.dz-scroll');
     const screen = document.querySelector('.dz-screen');
+    const d = state.session.dados || {};
 
     if (state.session.demoSlug) {
         // Already published (revisiting this step after paying) — link to the real site.
@@ -1504,11 +1515,25 @@ function bodyPreview(node) {
         // Not published yet — render the same landing page live, from the
         // dossier as it stands right now, inside an isolated iframe (its
         // own stylesheet, can't leak into the app's own styles).
+        let visual = d.demoVisual === 'sem-fotos' ? 'sem-fotos' : 'fotos';
+        const frameSrc = (v) => `/digitalize/preview.html?token=${encodeURIComponent(state.token)}&visual=${encodeURIComponent(v)}`;
+
+        const switchRow = el('div', 'dz-demo-switch-row');
+        switchRow.style.marginTop = '18px';
+        const btnFotos = el('button', 'dz-demo-switch-btn', 'Com fotos');
+        const btnSemFotos = el('button', 'dz-demo-switch-btn', 'Sem fotos');
+        btnFotos.type = 'button';
+        btnSemFotos.type = 'button';
+        switchRow.append(btnFotos, btnSemFotos);
+        scroll.appendChild(switchRow);
+
         const frame = document.createElement('iframe');
-        frame.src = `/digitalize/preview.html?token=${encodeURIComponent(state.token)}`;
+        frame.src = frameSrc(visual);
         frame.title = 'Pré-visualização do site';
         frame.className = 'dz-preview-frame';
-        frame.loading = 'lazy';
+        // No loading="lazy" here — this iframe is switched between "com fotos" and
+        // "sem fotos" by reassigning .src after the initial load, and lazy-loading
+        // an already-loaded iframe can silently swallow that re-navigation.
         scroll.appendChild(frame);
         const openBtn = el('a', 'dz-btn dz-btn-secondary', 'Abrir em ecrã inteiro');
         openBtn.target = '_blank';
@@ -1516,6 +1541,56 @@ function bodyPreview(node) {
         openBtn.href = frame.src;
         openBtn.style.marginTop = '10px';
         scroll.appendChild(openBtn);
+
+        const syncSwitchButtons = () => {
+            btnFotos.classList.toggle('is-selected', visual === 'fotos');
+            btnSemFotos.classList.toggle('is-selected', visual === 'sem-fotos');
+        };
+        syncSwitchButtons();
+
+        const selectVisual = async (v) => {
+            if (v === visual) return;
+            visual = v;
+            syncSwitchButtons();
+            frame.src = frameSrc(v);
+            openBtn.href = frame.src;
+            try {
+                await ensureSession();
+                await api(`/sessoes/${encodeURIComponent(state.token)}/dados`, { method: 'PATCH', body: { patch: { demoVisual: v } } });
+                await refreshSession();
+            } catch (_) { /* the toggle already updated locally; a failed save just won't stick */ }
+        };
+        btnFotos.addEventListener('click', () => selectVisual('fotos'));
+        btnSemFotos.addEventListener('click', () => selectVisual('sem-fotos'));
+
+        // "Still not happy with either?" upsell — not a live preview (a hand-made
+        // custom site can't be rendered on demand), just a plan choice + price bump
+        // that carries through to the contract and payment steps.
+        const customCard = el('button', 'dz-upsell-card');
+        customCard.type = 'button';
+        customCard.appendChild(el('div', 'dz-upsell-title', 'Ainda não está satisfeito?'));
+        customCard.appendChild(el('div', 'dz-upsell-desc', 'Criamos um site personalizado à sua medida, feito à mão pela nossa equipa.'));
+        const priceHolder = el('div');
+        customCard.appendChild(priceHolder);
+        scroll.appendChild(customCard);
+
+        const paintCustomCard = () => {
+            const isCustom = (state.session.dados || {}).plano_escolhido === 'custom';
+            customCard.classList.toggle('is-selected', isCustom);
+            priceHolder.innerHTML = '';
+            priceHolder.appendChild(planoPriceNode(state.session.plano));
+        };
+        paintCustomCard();
+
+        customCard.addEventListener('click', async () => {
+            const wasCustom = (state.session.dados || {}).plano_escolhido === 'custom';
+            try {
+                await ensureSession();
+                await api(`/sessoes/${encodeURIComponent(state.token)}/dados`, { method: 'PATCH', body: { patch: { plano_escolhido: wasCustom ? 'normal' : 'custom' } } });
+                await refreshSession();
+                paintCustomCard();
+            } catch (_) { toast('Não consegui guardar a escolha.'); }
+        });
     }
 
     const footer = footerOf(screen);
@@ -1606,10 +1681,13 @@ function bodyContrato(node) {
     field.append(nomeInput, emailInput, nifInput);
     scroll.appendChild(field);
 
+    const plano = state.session.plano;
+    const isCustom = plano.id === 'custom';
+
     scroll.appendChild(el('p', 'dz-field-label', 'O que está incluído'));
     const contractBox = el('div', 'dz-contract-box');
-    contractBox.innerHTML = `<p>Site publicado com o endereço escolhido (<strong>${dominioEscolhido || '—'}</strong>), domínio e alojamento incluídos no primeiro ano. Ligação da ficha do Google, Instagram e Facebook quando indicar. Botão de WhatsApp a funcionar. Alterações de conteúdo sempre grátis.</p>
-    <p>Valor: <strong>49,00 €</strong> (pagamento único, sem IVA, sem mensalidades). O site e o código ficam propriedade sua.</p>`;
+    contractBox.innerHTML = `<p>${isCustom ? 'Site personalizado, feito à mão pela nossa equipa, ' : 'Site '}publicado com o endereço escolhido (<strong>${dominioEscolhido || '—'}</strong>), domínio e alojamento incluídos no primeiro ano. Ligação da ficha do Google, Instagram e Facebook quando indicar. Botão de WhatsApp a funcionar. Alterações de conteúdo sempre grátis.</p>
+    <p>Valor: <strong>${(plano.precoOriginalCentimos / 100).toFixed(2).replace('.', ',')} €</strong> por <strong>${(plano.precoCentimos / 100).toFixed(2).replace('.', ',')} €</strong> em promoção (pagamento único, sem IVA). O site e o código ficam propriedade sua.</p>`;
     scroll.appendChild(contractBox);
 
     const checkboxRow = el('label', 'dz-checkbox-row');
@@ -1647,15 +1725,72 @@ function bodyContrato(node) {
 function bodyPagar() {
     const scroll = document.querySelector('.dz-scroll');
     const screen = document.querySelector('.dz-screen');
+    const d = state.session.dados || {};
+    const dominioEscolhido = d.dominio_escolhido || '';
+    const isPaidDomain = Boolean(dominioEscolhido) && !dominioEscolhido.endsWith('.digitalize.pt');
+
     const priceBlock = el('div', 'dz-price-block');
     priceBlock.style.marginTop = '14px';
-    priceBlock.appendChild(el('div', 'dz-price-amount', '49 €'));
-    priceBlock.appendChild(el('div', 'dz-price-note', 'Pagamento único · sem mensalidades'));
     scroll.appendChild(priceBlock);
+
+    // "Depois do site publicado" — an optional add-on: pay the chosen domain for a
+    // year, or the first month of a plan that keeps the site editable by the client
+    // at any time. Neither is required to publish; picking one just adds to the total.
+    scroll.appendChild(el('p', 'dz-field-label', 'Depois do site publicado'));
+    const extraWrap = el('div', 'dz-choices');
+    scroll.appendChild(extraWrap);
+    let extraChoice = ['dominio_anual', 'mensalidade'].includes(d.extra_plano) ? d.extra_plano : '';
+
+    const footer = footerOf(screen);
+    const payBtn = el('button', 'dz-btn dz-btn-primary', 'Pagar e publicar');
+    payBtn.type = 'button';
+
+    const renderPrice = () => {
+        priceBlock.innerHTML = '';
+        priceBlock.appendChild(planoPriceNode(state.session.plano));
+        const extra = state.session.extra;
+        if (extra && extra.id) {
+            priceBlock.appendChild(el('div', 'dz-price-extra', `+ ${extra.nome}: ${(extra.centimos / 100).toFixed(2).replace('.', ',')} €`));
+        }
+        const total = (state.session.totalCentimos / 100).toFixed(2).replace('.', ',');
+        priceBlock.appendChild(el('div', 'dz-price-note', `Total: ${total} € · pagamento único`));
+        payBtn.textContent = `Pagar ${total} € e publicar`;
+    };
+
+    const extraOptions = [];
+    if (isPaidDomain) {
+        extraOptions.push(['dominio_anual', `Domínio ${dominioEscolhido} — 1 ano`, 'Regista o domínio escolhido por um ano.']);
+    }
+    extraOptions.push(['mensalidade', 'Mensalidade — 2,99 €/mês', 'Mantém o site no ar e permite alterar fotos e texto a qualquer altura.']);
+    extraOptions.push(['', 'Sem isto por agora', isPaidDomain ? 'Pode registar o domínio mais tarde.' : 'Fica com o endereço grátis.']);
+
+    const paintExtraOptions = () => {
+        extraWrap.innerHTML = '';
+        extraOptions.forEach(([id, label, desc]) => {
+            const btn = el('button', `dz-choice${extraChoice === id ? ' is-selected' : ''}`);
+            btn.type = 'button';
+            btn.appendChild(el('p', 'dz-choice-label', label));
+            btn.appendChild(el('p', 'dz-choice-desc', desc));
+            btn.addEventListener('click', async () => {
+                if (extraChoice === id) return;
+                extraChoice = id;
+                paintExtraOptions();
+                try {
+                    await ensureSession();
+                    await api(`/sessoes/${encodeURIComponent(state.token)}/dados`, { method: 'PATCH', body: { patch: { extra_plano: id } } });
+                    await refreshSession();
+                    renderPrice();
+                } catch (_) { toast('Não consegui guardar a escolha.'); }
+            });
+            extraWrap.appendChild(btn);
+        });
+    };
+    paintExtraOptions();
 
     const methods = [['mbway', 'MB WAY'], ['multibanco', 'Multibanco'], ['cartao', 'Cartão']];
     let metodo = 'mbway';
     const methodRow = el('div', 'dz-method-row');
+    methodRow.style.marginTop = '14px';
     methods.forEach(([id, label]) => {
         const chip = el('button', `dz-method-chip${id === metodo ? ' is-selected' : ''}`, label);
         chip.type = 'button';
@@ -1668,26 +1803,26 @@ function bodyPagar() {
     });
     scroll.appendChild(methodRow);
 
-    const footer = footerOf(screen);
-    const payBtn = el('button', 'dz-btn dz-btn-primary', 'Pagar 49 € e publicar');
-    payBtn.type = 'button';
+    renderPrice();
+
     payBtn.addEventListener('click', async () => {
         payBtn.disabled = true;
+        const payingLabel = payBtn.textContent;
         payBtn.textContent = 'A abrir pagamento…';
-        const d = state.session.dados || {};
+        const dados = state.session.dados || {};
         try {
             const { redirectUrl } = await api(`/sessoes/${encodeURIComponent(state.token)}/checkout`, {
                 method: 'POST',
                 body: {
-                    clienteNome: d.nome_negocio || '', clienteEmail: d.email || '', clienteNif: d.nif_negocio || '',
-                    dominioEscolhido: d.dominio_escolhido || '', metodo
+                    clienteNome: dados.nome_negocio || '', clienteEmail: dados.email || '', clienteNif: dados.nif_negocio || '',
+                    dominioEscolhido: dados.dominio_escolhido || '', extraPlano: extraChoice, metodo
                 }
             });
             window.location.href = redirectUrl;
         } catch (err) {
             toast(err.message || 'Não consegui iniciar o pagamento.');
             payBtn.disabled = false;
-            payBtn.textContent = 'Pagar 49 € e publicar';
+            payBtn.textContent = payingLabel;
         }
     });
     footer.appendChild(payBtn);
