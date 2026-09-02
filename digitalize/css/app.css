@@ -203,6 +203,20 @@ body {
 .dz-textarea { min-height: 90px; resize: vertical; }
 
 .dz-horario-selector { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.dz-horario-block {
+    position: relative;
+    border: 1.5px solid var(--dz-border);
+    border-radius: 14px;
+    padding: 14px 40px 14px 14px; /* right padding reserves room for .dz-horario-remove, layout stays stable whether it's shown or not */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.dz-horario-remove {
+    position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 13px;
+    border: none; background: var(--dz-fill); color: var(--dz-muted); font-size: 1rem; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
 .dz-horario-row { display: flex; gap: 10px; }
 .dz-horario-field { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 .dz-horario-field .dz-select { padding: 12px 14px; }

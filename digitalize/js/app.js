@@ -196,7 +196,7 @@ const NODES = [
     { id: 'tipo', isl: 0, chave: 'q1_tipo', pts: 20, kind: 'tipo', titulo: 'Tem loja ou vai a casa das pessoas?', lede: 'Isto muda o site todo. É a única pergunta grande.' },
     { id: 'nome', isl: 0, chave: 'q2_nome', pts: 20, campo: 'nome_negocio', suggestCampo: 'google_nome', kind: 'confirm', titulo: 'Como se chama o negócio?', lede: 'É o que vai aparecer no topo do site.', placeholder: 'Ex.: Canalizações Ferreira' },
     { id: 'oficio', isl: 0, chave: 'q3_oficio', pts: 40, campo: 'o_que_faz', kind: 'descricao', titulo: 'O que faz, em poucas palavras?', lede: 'Escolha a frase mais parecida — ou escreva a sua.' },
-    { id: 'zonas', isl: 0, chave: 'q4_zonas', pts: 30, campo: 'cidade', kind: 'cidade', titulo: 'Onde trabalha?', lede: 'Cidade principal — pode falar de mais zonas no site depois.', placeholder: 'Nome da cidade ou concelho' },
+    { id: 'zonas', isl: 0, chave: 'q4_zonas', pts: 30, campo: 'cidade', kind: 'cidade', titulo: 'Onde trabalha?', lede: 'Pode escolher mais do que uma.', placeholder: 'Nome da cidade ou concelho' },
     { id: 'contacto', isl: 0, chave: 'q5_telefone', pts: 40, campo: 'telefone', kind: 'texto', inputType: 'tel', titulo: 'Qual o telefone / WhatsApp?', lede: 'É como os clientes o contactam a partir do site.', placeholder: '9xx xxx xxx' },
     { id: 'servicos', isl: 0, chave: 'q6_servicos', pts: 40, campo: 'servicos_passo_estado', kind: 'servicos', titulo: 'Quais são os seus serviços?', lede: 'Escolha da lista — não precisa de escrever nada.' },
     { id: 'horario', isl: 0, chave: 'q7_horario', pts: 40, campo: 'horario', kind: 'horario', titulo: 'Quando trabalha?', lede: 'O horário que aparece no site.' },
@@ -810,21 +810,30 @@ const CIDADES_PRINCIPAIS = [
 function bodyCidade(node, { screen }) {
     const scroll = screen.querySelector('.dz-scroll');
     const d = (state.session && state.session.dados) || {};
-    const already = clean(d[node.campo]);
     const knownIds = CIDADES_PRINCIPAIS.filter((c) => c.id !== 'Outro').map((c) => c.id);
-    let selected = knownIds.includes(already) ? already : (already ? 'Outro' : '');
+    // Free-text, comma-joined value — bucket each already-saved piece into a known
+    // city toggle or a custom chip, so revisiting this step round-trips either shape.
+    const already = clean(d[node.campo]).split(',').map((s) => clean(s)).filter(Boolean);
+    const selectedKnown = new Set(already.filter((v) => knownIds.includes(v)));
+    const customCities = already.filter((v) => !knownIds.includes(v));
+    let addOpen = false;
 
     const grid = el('div', 'dz-city-grid');
     grid.style.marginTop = '18px';
     scroll.appendChild(grid);
 
-    const customField = el('div', 'dz-field');
-    customField.style.cssText = 'margin-top:12px;display:none';
-    const customInput = el('input', 'dz-input');
-    customInput.placeholder = node.placeholder || 'Nome da cidade ou concelho';
-    if (selected === 'Outro') customInput.value = already;
-    customField.appendChild(customInput);
-    scroll.appendChild(customField);
+    const addWrap = el('div', 'dz-servicos-custom-row');
+    addWrap.style.cssText = 'margin-top:14px;display:none';
+    const addInput = el('input', 'dz-input');
+    addInput.placeholder = 'Nome da cidade ou concelho';
+    const addBtn = el('button', 'dz-servicos-custom-add', '+ Adicionar');
+    addBtn.type = 'button';
+    addWrap.append(addInput, addBtn);
+    scroll.appendChild(addWrap);
+
+    const chipsWrap = el('div', 'dz-servicos-grid');
+    chipsWrap.style.cssText = 'margin-top:12px;display:none';
+    scroll.appendChild(chipsWrap);
 
     const footer = footerOf(screen);
     const nextBtn = el('button', 'dz-btn dz-btn-primary', 'Continuar');
@@ -832,21 +841,38 @@ function bodyCidade(node, { screen }) {
     footer.appendChild(nextBtn);
 
     function syncEnabled() {
-        nextBtn.disabled = selected === 'Outro' ? !clean(customInput.value) : !selected;
+        nextBtn.disabled = selectedKnown.size === 0 && customCities.length === 0;
+    }
+
+    function paintChips() {
+        chipsWrap.innerHTML = '';
+        chipsWrap.style.display = customCities.length ? 'flex' : 'none';
+        customCities.forEach((nome, idx) => {
+            const chip = el('button', 'dz-service-chip is-selected', `${nome}  ×`);
+            chip.type = 'button';
+            chip.addEventListener('click', () => { customCities.splice(idx, 1); paintChips(); syncEnabled(); });
+            chipsWrap.appendChild(chip);
+        });
     }
 
     function paintCards() {
         grid.innerHTML = '';
         CIDADES_PRINCIPAIS.forEach((c) => {
-            const card = el('button', `dz-city-card${selected === c.id ? ' is-selected' : ''}`);
+            const isOutro = c.id === 'Outro';
+            const active = isOutro ? addOpen : selectedKnown.has(c.id);
+            const card = el('button', `dz-city-card${active ? ' is-selected' : ''}`);
             card.type = 'button';
             const icon = el('div', 'dz-city-icon');
             icon.innerHTML = c.icon;
             card.append(icon, el('div', 'dz-city-name', c.nome));
             card.addEventListener('click', () => {
-                selected = c.id;
-                customField.style.display = c.id === 'Outro' ? 'block' : 'none';
-                if (c.id === 'Outro') setTimeout(() => customInput.focus(), 30);
+                if (isOutro) {
+                    addOpen = !addOpen;
+                    addWrap.style.display = addOpen ? 'flex' : 'none';
+                    if (addOpen) setTimeout(() => addInput.focus(), 30);
+                } else {
+                    if (selectedKnown.has(c.id)) selectedKnown.delete(c.id); else selectedKnown.add(c.id);
+                }
                 paintCards();
                 syncEnabled();
             });
@@ -854,11 +880,24 @@ function bodyCidade(node, { screen }) {
         });
     }
     paintCards();
-    customField.style.display = selected === 'Outro' ? 'block' : 'none';
+    addWrap.style.display = addOpen ? 'flex' : 'none';
+    paintChips();
     syncEnabled();
 
+    const addCustom = () => {
+        const value = clean(addInput.value);
+        if (!value) return;
+        if (!customCities.some((v) => v.toLowerCase() === value.toLowerCase())) customCities.push(value);
+        addInput.value = '';
+        addInput.focus();
+        paintChips();
+        syncEnabled();
+    };
+    addBtn.addEventListener('click', addCustom);
+    addInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); addCustom(); } });
+
     const submit = async () => {
-        const value = selected === 'Outro' ? clean(customInput.value) : selected;
+        const value = [...selectedKnown, ...customCities].join(', ');
         if (!value) return;
         nextBtn.disabled = true;
         try {
@@ -869,8 +908,6 @@ function bodyCidade(node, { screen }) {
         }
     };
     nextBtn.addEventListener('click', submit);
-    customInput.addEventListener('input', syncEnabled);
-    customInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
 }
 
 // ---- kind: confirm (a suggested value from login — "É este? Sim / Corrigir") ----
@@ -979,6 +1016,7 @@ function bodyDescricao(node, { screen }) {
 
         const customBtn = el('button', `dz-choice${customMode ? ' is-selected' : ''}`);
         customBtn.type = 'button';
+        customBtn.style.marginTop = '10px';
         customBtn.appendChild(el('p', 'dz-choice-label', 'Nenhuma destas — escrever a minha'));
         customBtn.addEventListener('click', () => { customMode = true; paint(frases); });
         wrap.appendChild(customBtn);
@@ -1206,8 +1244,8 @@ function renderServicosPicker({ back, submit, saveLabel = 'Guardar e continuar' 
 // Structured "De [dia] até [dia], das [hora] às [hora]" — a selector instead
 // of a free-text box, so even the "not one of the presets" case never
 // requires typing.
-function parseHorarioGuess(value) {
-    const m = /^([A-Za-zçÇáàâãéêíóôõúÁÀÂÃÉÊÍÓÔÕÚ]{3})(?:–([A-Za-zçÇáàâãéêíóôõúÁÀÂÃÉÊÍÓÔÕÚ]{3}))?,\s*(\d{1,2})h.*?(\d{1,2})h\s*$/.exec(clean(value) || '');
+function parseHorarioSegment(text) {
+    const m = /^([A-Za-zçÇáàâãéêíóôõúÁÀÂÃÉÊÍÓÔÕÚ]{3})(?:–([A-Za-zçÇáàâãéêíóôõúÁÀÂÃÉÊÍÓÔÕÚ]{3}))?,\s*(\d{1,2})h.*?(\d{1,2})h\s*$/.exec(clean(text) || '');
     if (!m) return null;
     const diaIni = DIAS_SEMANA.find((d) => d.toLowerCase() === m[1].toLowerCase());
     const diaFim = m[2] ? DIAS_SEMANA.find((d) => d.toLowerCase() === m[2].toLowerCase()) : diaIni;
@@ -1217,8 +1255,17 @@ function parseHorarioGuess(value) {
     return { diaIni, diaFim, abre, fecha };
 }
 
+// A horário can be more than one block — e.g. "Seg–Sex, 9h–18h; Sáb, 9h–13h;
+// Dom, 10h–13h" — so the saved value is semicolon-joined segments.
+function parseHorarioSegments(value) {
+    const segments = clean(value).split(';').map((s) => parseHorarioSegment(s)).filter(Boolean);
+    return segments;
+}
+
 function buildHorarioSelector(existingValue, onChange) {
-    const guess = parseHorarioGuess(existingValue) || { diaIni: 'Seg', diaFim: 'Sáb', abre: 9, fecha: 19 };
+    let segments = parseHorarioSegments(existingValue);
+    if (!segments.length) segments = [{ diaIni: 'Seg', diaFim: 'Sáb', abre: 9, fecha: 19 }];
+
     const wrap = el('div', 'dz-horario-selector');
 
     function makeSelect(options, value, label) {
@@ -1240,26 +1287,73 @@ function buildHorarioSelector(existingValue, onChange) {
     const dayOpts = DIAS_SEMANA.map((d) => ({ value: d, label: d }));
     const hourOpts = HORAS_DIA.map((h) => ({ value: h, label: `${h}h` }));
 
-    const diaIni = makeSelect(dayOpts, guess.diaIni, 'De');
-    const diaFim = makeSelect(dayOpts, guess.diaFim, 'Até');
-    const horaAbre = makeSelect(hourOpts, guess.abre, 'Abre');
-    const horaFecha = makeSelect(hourOpts, guess.fecha, 'Fecha');
-
-    const row1 = el('div', 'dz-horario-row');
-    row1.append(diaIni.field, diaFim.field);
-    const row2 = el('div', 'dz-horario-row');
-    row2.append(horaAbre.field, horaFecha.field);
-    wrap.append(row1, row2);
-
-    function compose() {
-        const di = diaIni.select.value, df = diaFim.select.value;
+    function composeSegment(row) {
+        const di = row.diaIni.select.value, df = row.diaFim.select.value;
         const dias = di === df ? di : `${di}–${df}`;
-        return `${dias}, ${horaAbre.select.value}h–${horaFecha.select.value}h`;
+        return `${dias}, ${row.horaAbre.select.value}h–${row.horaFecha.select.value}h`;
     }
-    [diaIni.select, diaFim.select, horaAbre.select, horaFecha.select].forEach((s) => {
-        s.addEventListener('change', () => onChange(compose()));
+
+    function composeAll() {
+        return rows.map(composeSegment).join('; ');
+    }
+
+    const addBtn = el('button', 'dz-btn dz-btn-secondary', '+ Adicionar horário (ex.: fim de semana à parte)');
+    addBtn.type = 'button';
+
+    const rows = [];
+    // Only removable once there's more than one — otherwise refreshRemoveButtons
+    // hides it, so the last remaining block can never be deleted outright.
+    function refreshRemoveButtons() {
+        rows.forEach((row) => { row.removeBtn.style.display = rows.length > 1 ? '' : 'none'; });
+    }
+
+    function buildRow(seg) {
+        const block = el('div', 'dz-horario-block');
+        const diaIni = makeSelect(dayOpts, seg.diaIni, 'De');
+        const diaFim = makeSelect(dayOpts, seg.diaFim, 'Até');
+        const horaAbre = makeSelect(hourOpts, seg.abre, 'Abre');
+        const horaFecha = makeSelect(hourOpts, seg.fecha, 'Fecha');
+        const row1 = el('div', 'dz-horario-row');
+        row1.append(diaIni.field, diaFim.field);
+        const row2 = el('div', 'dz-horario-row');
+        row2.append(horaAbre.field, horaFecha.field);
+        block.append(row1, row2);
+        const removeBtn = el('button', 'dz-horario-remove', '×');
+        removeBtn.type = 'button';
+        removeBtn.setAttribute('aria-label', 'Remover este horário');
+        block.appendChild(removeBtn);
+        const row = { block, diaIni, diaFim, horaAbre, horaFecha, removeBtn };
+        [diaIni.select, diaFim.select, horaAbre.select, horaFecha.select].forEach((s) => {
+            s.addEventListener('change', () => onChange(composeAll()));
+        });
+        removeBtn.addEventListener('click', () => {
+            const idx = rows.indexOf(row);
+            if (idx === -1) return;
+            rows.splice(idx, 1);
+            block.remove();
+            refreshRemoveButtons();
+            onChange(composeAll());
+        });
+        return row;
+    }
+
+    segments.forEach((seg) => {
+        const row = buildRow(seg);
+        rows.push(row);
+        wrap.appendChild(row.block);
     });
-    onChange(compose());
+    refreshRemoveButtons();
+
+    addBtn.addEventListener('click', () => {
+        const row = buildRow({ diaIni: 'Seg', diaFim: 'Sáb', abre: 9, fecha: 19 });
+        rows.push(row);
+        wrap.insertBefore(row.block, addBtn);
+        refreshRemoveButtons();
+        onChange(composeAll());
+    });
+    wrap.appendChild(addBtn);
+
+    onChange(composeAll());
     return wrap;
 }
 
@@ -1298,6 +1392,7 @@ function bodyHorario(node) {
         wrap.appendChild(grid);
         const customBtn = el('button', `dz-choice${customMode ? ' is-selected' : ''}`);
         customBtn.type = 'button';
+        customBtn.style.marginTop = '10px';
         customBtn.appendChild(el('p', 'dz-choice-label', 'Outro horário — escolher'));
         customBtn.addEventListener('click', () => { customMode = true; paint(); });
         wrap.appendChild(customBtn);
