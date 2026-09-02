@@ -194,6 +194,11 @@ body {
 
 .dz-textarea { min-height: 90px; resize: vertical; }
 
+.dz-horario-selector { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.dz-horario-row { display: flex; gap: 10px; }
+.dz-horario-field { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.dz-horario-field .dz-select { padding: 12px 14px; }
+
 .dz-spacer { flex: 1; min-height: 20px; }
 
 .dz-actions {
@@ -542,6 +547,10 @@ body {
 }
 .dz-login-why-title { font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; color: #84b199; font-weight: 700; }
 .dz-login-why-item { font-size: 0.92rem; line-height: 1.4; color: rgba(244, 241, 234, 0.78); margin-top: 8px; }
+.dz-google-btn-holder { display: flex; justify-content: center; min-height: 44px; }
+.dz-wa-form { display: flex; gap: 8px; }
+.dz-wa-form .dz-input { flex: 1; height: 56px; border-radius: 16px; border: none; padding: 0 16px; font-size: 1rem; }
+.dz-wa-form .dz-btn { flex: 0 0 auto; padding: 0 20px; }
 
 /* ---------- Path (map of islands) screen ---------- */
 .dz-path-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; flex: 0 0 auto; }
@@ -605,6 +614,14 @@ body {
 
 /* ---------- Node detail screen ---------- */
 .dz-node-hint { color: var(--dz-muted); font-size: 0.92rem; line-height: 1.45; margin: 4px 0 0; }
+.dz-preview-frame {
+    width: 100%;
+    height: min(60vh, 560px);
+    margin-top: 18px;
+    border: 1.5px solid var(--dz-border);
+    border-radius: var(--dz-radius-lg);
+    background: var(--dz-surface);
+}
 .dz-node-value {
     margin-top: 20px; background: var(--dz-fill); border-radius: var(--dz-radius-lg); padding: 20px 18px;
 }

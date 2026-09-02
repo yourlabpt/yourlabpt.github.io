@@ -209,6 +209,26 @@ function patchDados(db, { leadId, businessType, patch }) {
     return { ...opcionais, ...obrigatorios };
 }
 
+/**
+ * The same demo + identidade construction finalizeSelfServeDeal uses when a
+ * deal closes — factored out so the pre-payment preview node can show the
+ * real thing (same seeding, same palette logic), not a guess. Pure: takes
+ * whatever dados exist right now, no DB write.
+ */
+async function computeDemoPreview({ businessType, dados }) {
+    // Reuse the exact seeding the admin wizard uses for a fresh demo — pure
+    // functions, safe to import server-side (same trick as proposal-calc.js).
+    const { seedDemoFromType } = await import('../../digitalizept/js/demo/seed.js');
+    const demo = seedDemoFromType({ data: { businessType, dados } });
+    const paletaId = cleanText(dados.paleta_escolhida, 20) || 'bold';
+    const paleta = (Array.isArray(businessType.paletas_sugeridas) ? businessType.paletas_sugeridas : [])
+        .find((p) => p.id === paletaId) || (businessType.paletas_sugeridas || [])[0];
+    const identidade = paleta && Array.isArray(paleta.cores) && paleta.cores.length >= 3
+        ? { paleta: paletaId, estilo: paletaId, cores: { base: paleta.cores[0], destaque: paleta.cores[1], secundaria: paleta.cores[2] } }
+        : {};
+    return { demo, identidade };
+}
+
 function buildFlatContractHtml({ clienteNome, clienteNif, negocioNome, dataIso, hash }) {
     const dataFmt = new Date(dataIso).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
     const preco = (PACOTE_PRECO_CENTIMOS / 100).toFixed(2).replace('.', ',');
@@ -305,16 +325,7 @@ async function finalizeSelfServeDeal(db, {
         makeSlug: digitalizeptSlugLike
     });
 
-    // Reuse the exact seeding the admin wizard uses for a fresh demo — pure
-    // functions, safe to import server-side (same trick as proposal-calc.js).
-    const { seedDemoFromType } = await import('../../digitalizept/js/demo/seed.js');
-    const demo = seedDemoFromType({ data: { businessType, dados } });
-    const paletaId = cleanText(dados.paleta_escolhida, 20) || 'bold';
-    const paleta = (Array.isArray(businessType.paletas_sugeridas) ? businessType.paletas_sugeridas : [])
-        .find((p) => p.id === paletaId) || (businessType.paletas_sugeridas || [])[0];
-    const identidade = paleta && Array.isArray(paleta.cores) && paleta.cores.length >= 3
-        ? { paleta: paletaId, estilo: paletaId, cores: { base: paleta.cores[0], destaque: paleta.cores[1], secundaria: paleta.cores[2] } }
-        : {};
+    const { demo, identidade } = await computeDemoPreview({ businessType, dados });
 
     let workPath = '';
     try {
@@ -383,6 +394,7 @@ module.exports = {
     createSession,
     getSession,
     patchDados,
+    computeDemoPreview,
     finalizeSelfServeDeal,
     payments
 };

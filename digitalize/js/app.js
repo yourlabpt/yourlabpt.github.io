@@ -178,12 +178,23 @@ const ISLANDS = [
     { kicker: 'Ilha 5', title: 'Crescer', sub: 'Nunca fica completa — vale a pena voltar.' }
 ];
 
-const HORARIOS_SUGERIDOS = ['Seg–Sáb, 9h–19h', 'Seg–Sex, 9h–18h', '24 horas, todos os dias', 'A combinar por telefone'];
+const HORARIOS_SUGERIDOS = [
+    'Seg–Sex, 9h–18h',
+    'Seg–Sáb, 9h–19h',
+    'Seg–Sáb, 9h–13h e 14h–19h',
+    'Ter–Sáb, 9h–19h',
+    'Seg–Dom, 9h–20h',
+    '24 horas, todos os dias',
+    'Só com marcação',
+    'A combinar por telefone'
+];
+const DIAS_SEMANA = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const HORAS_DIA = Array.from({ length: 19 }, (_, i) => i + 6); // 6h .. 24h
 
 const NODES = [
     // Ilha 1
     { id: 'tipo', isl: 0, chave: 'q1_tipo', pts: 20, kind: 'tipo', titulo: 'Tem loja ou vai a casa das pessoas?', lede: 'Isto muda o site todo. É a única pergunta grande.' },
-    { id: 'nome', isl: 0, chave: 'q2_nome', pts: 20, campo: 'nome_negocio', kind: 'texto', titulo: 'Como se chama o negócio?', lede: 'É o que vai aparecer no topo do site.', placeholder: 'Ex.: Canalizações Ferreira' },
+    { id: 'nome', isl: 0, chave: 'q2_nome', pts: 20, campo: 'nome_negocio', suggestCampo: 'google_nome', kind: 'confirm', titulo: 'Como se chama o negócio?', lede: 'É o que vai aparecer no topo do site.', placeholder: 'Ex.: Canalizações Ferreira' },
     { id: 'oficio', isl: 0, chave: 'q3_oficio', pts: 40, campo: 'o_que_faz', kind: 'descricao', titulo: 'O que faz, em poucas palavras?', lede: 'Escolha a frase mais parecida — ou escreva a sua.' },
     { id: 'zonas', isl: 0, chave: 'q4_zonas', pts: 30, campo: 'cidade', kind: 'texto', titulo: 'Onde trabalha?', lede: 'Cidade principal — pode falar de mais zonas no site depois.', placeholder: 'Ex.: Porto' },
     { id: 'contacto', isl: 0, chave: 'q5_telefone', pts: 40, campo: 'telefone', kind: 'texto', inputType: 'tel', titulo: 'Qual o telefone / WhatsApp?', lede: 'É como os clientes o contactam a partir do site.', placeholder: '9xx xxx xxx' },
@@ -293,6 +304,118 @@ async function ensureSession() {
     return refreshSession();
 }
 
+const ICON_WHATSAPP_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0012.04 2zm0 18.15h-.01a8.2 8.2 0 01-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.22 8.22 0 01-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 012.41 5.83c0 4.55-3.7 8.24-8.24 8.24zm4.52-6.17c-.25-.12-1.47-.72-1.69-.81-.23-.08-.4-.12-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.39-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.88 2.38 1 2.54c.13.17 1.73 2.64 4.2 3.7.59.25 1.05.4 1.4.52.59.19 1.13.16 1.55.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.08.14-1.18-.06-.1-.23-.16-.48-.28z"/></svg>';
+
+let googleScriptPromise = null;
+function loadGoogleIdentityScript() {
+    if (window.google && window.google.accounts && window.google.accounts.id) return Promise.resolve();
+    if (googleScriptPromise) return googleScriptPromise;
+    googleScriptPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.defer = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Não consegui carregar o Google.'));
+        document.head.appendChild(s);
+    });
+    return googleScriptPromise;
+}
+
+async function enterFlow() {
+    const first = currentNodeId() || NODES[0].id;
+    renderNode(first);
+}
+
+async function onGoogleCredential(response) {
+    try {
+        await ensureSession();
+        await api(`/sessoes/${encodeURIComponent(state.token)}/auth/google`, { method: 'POST', body: { credential: response.credential } });
+        await refreshSession();
+        await enterFlow();
+    } catch (err) {
+        toast(err.message || 'Não consegui validar a conta Google.');
+    }
+}
+
+async function renderGoogleDoor(container) {
+    let cfg = { googleConfigured: false };
+    try { cfg = await api('/config'); } catch (_) { /* fall through to disabled state below */ }
+
+    if (!cfg.googleConfigured) {
+        const btn = el('button', 'dz-door dz-door-google');
+        btn.type = 'button';
+        const badge = el('div', 'dz-door-badge', 'G');
+        badge.style.cssText += 'background:#12261c;color:#f4f1ea;';
+        btn.append(badge, el('div', '', 'Continuar com Google'));
+        btn.addEventListener('click', () => toast('Login com Google ainda não está configurado.'));
+        container.appendChild(btn);
+        return;
+    }
+
+    try {
+        await loadGoogleIdentityScript();
+        window.google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogleCredential });
+        const holder = el('div', 'dz-google-btn-holder');
+        container.appendChild(holder);
+        window.google.accounts.id.renderButton(holder, {
+            type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill',
+            text: 'continue_with', logo_alignment: 'left', width: 336, locale: 'pt_PT'
+        });
+    } catch (_) {
+        const btn = el('button', 'dz-door dz-door-google');
+        btn.type = 'button';
+        btn.append(el('div', '', 'Continuar com Google'));
+        btn.addEventListener('click', () => toast('Não consegui carregar o Google agora. Tente de novo.'));
+        container.appendChild(btn);
+    }
+}
+
+function renderWhatsAppDoor(container) {
+    const waBtn = el('button', 'dz-door dz-door-wa');
+    waBtn.type = 'button';
+    const waBadge = el('div', 'dz-door-badge');
+    waBadge.style.color = '#fff';
+    waBadge.innerHTML = ICON_WHATSAPP_SVG;
+    waBtn.append(waBadge, el('div', '', 'Continuar com WhatsApp'));
+
+    const form = el('div', 'dz-wa-form');
+    form.style.display = 'none';
+    const input = el('input', 'dz-input');
+    input.type = 'tel';
+    input.placeholder = 'O seu número — 9xx xxx xxx';
+    const submitBtn = el('button', 'dz-btn dz-btn-primary', 'Continuar');
+    submitBtn.type = 'button';
+    form.append(input, submitBtn);
+
+    waBtn.addEventListener('click', () => {
+        waBtn.style.display = 'none';
+        form.style.display = 'flex';
+        input.focus();
+    });
+
+    const submit = async () => {
+        const digits = clean(input.value).replace(/[^\d+]/g, '');
+        if (digits.replace(/\D/g, '').length < 9) { toast('Escreva um número de telemóvel válido.'); return; }
+        submitBtn.disabled = true;
+        try {
+            await ensureSession();
+            await api(`/sessoes/${encodeURIComponent(state.token)}/dados`, {
+                method: 'PATCH', body: { patch: { telefone: digits, whatsapp: digits } }
+            });
+            await refreshSession();
+            await enterFlow();
+        } catch (err) {
+            toast(err.message || 'Não consegui começar.');
+            submitBtn.disabled = false;
+        }
+    };
+    submitBtn.addEventListener('click', submit);
+    input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+
+    container.append(waBtn, form);
+}
+
 function renderLogin() {
     const root = document.getElementById('app');
     root.innerHTML = '';
@@ -311,35 +434,14 @@ function renderLogin() {
 
     const doors = el('div');
     doors.style.cssText = 'display:flex;flex-direction:column;gap:11px;margin-top:26px';
-    const enter = async (btn, label) => {
-        btn.disabled = true;
-        btn.textContent = 'Um momento…';
-        try {
-            await ensureSession();
-            const first = currentNodeId() || NODES[0].id;
-            renderNode(first);
-        } catch (err) {
-            toast(err.message || 'Não consegui começar.');
-            btn.disabled = false;
-            btn.textContent = label;
-        }
-    };
-
-    const googleBtn = el('button', 'dz-door dz-door-google');
-    googleBtn.type = 'button';
-    const googleBadge = el('div', 'dz-door-badge', 'G');
-    googleBadge.style.cssText += 'background:#12261c;color:#f4f1ea;';
-    googleBtn.append(googleBadge, el('div', '', 'Continuar com Google'));
-    googleBtn.addEventListener('click', () => enter(googleBtn, 'Continuar com Google'));
-
-    const waBtn = el('button', 'dz-door dz-door-wa');
-    waBtn.type = 'button';
-    const waBadge = el('div', 'dz-door-badge');
-    waBadge.style.cssText += 'background:#08240f;opacity:0.9;';
-    waBtn.append(waBadge, el('div', '', 'Continuar com WhatsApp'));
-    waBtn.addEventListener('click', () => enter(waBtn, 'Continuar com WhatsApp'));
-
-    doors.append(googleBtn, waBtn);
+    // Fixed slots, appended synchronously in order — renderGoogleDoor fills
+    // its slot after an async /config fetch, which must not push it below
+    // the (synchronous) WhatsApp door.
+    const googleSlot = el('div');
+    const waSlot = el('div');
+    doors.append(googleSlot, waSlot);
+    renderGoogleDoor(googleSlot);
+    renderWhatsAppDoor(waSlot);
     login.appendChild(doors);
     login.appendChild(el('p', 'dz-login-other', 'Também pode entrar por SMS ou email.'));
 
@@ -485,7 +587,7 @@ function renderNode(nodeId) {
     if (hint) scroll.appendChild(el('p', 'dz-node-hint', hint));
 
     const builders = {
-        tipo: bodyTipo, texto: bodyTexto, descricao: bodyDescricao, servicos: bodyServicos,
+        tipo: bodyTipo, texto: bodyTexto, confirm: bodyConfirm, descricao: bodyDescricao, servicos: bodyServicos,
         horario: bodyHorario, paleta: bodyPaleta, preview: bodyPreview, dominio: bodyDominio,
         contrato: bodyContrato, pagar: bodyPagar, howto: bodyHowto, whatsapp: bodyWhatsapp,
         link: bodyLink, qr: bodyQr
@@ -600,6 +702,66 @@ function bodyTexto(node, { screen }) {
     nextBtn.addEventListener('click', submit);
     input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
     setTimeout(() => input.focus(), 30);
+}
+
+// ---- kind: confirm (a suggested value from login — "É este? Sim / Corrigir") ----
+function bodyConfirm(node) {
+    const scroll = document.querySelector('.dz-scroll');
+    const screen = document.querySelector('.dz-screen');
+    const d = state.session.dados || {};
+    const suggested = node.suggestCampo ? clean(d[node.suggestCampo]) : '';
+    const already = clean(d[node.campo]);
+
+    // Nothing to confirm — same plain text-input node as before.
+    if (!suggested) { bodyTexto(node); return; }
+
+    let editing = Boolean(already) && already !== suggested;
+    const wrap = el('div');
+    wrap.style.marginTop = '18px';
+    scroll.appendChild(wrap);
+    const footer = footerOf(screen);
+
+    function paint() {
+        wrap.innerHTML = '';
+        footer.innerHTML = '';
+        if (!editing) {
+            const card = el('div', 'dz-node-value dz-anim-pop');
+            card.appendChild(el('div', 'dz-node-value-from', 'Vem da sua conta Google'));
+            card.appendChild(el('div', 'dz-node-value-text', suggested));
+            wrap.appendChild(card);
+
+            const yesBtn = el('button', 'dz-btn dz-btn-primary', 'Sim, é este');
+            yesBtn.type = 'button';
+            yesBtn.addEventListener('click', async () => {
+                yesBtn.disabled = true;
+                try { await completeNode(node, { [node.campo]: suggested }); } catch (err) { toast(err.message || 'Não consegui guardar.'); yesBtn.disabled = false; }
+            });
+            const fixBtn = el('button', 'dz-btn dz-btn-ghost', 'Não, corrigir');
+            fixBtn.type = 'button';
+            fixBtn.addEventListener('click', () => { editing = true; paint(); });
+            footer.append(yesBtn, fixBtn);
+        } else {
+            const field = el('div', 'dz-field');
+            const input = el('input', 'dz-input');
+            input.placeholder = node.placeholder || '';
+            input.value = already || suggested;
+            field.appendChild(input);
+            wrap.appendChild(field);
+            const saveBtn = el('button', 'dz-btn dz-btn-primary', 'Guardar');
+            saveBtn.type = 'button';
+            const submit = async () => {
+                const value = clean(input.value);
+                if (!value) { toast('Preencha antes de continuar.'); return; }
+                saveBtn.disabled = true;
+                try { await completeNode(node, { [node.campo]: value }); } catch (err) { toast(err.message || 'Não consegui guardar.'); saveBtn.disabled = false; }
+            };
+            saveBtn.addEventListener('click', submit);
+            input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+            footer.appendChild(saveBtn);
+            setTimeout(() => input.focus(), 30);
+        }
+    }
+    paint();
 }
 
 // ---- kind: descricao (3 ready phrases, tap = pick; "nenhuma" reveals text) ----
@@ -872,6 +1034,66 @@ function renderServicosPicker({ back, submit, saveLabel = 'Guardar e continuar' 
     });
 }
 
+// Structured "De [dia] até [dia], das [hora] às [hora]" — a selector instead
+// of a free-text box, so even the "not one of the presets" case never
+// requires typing.
+function parseHorarioGuess(value) {
+    const m = /^([A-Za-zçÇáàâãéêíóôõúÁÀÂÃÉÊÍÓÔÕÚ]{3})(?:–([A-Za-zçÇáàâãéêíóôõúÁÀÂÃÉÊÍÓÔÕÚ]{3}))?,\s*(\d{1,2})h.*?(\d{1,2})h\s*$/.exec(clean(value) || '');
+    if (!m) return null;
+    const diaIni = DIAS_SEMANA.find((d) => d.toLowerCase() === m[1].toLowerCase());
+    const diaFim = m[2] ? DIAS_SEMANA.find((d) => d.toLowerCase() === m[2].toLowerCase()) : diaIni;
+    const abre = Number(m[3]);
+    const fecha = Number(m[4]);
+    if (!diaIni || !diaFim || !HORAS_DIA.includes(abre) || !HORAS_DIA.includes(fecha)) return null;
+    return { diaIni, diaFim, abre, fecha };
+}
+
+function buildHorarioSelector(existingValue, onChange) {
+    const guess = parseHorarioGuess(existingValue) || { diaIni: 'Seg', diaFim: 'Sáb', abre: 9, fecha: 19 };
+    const wrap = el('div', 'dz-horario-selector');
+
+    function makeSelect(options, value, label) {
+        const field = el('div', 'dz-horario-field');
+        field.appendChild(el('label', 'dz-field-label', label));
+        const select = document.createElement('select');
+        select.className = 'dz-select';
+        options.forEach((opt) => {
+            const o = document.createElement('option');
+            o.value = String(opt.value);
+            o.textContent = opt.label;
+            if (String(opt.value) === String(value)) o.selected = true;
+            select.appendChild(o);
+        });
+        field.appendChild(select);
+        return { field, select };
+    }
+
+    const dayOpts = DIAS_SEMANA.map((d) => ({ value: d, label: d }));
+    const hourOpts = HORAS_DIA.map((h) => ({ value: h, label: `${h}h` }));
+
+    const diaIni = makeSelect(dayOpts, guess.diaIni, 'De');
+    const diaFim = makeSelect(dayOpts, guess.diaFim, 'Até');
+    const horaAbre = makeSelect(hourOpts, guess.abre, 'Abre');
+    const horaFecha = makeSelect(hourOpts, guess.fecha, 'Fecha');
+
+    const row1 = el('div', 'dz-horario-row');
+    row1.append(diaIni.field, diaFim.field);
+    const row2 = el('div', 'dz-horario-row');
+    row2.append(horaAbre.field, horaFecha.field);
+    wrap.append(row1, row2);
+
+    function compose() {
+        const di = diaIni.select.value, df = diaFim.select.value;
+        const dias = di === df ? di : `${di}–${df}`;
+        return `${dias}, ${horaAbre.select.value}h–${horaFecha.select.value}h`;
+    }
+    [diaIni.select, diaFim.select, horaAbre.select, horaFecha.select].forEach((s) => {
+        s.addEventListener('change', () => onChange(compose()));
+    });
+    onChange(compose());
+    return wrap;
+}
+
 // ---- kind: horario (preset cards + custom fallback) ----
 function bodyHorario(node) {
     const scroll = document.querySelector('.dz-scroll');
@@ -907,20 +1129,11 @@ function bodyHorario(node) {
         wrap.appendChild(grid);
         const customBtn = el('button', `dz-choice${customMode ? ' is-selected' : ''}`);
         customBtn.type = 'button';
-        customBtn.appendChild(el('p', 'dz-choice-label', 'Outro horário — escrever'));
+        customBtn.appendChild(el('p', 'dz-choice-label', 'Outro horário — escolher'));
         customBtn.addEventListener('click', () => { customMode = true; paint(); });
         wrap.appendChild(customBtn);
         if (customMode) {
-            const field = el('div', 'dz-field');
-            field.style.marginTop = '10px';
-            const input = el('input', 'dz-input');
-            input.placeholder = 'Ex.: Ter–Sáb, 10h–20h';
-            input.value = HORARIOS_SUGERIDOS.includes(selected) ? '' : selected;
-            input.addEventListener('input', () => { selected = input.value; });
-            input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(clean(input.value)); } });
-            field.appendChild(input);
-            wrap.appendChild(field);
-            setTimeout(() => input.focus(), 10);
+            wrap.appendChild(buildHorarioSelector(HORARIOS_SUGERIDOS.includes(selected) ? '' : selected, (value) => { selected = value; }));
         }
     }
     paint();
@@ -978,14 +1191,33 @@ function bodyPaleta(node) {
 function bodyPreview(node) {
     const scroll = document.querySelector('.dz-scroll');
     const screen = document.querySelector('.dz-screen');
+
     if (state.session.demoSlug) {
-        const previewBtn = el('a', 'dz-btn dz-btn-secondary', 'Ver rascunho');
+        // Already published (revisiting this step after paying) — link to the real site.
+        const previewBtn = el('a', 'dz-btn dz-btn-secondary', 'Ver site publicado');
         previewBtn.target = '_blank';
         previewBtn.rel = 'noopener';
         previewBtn.href = `/d/${encodeURIComponent(state.session.demoSlug)}`;
         previewBtn.style.marginTop = '18px';
         scroll.appendChild(previewBtn);
+    } else {
+        // Not published yet — render the same landing page live, from the
+        // dossier as it stands right now, inside an isolated iframe (its
+        // own stylesheet, can't leak into the app's own styles).
+        const frame = document.createElement('iframe');
+        frame.src = `/digitalize/preview.html?token=${encodeURIComponent(state.token)}`;
+        frame.title = 'Pré-visualização do site';
+        frame.className = 'dz-preview-frame';
+        frame.loading = 'lazy';
+        scroll.appendChild(frame);
+        const openBtn = el('a', 'dz-btn dz-btn-secondary', 'Abrir em ecrã inteiro');
+        openBtn.target = '_blank';
+        openBtn.rel = 'noopener';
+        openBtn.href = frame.src;
+        openBtn.style.marginTop = '10px';
+        scroll.appendChild(openBtn);
     }
+
     const footer = footerOf(screen);
     const nextBtn = el('button', 'dz-btn dz-btn-primary', 'Pôr no ar');
     nextBtn.type = 'button';

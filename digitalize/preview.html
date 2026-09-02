@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Pré-visualização — Digitalize</title>
+    <link rel="stylesheet" href="/digitalizept/digitalizept.css">
+</head>
+<body class="dp-public">
+    <div id="root" class="dp-public">A carregar a pré-visualização…</div>
+    <script type="module">
+        import { renderLanding } from '/digitalizept/js/demo/landing.js';
+
+        const token = new URLSearchParams(window.location.search).get('token');
+        const root = document.getElementById('root');
+
+        if (!token) {
+            root.textContent = 'Falta o token da sessão.';
+        } else {
+            try {
+                const res = await fetch(`/api/digitalize/sessoes/${encodeURIComponent(token)}/preview`);
+                const data = await res.json();
+                if (!res.ok || !data.demo) {
+                    root.textContent = data.error || 'Ainda não há dados suficientes para uma pré-visualização.';
+                } else {
+                    document.title = `${data.nome || 'Pré-visualização'} — Digitalize`;
+                    const state = { data: { businessType: data.businessType, dados: data.dados, identidade: data.identidade, demo: data.demo } };
+                    const landing = renderLanding(state);
+                    root.replaceWith(landing);
+                }
+            } catch (_) {
+                root.textContent = 'Não foi possível carregar a pré-visualização.';
+            }
+        }
+    </script>
+</body>
+</html>

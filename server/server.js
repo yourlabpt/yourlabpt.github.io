@@ -47,6 +47,7 @@ const {
 const { createRateLimiter } = require('./lib/rate-limit');
 const { findAvailableDomains } = require('./lib/digitalizept-domains');
 const digitalizeApp = require('./lib/digitalize-app');
+const digitalizeGoogleAuth = require('./lib/digitalize-google-auth');
 const {
     mergeDemoForResume,
     resumeWizardPosition,
@@ -1766,6 +1767,7 @@ const digitalizeptVisualLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 
 // /digitalize is public (no admin key) — tighter limits than the seller-only routes above.
 const digitalizeAppLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
 const digitalizeCheckoutLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 6 });
+const digitalizeAuthLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 });
 
 app.post('/api/digitalizept/login', (req, res) => {
     const ip = clientIp(req);
@@ -2078,6 +2080,34 @@ app.get('/api/digitalize/sessoes/:token', (req, res) => {
     }
 });
 
+// Pre-payment "see your site" preview — same seeding + renderLanding the
+// published /d/:slug page uses, just computed live from the session's
+// current answers instead of a persisted, publicly-reachable demo.
+app.get('/api/digitalize/sessoes/:token/preview', async (req, res) => {
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sessão não encontrada.' });
+        const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
+            || { id: 'generico', nome: 'Negócio', paletas_sugeridas: [] };
+        const { demo, identidade } = await digitalizeApp.computeDemoPreview({ businessType, dados: state.dados });
+        return res.json({
+            nome: state.dados.nome_negocio || '',
+            businessType,
+            demo,
+            demoHtml: '',
+            demoHtmlCustom: '',
+            demoHtmlSource: '',
+            demoVisual: '',
+            identidade,
+            dados: state.dados
+        });
+    } catch (err) {
+        console.error('digitalize preview error:', err.message);
+        return res.status(500).json({ error: 'Não foi possível gerar a pré-visualização.' });
+    }
+});
+
 app.patch('/api/digitalize/sessoes/:token/dados', (req, res) => {
     const ip = req.ip || 'unknown';
     if (digitalizeAppLimiter.isLimited(ip)) {
@@ -2306,6 +2336,48 @@ app.get('/api/digitalize/sessoes/:token/crescimento', (req, res) => {
     } catch (err) {
         console.error('digitalize crescimento error:', err.message);
         return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel carregar.' });
+    }
+});
+
+// Public, non-secret \u2014 an OAuth client ID is meant to be visible client-side.
+// Lets the login screen know whether the Google button can actually work.
+app.get('/api/digitalize/config', (req, res) => {
+    res.json({
+        googleConfigured: digitalizeGoogleAuth.isConfigured(),
+        googleClientId: digitalizeGoogleAuth.isConfigured() ? digitalizeGoogleAuth.clientId() : ''
+    });
+});
+
+// Verifies the ID token Google Identity Services hands back client-side,
+// then prefills the dossier with real name/email \u2014 no password, no account
+// created on our side, just a faster, honest version of the same doors.
+app.post('/api/digitalize/sessoes/:token/auth/google', async (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeAuthLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiados pedidos. Aguarde um minuto.' });
+    }
+    if (!digitalizeGoogleAuth.isConfigured()) {
+        return res.status(503).json({ error: 'Login com Google ainda n\u00e3o est\u00e1 configurado.' });
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        const { nome, email, emailVerificado } = await digitalizeGoogleAuth.verifyIdToken((req.body || {}).credential);
+        const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
+            || { id: 'generico', campos_obrigatorios: [], perguntas_especificas: [] };
+        digitalizeApp.patchDados(db, {
+            leadId: state.leadId,
+            businessType,
+            patch: {
+                google_nome: cleanText(nome, 160),
+                email: emailVerificado ? cleanText(email, 200) : (state.dados.email || '')
+            }
+        });
+        return res.json(digitalizeSessionResponse(digitalizeApp.getSession(db, req.params.token)));
+    } catch (err) {
+        console.error('digitalize google auth error:', err.message);
+        return res.status(401).json({ error: 'N\u00e3o foi poss\u00edvel validar a conta Google.' });
     }
 });
 
