@@ -517,8 +517,11 @@ async function renderEmailDoor(container) {
 function renderLogin() {
     const root = document.getElementById('app');
     root.innerHTML = '';
-    const screen = el('div', 'dz-screen');
+    // --bleed: this screen's own dark-green card reaches the true edges, so the
+    // usual side padding moves onto the topbar alone instead of the whole screen.
+    const screen = el('div', 'dz-screen dz-screen--bleed');
     const topbar = el('div', 'dz-topbar');
+    topbar.style.padding = '4px 20px 18px';
     topbar.appendChild(backSpacer()); // no back on the very first screen
     screen.appendChild(topbar);
     const scroll = el('div', 'dz-scroll');
@@ -556,8 +559,9 @@ function renderLogin() {
 function renderWelcomeBanner() {
     const root = document.getElementById('app');
     root.innerHTML = '';
-    const screen = el('div', 'dz-screen');
+    const screen = el('div', 'dz-screen dz-screen--bleed');
     const topbar = el('div', 'dz-topbar');
+    topbar.style.padding = '4px 20px 18px';
     topbar.appendChild(backSpacer());
     screen.appendChild(topbar);
     const scroll = el('div', 'dz-scroll');
@@ -1851,8 +1855,9 @@ function renderConfirmarPagamento() {
 function renderCelebrate() {
     const root = document.getElementById('app');
     root.innerHTML = '';
-    const screen = el('div', 'dz-screen');
+    const screen = el('div', 'dz-screen dz-screen--bleed');
     const topbar = el('div', 'dz-topbar');
+    topbar.style.padding = '4px 20px 18px';
     topbar.appendChild(backSpacer());
     topbar.appendChild(el('div', 'dz-spacer'));
     if (state.session) topbar.appendChild(el('span', 'dz-points', `${state.session.pontos} pts`));

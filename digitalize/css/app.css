@@ -30,15 +30,6 @@ html, body {
     background: var(--dz-bg);
 }
 
-html {
-    /* Pins the page to the viewport outright — iOS Safari's overflow:hidden alone still
-       lets a fast swipe rubber-band the whole document and briefly reveal Safari's own
-       chrome color underneath. This is what makes it feel fixed/app-like instead. */
-    position: fixed;
-    inset: 0;
-    width: 100%;
-}
-
 body {
     color: var(--dz-ink);
     font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
@@ -69,13 +60,24 @@ body {
     overflow: hidden;
 }
 
+/* Login/welcome-banner/celebrate: their own dark-green card should reach the true
+   left/right edges. Side padding moves onto their topbar instead (set inline, since
+   only those three screens need it) so the screen's own body can bleed edge to edge
+   without depending on a negative-margin escape — that reads as full-bleed in Chromium
+   but real Safari clips it against .dz-scroll's overflow-x: hidden below, leaving an
+   inset "boxed" card instead of a full-bleed one.
+   The background color also moves onto .dz-screen itself: the safe-area padding above
+   the topbar and below .dz-scroll (notch/home-indicator clearance) was still showing
+   .dz-app's cream through — a visible seam of the "wrong" color top and bottom even
+   once the sides were fixed. */
+.dz-screen--bleed { padding-left: 0; padding-right: 0; background: #12261c; }
+
 /* A node/path screen's own scrolling region — header stays put, this scrolls. */
 .dz-scroll {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    overflow-x: hidden; /* without this, overflow-y:auto implicitly makes overflow-x 'auto' too (CSS quirk), and the
-                            full-bleed screens' negative side margins then register as real horizontal scroll —
+    overflow-x: hidden; /* without this, overflow-y:auto implicitly makes overflow-x 'auto' too (CSS quirk) —
                             a trackpad swipe or the browser's own find-in-page can shift the whole screen sideways */
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain; /* scrolling past this list's edge stays here, doesn't bounce the fixed page under it */
@@ -599,7 +601,7 @@ body {
 /* ---------- Login door screen ---------- */
 .dz-login-screen {
     flex: 1; display: flex; flex-direction: column; justify-content: center;
-    background: #12261c; color: #f4f1ea; margin: 0 -20px; padding: 30px 26px calc(30px + env(safe-area-inset-bottom));
+    background: #12261c; color: #f4f1ea; padding: 30px 26px calc(30px + env(safe-area-inset-bottom));
     min-height: 100%;
 }
 .dz-login-kicker { font-size: 0.76rem; letter-spacing: 0.14em; text-transform: uppercase; color: #84b199; font-weight: 700; }
@@ -748,7 +750,7 @@ body {
 /* ---------- Celebrate screen ---------- */
 .dz-celebrate {
     flex: 1; display: flex; flex-direction: column; justify-content: center;
-    background: #12261c; color: #f4f1ea; margin: 0 -20px; padding: 30px 26px calc(30px + env(safe-area-inset-bottom));
+    background: #12261c; color: #f4f1ea; padding: 30px 26px calc(30px + env(safe-area-inset-bottom));
     min-height: 100%;
 }
 .dz-celebrate-kicker { font-size: 0.76rem; letter-spacing: 0.14em; text-transform: uppercase; color: #84b199; font-weight: 700; }
