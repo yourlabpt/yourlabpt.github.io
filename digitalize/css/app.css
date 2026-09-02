@@ -26,7 +26,17 @@ html, body {
     margin: 0;
     height: 100%;
     overflow: hidden; /* the screen itself scrolls internally, never the page */
+    overscroll-behavior: none; /* no rubber-band bounce revealing anything behind the page */
     background: var(--dz-bg);
+}
+
+html {
+    /* Pins the page to the viewport outright — iOS Safari's overflow:hidden alone still
+       lets a fast swipe rubber-band the whole document and briefly reveal Safari's own
+       chrome color underneath. This is what makes it feel fixed/app-like instead. */
+    position: fixed;
+    inset: 0;
+    width: 100%;
 }
 
 body {
@@ -68,6 +78,7 @@ body {
                             full-bleed screens' negative side margins then register as real horizontal scroll —
                             a trackpad swipe or the browser's own find-in-page can shift the whole screen sideways */
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain; /* scrolling past this list's edge stays here, doesn't bounce the fixed page under it */
 }
 .dz-scroll::-webkit-scrollbar { width: 0; height: 0; }
 
@@ -752,20 +763,4 @@ body {
 .dz-celebrate-btn {
     margin-top: 26px; height: 54px; border-radius: 16px; background: #f4f1ea; color: #12261c; border: none;
     font: inherit; font-size: 1.02rem; font-weight: 700; cursor: pointer; flex: 0 0 auto;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --dz-bg: #17171a;
-        --dz-surface: #212124;
-        --dz-fill: #2a2a2e;
-        --dz-ink: #f4f2ec;
-        --dz-muted: #9b9a94;
-        --dz-border: rgba(244, 242, 236, 0.12);
-        --dz-accent: #4ade80;
-        --dz-accent-ink: #06210f;
-        --dz-accent-fill: rgba(74, 222, 128, 0.12);
-    }
-    .dz-price-block { background: var(--dz-surface); border: 1px solid var(--dz-border); }
-    .dz-btn-primary { background: var(--dz-ink); color: var(--dz-bg); }
 }

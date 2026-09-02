@@ -131,6 +131,16 @@ function flash(message, kind) {
     flashTimer = setTimeout(() => node.remove(), 4200);
 }
 
+// A disabled button, not a bare div — .dz-back:disabled is what actually hides
+// the circle via CSS. A plain div never picks that up and renders as a solid
+// grey ball with nothing in it, floating in the corner for no visible reason.
+function backSpacer() {
+    const btn = el('button', 'dz-back', '‹');
+    btn.type = 'button';
+    btn.disabled = true;
+    return btn;
+}
+
 // ---------- Shell ----------
 // Every screen shares this: a fixed header (back / kicker / points) and a
 // scrolling body — the page itself never scrolls (see app.css), only this.
@@ -509,7 +519,7 @@ function renderLogin() {
     root.innerHTML = '';
     const screen = el('div', 'dz-screen');
     const topbar = el('div', 'dz-topbar');
-    topbar.appendChild(el('div', 'dz-back')); // spacer, no back on the very first screen
+    topbar.appendChild(backSpacer()); // no back on the very first screen
     screen.appendChild(topbar);
     const scroll = el('div', 'dz-scroll');
     screen.appendChild(scroll);
@@ -548,7 +558,7 @@ function renderWelcomeBanner() {
     root.innerHTML = '';
     const screen = el('div', 'dz-screen');
     const topbar = el('div', 'dz-topbar');
-    topbar.appendChild(el('div', 'dz-back'));
+    topbar.appendChild(backSpacer());
     screen.appendChild(topbar);
     const scroll = el('div', 'dz-scroll');
     screen.appendChild(scroll);
@@ -1843,7 +1853,7 @@ function renderCelebrate() {
     root.innerHTML = '';
     const screen = el('div', 'dz-screen');
     const topbar = el('div', 'dz-topbar');
-    topbar.appendChild(el('div', 'dz-back'));
+    topbar.appendChild(backSpacer());
     topbar.appendChild(el('div', 'dz-spacer'));
     if (state.session) topbar.appendChild(el('span', 'dz-points', `${state.session.pontos} pts`));
     screen.appendChild(topbar);
