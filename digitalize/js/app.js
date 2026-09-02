@@ -196,7 +196,7 @@ const NODES = [
     { id: 'tipo', isl: 0, chave: 'q1_tipo', pts: 20, kind: 'tipo', titulo: 'Tem loja ou vai a casa das pessoas?', lede: 'Isto muda o site todo. É a única pergunta grande.' },
     { id: 'nome', isl: 0, chave: 'q2_nome', pts: 20, campo: 'nome_negocio', suggestCampo: 'google_nome', kind: 'confirm', titulo: 'Como se chama o negócio?', lede: 'É o que vai aparecer no topo do site.', placeholder: 'Ex.: Canalizações Ferreira' },
     { id: 'oficio', isl: 0, chave: 'q3_oficio', pts: 40, campo: 'o_que_faz', kind: 'descricao', titulo: 'O que faz, em poucas palavras?', lede: 'Escolha a frase mais parecida — ou escreva a sua.' },
-    { id: 'zonas', isl: 0, chave: 'q4_zonas', pts: 30, campo: 'cidade', kind: 'texto', titulo: 'Onde trabalha?', lede: 'Cidade principal — pode falar de mais zonas no site depois.', placeholder: 'Ex.: Porto' },
+    { id: 'zonas', isl: 0, chave: 'q4_zonas', pts: 30, campo: 'cidade', kind: 'cidade', titulo: 'Onde trabalha?', lede: 'Cidade principal — pode falar de mais zonas no site depois.', placeholder: 'Nome da cidade ou concelho' },
     { id: 'contacto', isl: 0, chave: 'q5_telefone', pts: 40, campo: 'telefone', kind: 'texto', inputType: 'tel', titulo: 'Qual o telefone / WhatsApp?', lede: 'É como os clientes o contactam a partir do site.', placeholder: '9xx xxx xxx' },
     { id: 'servicos', isl: 0, chave: 'q6_servicos', pts: 40, campo: 'servicos_passo_estado', kind: 'servicos', titulo: 'Quais são os seus serviços?', lede: 'Escolha da lista — não precisa de escrever nada.' },
     { id: 'horario', isl: 0, chave: 'q7_horario', pts: 40, campo: 'horario', kind: 'horario', titulo: 'Quando trabalha?', lede: 'O horário que aparece no site.' },
@@ -359,7 +359,9 @@ async function renderGoogleDoor(container) {
         const holder = el('div', 'dz-google-btn-holder');
         container.appendChild(holder);
         window.google.accounts.id.renderButton(holder, {
-            type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill',
+            // filled_white, not filled_black — a black pill barely reads against the
+            // dark green login screen, and white matches the disabled-state fallback below.
+            type: 'standard', theme: 'filled_white', size: 'large', shape: 'pill',
             text: 'continue_with', logo_alignment: 'left', width: 336, locale: 'pt_PT'
         });
     } catch (_) {
@@ -377,13 +379,13 @@ function renderWhatsAppDoor(container) {
     const waBadge = el('div', 'dz-door-badge');
     waBadge.style.color = '#fff';
     waBadge.innerHTML = ICON_WHATSAPP_SVG;
-    waBtn.append(waBadge, el('div', '', 'Continuar com WhatsApp'));
+    waBtn.append(waBadge, el('div', '', 'Continuar com o meu número'));
 
     const form = el('div', 'dz-wa-form');
     form.style.display = 'none';
     const input = el('input', 'dz-input');
     input.type = 'tel';
-    input.placeholder = 'O seu número — 9xx xxx xxx';
+    input.placeholder = 'O seu número de WhatsApp — 9xx xxx xxx';
     const submitBtn = el('button', 'dz-btn dz-btn-primary', 'Continuar');
     submitBtn.type = 'button';
     form.append(input, submitBtn);
@@ -416,6 +418,89 @@ function renderWhatsAppDoor(container) {
     container.append(waBtn, form);
 }
 
+// Real one-time-code sign-in by email — sent through the site's own SMTP
+// setup, verified server-side, no third-party account required. Tucked
+// under the two main doors since it's the slower fallback, not the default.
+async function renderEmailDoor(container) {
+    let cfg = { emailConfigured: false };
+    try { cfg = await api('/config'); } catch (_) { /* fall through — link still shown, click reports the real reason */ }
+
+    const link = el('button', 'dz-login-other-link', 'Também pode entrar por email.');
+    link.type = 'button';
+    const wrap = el('div', 'dz-email-form');
+    wrap.style.display = 'none';
+    container.append(link, wrap);
+
+    let stage = 'email';
+    let sentTo = '';
+
+    const paint = () => {
+        wrap.innerHTML = '';
+        if (stage === 'email') {
+            const input = el('input', 'dz-input');
+            input.type = 'email';
+            input.placeholder = 'oseuemail@exemplo.pt';
+            const btn = el('button', 'dz-btn dz-btn-primary', 'Enviar código');
+            btn.type = 'button';
+            const submit = async () => {
+                const value = clean(input.value);
+                if (!value) { toast('Escreva o seu email.'); return; }
+                if (!cfg.emailConfigured) { toast('Login por email ainda não está configurado.'); return; }
+                btn.disabled = true;
+                try {
+                    await ensureSession();
+                    await api(`/sessoes/${encodeURIComponent(state.token)}/auth/email/request`, { method: 'POST', body: { email: value } });
+                    sentTo = value;
+                    stage = 'code';
+                    paint();
+                } catch (err) {
+                    toast(err.message || 'Não consegui enviar o código.');
+                    btn.disabled = false;
+                }
+            };
+            btn.addEventListener('click', submit);
+            input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+            wrap.append(input, btn);
+            setTimeout(() => input.focus(), 30);
+        } else {
+            const hint = el('p', 'dz-hint', `Enviámos um código para ${sentTo}.`);
+            hint.style.color = 'rgba(244, 241, 234, 0.6)';
+            const input = el('input', 'dz-input');
+            input.type = 'text';
+            input.inputMode = 'numeric';
+            input.placeholder = '123456';
+            const btn = el('button', 'dz-btn dz-btn-primary', 'Confirmar');
+            btn.type = 'button';
+            const submit = async () => {
+                const code = clean(input.value);
+                if (!code) { toast('Escreva o código recebido.'); return; }
+                btn.disabled = true;
+                try {
+                    await api(`/sessoes/${encodeURIComponent(state.token)}/auth/email/verify`, { method: 'POST', body: { email: sentTo, code } });
+                    await refreshSession();
+                    await enterFlow();
+                } catch (err) {
+                    toast(err.message || 'Código inválido.');
+                    btn.disabled = false;
+                }
+            };
+            btn.addEventListener('click', submit);
+            input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+            const back = el('button', 'dz-login-other-link', 'Usar outro email');
+            back.type = 'button';
+            back.addEventListener('click', () => { stage = 'email'; paint(); });
+            wrap.append(hint, input, btn, back);
+            setTimeout(() => input.focus(), 30);
+        }
+    };
+
+    link.addEventListener('click', () => {
+        link.style.display = 'none';
+        wrap.style.display = 'flex';
+        paint();
+    });
+}
+
 function renderLogin() {
     const root = document.getElementById('app');
     root.innerHTML = '';
@@ -443,7 +528,10 @@ function renderLogin() {
     renderGoogleDoor(googleSlot);
     renderWhatsAppDoor(waSlot);
     login.appendChild(doors);
-    login.appendChild(el('p', 'dz-login-other', 'Também pode entrar por SMS ou email.'));
+
+    const emailSlot = el('div');
+    login.appendChild(emailSlot);
+    renderEmailDoor(emailSlot);
 
     const why = el('div', 'dz-login-why');
     why.appendChild(el('div', 'dz-login-why-title', 'Porque é mais rápido'));
@@ -587,7 +675,7 @@ function renderNode(nodeId) {
     if (hint) scroll.appendChild(el('p', 'dz-node-hint', hint));
 
     const builders = {
-        tipo: bodyTipo, texto: bodyTexto, confirm: bodyConfirm, descricao: bodyDescricao, servicos: bodyServicos,
+        tipo: bodyTipo, texto: bodyTexto, cidade: bodyCidade, confirm: bodyConfirm, descricao: bodyDescricao, servicos: bodyServicos,
         horario: bodyHorario, paleta: bodyPaleta, preview: bodyPreview, dominio: bodyDominio,
         contrato: bodyContrato, pagar: bodyPagar, howto: bodyHowto, whatsapp: bodyWhatsapp,
         link: bodyLink, qr: bodyQr
@@ -704,6 +792,87 @@ function bodyTexto(node, { screen }) {
     setTimeout(() => input.focus(), 30);
 }
 
+// ---- kind: cidade (tap a city block instead of typing — same line-icon style throughout) ----
+const ICON_CITY_PORTO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17c3-6 6-9 10-9s7 3 10 9"/><path d="M2 20h20"/><path d="M6 13v4M12 8v4M18 13v4"/></svg>';
+const ICON_CITY_LISBOA_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="10" rx="2"/><path d="M4 10h16"/><path d="M8 6V4h8v2"/><circle cx="8" cy="19" r="1.4"/><circle cx="16" cy="19" r="1.4"/></svg>';
+const ICON_CITY_BRAGA_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h4v-3h4v-3h4v-3h4v-3h2"/></svg>';
+const ICON_CITY_COIMBRA_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-4 10 4-10 4-10-4z"/><path d="M6 11v4c0 1.5 2.5 3 6 3s6-1.5 6-3v-4"/><path d="M22 9v5"/></svg>';
+const ICON_CITY_OUTRO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.2 7-12a7 7 0 0 0-14 0c0 4.8 7 12 7 12z"/><path d="M12 8v4M10 10h4"/></svg>';
+
+const CIDADES_PRINCIPAIS = [
+    { id: 'Porto', nome: 'Porto', icon: ICON_CITY_PORTO_SVG },
+    { id: 'Lisboa', nome: 'Lisboa', icon: ICON_CITY_LISBOA_SVG },
+    { id: 'Braga', nome: 'Braga', icon: ICON_CITY_BRAGA_SVG },
+    { id: 'Coimbra', nome: 'Coimbra', icon: ICON_CITY_COIMBRA_SVG },
+    { id: 'Outro', nome: 'Outra cidade', icon: ICON_CITY_OUTRO_SVG }
+];
+
+function bodyCidade(node, { screen }) {
+    const scroll = screen.querySelector('.dz-scroll');
+    const d = (state.session && state.session.dados) || {};
+    const already = clean(d[node.campo]);
+    const knownIds = CIDADES_PRINCIPAIS.filter((c) => c.id !== 'Outro').map((c) => c.id);
+    let selected = knownIds.includes(already) ? already : (already ? 'Outro' : '');
+
+    const grid = el('div', 'dz-city-grid');
+    grid.style.marginTop = '18px';
+    scroll.appendChild(grid);
+
+    const customField = el('div', 'dz-field');
+    customField.style.cssText = 'margin-top:12px;display:none';
+    const customInput = el('input', 'dz-input');
+    customInput.placeholder = node.placeholder || 'Nome da cidade ou concelho';
+    if (selected === 'Outro') customInput.value = already;
+    customField.appendChild(customInput);
+    scroll.appendChild(customField);
+
+    const footer = footerOf(screen);
+    const nextBtn = el('button', 'dz-btn dz-btn-primary', 'Continuar');
+    nextBtn.type = 'button';
+    footer.appendChild(nextBtn);
+
+    function syncEnabled() {
+        nextBtn.disabled = selected === 'Outro' ? !clean(customInput.value) : !selected;
+    }
+
+    function paintCards() {
+        grid.innerHTML = '';
+        CIDADES_PRINCIPAIS.forEach((c) => {
+            const card = el('button', `dz-city-card${selected === c.id ? ' is-selected' : ''}`);
+            card.type = 'button';
+            const icon = el('div', 'dz-city-icon');
+            icon.innerHTML = c.icon;
+            card.append(icon, el('div', 'dz-city-name', c.nome));
+            card.addEventListener('click', () => {
+                selected = c.id;
+                customField.style.display = c.id === 'Outro' ? 'block' : 'none';
+                if (c.id === 'Outro') setTimeout(() => customInput.focus(), 30);
+                paintCards();
+                syncEnabled();
+            });
+            grid.appendChild(card);
+        });
+    }
+    paintCards();
+    customField.style.display = selected === 'Outro' ? 'block' : 'none';
+    syncEnabled();
+
+    const submit = async () => {
+        const value = selected === 'Outro' ? clean(customInput.value) : selected;
+        if (!value) return;
+        nextBtn.disabled = true;
+        try {
+            await completeNode(node, { [node.campo]: value });
+        } catch (err) {
+            toast(err.message || 'Não consegui guardar.');
+            syncEnabled();
+        }
+    };
+    nextBtn.addEventListener('click', submit);
+    customInput.addEventListener('input', syncEnabled);
+    customInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); submit(); } });
+}
+
 // ---- kind: confirm (a suggested value from login — "É este? Sim / Corrigir") ----
 function bodyConfirm(node) {
     const scroll = document.querySelector('.dz-scroll');
@@ -713,7 +882,7 @@ function bodyConfirm(node) {
     const already = clean(d[node.campo]);
 
     // Nothing to confirm — same plain text-input node as before.
-    if (!suggested) { bodyTexto(node); return; }
+    if (!suggested) { bodyTexto(node, { screen }); return; }
 
     let editing = Boolean(already) && already !== suggested;
     const wrap = el('div');
@@ -1651,6 +1820,21 @@ const ICON_SHARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="no
 const ICON_PLUS_SQUARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>';
 const ICON_CHECK_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
 
+// The banner is position:fixed at the bottom of the viewport, outside .dz-app's own box,
+// so without this the footer button on every screen renders underneath it (hidden, unclickable).
+// Reserve the equivalent height as bottom padding on .dz-app while the banner is visible.
+let installBannerResizeObserver = null;
+function reserveInstallBannerSpace(banner) {
+    const sync = () => document.documentElement.style.setProperty('--dz-install-banner-h', `${banner.offsetHeight}px`);
+    sync();
+    installBannerResizeObserver = new ResizeObserver(sync);
+    installBannerResizeObserver.observe(banner);
+}
+function releaseInstallBannerSpace() {
+    if (installBannerResizeObserver) { installBannerResizeObserver.disconnect(); installBannerResizeObserver = null; }
+    document.documentElement.style.setProperty('--dz-install-banner-h', '0px');
+}
+
 function showInstallBanner(kind) {
     if (document.querySelector('.dz-install-banner')) return;
     const banner = el('div', 'dz-install-banner');
@@ -1669,15 +1853,16 @@ function showInstallBanner(kind) {
     installBtn.addEventListener('click', async () => {
         if (kind === 'ios') { renderIosInstallSheet(banner); return; }
         const outcome = await triggerInstall();
-        if (outcome) { banner.remove(); dismissInstallPrompt(); }
+        if (outcome) { banner.remove(); releaseInstallBannerSpace(); dismissInstallPrompt(); }
     });
     const closeBtn = el('button', 'dz-install-close', '×');
     closeBtn.type = 'button';
     closeBtn.setAttribute('aria-label', 'Fechar');
-    closeBtn.addEventListener('click', () => { banner.remove(); dismissInstallPrompt(); });
+    closeBtn.addEventListener('click', () => { banner.remove(); releaseInstallBannerSpace(); dismissInstallPrompt(); });
     actions.append(installBtn, closeBtn);
     banner.appendChild(actions);
     document.body.appendChild(banner);
+    reserveInstallBannerSpace(banner);
 }
 
 function renderIosInstallSheet(banner) {
@@ -1714,7 +1899,7 @@ function renderIosInstallSheet(banner) {
     const closeBtn = el('button', 'dz-btn dz-btn-primary', 'Entendi');
     closeBtn.type = 'button';
     closeBtn.style.marginTop = '6px';
-    closeBtn.addEventListener('click', () => { overlay.remove(); if (banner) banner.remove(); dismissInstallPrompt(); });
+    closeBtn.addEventListener('click', () => { overlay.remove(); if (banner) banner.remove(); releaseInstallBannerSpace(); dismissInstallPrompt(); });
     card.appendChild(closeBtn);
     overlay.appendChild(card);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });

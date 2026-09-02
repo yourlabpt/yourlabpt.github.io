@@ -11,6 +11,7 @@
     --dz-danger: #b3261e;
     --dz-radius: 16px;
     --dz-radius-lg: 24px;
+    --dz-install-banner-h: 0px;
     font-size: 16px;
 }
 
@@ -32,9 +33,13 @@ body {
 .dz-app {
     height: 100vh;
     height: 100dvh; /* real viewport, not the address-bar-inflated one — fits as an app, no dead scroll */
+    /* the install banner is position:fixed at the bottom, outside this box — without shrinking
+       here too, it sits on top of the footer button on every screen and hides it */
+    height: calc(100dvh - var(--dz-install-banner-h));
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: height 200ms ease;
 }
 
 .dz-screen {
@@ -45,7 +50,7 @@ body {
     max-width: 480px;
     width: 100%;
     margin: 0 auto;
-    padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+    padding: calc(16px + env(safe-area-inset-top)) 20px calc(16px + env(safe-area-inset-bottom));
     overflow: hidden;
 }
 
@@ -54,6 +59,9 @@ body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden; /* without this, overflow-y:auto implicitly makes overflow-x 'auto' too (CSS quirk), and the
+                            full-bleed screens' negative side margins then register as real horizontal scroll —
+                            a trackpad swipe or the browser's own find-in-page can shift the whole screen sideways */
     -webkit-overflow-scrolling: touch;
 }
 .dz-scroll::-webkit-scrollbar { width: 0; height: 0; }
@@ -260,6 +268,40 @@ body {
 }
 
 .dz-type-chip.is-selected { border-color: var(--dz-accent); background: var(--dz-accent-fill); color: var(--dz-accent); }
+
+.dz-city-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.dz-city-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1.5px solid var(--dz-border);
+    background: var(--dz-surface);
+    border-radius: var(--dz-radius);
+    padding: 16px;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.dz-city-card:hover { border-color: var(--dz-ink); }
+.dz-city-card.is-selected { border-color: var(--dz-accent); background: var(--dz-accent-fill); }
+
+.dz-city-icon {
+    width: 38px; height: 38px; border-radius: 11px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--dz-fill); color: var(--dz-ink);
+}
+.dz-city-icon svg { width: 21px; height: 21px; }
+.dz-city-card.is-selected .dz-city-icon { background: rgba(31, 107, 69, 0.14); color: var(--dz-accent); }
+
+.dz-city-name { font-weight: 700; font-size: 0.92rem; letter-spacing: -0.01em; }
 
 .dz-domain-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 
@@ -534,23 +576,36 @@ body {
 .dz-login-title { font-size: 2rem; line-height: 1.12; font-weight: 700; letter-spacing: -0.03em; margin: 16px 0 0; }
 .dz-login-body { font-size: 1.02rem; line-height: 1.5; color: rgba(244, 241, 234, 0.72); margin: 12px 0 0; }
 .dz-door {
-    height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px;
-    font-size: 1.02rem; font-weight: 700; cursor: pointer; border: none; font: inherit; width: 100%;
+    /* matches the ~40px height Google Identity renders its own "large" button at */
+    height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-size: 0.95rem; font-weight: 700; cursor: pointer; border: none; font: inherit; width: 100%;
 }
 .dz-door:active { transform: scale(0.985); }
 .dz-door-google { background: #f4f1ea; color: #12261c; }
 .dz-door-wa { background: #25d366; color: #08240f; }
-.dz-door-badge { width: 22px; height: 22px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex: 0 0 auto; }
-.dz-login-other { font-size: 0.85rem; color: rgba(244, 241, 234, 0.5); text-align: center; margin-top: 12px; }
+.dz-door-badge { width: 20px; height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: 0 0 auto; }
 .dz-login-why {
     margin-top: 26px; background: rgba(255, 255, 255, 0.06); border-radius: 18px; padding: 16px 18px;
 }
 .dz-login-why-title { font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; color: #84b199; font-weight: 700; }
 .dz-login-why-item { font-size: 0.92rem; line-height: 1.4; color: rgba(244, 241, 234, 0.78); margin-top: 8px; }
-.dz-google-btn-holder { display: flex; justify-content: center; min-height: 44px; }
+.dz-google-btn-holder {
+    display: flex; justify-content: center; align-items: center; height: 44px;
+    /* visible the instant it's on screen, not just once Google's script finishes loading */
+    background: #f4f1ea; border-radius: 22px; overflow: hidden;
+}
 .dz-wa-form { display: flex; gap: 8px; }
-.dz-wa-form .dz-input { flex: 1; height: 56px; border-radius: 16px; border: none; padding: 0 16px; font-size: 1rem; }
-.dz-wa-form .dz-btn { flex: 0 0 auto; padding: 0 20px; }
+.dz-wa-form .dz-input { flex: 1; height: 44px; border-radius: 22px; border: none; padding: 0 16px; font-size: 0.95rem; }
+.dz-wa-form .dz-btn { flex: 0 0 auto; height: 44px; padding: 0 20px; }
+.dz-login-other-link {
+    display: block; width: 100%; text-align: center; background: transparent; border: none; font: inherit;
+    font-size: 0.85rem; color: rgba(244, 241, 234, 0.65); text-decoration: underline; text-underline-offset: 2px;
+    cursor: pointer; padding: 4px 0; margin-top: 12px;
+}
+.dz-login-other-link:hover { color: rgba(244, 241, 234, 0.9); }
+.dz-email-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.dz-email-form .dz-input { height: 44px; border-radius: 22px; border: none; padding: 0 16px; font-size: 0.95rem; }
+.dz-email-form .dz-btn { height: 44px; border-radius: 22px; width: 100%; }
 
 /* ---------- Path (map of islands) screen ---------- */
 .dz-path-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; flex: 0 0 auto; }

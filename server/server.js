@@ -48,6 +48,7 @@ const { createRateLimiter } = require('./lib/rate-limit');
 const { findAvailableDomains } = require('./lib/digitalizept-domains');
 const digitalizeApp = require('./lib/digitalize-app');
 const digitalizeGoogleAuth = require('./lib/digitalize-google-auth');
+const digitalizeEmailAuth = require('./lib/digitalize-email-auth');
 const {
     mergeDemoForResume,
     resumeWizardPosition,
@@ -2344,7 +2345,8 @@ app.get('/api/digitalize/sessoes/:token/crescimento', (req, res) => {
 app.get('/api/digitalize/config', (req, res) => {
     res.json({
         googleConfigured: digitalizeGoogleAuth.isConfigured(),
-        googleClientId: digitalizeGoogleAuth.isConfigured() ? digitalizeGoogleAuth.clientId() : ''
+        googleClientId: digitalizeGoogleAuth.isConfigured() ? digitalizeGoogleAuth.clientId() : '',
+        emailConfigured: digitalizeEmailAuth.isConfigured()
     });
 });
 
@@ -2378,6 +2380,63 @@ app.post('/api/digitalize/sessoes/:token/auth/google', async (req, res) => {
     } catch (err) {
         console.error('digitalize google auth error:', err.message);
         return res.status(401).json({ error: 'N\u00e3o foi poss\u00edvel validar a conta Google.' });
+    }
+});
+
+// One-time code emailed to the person, sent through the site's own SMTP
+// transporter \u2014 real verification, no third-party account needed.
+// isConfigured() gates it exactly like Google: never fakes success.
+app.post('/api/digitalize/sessoes/:token/auth/email/request', async (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeAuthLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiados pedidos. Aguarde um minuto.' });
+    }
+    if (!digitalizeEmailAuth.isConfigured()) {
+        return res.status(503).json({ error: 'Login por email ainda n\u00e3o est\u00e1 configurado.' });
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        const email = normalizeEmail((req.body || {}).email);
+        if (!email) return res.status(400).json({ error: 'Escreva um email v\u00e1lido.' });
+        const code = digitalizeEmailAuth.issueCode(req.params.token, email);
+        const result = await sendProjectNotificationEmail({
+            to: email,
+            subject: `${code} \u2014 o seu c\u00f3digo Digitalize`,
+            text: `O seu c\u00f3digo \u00e9 ${code}. V\u00e1lido por 10 minutos.`,
+            html: `<p>O seu c\u00f3digo \u00e9 <strong style="font-size:20px;letter-spacing:2px">${code}</strong>.</p><p>V\u00e1lido por 10 minutos.</p>`
+        });
+        if (!result.sent) return res.status(502).json({ error: 'N\u00e3o foi poss\u00edvel enviar o email.' });
+        return res.json({ sent: true });
+    } catch (err) {
+        if (err.status) return res.status(err.status).json({ error: err.message });
+        console.error('digitalize email auth request error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel enviar o c\u00f3digo.' });
+    }
+});
+
+app.post('/api/digitalize/sessoes/:token/auth/email/verify', async (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (digitalizeAuthLimiter.isLimited(ip)) {
+        return res.status(429).json({ error: 'Demasiados pedidos. Aguarde um minuto.' });
+    }
+    try {
+        const db = getDigitalizeptDb();
+        const state = digitalizeApp.getSession(db, req.params.token);
+        if (!state) return res.status(404).json({ error: 'Sess\u00e3o n\u00e3o encontrada.' });
+        const email = normalizeEmail((req.body || {}).email);
+        const code = cleanText((req.body || {}).code, 12);
+        if (!email || !code) return res.status(400).json({ error: 'Escreva o c\u00f3digo recebido.' });
+        digitalizeEmailAuth.verifyCode(req.params.token, email, code);
+        const businessType = loadBusinessTypes().find((t) => t.id === state.businessTypeId)
+            || { id: 'generico', campos_obrigatorios: [], perguntas_especificas: [] };
+        digitalizeApp.patchDados(db, { leadId: state.leadId, businessType, patch: { email } });
+        return res.json(digitalizeSessionResponse(digitalizeApp.getSession(db, req.params.token)));
+    } catch (err) {
+        if (err.status) return res.status(err.status).json({ error: err.message });
+        console.error('digitalize email auth verify error:', err.message);
+        return res.status(500).json({ error: 'N\u00e3o foi poss\u00edvel validar o c\u00f3digo.' });
     }
 });
 
