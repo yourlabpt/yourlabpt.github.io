@@ -2309,6 +2309,20 @@
           if (action === 'approved') {
             await window.PdosUI?.reloadProject?.(project.id);
           }
+          const commit = payload.repositoryCommit;
+          if (commit && !commit.skipped) {
+            if (commit.committed) {
+              const refused = commit.outOfScope?.length
+                ? ` ${commit.outOfScope.length} ficheiro(s) fora do módulo foram recusados.`
+                : '';
+              window.showToast?.(
+                `Código enviado para ${commit.branch} (pedido #${commit.changeRequest?.number}).${refused}`,
+                refused ? 'warn' : 'ok'
+              );
+            } else {
+              window.showToast?.(`Aprovado, mas sem commit: ${commit.reason || commit.error}`, 'warn');
+            }
+          }
           if (action === 'approved' && payload.nextWorkItem) {
             const next = payload.nextWorkItem;
             const run = await apiRequest('/agent-runs', {

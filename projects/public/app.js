@@ -1510,6 +1510,9 @@ function renderActiveTab(project, tabId) {
     case 'definicoes':
       renderUsersPanel();
       renderMembers(project);
+      window.ProjectRepositoryUI?.render?.(project);
+      window.OpenspecUI?.render?.(project);
+      window.OrchestrationUI?.render?.(project);
       setReadonlyByRole();
       break;
     case 'agentes':

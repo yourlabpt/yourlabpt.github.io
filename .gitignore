@@ -47,6 +47,11 @@ projects/data/blobs/
 projects/data/snapshots/
 projects/data/store.json.bak
 
+# Encrypted provider credentials and the local key that unwraps them.
+# The rest of projects/data/ is tracked, so these must never live there unignored.
+projects/data/*.secret.json
+projects/data/.secret-key
+
 # Digitalize Portugal sales app (local runtime)
 server/data/digitalizept.db
 server/data/digitalizept.db-*

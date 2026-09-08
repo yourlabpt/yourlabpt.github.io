@@ -9,6 +9,8 @@ const { normalizeMode } = require('./agent-connection-mode');
 const { registerAgentConnectorRoutes } = require('./agent-connector-routes');
 const engineeringState = require('./engineering-state');
 const agentPlatformSettings = require('./agent-platform-settings');
+const agentPersonas = require('./agent-personas');
+const gitRepositories = require('./git-repositories');
 const { resolveRuntimeReachability } = require('./work-items-routes');
 const {
   CONTRACT_ID,
@@ -346,6 +348,11 @@ function registerAgentRuntimeRoutes(app, deps) {
     verifyPassword,
     dataDir,
   } = deps;
+
+  // Set by api.js once the orchestration driver exists. When a chain-driven run
+  // finishes, this is what advances the chain to the next persona.
+  let orchestrationDriver = null;
+  function setOrchestrationDriver(driver) { orchestrationDriver = driver; }
 
   const { createAgentRuntimeClient } = require('./agent-runtime-client');
   const runtime = createAgentRuntimeClient();
@@ -764,13 +771,43 @@ function registerAgentRuntimeRoutes(app, deps) {
     const review = reviewRaw && deliveryOs.isActionableReviewForPanel(normalizeHumanReview(reviewRaw))
       ? normalizeHumanReview(reviewRaw)
       : null;
-    return {
+    const outcome = {
       projectId,
       promptRunId: runId,
       review,
       deferred: deferApply,
       noChanges: Boolean(parsed && !review),
     };
+
+    // The chain propagates itself: a finished persona run records its result and the
+    // next persona is dispatched immediately. Advancing must never break the result
+    // that already landed, so a driver failure is logged and swallowed.
+    if (orchestrationDriver) {
+      try {
+        const snapshot = await readStore();
+        const project = snapshot.projects.find((entry) => entry.id === projectId);
+        const personaId = orchestrationDriver.personaIdForWorkItem(project, workItemIdForRun(project, runId));
+        if (personaId) {
+          await orchestrationDriver.recordAndAdvance(projectId, {
+            personaId,
+            workItemId: workItemIdForRun(project, runId),
+            outcome: 'completed',
+            summary: textOr(review?.summaryMarkdown).slice(0, 400),
+          });
+        }
+      } catch (error) {
+        console.error('[orchestration] falha ao avancar a cadeia:', error.message);
+      }
+    }
+
+    return outcome;
+  }
+
+  /** The work item a prompt run belongs to. */
+  function workItemIdForRun(project, runId) {
+    const job = ensureArray(project?.agentJobs).find((entry) => entry.promptRunId === runId);
+    return textOr(job?.workItemId)
+      || textOr(ensureArray(project?.promptRuns).find((entry) => entry.id === runId)?.workItemId);
   }
 
   async function validateAgentOutput(dispatch, rawInput) {
@@ -1150,16 +1187,27 @@ function registerAgentRuntimeRoutes(app, deps) {
     } catch (error) { return res.status(503).json({ message: `Agent Runtime indisponivel: ${error.message}`, reachable: false }); }
   });
 
-  app.post('/api/projects/agent-runs', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+  /**
+   * Starts one agent run. Extracted from the HTTP handler so the orchestration
+   * chain can dispatch without going back out through the network — the route
+   * below is now a thin wrapper over exactly this logic.
+   *
+   * Returns { status, body } instead of writing to a response.
+   */
+  function httpResult(status) {
+    return { json: (body) => ({ status, body }) };
+  }
+
+  async function startAgentRun(input = {}) {
     try {
       if (connectionMode === 'disabled') {
-        return res.status(503).json({ message: 'Execucao por agente desativada.' });
+        return httpResult(503).json({ message: 'Execucao por agente desativada.' });
       }
       if (connectionMode === 'remote_pull' && !connectorStore) {
-        return res.status(503).json({ message: 'Fila segura de agentes indisponivel.' });
+        return httpResult(503).json({ message: 'Fila segura de agentes indisponivel.' });
       }
       if (connectionMode === 'remote_pull' && !connectorStore.activeConnector()) {
-        return res.status(409).json({
+        return httpResult(409).json({
           message: 'Emparelhe um Agent Runtime em Projects → Definições antes de executar.',
         });
       }
@@ -1171,23 +1219,23 @@ function registerAgentRuntimeRoutes(app, deps) {
         options: bodyOptions = {},
         agentRequestId: requestedAgentRequestId,
         workItemId: requestedWorkItemId,
-      } = req.body || {};
+      } = input;
 
       let options = bodyOptions;
       let budget = bodyBudget;
       let agentId = bodyAgentId || runtime.mapPlatformType(agentType);
 
       if (!projectId || !agentId) {
-        return res.status(400).json({ message: 'projectId e agentId (ou agentType) sao obrigatorios.' });
+        return httpResult(400).json({ message: 'projectId e agentId (ou agentType) sao obrigatorios.' });
       }
       if (!requestedWorkItemId) {
-        return res.status(400).json({ message: 'workItemId e obrigatorio. Crie e aprove uma tarefa canonica antes de iniciar o agente.' });
+        return httpResult(400).json({ message: 'workItemId e obrigatorio. Crie e aprove uma tarefa canonica antes de iniciar o agente.' });
       }
 
       const store = await readStore();
       const project = store.projects.find((entry) => entry.id === projectId);
       if (!project) {
-        return res.status(404).json({ message: 'Projeto nao encontrado.' });
+        return httpResult(404).json({ message: 'Projeto nao encontrado.' });
       }
 
       let platformAgentType = runtime.mapAgentId(agentId);
@@ -1234,7 +1282,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         if (RESTARTABLE_TASK_STATUSES.has(canonicalTask.status)) {
           resetTaskForRestart(mutableProject, canonicalTask.id, {
             at: nowIso(),
-            actorUserId: req.auth.user.id,
+            actorUserId: input.actorUserId,
           });
           canonicalTask = workItems.findWorkItem(mutableProject, requestedWorkItemId);
           tasks = workItems.getWorkItems(mutableProject)
@@ -1324,7 +1372,7 @@ function registerAgentRuntimeRoutes(app, deps) {
       }
 
       if (!delegatedTask) {
-        return res.status(202).json({
+        return httpResult(202).json({
           requiresApproval: true,
           agentRequest: delegation.request,
           workItems: workItems.toSlimCards(delegation.tasks),
@@ -1347,7 +1395,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         targetOutput: built.targetOutput,
         contextPack: built.contextPack,
         fullPrompt: built.fullPrompt,
-        createdBy: req.auth.user.id,
+        createdBy: input.actorUserId,
         workItemId: delegatedTask.id,
         agentRequestId: delegation.request.id,
         summaryMarkdown: `YourLab Agent: ${agentId}`,
@@ -1368,7 +1416,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         budget,
         createdAt: nowIso(),
         updatedAt: nowIso(),
-        createdBy: req.auth.user.id,
+        createdBy: input.actorUserId,
         workItemId: delegatedTask.id,
         agentRequestId: delegation.request.id,
       };
@@ -1385,7 +1433,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         mutableProject.updatedAt = nowIso();
 
         appendActivity(mutableStore, {
-          actorUserId: req.auth.user.id,
+          actorUserId: input.actorUserId,
           projectId,
           action: 'agent_run_dispatched',
           details: { agentId, promptRunId: run.id, workItemId: delegatedTask.id, agentRequestId: delegation.request.id },
@@ -1429,6 +1477,30 @@ function registerAgentRuntimeRoutes(app, deps) {
         const engineeringInstructions = engineeringPilot
           ? `\n\n## Proposta de engenharia (piloto)\nAlém do output legado obrigatório, inclui opcionalmente um campo engineeringChangeSet conforme engineering-change-set/v1. Usa exatamente projectId=${projectId}, taskId=${delegatedTask.id}, runId=${run.id} e baseEngineeringRevision=${engineeringContext.baseEngineeringRevision}. Coloca-o no topo da resposta ou dentro do output da subtask correspondente. Todas as secções são apenas propostas para revisão humana. Não apliques alterações e não cries Tasks.`
           : '';
+        // A code-writing persona needs to know which repository and which module it is
+        // allowed to touch. The token is deliberately absent: the runtime returns file
+        // contents and the platform commits them after review.
+        const codePersona = agentPersonas.listPersonas()
+          .find((persona) => persona.taskTypes.includes(platformAgentType) && persona.canWriteCode) || null;
+        const linkedRepository = codePersona
+          ? gitRepositories.normalizeProjectRepository(project.repository)
+          : null;
+        const repositoryContext = linkedRepository ? {
+          provider: linkedRepository.provider,
+          fullName: linkedRepository.fullName,
+          cloneUrl: linkedRepository.cloneUrl,
+          defaultBranch: linkedRepository.defaultBranch,
+          specRoot: 'openspec/',
+          moduleName: textOr(delegatedTask.moduleName),
+          allowedPaths: ensureArray(delegatedTask.repositoryPaths),
+          writeScope: codePersona.writeScope,
+          rules: [
+            'Devolve o conteudo completo de cada ficheiro alterado em changedFiles[].path e .content.',
+            'Nao alteres ficheiros fora do teu modulo — serao recusados na escrita.',
+            'Nao facas commit nem push: a plataforma escreve apos revisao humana.',
+          ],
+        } : null;
+
         const frozenPackage = buildFrozenTaskPackage({
           projectId,
           workItemId: delegatedTask.id,
@@ -1444,6 +1516,7 @@ function registerAgentRuntimeRoutes(app, deps) {
           context: {
             ...built.contextPack,
             ...(engineeringContext ? { engineering: engineeringContext } : {}),
+            ...(repositoryContext ? { repository: repositoryContext } : {}),
           },
           taskGraph: canonicalPackage.children?.map((task) => ({
             id: task.id,
@@ -1517,7 +1590,7 @@ function registerAgentRuntimeRoutes(app, deps) {
             request.updatedAt = nowIso();
           }
         });
-        return res.status(202).json({
+        return httpResult(202).json({
           agentJob: { ...agentJob, status: 'queued', dispatchId: dispatch.id, packageHash: dispatch.packageHash },
           promptRun: run,
           compatibilityPending: compatibilityPendingReasons.length > 0,
@@ -1562,7 +1635,7 @@ function registerAgentRuntimeRoutes(app, deps) {
           const failedTask = workItems.findWorkItem(mutableProject, delegatedTask.id);
           if (failedTask) await notifyActionable(mutableStore, mutableProject, { type: 'task_failed', task: failedTask, request: delegation.request, title: 'Tarefa do agente falhou', message: `A tarefa “${failedTask.title}” precisa de intervenção: ${error.message}` });
         });
-        return res.status(502).json({ message: `Agent runtime indisponivel: ${error.message}` });
+        return httpResult(502).json({ message: `Agent runtime indisponivel: ${error.message}` });
       }
 
       await updateStore(async (mutableStore) => {
@@ -1594,7 +1667,7 @@ function registerAgentRuntimeRoutes(app, deps) {
         }
       });
 
-      return res.status(201).json({
+      return httpResult(201).json({
         agentJob: { ...agentJob, yarJobId: yarResponse?.job?.id, status: yarResponse?.job?.status || 'queued' },
         promptRun: run,
         agentRequest: delegation.request,
@@ -1602,8 +1675,16 @@ function registerAgentRuntimeRoutes(app, deps) {
         yarJob: yarResponse?.job,
       });
     } catch (error) {
-      return res.status(500).json({ message: error.message });
+      return httpResult(500).json({ message: error.message });
     }
+  }
+
+  app.post('/api/projects/agent-runs', authMiddleware, requireAgentProjectEditor, async (req, res) => {
+    const result = await startAgentRun({
+      ...(req.body || {}),
+      actorUserId: req.auth?.user?.id || '',
+    });
+    return res.status(result.status).json(result.body);
   });
 
   app.get('/api/projects/agent-runs/:runId/status', authMiddleware, requireAgentProjectEditor, async (req, res) => {
@@ -2389,14 +2470,44 @@ function registerAgentRuntimeRoutes(app, deps) {
   app.patch('/api/projects/agent-platform/settings', authMiddleware, requireRole('super_admin'), async (req, res) => {
     try {
       const body = req.body || {};
+      const patch = {};
+      if (body.executionDefaults) patch.executionDefaults = body.executionDefaults;
+      if (body.personas) {
+        for (const personaId of Object.keys(body.personas)) {
+          if (!agentPersonas.isPersonaId(personaId)) {
+            return res.status(400).json({ message: `Persona desconhecida: ${personaId}` });
+          }
+        }
+        patch.personas = body.personas;
+      }
       const settings = await agentPlatformSettings.writeAgentPlatformSettings(
         dataDir,
-        { executionDefaults: body.executionDefaults || {} },
+        patch,
         req.auth?.user?.id || '',
       );
       return res.json({ settings });
     } catch (error) {
       return res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Persona registry + live binding to whatever the connected runtime actually offers.
+  app.get('/api/projects/agent-platform/personas', authMiddleware, requireRole('super_admin'), async (req, res) => {
+    try {
+      const settings = await agentPlatformSettings.readAgentPlatformSettings(dataDir);
+      const connector = connectorStore?.activeConnector() || null;
+      const capabilities = connector?.capabilities || { agents: [], tools: [] };
+      return res.json({
+        pipelineSteps: agentPersonas.PIPELINE_STEPS,
+        modelProfiles: agentPersonas.MODEL_PROFILES,
+        runtimeTiers: agentPersonas.RUNTIME_TIER_BY_PROFILE,
+        connector: connector
+          ? { id: connector.id, name: connector.name, runtimeVersion: connector.runtimeVersion }
+          : null,
+        personas: agentPersonas.personaBindingReport(capabilities, settings.personas),
+      });
+    } catch (error) {
+      return res.status(500).json({ message: error.message });
     }
   });
 
@@ -2617,6 +2728,10 @@ function registerAgentRuntimeRoutes(app, deps) {
       return res.status(500).json({ message: error.message });
     }
   });
+
+  // Handed to the orchestration driver so the chain can dispatch a persona directly,
+  // without a second execution path or a self-directed HTTP call.
+  return { startAgentRun, setOrchestrationDriver };
 }
 
 function agentFriendlyName(agentType) {

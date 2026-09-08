@@ -8,6 +8,18 @@
     runs: [],
     health: null,
     connectors: [],
+    personas: [],
+    modelProfiles: [],
+    personaConnector: null,
+  };
+
+  const WRITE_SCOPE_LABELS = {
+    spec: 'Especificação',
+    design: 'Desenho',
+    contracts: 'Contratos',
+    module_code: 'Código do módulo',
+    tests: 'Testes',
+    none: 'Sem escrita',
   };
 
   function $(id) { return document.getElementById(id); }
@@ -95,6 +107,155 @@
     `;
   }
 
+  function personaBindingBadge(persona) {
+    if (!state.personaConnector) {
+      return '<span class="section-badge badge-gray">Sem runtime ligado</span>';
+    }
+    if (persona.pinnedAgentMissing) {
+      return '<span class="section-badge badge-red">Agente fixado indisponível</span>';
+    }
+    if (!persona.satisfied) {
+      const blocked = persona.candidates.find((candidate) => candidate.typeMatch);
+      const detail = blocked?.missingTools?.length
+        ? `Faltam ferramentas: ${blocked.missingTools.join(', ')}`
+        : 'Nenhum agente declara este tipo de tarefa';
+      return `<span class="section-badge badge-amber" title="${escapeHtml(detail)}">Sem agente compatível</span>`;
+    }
+    return `<span class="section-badge badge-green">${escapeHtml(persona.boundAgentName || persona.boundAgentId)}</span>`;
+  }
+
+  function renderPersonas() {
+    const host = $('agentsPersonasList');
+    if (!host) return;
+    if (!state.personas.length) {
+      host.innerHTML = '<p class="muted-text">Registo de personas indisponível.</p>';
+      return;
+    }
+    host.innerHTML = state.personas.map((persona) => {
+      const options = state.modelProfiles.map((profile) => `
+        <option value="${escapeHtml(profile)}"${profile === persona.modelProfileId ? ' selected' : ''}>${escapeHtml(profile)}</option>
+      `).join('');
+      const agentOptions = ['<option value="">Automático</option>']
+        .concat(persona.candidates.map((candidate) => `
+          <option value="${escapeHtml(candidate.agentId)}"${candidate.agentId === persona.boundAgentId && persona.pinnedAgentMissing === false ? '' : ''}>
+            ${escapeHtml(candidate.name)}${candidate.eligible ? '' : ' (incompatível)'}
+          </option>
+        `))
+        .join('');
+      return `
+        <article class="agents-persona-row read-card" data-persona-id="${escapeHtml(persona.personaId)}">
+          <div class="panel-title-row">
+            <div>
+              <strong>${persona.order}. ${escapeHtml(persona.label)}</strong>
+              <p class="muted-text">${escapeHtml(persona.pipelineSteps.join(' · '))} — fases: ${escapeHtml(persona.deliveryStages.join(', '))}</p>
+            </div>
+            ${personaBindingBadge(persona)}
+          </div>
+          <div class="form-grid compact mt-8">
+            <label>Perfil do modelo<select data-persona-field="modelProfileId">${options}</select></label>
+            <label>Agente do runtime<select data-persona-field="agentId">${agentOptions}</select></label>
+            <label>Limite tokens<input type="number" min="0" data-persona-field="maxTokens" value="${Number(persona.maxTokens) || 0}" /></label>
+            <label>Tempo máximo (min)<input type="number" min="0" data-persona-field="maxWallClockMinutes" value="${Number(persona.maxWallClockMinutes) || 0}" /></label>
+            <label class="checkline"><input type="checkbox" data-persona-field="enabled"${persona.enabled ? ' checked' : ''} /> Activa</label>
+            <label class="checkline"><input type="checkbox" data-persona-field="requiresHumanApproval"${persona.requiresHumanApproval ? ' checked' : ''} /> Exige aprovação humana</label>
+          </div>
+          <p class="muted-text mt-8">
+            Escreve: <strong>${escapeHtml(WRITE_SCOPE_LABELS[persona.writeScope] || persona.writeScope)}</strong>
+            · Código: ${persona.canWriteCode ? 'sim' : 'não'}
+            · Tier no runtime: <code>${escapeHtml(persona.runtimeTier)}</code>
+          </p>
+        </article>
+      `;
+    }).join('');
+    // The pinned agent is a stored override, not the resolved binding — set it after
+    // render so an unavailable pin still shows as "Automático" rather than vanishing.
+    for (const persona of state.personas) {
+      const row = host.querySelector(`[data-persona-id="${persona.personaId}"]`);
+      const select = row?.querySelector('[data-persona-field="agentId"]');
+      const pinned = state.settings?.personas?.[persona.personaId]?.agentId || '';
+      if (select) select.value = pinned;
+    }
+  }
+
+  function readPersonaForm() {
+    const host = $('agentsPersonasList');
+    if (!host) return {};
+    const personas = {};
+    host.querySelectorAll('[data-persona-id]').forEach((row) => {
+      const personaId = row.dataset.personaId;
+      const field = (name) => row.querySelector(`[data-persona-field="${name}"]`);
+      personas[personaId] = {
+        enabled: field('enabled')?.checked !== false,
+        modelProfileId: field('modelProfileId')?.value || 'medium',
+        agentId: field('agentId')?.value || '',
+        maxTokens: Number(field('maxTokens')?.value) || 0,
+        maxWallClockMinutes: Number(field('maxWallClockMinutes')?.value) || 0,
+        requiresHumanApproval: field('requiresHumanApproval')?.checked === true,
+      };
+    });
+    return personas;
+  }
+
+  function renderGitProvider() {
+    const settings = state.git;
+    const host = $('gitProviderStatus');
+    if (!host || !settings) return;
+    if ($('gitProvider')) $('gitProvider').value = settings.provider || 'github';
+    if ($('gitAccount')) $('gitAccount').value = settings.account || '';
+    if ($('gitDefaultOwner')) $('gitDefaultOwner').value = settings.defaultOwner || '';
+    if ($('gitDefaultVisibility')) $('gitDefaultVisibility').value = settings.defaultVisibility || 'private';
+    if ($('gitRepoPrefix')) $('gitRepoPrefix').value = settings.repositoryPrefix || '';
+    if ($('gitApiBaseUrl')) $('gitApiBaseUrl').value = settings.apiBaseUrl || '';
+    if ($('gitToken')) {
+      $('gitToken').value = '';
+      $('gitToken').placeholder = settings.hasToken
+        ? 'Token guardado — escreva um novo para substituir'
+        : 'Cole aqui o token de acesso';
+    }
+
+    const parts = [];
+    if (!settings.hasToken) {
+      parts.push('<span class="section-badge badge-gray">Sem token</span> Configure a conta para poder criar repositórios.');
+    } else if (settings.verifiedAt) {
+      parts.push(`<span class="section-badge badge-green">Ligado como ${escapeHtml(settings.verifiedAccount)}</span> Verificado em ${new Date(settings.verifiedAt).toLocaleString('pt-PT')}.`);
+    } else {
+      parts.push('<span class="section-badge badge-amber">Token por verificar</span> Use “Testar ligação”.');
+    }
+    if (settings.keySource === 'file') {
+      parts.push('<br /><span class="muted-text">Chave de cifra guardada em <code>data/.secret-key</code> (fora do git). Defina <code>PLATFORM_SECRET_KEY</code> no ambiente para a gerir fora do disco.</span>');
+    }
+    host.innerHTML = `<p class="muted-text">${parts.join(' ')}</p>`;
+  }
+
+  async function saveGitProvider() {
+    const body = {
+      provider: $('gitProvider')?.value || 'github',
+      account: $('gitAccount')?.value?.trim() || '',
+      defaultOwner: $('gitDefaultOwner')?.value?.trim() || '',
+      defaultVisibility: $('gitDefaultVisibility')?.value || 'private',
+      repositoryPrefix: $('gitRepoPrefix')?.value?.trim() || '',
+      apiBaseUrl: $('gitApiBaseUrl')?.value?.trim() || '',
+    };
+    // Only send the token when one was typed, so saving never clears a stored one.
+    const typed = $('gitToken')?.value?.trim();
+    if (typed) body.token = typed;
+    const payload = await apiRequest('/git-provider/settings', { method: 'PATCH', body });
+    state.git = payload.settings;
+    renderGitProvider();
+    window.showToast?.('Configuração Git guardada.', 'ok');
+  }
+
+  async function verifyGitProvider() {
+    const payload = await apiRequest('/git-provider/verify', { method: 'POST', body: {} });
+    state.git = payload.settings;
+    renderGitProvider();
+    const owners = (payload.owners || []).map((owner) => owner.label).join(', ');
+    window.showToast?.(
+      `Ligado como ${payload.identity.account}${owners ? ` · ${owners}` : ''}`,
+      'ok'
+    );
+  }
+
   function renderRuns() {
     const host = $('agentsRunsList');
     if (!host) return;
@@ -119,16 +280,24 @@
   async function refresh() {
     if (typeof window.isSuperAdmin === 'function' && !window.isSuperAdmin()) return;
     try {
-      const [healthPayload, settingsPayload, runsPayload] = await Promise.all([
+      const [healthPayload, settingsPayload, runsPayload, personasPayload, gitPayload] = await Promise.all([
         apiRequest('/agent-runs/health').catch(() => ({})),
         apiRequest('/agent-platform/settings'),
         apiRequest('/agent-runs/recent?limit=30'),
+        apiRequest('/agent-platform/personas').catch(() => ({})),
+        apiRequest('/git-provider/settings').catch(() => ({})),
       ]);
+      state.git = gitPayload.settings || null;
       state.health = healthPayload;
       state.settings = settingsPayload.settings;
       state.runs = runsPayload.runs || [];
+      state.personas = personasPayload.personas || [];
+      state.modelProfiles = personasPayload.modelProfiles || [];
+      state.personaConnector = personasPayload.connector || null;
       fillForm(state.settings);
       renderHealth();
+      renderGitProvider();
+      renderPersonas();
       renderRuns();
     } catch (error) {
       const host = $('agentsAdminRoot');
@@ -146,9 +315,28 @@
     window.showToast?.('Definições de agentes guardadas.', 'ok');
   }
 
+  async function savePersonas() {
+    const payload = await apiRequest('/agent-platform/settings', {
+      method: 'PATCH',
+      body: { personas: readPersonaForm() },
+    });
+    state.settings = payload.settings;
+    await refresh();
+    window.showToast?.('Personas guardadas.', 'ok');
+  }
+
   function wireEvents() {
     $('agentsSaveDefaultsBtn')?.addEventListener('click', () => {
       saveDefaults().catch((error) => window.showToast?.(error.message, 'error'));
+    });
+    $('agentsSavePersonasBtn')?.addEventListener('click', () => {
+      savePersonas().catch((error) => window.showToast?.(error.message, 'error'));
+    });
+    $('gitSaveBtn')?.addEventListener('click', () => {
+      saveGitProvider().catch((error) => window.showToast?.(error.message, 'error'));
+    });
+    $('gitVerifyBtn')?.addEventListener('click', () => {
+      verifyGitProvider().catch((error) => window.showToast?.(error.message, 'error'));
     });
     $('agentsRefreshBtn')?.addEventListener('click', () => {
       refresh().catch((error) => window.showToast?.(error.message, 'error'));

@@ -10,6 +10,11 @@ const deliveryOs = require('./delivery-os');
 const stageTransitions = require('./stage-transition-requests');
 const ideaAugmentRequests = require('./idea-augment-requests');
 const agentPlatformSettings = require('./agent-platform-settings');
+const agentPersonas = require('./agent-personas');
+const agentCodeCommit = require('./agent-code-commit');
+const gitRepositories = require('./git-repositories');
+const gitSettings = require('./git-provider-settings');
+const { createGitProviderClient } = require('./git-provider-client');
 
 const ACTIVE_AGENT_STATUSES = new Set([
   'queued', 'claimed', 'running', 'planning', 'researching', 'executing',
@@ -150,7 +155,62 @@ function registerWorkItemRoutes(app, deps) {
     nowIso,
     sendProjectEmail,
     normalizeRequirementRecord,
+    dataDir,
   } = deps;
+
+  /**
+   * A task earns a commit when a code-writing persona produced it and the project has
+   * a repository. Everything else — spec, design, contract work — is approved into the
+   * platform only.
+   */
+  function personaForTask(item) {
+    const agentType = textOr(item?.agentType);
+    const agentId = textOr(item?.agentId);
+    return agentPersonas.listPersonas().find((persona) => (
+      persona.taskTypes.includes(agentType) || persona.id === agentType || persona.id === agentId
+    )) || null;
+  }
+
+  function commitScopeForTask(project, item) {
+    const explicit = workItems.ensureArray(item?.repositoryPaths);
+    if (explicit.length) return { moduleName: textOr(item?.moduleName), modulePaths: explicit };
+    const moduleName = textOr(item?.moduleName)
+      || textOr(workItems.ensureArray(project?.requirements)
+        .find((requirement) => requirement.id === textOr(item?.requirementId))?.module);
+    return { moduleName, modulePaths: [] };
+  }
+
+  /**
+   * Commits an approved agent result into the project's repository. Runs after the
+   * approval is already persisted: a provider outage must not undo a human decision,
+   * so a failure is reported and retryable rather than transactional.
+   */
+  async function commitApprovedTaskToRepository(project, item, attempt) {
+    const persona = personaForTask(item);
+    if (!persona?.canWriteCode) return null;
+    const repository = gitRepositories.normalizeProjectRepository(project.repository);
+    if (!repository) {
+      return { committed: false, reason: 'O projecto nao tem repositorio ligado.', skipped: true };
+    }
+    const parsed = attempt?.parsedOutput
+      || deliveryOs.parseAgentJsonOutput(String(attempt?.rawOutput || '')).parsed;
+    if (!parsed) return { committed: false, reason: 'O resultado nao traz ficheiros estruturados.', skipped: true };
+
+    const settings = await gitSettings.readGitProviderSettings(dataDir);
+    const token = await gitSettings.resolveGitToken(dataDir);
+    const client = createGitProviderClient({
+      provider: settings.provider, apiBaseUrl: settings.apiBaseUrl, token,
+    });
+    const scope = commitScopeForTask(project, item);
+    return agentCodeCommit.commitApprovedChanges(client, repository, {
+      task: item,
+      parsedOutput: parsed,
+      personaId: persona.id,
+      agentId: textOr(item?.agentId),
+      requireScope: persona.scopedToSingleModule === true,
+      ...scope,
+    });
+  }
 
   function linkedExecution(project, item, attempts = item?.attempts || []) {
     const latest = attempts[attempts.length - 1] || null;
@@ -1173,10 +1233,46 @@ function registerWorkItemRoutes(app, deps) {
           ? connectorStore.markReviewed(current.id, action)
           : current;
       }
+
+      let repositoryCommit = null;
+      if (action === 'approved') {
+        try {
+          repositoryCommit = await commitApprovedTaskToRepository(
+            req.loadedProject,
+            updated,
+            updated.attempts[updated.attempts.length - 1]
+          );
+        } catch (error) {
+          // The approval stands; only the commit failed. Say so instead of pretending
+          // the code reached the repository.
+          repositoryCommit = { committed: false, error: error.message };
+        }
+        if (repositoryCommit) {
+          await updateStore(async (store) => {
+            const project = store.projects.find((entry) => entry.id === req.params.projectId);
+            if (!project) return;
+            appendActivity(store, {
+              actorUserId: req.auth.user.id,
+              projectId: project.id,
+              action: repositoryCommit.committed ? 'agent_code_committed' : 'agent_code_commit_skipped',
+              details: {
+                workItemId: updated.id,
+                branch: repositoryCommit.branch,
+                changeRequest: repositoryCommit.changeRequest?.url,
+                fileCount: repositoryCommit.files?.length || 0,
+                outOfScope: repositoryCommit.outOfScope?.map((file) => file.path) || [],
+                reason: repositoryCommit.reason || repositoryCommit.error || '',
+              },
+            });
+          });
+        }
+      }
+
       return res.json({
         workItem: updated,
         agentRequest: updatedRequest,
         nextWorkItem,
+        repositoryCommit,
         connectorReleased: !connectorRunId
           || ['completed', 'failed', 'cancelled'].includes(connectorDispatch?.status),
       });

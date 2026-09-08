@@ -349,6 +349,12 @@ function normalizeWorkItem(raw, options = {}) {
     progressCurrent: Math.max(0, Number(src.progressCurrent ?? src.completedSubtasks) || 0),
     progressTotal: Math.max(0, Number(src.progressTotal ?? src.totalSubtasks) || 0),
     externalRefs, agentType: textOr(src.agentType), executionPlanId: textOr(src.executionPlanId),
+    // Repository write scope for code-writing agents: which module this task owns and
+    // the paths it may touch. Without these a scoped agent is refused the commit.
+    moduleName: textOr(src.moduleName || src.module),
+    repositoryPaths: [...new Set(ensureArray(src.repositoryPaths)
+      .map((entry) => textOr(entry))
+      .filter(Boolean))],
     executionPlanTaskId: textOr(src.executionPlanTaskId), agentJobId: textOr(src.agentJobId), promptRunId: textOr(src.promptRunId),
     agentStatus: textOr(src.agentStatus), resultSummaryMarkdown: textOr(src.resultSummaryMarkdown),
     automationRuleId: textOr(src.automationRuleId), updates: normalizeUpdates(src.updates, options),

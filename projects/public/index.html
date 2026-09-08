@@ -744,6 +744,40 @@
                   </div>
                 </section>
                 <section class="settings-section mt-12">
+                  <div class="panel-title-row">
+                    <div>
+                      <h4>Repositórios Git</h4>
+                      <p class="muted-text">A conta usada para criar e ler os repositórios dos projectos. O trabalho dos agentes acontece no repositório.</p>
+                    </div>
+                    <div class="ado-action-bar">
+                      <button type="button" class="btn tiny ghost" id="gitVerifyBtn">Testar ligação</button>
+                      <button type="button" class="btn primary" id="gitSaveBtn">Guardar</button>
+                    </div>
+                  </div>
+                  <div id="gitProviderStatus" class="mt-8"></div>
+                  <div class="form-grid compact mt-8">
+                    <label>Fornecedor<select id="gitProvider"><option value="github">GitHub</option><option value="gitlab">GitLab</option></select></label>
+                    <label>Conta<input id="gitAccount" placeholder="utilizador ou organização" /></label>
+                    <label class="full">Token de acesso<input id="gitToken" type="password" autocomplete="off" placeholder="Deixe vazio para manter o token guardado" />
+                      <small class="field-help">GitHub: token com <code>repo</code>. GitLab: token com <code>api</code>. Guardado cifrado, nunca é devolvido pela API.</small>
+                    </label>
+                    <label>Dono por omissão<input id="gitDefaultOwner" placeholder="vazio = a sua conta" /></label>
+                    <label>Visibilidade<select id="gitDefaultVisibility"><option value="private">Privado</option><option value="public">Público</option></select></label>
+                    <label>Prefixo dos repositórios<input id="gitRepoPrefix" placeholder="ex.: yourlab" /></label>
+                    <label>URL da API<input id="gitApiBaseUrl" placeholder="deixe vazio para o padrão" /></label>
+                  </div>
+                </section>
+                <section class="settings-section mt-12">
+                  <div class="panel-title-row">
+                    <div>
+                      <h4>Personas da linha de produção</h4>
+                      <p class="muted-text">Intenção → Proposta → OpenSpec → UX → Módulos → Interfaces → Construir → Testar → Integrar. Cada persona liga a um agente do runtime.</p>
+                    </div>
+                    <button type="button" class="btn primary" id="agentsSavePersonasBtn">Guardar personas</button>
+                  </div>
+                  <div id="agentsPersonasList" class="agents-personas-list mt-8"></div>
+                </section>
+                <section class="settings-section mt-12">
                   <h4>Execuções recentes</h4>
                   <div id="agentsRunsList" class="agents-runs-list"></div>
                 </section>
@@ -849,6 +883,20 @@
                   <button class="btn primary" type="submit">Dar acesso ao projecto</button>
                 </form>
                 <div id="projectMembers" class="member-list mt-8"></div>
+              </section>
+
+              <section class="panel section-panel settings-section mt-12" id="projectRepositorySection">
+                <div class="panel-title-row settings-section-heading">
+                  <div>
+                    <span class="settings-step-number">4</span>
+                    <h3 class="panel-heading">Repositório do projecto</h3>
+                    <p>O trabalho acontece aqui. Os agentes escrevem no repositório e a plataforma acompanha o progresso.</p>
+                  </div>
+                  <button type="button" class="btn tiny" id="repoRefreshBtn" title="Actualizar">↺</button>
+                </div>
+                <div id="projectRepositoryPanel"></div>
+                <div id="projectOpenspecPanel" class="mt-12"></div>
+                <div id="projectOrchestrationPanel" class="mt-12"></div>
               </section>
 
               <section class="panel section-panel settings-section">
@@ -1374,6 +1422,9 @@
   <script src="/projects/static/work-items-markdown.js?v=3" defer></script>
   <script src="/projects/static/work-items-ui.js?v=32" defer></script>
   <script src="/projects/static/agents-admin-ui.js?v=1" defer></script>
+  <script src="/projects/static/project-repository-ui.js?v=1" defer></script>
+  <script src="/projects/static/openspec-ui.js?v=1" defer></script>
+  <script src="/projects/static/orchestration-ui.js?v=1" defer></script>
   <script src="/projects/static/delivery-os-platform-ui.js?v=6" defer></script>
   <script src="/projects/static/client-portal-ui.js?v=3" defer></script>
   <script>

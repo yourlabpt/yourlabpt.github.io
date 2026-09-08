@@ -28,6 +28,11 @@ const proposalGenerator = require('./lib/proposal-generator');
 const { createAgentRuntimeClient } = require('./lib/agent-runtime-client');
 const engineeringState = require('./lib/engineering-state');
 const { registerEngineeringStateRoutes } = require('./lib/engineering-state-routes');
+const gitRepositories = require('./lib/git-repositories');
+const { registerGitRoutes } = require('./lib/git-routes');
+const { registerOpenspecRoutes } = require('./lib/openspec-routes');
+const { registerOrchestrationRoutes } = require('./lib/orchestration-routes');
+const { createDriver } = require('./lib/orchestration-driver');
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 const sessions = new Map();
@@ -897,6 +902,7 @@ function registerRequirementsPlatform(app, options) {
       assumptions: ensureArray(project.assumptions),
       risks: ensureArray(project.risks),
       integrations: ensureArray(project.integrations),
+      repository: gitRepositories.normalizeProjectRepository(project.repository),
       technicalApproach: project.technicalApproach || defaultTechnicalApproach(),
       requirements: skipRequirements
         ? []
@@ -3899,10 +3905,11 @@ function registerRequirementsPlatform(app, options) {
     normalizeRequirementRecord,
     connectorStore,
     agentConnectionMode,
+    dataDir,
     runtime: createAgentRuntimeClient(),
   });
 
-  registerAgentRuntimeRoutes(app, {
+  const agentRuntimeApi = registerAgentRuntimeRoutes(app, {
     authMiddleware,
     requireRole,
     loadProjectForUser,
@@ -3934,6 +3941,47 @@ function registerRequirementsPlatform(app, options) {
     getUserName,
     sqliteStore,
   });
+
+  registerGitRoutes(app, {
+    authMiddleware,
+    requireRole,
+    loadProjectForUser,
+    updateStore,
+    appendActivity,
+    dataDir,
+  });
+
+  registerOpenspecRoutes(app, {
+    authMiddleware,
+    requireRole,
+    loadProjectForUser,
+    updateStore,
+    appendActivity,
+    normalizeRequirementRecord,
+    dataDir,
+  });
+
+  const orchestrationDriver = createDriver({
+    updateStore,
+    appendActivity,
+    startAgentRun: agentRuntimeApi.startAgentRun,
+    dataDir,
+    nowIso,
+  });
+
+  registerOrchestrationRoutes(app, {
+    authMiddleware,
+    requireRole,
+    loadProjectForUser,
+    updateStore,
+    appendActivity,
+    nowIso,
+    dataDir,
+    driver: orchestrationDriver,
+  });
+
+  // Closes the loop: a finished agent run now advances the chain by itself.
+  agentRuntimeApi.setOrchestrationDriver(orchestrationDriver);
 
   ensureStore().catch((error) => {
     console.error('Erro ao inicializar Requirements Platform:', error.message);

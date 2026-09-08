@@ -4,6 +4,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const workItems = require('./work-items');
+const agentPersonas = require('./agent-personas');
 
 const FILE_NAME = 'agent-platform-settings.json';
 
@@ -63,8 +64,9 @@ function normalizePlatformSettings(raw = {}) {
     },
   });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     executionDefaults,
+    personas: agentPersonas.normalizePersonaOverrides(src.personas),
     updatedAt: workItems.textOr(src.updatedAt),
     updatedBy: workItems.textOr(src.updatedBy),
   };
@@ -88,6 +90,9 @@ async function writeAgentPlatformSettings(dataDir, patch = {}, actorUserId = '')
       ...stripNormalizedTokenPolicy(current.executionDefaults),
       ...(patch.executionDefaults || {}),
     },
+    personas: patch.personas && typeof patch.personas === 'object'
+      ? { ...current.personas, ...patch.personas }
+      : current.personas,
     updatedAt: new Date().toISOString(),
     updatedBy: actorUserId,
   });
@@ -96,13 +101,28 @@ async function writeAgentPlatformSettings(dataDir, patch = {}, actorUserId = '')
   return next;
 }
 
-function mergeWithPlatformDefaults(taskSettings, platformSettings) {
-  const platform = normalizePlatformSettings(platformSettings).executionDefaults;
+function mergeWithPlatformDefaults(taskSettings, platformSettings, personaId = '') {
+  const settings = normalizePlatformSettings(platformSettings);
+  const platform = settings.executionDefaults;
   const task = taskSettings && typeof taskSettings === 'object' ? taskSettings : {};
+  const persona = agentPersonas.isPersonaId(personaId)
+    ? agentPersonas.resolvePersona(personaId, settings.personas)
+    : null;
   const merged = workItems.normalizeExecutionSettings({
     ...stripNormalizedTokenPolicy(platform),
+    ...(persona ? {
+      modelProfileId: persona.modelProfileId,
+      ...(persona.agentId ? { agentId: persona.agentId } : {}),
+      ...(persona.maxTokens ? { maxTokens: persona.maxTokens, tokenBudgetMode: 'limited' } : {}),
+      ...(persona.maxWallClockMinutes
+        ? { maxWallClockMinutes: persona.maxWallClockMinutes, timeLimitEnabled: true }
+        : {}),
+      ...(persona.maxSubtasks ? { planningWaveSize: persona.maxSubtasks } : {}),
+    } : {}),
     ...stripNormalizedTokenPolicy(task),
-    allowedMcpTools: task.allowedMcpTools?.length ? task.allowedMcpTools : platform.allowedMcpTools,
+    allowedMcpTools: task.allowedMcpTools?.length
+      ? task.allowedMcpTools
+      : (persona?.allowedTools?.length ? persona.allowedTools : platform.allowedMcpTools),
   });
   return merged;
 }
